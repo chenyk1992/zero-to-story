@@ -2,10 +2,9 @@
 
 Responsibilities:
 - Take an approved storyboard
-- Use PromptGenerationService to plan shot modes
+- Use PanelGenerationService to plan panel modes
 - Create tasks with proper dependencies:
-  - First shot (T2V): no dependencies
-  - Continuation shots (I2V/R2V): depend on previous shot's output
+  - Panel video tasks in narrative order
 - Materialize tasks to the database
 - Return the execution plan with the full dependency graph
 
@@ -19,16 +18,15 @@ from typing import ClassVar
 from lfo.application.visual_profile_service import VisualProfileService
 from lfo.core.database import Database
 from lfo.planning.materializer import PlanMaterializer
-from lfo.planning.reference_planner import plan_references
 from lfo.planning.schema import (
-    AssetRequirement,
     ExecutionPlan,
     PlannedTask,
+    ReferenceBinding,
 )
-from lfo.services.prompt_generation_service import (
+from lfo.services.panel_generation_service import (
     GenerationPlan,
-    PromptGenerationService,
-    ShotGenerationPlan,
+    PanelGenerationPlan,
+    PanelGenerationService,
 )
 from lfo.storyboard.storyboard import Storyboard
 
@@ -65,11 +63,11 @@ class StoryboardGraphService:
     def __init__(
         self,
         db: Database,
-        prompt_service: PromptGenerationService | None = None,
+        panel_service: PanelGenerationService | None = None,
         materializer: PlanMaterializer | None = None,
     ) -> None:
         self.db = db
-        self.prompt_service = prompt_service or PromptGenerationService()
+        self.panel_service = panel_service or PanelGenerationService()
         self.materializer = materializer or PlanMaterializer(db)
 
     # -- public API ------------------------------------------------------- #
@@ -78,7 +76,7 @@ class StoryboardGraphService:
         """Build a task dependency graph from a storyboard.
 
         Steps:
-        1. Generate shot plan (mode selection for each shot)
+        1. Generate panel plan (mode selection for each panel)
         2. Create tasks with dependencies
         3. Materialize to database
         4. Return the graph
@@ -91,19 +89,20 @@ class StoryboardGraphService:
         """
         project_id = storyboard.project.project_id
 
-        # 1. Generate shot plan
-        gen_plan = self.prompt_service.generate_plan(storyboard, project_id)
+        available_assets = self._load_available_assets(project_id)
+        gen_plan = self.panel_service.generate_plan(
+            storyboard,
+            project_id,
+            available_assets=available_assets,
+        )
 
-        # 2. Create tasks
         tasks = self._create_tasks(gen_plan, storyboard)
 
-        # 3. Build execution plan
         exec_plan = ExecutionPlan(
             project_id=project_id,
             planned_tasks=tasks,
         )
 
-        # 4. Materialize to DB
         summary = self.materializer.apply(exec_plan)
 
         return TaskGraph(
@@ -120,116 +119,42 @@ class StoryboardGraphService:
         gen_plan: GenerationPlan,
         storyboard: Storyboard,
     ) -> list[PlannedTask]:
-        """Create PlannedTask objects from a generation plan.
-
-        When the active profile policy is ``visual_required`` and a shot
-        requires visual input, a ``visual.generate`` task is inserted
-        before the video task to produce the start frame.  The video
-        task then depends on the visual task instead of directly on the
-        previous shot.
-        """
+        """Create PlannedTask objects from a panel generation plan."""
         tasks: list[PlannedTask] = []
         prev_task_id: str | None = None
 
-        # Read active profile policy (default: allow_t2va_fallback)
-        policy = self._get_visual_policy(gen_plan.project_id)
+        for panel_plan in gen_plan.panel_plans:
+            task_id = f"task_{panel_plan.panel_id}"
+            depends_on: list[str] = [prev_task_id] if prev_task_id else []
 
-        # Collect available_assets from db: {entity_id: {asset_role: {status, asset_id}}}
-        available_assets = self._load_available_assets(gen_plan.project_id)
+            ref_bindings = _reference_bindings_from_pack(panel_plan)
 
-        for shot_plan in gen_plan.shot_plans:
-            task_id = f"task_{shot_plan.shot_id}"
-
-            # Determine dependencies
-            depends_on: list[str] = []
-            asset_reqs: list[AssetRequirement] = []
-
-            if shot_plan.requires_visual_input and policy == "visual_required":
-                # Insert a visual.generate task to produce the start frame
-                visual_task_id = f"visual_{shot_plan.shot_id}_start_frame"
-                visual_depends = [prev_task_id] if prev_task_id else []
-
-                visual_task = PlannedTask(
-                    logical_task_key=f"visual/{shot_plan.shot_id}/start_frame",
-                    task_id=visual_task_id,
-                    project_id=gen_plan.project_id,
-                    task_type="visual.generate",
-                    target_ids=[shot_plan.shot_id],
-                    workflow_id="",
-                    workflow_family="",
-                    workflow_mode="t2i",
-                    selection_reason=(
-                        "visual_required policy: generate start frame"
-                    ),
-                    depends_on=visual_depends,
-                    serial_group=gen_plan.project_id,
-                    priority_class=35,  # Higher priority than video (30)
-                    prompt_blueprint_id="",
-                    asset_requirements=[AssetRequirement(
-                        requirement_id=f"req_{shot_plan.shot_id}_start_frame",
-                        target_id=shot_plan.shot_id,
-                        asset_role="start_frame",
-                        required=True,
-                        status="missing",
-                        blocking_reason="Start frame will be generated by visual task",
-                    )],
-                    status="PLANNED" if not visual_depends else "WAITING_ASSETS",
-                    aligned_frames=0,  # Not applicable for image generation
-                )
-                tasks.append(visual_task)
-
-                # Video task depends on the visual task
-                depends_on.append(visual_task_id)
-                asset_reqs.append(AssetRequirement(
-                    requirement_id=f"req_{shot_plan.shot_id}_start_frame",
-                    target_id=shot_plan.shot_id,
-                    asset_role="start_frame",
-                    required=True,
-                    status="missing",
-                    blocking_reason="Start frame from visual.generate task",
-                ))
-            elif prev_task_id and shot_plan.requires_visual_input:
-                # Existing behavior: depend on previous shot's output
-                depends_on.append(prev_task_id)
-                asset_reqs.append(AssetRequirement(
-                    requirement_id=f"req_{shot_plan.shot_id}_prev_frame",
-                    target_id=shot_plan.shot_id,
-                    asset_role="start_frame",
-                    required=True,
-                    status="missing",
-                    blocking_reason=f"Requires end frame from {prev_task_id}",
-                ))
-
-            # Create the video task
-            # For R2V: resolve reference_bindings from available_assets + shot
-            ref_bindings: list = []
-            if shot_plan.workflow_mode == "r2v":
-                # Find the matching Shot in the storyboard
-                shot_obj = next(
-                    (s for s in storyboard.shots if s.shot_id == shot_plan.shot_id),
-                    None,
-                )
-                if shot_obj is not None:
-                    ref_bindings = plan_references(shot_obj, storyboard, available_assets)
+            panel = storyboard.panel_by_id(panel_plan.panel_id)
+            aligned_frames = 0
+            if panel is not None:
+                aligned_frames = max(1, (panel.desired_duration_ms * 24) // 1000)
 
             task = PlannedTask(
-                logical_task_key=f"video/{shot_plan.shot_id}",
+                logical_task_key=f"video/{panel_plan.panel_id}",
                 task_id=task_id,
                 project_id=gen_plan.project_id,
-                task_type="video.h3",
-                target_ids=[shot_plan.shot_id],
-                workflow_id=MODE_TO_WORKFLOW.get(shot_plan.workflow_mode, "h3_standard_t2v"),
-                workflow_family=MODE_TO_FAMILY.get(shot_plan.workflow_mode, "h3_fl2va"),
-                workflow_mode=shot_plan.workflow_mode,
-                selection_reason=self._selection_reason(shot_plan),
+                task_type=panel_plan.task_type,
+                target_ids=[panel_plan.panel_id],
+                workflow_id=panel_plan.workflow_id,
+                workflow_family=MODE_TO_FAMILY.get(
+                    panel_plan.workflow_mode,
+                    "h3_fl2va",
+                ),
+                workflow_mode=panel_plan.workflow_mode,
+                selection_reason=self._selection_reason(panel_plan),
                 depends_on=depends_on,
-                serial_group=gen_plan.project_id,  # All shots in a project are serial
+                serial_group=gen_plan.project_id,
                 priority_class=30,
-                prompt_blueprint_id=f"pb_{shot_plan.shot_id}",
-                asset_requirements=asset_reqs,
+                prompt_blueprint_id=f"pb_{panel_plan.panel_id}",
+                asset_requirements=[],
                 reference_bindings=ref_bindings,
-                status="WAITING_ASSETS",
-                aligned_frames=124,  # Standard 5s @ 24fps
+                status="WAITING_ASSETS" if depends_on else "PLANNED",
+                aligned_frames=aligned_frames,
             )
 
             tasks.append(task)
@@ -238,12 +163,7 @@ class StoryboardGraphService:
         return tasks
 
     def _get_visual_policy(self, project_id: str) -> str:
-        """Read the active visual generation profile policy.
-
-        Returns the policy string (``allow_t2va_fallback`` or
-        ``visual_required``).  Defaults to ``allow_t2va_fallback`` when
-        no active profile exists.
-        """
+        """Read the active visual generation profile policy."""
         try:
             profile_service = VisualProfileService(self.db)
             active = profile_service.get_active(project_id)
@@ -252,19 +172,11 @@ class StoryboardGraphService:
                     "visual_input_policy", "allow_t2va_fallback"
                 )
         except Exception:
-            # If profile lookup fails, default to fallback (never block)
             pass
         return "allow_t2va_fallback"
 
     def _load_available_assets(self, project_id: str) -> dict:
-        """Load approved assets from DB into the format plan_references expects.
-
-        Returns:
-            Dict of {entity_id: {asset_role: {status, asset_id}}} for all
-            approved assets in the project.
-        """
-        # Schema: asset_bindings (binding_id, asset_id, project_id, entity_type,
-        # entity_id, asset_role, validity) + asset_reviews (asset_id, manual_review_status)
+        """Load approved assets from DB into the format plan_references expects."""
         rows = self.db.fetchall(
             """SELECT ab.entity_id, ab.asset_role, ab.asset_id, ar.manual_review_status
                FROM asset_bindings ab
@@ -285,16 +197,30 @@ class StoryboardGraphService:
         return result
 
     _REASON_MAP: ClassVar[dict[str, str]] = {
-        "t2va": "First shot or standalone: text-to-video",
-        "i2v": "Continuation shot: image-to-video with visual input",
+        "t2va": "Text-to-video fallback",
+        "i2v": "Image-to-video with visual input",
         "first_last": "First+last frame control",
-        "r2v": "Reference-based: character continuity",
+        "r2v": "Reference-based: PanelPack composition + identity refs",
     }
 
     @staticmethod
-    def _selection_reason(shot_plan: ShotGenerationPlan) -> str:
+    def _selection_reason(panel_plan: PanelGenerationPlan) -> str:
         """Generate a human-readable reason for workflow selection."""
         return (
-            StoryboardGraphService._REASON_MAP.get(shot_plan.workflow_mode)
-            or f"Mode: {shot_plan.workflow_mode}"
+            StoryboardGraphService._REASON_MAP.get(panel_plan.workflow_mode)
+            or f"Mode: {panel_plan.workflow_mode}"
         )
+
+
+def _reference_bindings_from_pack(panel_plan: PanelGenerationPlan) -> list[ReferenceBinding]:
+    if panel_plan.workflow_mode != "r2v":
+        return []
+    return [
+        ReferenceBinding(
+            slot=ref.slot,
+            asset_id=ref.asset_id,
+            entity_id=ref.entity_id,
+            role=ref.role,
+        )
+        for ref in panel_plan.pack.refs
+    ]

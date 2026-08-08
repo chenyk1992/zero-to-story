@@ -374,36 +374,26 @@ class PipelineService:
     # -- prompt compilation --------------------------------------------- #
 
     def _compile_prompt_for_task(self, planned_task) -> str:
-        """Compile the prompt text for a planned task from the storyboard.
+        """Compile the prompt text for a planned task from the storyboard."""
+        from lfo.services.panel_generation_service import PanelGenerationService
 
-        Looks up the matching Shot in the storyboard, determines the workflow
-        mode, and returns the assembled prompt string.
-        """
-        from lfo.comfy.workflow_loader import blueprint_to_text
-        from lfo.services.prompt_generation_service import PromptGenerationService
-
-        shot_id = planned_task.target_ids[0] if planned_task.target_ids else ""
-        if not shot_id or not hasattr(self, "_storyboard"):
+        panel_id = planned_task.target_ids[0] if planned_task.target_ids else ""
+        if not panel_id or not hasattr(self, "_storyboard"):
             return ""
 
-        # Find matching shot in storyboard
-        shot = next(
-            (s for s in self._storyboard.shots if s.shot_id == shot_id),
-            None,
+        panel = self._storyboard.panel_by_id(panel_id)
+        if panel is not None and panel.prompt_text:
+            return panel.prompt_text
+
+        svc = PanelGenerationService()
+        plan = svc.generate_plan(
+            self._storyboard,
+            self._storyboard.project.project_id,
         )
-        if shot is None:
-            return ""
-
-        # Determine mode from planned task workflow_mode
-        mode = planned_task.workflow_mode or "t2va"
-
-        # Compile blueprint
-        svc = PromptGenerationService()
-        blueprint = svc._compile_blueprint(shot, self._storyboard, mode)
-        if blueprint is None:
-            return shot.description or ""
-
-        return blueprint_to_text(blueprint)
+        for panel_plan in plan.panel_plans:
+            if panel_plan.panel_id == panel_id:
+                return panel_plan.prompt_text
+        return ""
 
     def _get_shot_duration(self, shot_id: str) -> int:
         """Get desired duration in seconds for a shot from the storyboard."""
