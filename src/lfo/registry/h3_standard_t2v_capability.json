@@ -1,0 +1,16 @@
+{
+  "workflow_id": "h3_standard_t2v",
+  "modes": [
+    "t2va"
+  ],
+  "accepts_prompt": true,
+  "accepts_image": false,
+  "accepts_reference_images": false,
+  "accepts_first_frame": false,
+  "accepts_last_frame": false,
+  "produces_video": true,
+  "produces_audio": true,
+  "limitations": [
+    "No image identity control"
+  ]
+}

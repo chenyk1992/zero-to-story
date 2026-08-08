@@ -1,0 +1,45 @@
+{
+  "schema_version": "lfo.intake.v1",
+  "project_id": "午夜不接单-chapter_02",
+  "sources": [
+    {
+      "source_id": "src_ep_002_screenplay",
+      "type": "screenplay",
+      "content": "【本集视觉剪辑版】\n标题：差评我认（午夜不接单 Ep002）\n源文件：.short-drama/午夜不接单/episodes/ep002.md\n\n一句话：陆野在走廊死守「勿回头」完成签收，却遇见电梯幽灵 13 层；站点他当笑话记账，金婷却告知 14 栋朋友回头后失联。\n\n场景摘要：\n1) 场景A 梧桐巷走廊：不回头送达、苍白红绳手签收、电梯显示 13/镜中第二头盔、冲楼梯。\n2) 场景B 站点+金婷门外：豆浆吐槽记账；金婷揭示桐姐开门无人、回头后失联、电话空号。\n\n关键对白：\n- 陆野：规则没写不能蹲！\n- 陆野：差评我认！电梯我拒！\n- 金婷：后来她自己……回头了。\n- 陆野：差评我认。人——我认倒霉去看看。\n\n视觉重点：后脑勺对着楼梯、红绳手腕、电梯 13、未接来电 12 通。\n\n钩子/预告见 cut_notes.md。分镜见 storyboard_brief.md（22 镜/45 秒）。",
+      "origin": "user",
+      "metadata": {
+        "language": "zh-CN",
+        "genre": "short_drama",
+        "episode": "002",
+        "drama_title": "午夜不接单",
+        "source_path": ".short-drama/午夜不接单/episodes/ep002.md",
+        "handoff_brief": ".short-drama/午夜不接单/handoff/ep002/storyboard_brief.md"
+      }
+    }
+  ],
+  "constraints": {
+    "target_duration_ms": 45000,
+    "aspect_ratio": "9:16",
+    "delivery_width": 1080,
+    "delivery_height": 1920,
+    "language": "zh-CN",
+    "visual_style": "wet-night neo-noir cinematic",
+    "medium_lock": "竖屏写实电影质感，夜雨都市，冷青与湿沥青反光；禁止漫画网纹与过度美颜。",
+    "max_characters": 3,
+    "max_scenes": 2,
+    "pacing": "medium",
+    "mood": "uneasy comedy dread",
+    "audio_policy": "full",
+    "custom": {
+      "shot_count_target": 22,
+      "bridge": "short-drama-screenwriter-handoff-v1",
+      "episode_to_chapter": "ep002→chapter_02"
+    }
+  },
+  "origin": {
+    "source": "user",
+    "confidence": "high",
+    "derived_from": [],
+    "reason": "短剧编剧 skill /桥接 next 从 ep002 剧本生成的 LFO intake 伴生包"
+  }
+}

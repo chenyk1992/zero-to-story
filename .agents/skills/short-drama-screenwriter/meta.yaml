@@ -1,0 +1,16 @@
+display-name-zh: 短剧编剧助手
+version: 0.1.12
+tag-en: "Short Drama / Script Writing"
+tag-cn: "短剧 / 剧本写作"
+complete-tags-en:
+  - "Short Drama / Planning"
+complete-tags-cn:
+  - "短剧漫剧 / 计划制定"
+summary-en: "Write full short drama scripts by topic"
+summary-cn: "按选题撰写完整短剧剧本"
+desc-en: "For short drama screenwriting from topic to full episodic script covering the complete creative process. Takes a story premise or topic plus desired format such as vertical Chinese short drama or overseas ReelShort and DramaBox productions. Produces a complete episodic script with built-in viral methodology covering hooks, conflict beats, cliffhangers and audience retention techniques for maximum engagement."
+desc-cn: "适用于微短剧从选题到完整剧本的全流程编剧,覆盖创意发想到定稿的完整创作过程。输入故事选题或题材方向、目标格式(国内竖屏短剧或海外 ReelShort、DramaBox 平台),输出分集完整剧本。内置爆款方法论,涵盖钩子设计、冲突节点编排、悬念结构设计与观众留存技巧,帮助创作者产出高完播率的短剧内容。"
+cover: ""
+author-en: "MiniMax Hub"
+author-cn: "MiniMax Hub"
+source: official

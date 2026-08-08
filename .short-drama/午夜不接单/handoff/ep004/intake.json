@@ -1,0 +1,45 @@
+{
+  "schema_version": "lfo.intake.v1",
+  "project_id": "午夜不接单-chapter_04",
+  "sources": [
+    {
+      "source_id": "src_ep_004_screenplay",
+      "type": "screenplay",
+      "content": "【本集视觉剪辑版】\n标题：素材侠驾到（午夜不接单 Ep004）\n源文件：.short-drama/午夜不接单/episodes/ep004.md\n\n一句话：苏晚白天审讯式取样，陆野吐出「空白收件人」与通宵面馆；金婷出示桐姐自拍瞳孔里的伞；两人进入白天 14 栋，系统打来异常完单奖「勿回头·阶段一」。\n\n场景摘要：\n1) 场景A 站点：双机位对审、侧脸快拍、互损。\n2) 场景B 金婷客厅+14栋楼下：伞自拍空号、自动门、完单奖到账。\n\n关键对白：\n- 苏晚：别演。镜头比你诚实。\n- 陆野：空白收件人……面馆门口，碗是热的。\n- 苏晚：重合度高得恶心。\n- 陆野：完单奖从鬼账上来的？\n\n视觉重点：白天刺眼光、录音笔顿住、瞳孔伞、单元门自开、楼道只剩最高一盏灯、到账通知。\n\n钩子见 cut_notes。分镜 22 镜/45 秒见 storyboard_brief.md。",
+      "origin": "user",
+      "metadata": {
+        "language": "zh-CN",
+        "genre": "short_drama",
+        "episode": "004",
+        "drama_title": "午夜不接单",
+        "source_path": ".short-drama/午夜不接单/episodes/ep004.md",
+        "handoff_brief": ".short-drama/午夜不接单/handoff/ep004/storyboard_brief.md"
+      }
+    }
+  ],
+  "constraints": {
+    "target_duration_ms": 45000,
+    "aspect_ratio": "9:16",
+    "delivery_width": 1080,
+    "delivery_height": 1920,
+    "language": "zh-CN",
+    "visual_style": "wet-night neo-noir cinematic",
+    "medium_lock": "竖屏写实电影质感；白天戏用冷日光与死白楼道，禁止温馨滤镜与过度美颜。",
+    "max_characters": 3,
+    "max_scenes": 2,
+    "pacing": "medium",
+    "mood": "wary banter dread",
+    "audio_policy": "full",
+    "custom": {
+      "shot_count_target": 22,
+      "bridge": "short-drama-screenwriter-handoff-v1",
+      "episode_to_chapter": "ep004→chapter_04"
+    }
+  },
+  "origin": {
+    "source": "user",
+    "confidence": "high",
+    "derived_from": [],
+    "reason": "短剧编剧 skill /桥接 3-4 从 ep004 生成"
+  }
+}

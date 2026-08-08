@@ -1,0 +1,36 @@
+{
+  "scenes": [
+    {
+      "scene_id": "scene_cliff",
+      "name": "悬崖",
+      "description": "黄昏时分的悬崖边，远处是燃烧的天空",
+      "time_of_day": "dusk",
+      "lighting": "warm sunset",
+      "mood": "epic",
+      "environment": "exterior"
+    }
+  ],
+  "props": [],
+  "shots": [
+    {
+      "shot_id": "shot_001_t2v",
+      "scene_id": "scene_cliff",
+      "description": "wide shot, lone samurai standing on cliff edge at sunset, dramatic sky",
+      "desired_duration_ms": 5000,
+      "camera": {"shot_size": "wide", "angle": "eye_level", "movement": "static"},
+      "characters": [],
+      "action_beats": [{"sequence": 1, "description": "samurai stands on cliff", "duration_ms": 5000}],
+      "narration": "",
+      "continuity": {
+        "start_state": "samurai on cliff",
+        "end_state": "same",
+        "previous_shot_id": null,
+        "next_shot_id": null,
+        "priority": "low",
+        "continuity_elements": [],
+        "start_frame_needed": false
+      },
+      "generation_hint": {"preferred_family": "h3_fl2va", "preferred_mode": "t2va", "notes": "T2V opener"}
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": "lfo.intake.v1",
+  "project_id": "午夜不接单-chapter_03",
+  "sources": [
+    {
+      "source_id": "src_ep_003_screenplay",
+      "type": "screenplay",
+      "content": "【本集视觉剪辑版】\n标题：整蛊还是真的（午夜不接单 Ep003）\n源文件：.short-drama/午夜不接单/episodes/ep003.md\n\n一句话：夜谈社赵帅逼陆野重演「勿回头」，回头瞬间真见鬼；字条写「换你来送」。剪辑师苏晚买下原件，透露三年前同一走廊有他的背影；屋顶黑伞注视他们。\n\n场景摘要：\n1) 场景A 门口+走廊：逼拍、念三条、回头见鬼、字条、苏晚入场。\n2) 场景B 雨棚：密封取样、三年前秘密、屋顶黑伞消失。\n\n关键对白：\n- 陆野：你从哪抄的？\n- 字条：回头者，换你来送。\n- 苏晚：别动镜头位。你脚边的字条，原件卖我。\n- 苏晚：三年前雨夜……骑手背影跟你重合。\n- 苏晚：别回头看 14 栋屋顶。\n\n视觉重点：稳定器红点、裂嘴睡衣女一闪、纸袋字条、双机位包、屋顶黑伞。\n\n钩子见 cut_notes。分镜 22 镜/45 秒见 storyboard_brief.md。",
+      "origin": "user",
+      "metadata": {
+        "language": "zh-CN",
+        "genre": "short_drama",
+        "episode": "003",
+        "drama_title": "午夜不接单",
+        "source_path": ".short-drama/午夜不接单/episodes/ep003.md",
+        "handoff_brief": ".short-drama/午夜不接单/handoff/ep003/storyboard_brief.md"
+      }
+    }
+  ],
+  "constraints": {
+    "target_duration_ms": 45000,
+    "aspect_ratio": "9:16",
+    "delivery_width": 1080,
+    "delivery_height": 1920,
+    "language": "zh-CN",
+    "visual_style": "wet-night neo-noir cinematic",
+    "medium_lock": "竖屏写实电影质感，夜雨都市，冷青与湿沥青反光；禁止漫画网纹与过度美颜。",
+    "max_characters": 3,
+    "max_scenes": 2,
+    "pacing": "fast",
+    "mood": "horror-comedy shock",
+    "audio_policy": "full",
+    "custom": {
+      "shot_count_target": 22,
+      "bridge": "short-drama-screenwriter-handoff-v1",
+      "episode_to_chapter": "ep003→chapter_03"
+    }
+  },
+  "origin": {
+    "source": "user",
+    "confidence": "high",
+    "derived_from": [],
+    "reason": "短剧编剧 skill /桥接 3-4 从 ep003 生成"
+  }
+}

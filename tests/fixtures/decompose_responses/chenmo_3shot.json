@@ -1,0 +1,103 @@
+{
+  "scenes": [
+    {
+      "scene_id": "scene_supermarket",
+      "name": "超市",
+      "description": "冷白荧光灯下的连锁超市，货架密集，地上有滑腻的洗发水",
+      "time_of_day": "day",
+      "lighting": "cold fluorescent",
+      "mood": "panic with dark humor",
+      "environment": "interior"
+    }
+  ],
+  "props": [
+    {
+      "prop_id": "prop_steel_pipe_scanner",
+      "name": "扫码枪钢管",
+      "description": "改装过的扫码枪，握把用钢管延长",
+      "significance": "陈默的标志性武器"
+    }
+  ],
+  "shots": [
+    {
+      "shot_id": "shot_001_t2v",
+      "scene_id": "scene_supermarket",
+      "description": "wide shot, 陈默一脚踹翻洗发水货架，'新员工'丧尸表演平地摔",
+      "desired_duration_ms": 5000,
+      "camera": {
+        "shot_size": "wide",
+        "angle": "eye_level",
+        "movement": "handheld"
+      },
+      "characters": [
+        {
+          "character_id": "char_chenmo",
+          "screen_position": "center",
+          "orientation": "facing_camera",
+          "action": "踹翻洗发水货架",
+          "expression": "漫不经心"
+        }
+      ],
+      "action_beats": [
+        {"sequence": 1, "description": "陈默抬脚", "duration_ms": 1500},
+        {"sequence": 2, "description": "货架倒下丧尸摔", "duration_ms": 2500},
+        {"sequence": 3, "description": "陈默比出拜拜手势", "duration_ms": 1000}
+      ],
+      "narration": "",
+      "continuity": {
+        "start_state": "陈默站在超市中央",
+        "end_state": "丧尸倒地，陈默比手势",
+        "previous_shot_id": null,
+        "next_shot_id": "shot_002_i2v",
+        "priority": "high",
+        "continuity_elements": ["costume:supermarket_uniform"],
+        "start_frame_needed": false
+      },
+      "generation_hint": {
+        "preferred_family": "h3_fl2va",
+        "preferred_mode": "t2va",
+        "notes": "首镜头 T2V"
+      }
+    },
+    {
+      "shot_id": "shot_002_i2v",
+      "scene_id": "scene_supermarket",
+      "description": "medium close-up, 陈默靠在冰柜上抽烟，烟雾缭绕中听到广播",
+      "desired_duration_ms": 6000,
+      "camera": {
+        "shot_size": "medium",
+        "angle": "low",
+        "movement": "slow_push_in"
+      },
+      "characters": [
+        {
+          "character_id": "char_chenmo",
+          "screen_position": "left",
+          "orientation": "profile",
+          "action": "靠在冰柜上抽烟",
+          "expression": "冷笑"
+        }
+      ],
+      "action_beats": [
+        {"sequence": 1, "description": "陈默靠上冰柜", "duration_ms": 1500},
+        {"sequence": 2, "description": "点燃一根烟", "duration_ms": 1500},
+        {"sequence": 3, "description": "烟雾缭绕中听到广播", "duration_ms": 3000}
+      ],
+      "narration": "",
+      "continuity": {
+        "start_state": "陈默站立",
+        "end_state": "陈默抽烟看着广播",
+        "previous_shot_id": "shot_001_t2v",
+        "next_shot_id": null,
+        "priority": "high",
+        "continuity_elements": ["costume:supermarket_uniform", "prop:cigarette"],
+        "start_frame_needed": true
+      },
+      "generation_hint": {
+        "preferred_family": "h3_fl2va",
+        "preferred_mode": "i2v",
+        "notes": "需要 shot_001 末帧"
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "workflow_id": "h3_standard_r2v",
+  "modes": [
+    "r2v"
+  ],
+  "accepts_prompt": true,
+  "accepts_image": false,
+  "accepts_reference_images": true,
+  "accepts_first_frame": false,
+  "accepts_last_frame": false,
+  "produces_video": true,
+  "produces_audio": true,
+  "limitations": [
+    "Fixed 3 reference slots"
+  ]
+}

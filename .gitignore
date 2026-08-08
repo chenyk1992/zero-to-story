@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# LFO runtime artifacts
+end_frames/
+normalized/
+pipeline_output/
+artifacts/
+*.db
+*.db-wal
+*.db-shm
+.mimocode/
+.pytest_cache/
+.cron-lock
+
+# User workspace — never committed. The system (code + templates) lives
+# in this repo; the workspace is where novels, storyboards, and run
+# outputs live. See workspace/README.md.
+workspace/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets / env
+.env
+.env.local

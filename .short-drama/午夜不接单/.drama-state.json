@@ -1,0 +1,21 @@
+{
+  "currentStep": "writing",
+  "genre": ["喜剧/搞笑", "悬疑/推理"],
+  "audience": "20–35岁，男女通吃",
+  "tone": "悬疑烧脑",
+  "totalEpisodes": 60,
+  "completedEpisodes": [1, 2, 3, 4],
+  "bridgedEpisodes": [1, 2, 3, 4],
+  "language": "zh",
+  "mode": "domestic",
+  "dramaTitle": "午夜不接单",
+  "endingType": "开放式",
+  "concept": "夜班跑腿员陆野拆穿都市传说，却发现自己是规则签收人",
+  "titleCandidates": ["别点那条传说", "午夜不接单", "规则请签收"],
+  "recommendedTitle": "午夜不接单",
+  "mainCast": ["陆野", "苏晚", "老K", "裴然", "沈知行"],
+  "hiddenBoss": "老K",
+  "paywallEpisodes": [10, 16, 22, 28, 36, 40, 45, 48, 52, 56],
+  "handoffNovelId": "午夜不接单",
+  "handoffChapterPattern": "epNNN→chapter_NN"
+}

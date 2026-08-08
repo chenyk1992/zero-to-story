@@ -1,0 +1,20 @@
+display-name-zh: 视频拆解分析师
+version: 0.2.4
+summary-en: "Deconstruct AI videos with dense keyframes and Seedance prompts."
+summary-cn: "高密度拆解AI视频"
+desc-en: "Deep AI-video deconstruction with replica prompts. Reads video metadata and builds a canvas evidence chain from dense keyframes, outputs a structured Markdown deconstruction report, and reverse-engineers Seedance 2.0 Chinese timestamp storyboard prompts under the rule of preferably fifteen seconds or less per clip and as few prompts as possible. Aimed at reference analysis, not general editing or subtitle work."
+desc-cn: "AI 视频深度拆解与复刻提示词。读取视频元信息 + 高密度关键帧建立画布证据链，输出结构化 Markdown 拆解报告，并按“每条尽量≤15 秒、提示词数量尽量少”反推 Seedance 2.0 中文时间戳分镜复刻提示词；面向参考分析，不做普通剪辑/字幕。"
+tag-en: "Short Drama / Intent Brainstorming"
+tag-cn: "短剧漫剧 / 意图脑爆"
+complete-tags-en:
+  - "Short Drama / Intent Brainstorming"
+  - "Commercial Ad / Intent Brainstorming"
+  - "Animation / Intent Brainstorming"
+complete-tags-cn:
+  - "短剧漫剧 / 意图脑爆"
+  - "商业广告 / 意图脑爆"
+  - "动画 / 意图脑爆"
+author-en: "MiniMax Hub"
+author-cn: "MiniMax Hub"
+source: official
+cover: "https://cdn.hailuoai.com/hailuo-video-web/public_assets/c810a994-05ab-4b38-b793-59c10e04590d.mp4"

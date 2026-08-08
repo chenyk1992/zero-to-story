@@ -1,0 +1,45 @@
+{
+  "schema_version": "lfo.intake.v1",
+  "project_id": "午夜不接单-chapter_01",
+  "sources": [
+    {
+      "source_id": "src_ep_001_screenplay",
+      "type": "screenplay",
+      "content": "【本集视觉剪辑版】\n标题：活在传说里（午夜不接单 Ep001）\n源文件：.short-drama/午夜不接单/episodes/ep001.md\n\n一句话：夜班骑手陆野在走廊念完「勿回头」备注后撞见诡异回头，跳回 72 小时前——他被客户骂「活在都市传说里」，却接下一单同样备注，当整蛊冲进雨夜。\n\n场景摘要：\n1) 场景B 梧桐巷老旧公寓走廊：暴雨、闪灯管、1404 门自开、备注三条、门缝黑暗中有东西回头。\n2) 场景A 夜城跑腿线：高档大堂社死对峙 → 雨街接单备注异变 → 出租屋倒计时后戴歪头盔出门。\n\n关键对白（精简）：\n- 陆野：差评我认，命我还想要。\n- 金婷：你是不是活在都市传说里啊？现实点！\n- 陆野：都市传说不接夜间急单，我比它敬业。\n- 陆野：念完三条？我是骑手还是和尚？\n- 陆野：行，当整蛊。整蛊也给完单奖。\n\n视觉重点：歪头盔骑手；门缝冷光；手机备注「23:59 前送达，勿回头」；冷暖色反差；竖屏 9:16。\n\n注意：完整编剧正文见源文件；钩子与下集预告见 handoff/ep001/cut_notes.md，不进入本约束。分镜详见 storyboard_brief.md（22 镜 / 45 秒）。",
+      "origin": "user",
+      "metadata": {
+        "language": "zh-CN",
+        "genre": "short_drama",
+        "episode": "001",
+        "drama_title": "午夜不接单",
+        "source_path": ".short-drama/午夜不接单/episodes/ep001.md",
+        "handoff_brief": ".short-drama/午夜不接单/handoff/ep001/storyboard_brief.md"
+      }
+    }
+  ],
+  "constraints": {
+    "target_duration_ms": 45000,
+    "aspect_ratio": "9:16",
+    "delivery_width": 1080,
+    "delivery_height": 1920,
+    "language": "zh-CN",
+    "visual_style": "wet-night neo-noir cinematic",
+    "medium_lock": "竖屏写实电影质感，夜雨都市，冷青与湿沥青反光；禁止漫画网纹与过度美颜。",
+    "max_characters": 2,
+    "max_scenes": 2,
+    "pacing": "medium",
+    "mood": "tense comedy unease",
+    "audio_policy": "full",
+    "custom": {
+      "shot_count_target": 22,
+      "bridge": "short-drama-screenwriter-handoff-v1",
+      "notes": "台词可进镜头；若改纯画面请将 audio_policy 改为 effects_only 并更新 cut_notes。"
+    }
+  },
+  "origin": {
+    "source": "user",
+    "confidence": "high",
+    "derived_from": [],
+    "reason": "短剧编剧 skill /桥接 从 ep001 剧本生成的 LFO intake 伴生包"
+  }
+}

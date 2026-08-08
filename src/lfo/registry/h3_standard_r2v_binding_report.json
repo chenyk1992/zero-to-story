@@ -1,0 +1,45 @@
+{
+  "workflow_id": "h3_standard_r2v",
+  "bindings": [
+    {
+      "binding_id": "prompt",
+      "node_id": "9",
+      "input_name": "value",
+      "class_type": "PrimitiveStringMultiline"
+    },
+    {
+      "binding_id": "ref_image_0",
+      "node_id": "6",
+      "input_name": "image",
+      "class_type": "LoadImage"
+    },
+    {
+      "binding_id": "ref_image_1",
+      "node_id": "7",
+      "input_name": "image",
+      "class_type": "LoadImage"
+    },
+    {
+      "binding_id": "ref_image_2",
+      "node_id": "8",
+      "input_name": "image",
+      "class_type": "LoadImage"
+    },
+    {
+      "binding_id": "duration",
+      "node_id": "10",
+      "input_name": "value",
+      "class_type": "PrimitiveFloat"
+    },
+    {
+      "binding_id": "filename_prefix",
+      "node_id": "21",
+      "input_name": "filename_prefix",
+      "class_type": "SaveVideo"
+    }
+  ],
+  "unresolved": [],
+  "status": "ok",
+  "mode": "strict",
+  "warnings": []
+}

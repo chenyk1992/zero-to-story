@@ -1,0 +1,88 @@
+{
+  "schema_version": "lfo.storyboard.v1",
+  "project": {
+    "project_id": "my_first_story",
+    "title": "我的第一个短视频",
+    "created_at": "2026-08-07T10:00:00.000Z"
+  },
+  "style_guide": {
+    "visual_style": "realistic cinematic",
+    "color_palette": "warm tones",
+    "aspect_ratio": "9:16"
+  },
+  "characters": [
+    {
+      "character_id": "char_protagonist",
+      "name": "主角",
+      "description": "25岁年轻女性，齐肩黑发，穿着简单的白色T恤，眼神坚定",
+      "role": "protagonist",
+      "age": "25",
+      "gender": "female",
+      "distinguishing_features": "齐肩黑发、坚定眼神"
+    }
+  ],
+  "scenes": [
+    {
+      "scene_id": "scene_001",
+      "name": "城市天台",
+      "description": "日落时分的城市天台，远处是城市天际线，金色阳光洒在水泥地面上",
+      "time_of_day": "dusk",
+      "lighting": "warm golden hour, soft shadows",
+      "mood": "contemplative",
+      "environment": "exterior"
+    }
+  ],
+  "shots": [
+    {
+      "shot_id": "shot_001",
+      "display_index": 1,
+      "scene_id": "scene_001",
+      "description": "主角站在天台边缘，凝视远方，背景是金色夕阳和城市天际线",
+      "desired_duration_ms": 5000,
+      "camera": {
+        "shot_size": "medium",
+        "angle": "eye_level",
+        "movement": "slow_push_in",
+        "focus": "主角"
+      },
+      "characters": [
+        {
+          "character_id": "char_protagonist",
+          "screen_position": "center",
+          "orientation": "facing_camera",
+          "action": "站在天台边缘",
+          "expression": "沉思"
+        }
+      ],
+      "action_beats": [
+        {
+          "beat_id": "beat_001",
+          "description": "主角抬头望向远方",
+          "duration_ms": 2500
+        },
+        {
+          "beat_id": "beat_002",
+          "description": "镜头缓缓推进，主角侧脸剪影",
+          "duration_ms": 2500
+        }
+      ],
+      "continuity": {
+        "start_frame_needed": false,
+        "end_state": "主角背影映在夕阳中",
+        "continuity_elements": []
+      },
+      "generation_hint": {
+        "preferred_family": "h3_fl2va",
+        "preferred_mode": "t2va",
+        "notes": "首镜头 T2V，无 first_frame"
+      }
+    }
+  ],
+  "audio_policy": {
+    "mode": "effects_only",
+    "music": "ambient",
+    "sound_effects": "wind",
+    "ambient": "city_distant",
+    "dialogue": "none"
+  }
+}

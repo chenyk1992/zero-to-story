@@ -1,0 +1,33 @@
+{
+  "workflow_id": "h3_standard_i2v",
+  "bindings": [
+    {
+      "binding_id": "prompt",
+      "node_id": "11",
+      "input_name": "prompt",
+      "class_type": "MiniMaxH3ImageToVideo"
+    },
+    {
+      "binding_id": "first_frame",
+      "node_id": "6",
+      "input_name": "image",
+      "class_type": "LoadImage"
+    },
+    {
+      "binding_id": "duration",
+      "node_id": "9",
+      "input_name": "value",
+      "class_type": "PrimitiveFloat"
+    },
+    {
+      "binding_id": "filename_prefix",
+      "node_id": "20",
+      "input_name": "filename_prefix",
+      "class_type": "SaveVideo"
+    }
+  ],
+  "unresolved": [],
+  "status": "ok",
+  "mode": "strict",
+  "warnings": []
+}

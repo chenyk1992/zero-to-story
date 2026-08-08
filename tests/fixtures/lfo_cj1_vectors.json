@@ -1,0 +1,79 @@
+{
+  "vectors": [
+    {
+      "id": "empty_object",
+      "input": {},
+      "canonical_bytes_repr": "{}",
+      "expected_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "key_order_a",
+      "input": {"b": 1, "a": 2},
+      "canonical_bytes_repr":"{\"a\":2,\"b\":1}",
+      "expected_sha256": "d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772"
+    },
+    {
+      "id": "key_order_b",
+      "input": {"a": 2, "b": 1},
+      "canonical_bytes_repr":"{\"a\":2,\"b\":1}",
+      "expected_sha256": "d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772"
+    },
+    {
+      "id": "unicode_nfc_single",
+      "description": "U+00E9 (precomposed)",
+      "input": {"v": "\u00e9"},
+      "canonical_bytes_repr":"{\"v\":\"\u00e9\"}",
+      "expected_sha256": "60331ad111b2a28c0a0eb4b64cfd0ee20df99e19513cf4045cf572b96973ed14"
+    },
+    {
+      "id": "unicode_nfc_decomposed",
+      "description": "U+0065 U+0301 (decomposed, should normalize to same)",
+      "input": {"v": "\u0065\u0301"},
+      "canonical_bytes_repr":"{\"v\":\"\u00e9\"}",
+      "expected_sha256": "60331ad111b2a28c0a0eb4b64cfd0ee20df99e19513cf4045cf572b96973ed14"
+    },
+    {
+      "id": "float_forbidden",
+      "input": {"v": 0.1},
+      "should_throw": "LFO_CJ1_FLOAT_FORBIDDEN"
+    },
+    {
+      "id": "default_null_vs_missing_with_schema",
+      "description": "With schema default=null, missing field == explicit null",
+      "input": {},
+      "schema": {
+        "type": "object",
+        "properties": {"v": {"type": ["string", "null"], "default": null}},
+        "additionalProperties": false
+      },
+      "canonical_bytes_repr":"{\"v\":null}",
+      "expected_sha256": "aae9e223dcdc02dfd8149da8c25b9536533a7232b0c9137ee6b2cd5c2a2629eb"
+    },
+    {
+      "id": "explicit_null_with_schema",
+      "description": "Explicit null == missing with default=null",
+      "input": {"v": null},
+      "schema": {
+        "type": "object",
+        "properties": {"v": {"type": ["string", "null"], "default": null}},
+        "additionalProperties": false
+      },
+      "canonical_bytes_repr":"{\"v\":null}",
+      "expected_sha256": "aae9e223dcdc02dfd8149da8c25b9536533a7232b0c9137ee6b2cd5c2a2629eb"
+    },
+    {
+      "id": "project_path_backslash",
+      "description": "Path field with backslash, marked lfo-project-path",
+      "input": {"path": "a\\b.png"},
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "format": "lfo-project-path"}
+        },
+        "additionalProperties": false
+      },
+      "canonical_bytes_repr":"{\"path\":\"a/b.png\"}",
+      "expected_sha256": "64047b2c5d96abba098fdc197f00af0855cd2099c4a43f7bfce44d87a8399165"
+    }
+  ]
+}

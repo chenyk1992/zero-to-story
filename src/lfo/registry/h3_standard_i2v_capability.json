@@ -1,0 +1,14 @@
+{
+  "workflow_id": "h3_standard_i2v",
+  "modes": [
+    "i2v"
+  ],
+  "accepts_prompt": true,
+  "accepts_image": true,
+  "accepts_reference_images": false,
+  "accepts_first_frame": true,
+  "accepts_last_frame": false,
+  "produces_video": true,
+  "produces_audio": true,
+  "limitations": []
+}

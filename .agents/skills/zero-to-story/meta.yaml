@@ -1,0 +1,18 @@
+display-name-zh: 从零开始创作短片
+version: 0.7.13
+tag-en: "Visual Production / Image Generation"
+tag-cn: "视觉创作 / 图像生成"
+complete-tags-en:
+  - "Short Drama / Planning"
+  - "Animation / Planning"
+complete-tags-cn:
+  - "短剧漫剧 / 计划制定"
+  - "动画 / 计划制定"
+summary-en: "Create storyboard from scratch, from idea to grid and video"
+summary-cn: "从灵感开始逐步构建完整故事分镜并生成视频"
+desc-en: "For creators starting without a finished script who need to build a complete storyboard from a single idea. Walks through story design, storyboard brief drafting, character reference image generation, monochrome panel layout creation, and final video prompt confirmation. Takes a one-sentence story concept or rough idea as input and produces a complete storyboard document with character sheets, black-and-white panels, and ready-to-use video prompts for downstream video generation."
+desc-cn: "适用于没有现成剧本、想从一个灵感逐步构建完整故事分镜并生成视频的创作者。流程涵盖故事设计、故事板概要撰写、角色参考图生成、黑白分镜图布局、视频提示词确认五个阶段。输入一句话故事概念或粗略想法,输出完整故事板文档、角色设定图、黑白分镜图,以及可直接送入视频生成管线的镜头提示词列表,作为完整创作链路的起点。"
+cover: ""
+author-en: "MiniMax Hub"
+author-cn: "MiniMax Hub"
+source: official
