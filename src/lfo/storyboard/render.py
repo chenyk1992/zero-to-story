@@ -6,7 +6,7 @@ Markdown is a read-only view — edits go through structured patches, not MD.
 from __future__ import annotations
 
 from .intake import Intake
-from .storyboard import Shot, Storyboard
+from .storyboard import Beat, Panel, Storyboard
 
 
 def render_intake_md(intake: Intake) -> str:
@@ -139,11 +139,19 @@ def render_storyboard_md(sb: Storyboard) -> str:
                 lines.append(" | ".join(meta_parts))
                 lines.append("")
 
-    # Shots
-    lines.append("## 分镜")
+    # Beats
+    if sb.beats:
+        lines.append("## 节拍")
+        lines.append("")
+        for beat in sb.beats:
+            lines.append(_render_beat_md(beat, sb))
+            lines.append("")
+
+    # Panels
+    lines.append("## 分镜面板")
     lines.append("")
-    for shot in sb.shots:
-        lines.append(_render_shot_md(shot, sb))
+    for panel in sb.panels:
+        lines.append(_render_panel_md(panel, sb))
         lines.append("")
 
     # Continuity Chains
@@ -183,31 +191,31 @@ def render_storyboard_md(sb: Storyboard) -> str:
     return "\n".join(lines)
 
 
-def _render_shot_md(shot: Shot, sb: Storyboard) -> str:
-    """Render a single shot to Markdown."""
-    idx = sb.display_index_for(shot.shot_id)
+def _render_beat_md(beat: Beat, sb: Storyboard) -> str:
+    """Render a single beat to Markdown."""
     lines: list[str] = []
-
-    lines.append(f"### Shot {idx} (`{shot.shot_id}`)")
+    lines.append(f"### Beat {beat.sequence} (`{beat.beat_id}`)")
     lines.append("")
 
-    if shot.description:
-        lines.append(f"_{shot.description}_")
+    if beat.description:
+        lines.append(f"_{beat.description}_")
         lines.append("")
 
-    # Duration + Camera
-    c = shot.camera
-    lines.append(f"**时长**: {shot.desired_duration_ms}ms ({shot.desired_duration_ms / 1000:.1f}s)")
-    lines.append("")
-    lines.append(f"**镜头**: {c.shot_size} | {c.angle} | {c.movement}")
-    if c.focus:
-        lines.append(f"**焦点**: {c.focus}")
-    lines.append("")
+    if beat.framing:
+        lines.append(f"**景别**: {beat.framing}")
+        lines.append("")
 
-    # Characters in this shot
-    if shot.characters:
+    if beat.dialogue:
+        lines.append(f"**对白**: {beat.dialogue}")
+        lines.append("")
+
+    if beat.sound:
+        lines.append(f"**声音**: {beat.sound}")
+        lines.append("")
+
+    if beat.characters:
         lines.append("**角色**:")
-        for char_app in shot.characters:
+        for char_app in beat.characters:
             char = sb.character_by_id(char_app.character_id)
             char_name = char.name if char else char_app.character_id
             parts = [char_name]
@@ -220,31 +228,26 @@ def _render_shot_md(shot: Shot, sb: Storyboard) -> str:
             lines.append(f"- {' | '.join(parts)}")
         lines.append("")
 
-    # Action beats
-    if shot.action_beats:
-        lines.append("**动作节拍**:")
-        for beat in shot.action_beats:
-            lines.append(f"{beat.sequence}. {beat.description}")
-        lines.append("")
+    return "\n".join(lines)
 
-    # Continuity
-    cont = shot.continuity
-    if cont.start_state or cont.end_state:
-        lines.append("**连续性**:")
-        if cont.start_state:
-            lines.append(f"- 起始状态: {cont.start_state}")
-        if cont.end_state:
-            lines.append(f"- 结束状态: {cont.end_state}")
-        if cont.priority != "medium":
-            lines.append(f"- 优先级: {cont.priority}")
-        lines.append("")
 
-    # Generation hint
-    hint = shot.generation_hint
-    if hint.preferred_family or hint.preferred_mode:
-        lines.append(f"**生成建议**: {hint.preferred_family} / {hint.preferred_mode}")
-        if hint.notes:
-            lines.append(f"  - {hint.notes}")
+def _render_panel_md(panel: Panel, sb: Storyboard) -> str:
+    """Render a single panel to Markdown."""
+    idx = sb.display_index_for_panel(panel.panel_id)
+    lines: list[str] = []
+
+    lines.append(f"### Panel {idx} (`{panel.panel_id}`)")
+    lines.append("")
+    lines.append(
+        f"**时长**: {panel.desired_duration_ms}ms ({panel.desired_duration_ms / 1000:.1f}s)"
+    )
+    lines.append(f"**节拍范围**: {panel.beat_range[0]}–{panel.beat_range[1]}")
+    if panel.beat_ids:
+        lines.append(f"**节拍**: {', '.join(panel.beat_ids)}")
+    lines.append("")
+
+    if panel.prompt_text:
+        lines.append(f"**提示词**: {panel.prompt_text}")
         lines.append("")
 
     return "\n".join(lines)

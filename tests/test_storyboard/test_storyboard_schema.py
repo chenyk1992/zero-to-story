@@ -1,11 +1,14 @@
 ﻿"""Tests for LFO Storyboard Schema."""
+from lfo.storyboard.panel_plan import derive_panels_from_beats
 from lfo.storyboard.storyboard import (
     REVIEW_PENDING,
     ActionBeat,
+    Beat,
     Camera,
     Character,
     CharacterAppearance,
     ContinuityInfo,
+    Panel,
     ProjectInfo,
     ReviewStatus,
     Scene,
@@ -77,26 +80,53 @@ class TestStyleGuide:
         sg2 = StyleGuide.from_dict(d)
         assert sg2.medium_lock == "Medium: 2D hand-drawn animation. NOT 3D render."
         assert sg2.style_keywords == ["cinematic", "neon-lit"]
+
     def test_auto_id(self):
         s = Scene(name="Rainy Street")
         assert s.scene_id.startswith("scene_")
 
 
+class TestBeat:
+    def test_auto_id(self):
+        b = Beat()
+        assert b.beat_id.startswith("beat_")
+
+    def test_with_scene(self):
+        b = Beat(beat_id="beat_001", scene_id="scene_001", sequence=1, description="Walks in")
+        assert b.beat_id == "beat_001"
+        assert b.scene_id == "scene_001"
+
+    def test_round_trip(self):
+        b = Beat(
+            beat_id="beat_001",
+            sequence=1,
+            scene_id="scene_001",
+            description="Enters frame",
+            dialogue="Hello",
+            sound="footsteps",
+            characters=[
+                CharacterAppearance(
+                    character_id="char_001",
+                    screen_position="center",
+                    action="walks forward",
+                )
+            ],
+            framing="close_up",
+        )
+        d = b.to_dict()
+        restored = Beat.from_dict(d)
+        assert restored.beat_id == "beat_001"
+        assert restored.framing == "close_up"
+        assert len(restored.characters) == 1
+        assert restored.characters[0].character_id == "char_001"
+
+
 class TestShot:
+    """Shot remains for LLM decompose intermediate; not on Storyboard."""
+
     def test_auto_id(self):
         s = Shot()
         assert s.shot_id.startswith("shot_")
-
-    def test_with_scene(self):
-        s = Shot(shot_id="shot_001", scene_id="scene_001", desired_duration_ms=5000)
-        assert s.shot_id == "shot_001"
-        assert s.desired_duration_ms == 5000
-
-    def test_camera_defaults(self):
-        s = Shot()
-        assert s.camera.shot_size == "medium"
-        assert s.camera.angle == "eye_level"
-        assert s.camera.movement == "static"
 
     def test_round_trip(self):
         s = Shot(
@@ -120,10 +150,7 @@ class TestShot:
         restored = Shot.from_dict(d)
         assert restored.shot_id == "shot_001"
         assert restored.camera.shot_size == "close_up"
-        assert len(restored.characters) == 1
-        assert restored.characters[0].character_id == "char_001"
         assert len(restored.action_beats) == 2
-        assert restored.action_beats[0].description == "Enters frame"
 
 
 class TestContinuityInfo:
@@ -153,32 +180,42 @@ class TestStoryboard:
     def test_create_empty(self):
         sb = Storyboard()
         assert sb.project.project_id == ""
-        assert sb.shots == []
+        assert sb.beats == []
+        assert sb.panels == []
         assert sb.review.status == REVIEW_PENDING
 
     def test_total_duration(self):
-        sb = Storyboard()
-        sb.shots = [
-            Shot(shot_id="s1", desired_duration_ms=5000),
-            Shot(shot_id="s2", desired_duration_ms=3000),
-            Shot(shot_id="s3", desired_duration_ms=7000),
-        ]
+        sb = Storyboard(
+            panels=[
+                Panel(panel_id="p1", desired_duration_ms=5000),
+                Panel(panel_id="p2", desired_duration_ms=3000),
+                Panel(panel_id="p3", desired_duration_ms=7000),
+            ],
+        )
         assert sb.total_duration_ms() == 15000
 
     def test_total_duration_empty(self):
         sb = Storyboard()
         assert sb.total_duration_ms() == 0
 
-    def test_shot_by_id(self):
-        sb = Storyboard()
-        sb.shots = [Shot(shot_id="s1"), Shot(shot_id="s2")]
-        found = sb.shot_by_id("s2")
+    def test_panel_by_id(self):
+        sb = Storyboard(
+            panels=[Panel(panel_id="p1"), Panel(panel_id="p2")],
+        )
+        found = sb.panel_by_id("p2")
         assert found is not None
-        assert found.shot_id == "s2"
+        assert found.panel_id == "p2"
 
-    def test_shot_by_id_missing(self):
+    def test_panel_by_id_missing(self):
         sb = Storyboard()
-        assert sb.shot_by_id("nonexistent") is None
+        assert sb.panel_by_id("nonexistent") is None
+
+    def test_beat_by_id(self):
+        sb = Storyboard()
+        sb.beats = [Beat(beat_id="b1"), Beat(beat_id="b2")]
+        found = sb.beat_by_id("b1")
+        assert found is not None
+        assert found.beat_id == "b1"
 
     def test_character_by_id(self):
         sb = Storyboard()
@@ -194,18 +231,36 @@ class TestStoryboard:
         assert found is not None
         assert found.name == "Lab"
 
-    def test_display_index(self):
-        sb = Storyboard()
-        sb.shots = [Shot(shot_id="s1"), Shot(shot_id="s2"), Shot(shot_id="s3")]
-        assert sb.display_index_for("s1") == 1
-        assert sb.display_index_for("s2") == 2
-        assert sb.display_index_for("s3") == 3
+    def test_display_index_for_panel(self):
+        sb = Storyboard(
+            panels=[Panel(panel_id="p1"), Panel(panel_id="p2"), Panel(panel_id="p3")],
+        )
+        assert sb.display_index_for_panel("p1") == 1
+        assert sb.display_index_for_panel("p2") == 2
+        assert sb.display_index_for_panel("p3") == 3
 
     def test_display_index_missing(self):
         sb = Storyboard()
-        assert sb.display_index_for("nonexistent") == 0
+        assert sb.display_index_for_panel("nonexistent") == 0
 
     def test_full_round_trip(self):
+        beats = [
+            Beat(
+                beat_id="beat_001",
+                sequence=1,
+                scene_id="scene_001",
+                description="Walks down the street",
+                framing="wide",
+                characters=[
+                    CharacterAppearance(
+                        character_id="char_001",
+                        screen_position="center",
+                        action="walks",
+                    )
+                ],
+            ),
+        ]
+        panels = derive_panels_from_beats(beats, 5000)
         sb = Storyboard(
             project=ProjectInfo(project_id="proj_001", title="Test Film"),
             story=Story(logline="A robot remembers.", synopsis="Long story."),
@@ -216,22 +271,8 @@ class TestStoryboard:
             scenes=[
                 Scene(scene_id="scene_001", name="Rainy Street", environment="exterior"),
             ],
-            shots=[
-                Shot(
-                    shot_id="shot_001",
-                    display_index=1,
-                    scene_id="scene_001",
-                    desired_duration_ms=5000,
-                    camera=Camera(shot_size="wide", movement="static"),
-                    characters=[
-                        CharacterAppearance(
-                            character_id="char_001",
-                            screen_position="center",
-                            action="walks",
-                        )
-                    ],
-                ),
-            ],
+            beats=beats,
+            panels=panels,
             review=ReviewStatus(status=REVIEW_PENDING),
         )
 
@@ -244,7 +285,7 @@ class TestStoryboard:
         assert restored.characters[0].name == "Mira"
         assert len(restored.scenes) == 1
         assert restored.scenes[0].name == "Rainy Street"
-        assert len(restored.shots) == 1
-        assert restored.shots[0].shot_id == "shot_001"
-        assert restored.shots[0].desired_duration_ms == 5000
-        assert restored.shots[0].camera.shot_size == "wide"
+        assert len(restored.beats) == 1
+        assert restored.beats[0].beat_id == "beat_001"
+        assert restored.beats[0].framing == "wide"
+        assert len(restored.panels) == 1

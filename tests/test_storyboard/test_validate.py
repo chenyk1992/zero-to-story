@@ -79,7 +79,6 @@ class TestValidateIntake:
             "constraints": {"target_duration_ms": 999999},
         }
         result = validate_intake(data)
-        # Should be valid but with warning
         assert result.valid is True
         assert len(result.warnings) > 0
 
@@ -89,10 +88,20 @@ class TestValidateStoryboard:
         data = {
             "project": {"project_id": "proj_001"},
             "story": {},
-            "shots": [
+            "beats": [
                 {
-                    "shot_id": "shot_001",
+                    "beat_id": "beat_001",
+                    "sequence": 1,
                     "scene_id": "scene_001",
+                    "description": "Action",
+                }
+            ],
+            "panels": [
+                {
+                    "panel_id": "panel_001",
+                    "sequence": 1,
+                    "beat_range": [1, 1],
+                    "beat_ids": ["beat_001"],
                     "desired_duration_ms": 5000,
                 }
             ],
@@ -104,22 +113,32 @@ class TestValidateStoryboard:
         assert result.valid is True
 
     def test_missing_project(self):
-        data = {"story": {}, "shots": [{"shot_id": "s1", "scene_id": "sc1", "desired_duration_ms": 1000}]}
+        data = {
+            "story": {},
+            "beats": [{"beat_id": "b1", "scene_id": "sc1"}],
+            "panels": [{"panel_id": "p1", "beat_ids": ["b1"], "desired_duration_ms": 1000}],
+        }
         result = validate_storyboard(data)
         assert result.valid is False
         assert any(e.path == "/project" for e in result.errors)
 
-    def test_missing_shots(self):
-        data = {"project": {"project_id": "p1"}, "story": {}, "shots": []}
-        result = validate_storyboard(data)
-        assert result.valid is False
-        assert any(e.path == "/shots" for e in result.errors)
-
-    def test_shot_missing_scene(self):
+    def test_missing_beats(self):
         data = {
             "project": {"project_id": "p1"},
             "story": {},
-            "shots": [{"shot_id": "s1", "desired_duration_ms": 1000}],
+            "beats": [],
+            "panels": [{"panel_id": "p1", "desired_duration_ms": 1000}],
+        }
+        result = validate_storyboard(data)
+        assert result.valid is False
+        assert any(e.path == "/beats" for e in result.errors)
+
+    def test_beat_missing_scene(self):
+        data = {
+            "project": {"project_id": "p1"},
+            "story": {},
+            "beats": [{"beat_id": "b1"}],
+            "panels": [{"panel_id": "p1", "beat_ids": ["b1"], "desired_duration_ms": 1000}],
         }
         result = validate_storyboard(data)
         assert result.valid is False
@@ -131,16 +150,16 @@ class TestValidateStoryboard:
             "story": {},
             "characters": [{"character_id": "char_001", "name": "Mira"}],
             "scenes": [{"scene_id": "scene_001"}],
-            "shots": [
+            "beats": [
                 {
-                    "shot_id": "s1",
+                    "beat_id": "b1",
                     "scene_id": "scene_001",
-                    "desired_duration_ms": 1000,
                     "characters": [
                         {"character_id": "char_nonexistent"}
                     ],
                 }
             ],
+            "panels": [{"panel_id": "p1", "beat_ids": ["b1"], "desired_duration_ms": 1000}],
         }
         result = validate_storyboard(data)
         assert result.valid is False
@@ -151,41 +170,42 @@ class TestValidateStoryboard:
             "project": {"project_id": "p1"},
             "story": {},
             "scenes": [{"scene_id": "scene_001"}],
-            "shots": [
+            "beats": [
                 {
-                    "shot_id": "s1",
+                    "beat_id": "b1",
                     "scene_id": "scene_nonexistent",
-                    "desired_duration_ms": 1000,
                 }
             ],
+            "panels": [{"panel_id": "p1", "beat_ids": ["b1"], "desired_duration_ms": 1000}],
         }
         result = validate_storyboard(data)
         assert result.valid is False
 
-    def test_continuity_invalid_reference(self):
+    def test_panel_beat_id_not_found(self):
         data = {
             "project": {"project_id": "p1"},
             "story": {},
             "scenes": [{"scene_id": "scene_001"}],
-            "shots": [
+            "beats": [{"beat_id": "b1", "scene_id": "scene_001"}],
+            "panels": [
                 {
-                    "shot_id": "s1",
-                    "scene_id": "scene_001",
+                    "panel_id": "p1",
+                    "beat_ids": ["beat_missing"],
                     "desired_duration_ms": 1000,
-                    "continuity": {"previous_shot_id": "shot_nonexistent"},
                 }
             ],
         }
         result = validate_storyboard(data)
         assert result.valid is False
-        assert any("previous_shot_id" in e.path for e in result.errors)
+        assert any("beat_ids" in e.path for e in result.errors)
 
     def test_invalid_review_status(self):
         data = {
             "project": {"project_id": "p1"},
             "story": {},
-            "shots": [{"shot_id": "s1", "scene_id": "sc1", "desired_duration_ms": 1000}],
             "scenes": [{"scene_id": "sc1"}],
+            "beats": [{"beat_id": "b1", "scene_id": "sc1"}],
+            "panels": [{"panel_id": "p1", "beat_ids": ["b1"], "desired_duration_ms": 1000}],
             "review": {"status": "invalid_status"},
         }
         result = validate_storyboard(data)

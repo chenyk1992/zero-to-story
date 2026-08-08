@@ -1,16 +1,16 @@
 """StoryboardDecomposer — turn an Intake into a Storyboard via LLM.
 
 This module is the bridge between narrative intent (Intake) and structured
-production data (Storyboard.shots). The decomposer:
+production data (Storyboard.beats + Storyboard.panels). The decomposer:
 
 1. Builds a prompt from the Intake, Characters, Scenes, and Style.
 2. Calls the LLM via the ``LLMClient`` protocol (default: ``MmxLLMClient``).
 3. Parses the LLM output and validates it against the decompose schema.
-4. Merges the new scenes/props/shots with the existing Storyboard (project,
+4. Merges the new scenes/props/beats with the existing Storyboard (project,
    story, style, characters, audio_policy, review) and resolves scene
-   references: shots may reference existing scenes (by id) or new scenes
+   references: beats may reference existing scenes (by id) or new scenes
    (declared in the LLM payload).
-5. Returns a :class:`Storyboard` with the new shots, scenes, and props set.
+5. Returns a :class:`Storyboard` with beats, derived panels, scenes, and props set.
 
 Failures are loud: the decomposer raises
 :class:`lfo.storyboard.decompose_schema.DecomposeSchemaError` (or its own
@@ -37,9 +37,11 @@ from .decompose_schema import (
     validate_llm_payload,
 )
 from .intake import Intake
+from .panel_plan import derive_panels_from_beats
 from .storyboard import (
     ActionBeat,
     AudioPolicy,
+    Beat,
     Camera,
     Character,
     CharacterAppearance,
@@ -318,6 +320,31 @@ def _resolve_scene_refs(
 # ---------------------------------------------------------------------------
 
 
+def _convert_shot_to_beat(shot_dict: dict, scene_id_remap: dict[str, str], sequence: int) -> Beat:
+    """Convert a validated LLM shot dict into a Beat."""
+    shot_dict = dict(shot_dict)
+    scene_id = shot_dict.get("scene_id", "")
+    scene_id = scene_id_remap.get(scene_id, scene_id)
+    camera = shot_dict.get("camera", {})
+    framing = camera.get("shot_size", "medium")
+    characters = [CharacterAppearance.from_dict(c) for c in shot_dict.get("characters", [])]
+    sounds = [
+        b.get("description", "")
+        for b in shot_dict.get("action_beats", [])
+        if b.get("description")
+    ]
+    return Beat(
+        beat_id=shot_dict.get("shot_id", f"beat_{uuid.uuid4().hex[:8]}"),
+        sequence=sequence,
+        scene_id=scene_id,
+        description=shot_dict.get("description", ""),
+        dialogue=shot_dict.get("narration", ""),
+        sound="; ".join(sounds),
+        characters=characters,
+        framing=framing,
+    )
+
+
 def _convert_shot(shot_dict: dict, scene_id_remap: dict[str, str]) -> Shot:
     """Convert a validated shot dict into a Shot dataclass."""
     scene_id = shot_dict.get("scene_id", "")
@@ -361,9 +388,9 @@ def _prop_from_dict(d: dict):
 # ---------------------------------------------------------------------------
 
 
-def _assign_display_indices(shots: list[Shot]) -> None:
-    for i, shot in enumerate(shots):
-        shot.display_index = i + 1
+def _assign_beat_sequences(beats: list[Beat]) -> None:
+    for i, beat in enumerate(beats):
+        beat.sequence = i + 1
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +471,17 @@ class StoryboardDecomposer:
         # Reconcile scenes
         merged_scenes, scene_remap = _resolve_scene_refs(payload, self.scenes)
 
-        # Convert shots
-        shots = [_convert_shot(s, scene_remap) for s in payload.new_shots]
-        _assign_display_indices(shots)
+        # Convert LLM shots → beats, then derive panels
+        beats = [
+            _convert_shot_to_beat(s, scene_remap, sequence=i + 1)
+            for i, s in enumerate(payload.new_shots)
+        ]
+        _assign_beat_sequences(beats)
+
+        total_ms = sum(s.get("desired_duration_ms", 0) for s in payload.new_shots)
+        if total_ms <= 0:
+            total_ms = intake.constraints.target_duration_ms
+        panels = derive_panels_from_beats(beats, total_ms)
 
         # Merge props
         merged_props = _merge_props([], payload.new_props)
@@ -459,7 +494,8 @@ class StoryboardDecomposer:
             characters=list(self.characters),
             scenes=merged_scenes,
             props=merged_props,
-            shots=shots,
+            beats=beats,
+            panels=panels,
             audio_policy=self.audio_policy,
         )
 

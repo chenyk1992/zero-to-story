@@ -32,19 +32,21 @@ from .intake import (
     IntakeSource,
     Origin,
 )
-from .render import render_intake_md, render_storyboard_md
+from .panel_plan import derive_panels_from_beats
 from .storyboard import (
     REVIEW_APPROVED,
     REVIEW_PENDING,
     REVIEW_REJECTED,
     ActionBeat,
     AudioPolicy,
+    Beat,
     Camera,
     Character,
     CharacterAppearance,
     ContinuityChain,
     ContinuityInfo,
     GenerationHint,
+    Panel,
     ProjectInfo,
     Prop,
     ReviewStatus,
@@ -54,6 +56,7 @@ from .storyboard import (
     Storyboard,
     StyleGuide,
 )
+from .render import render_intake_md, render_storyboard_md
 from .validate import validate_intake, validate_storyboard
 
 __all__ = [
@@ -74,6 +77,9 @@ __all__ = [
     "Character",
     "Scene",
     "Prop",
+    "Beat",
+    "Panel",
+    "derive_panels_from_beats",
     "Shot",
     "Camera",
     "CharacterAppearance",

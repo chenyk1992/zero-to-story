@@ -136,20 +136,16 @@ class TestDecomposeHappyPath:
         assert isinstance(sb, Storyboard)
         assert sb.project.title == "特价鸡蛋引发的血案"
         assert sb.project.intake_ref == "intake_test_001"
-        assert len(sb.shots) == 2
+        assert len(sb.beats) == 2
+        assert len(sb.panels) == 1
 
-        s1, s2 = sb.shots
-        assert s1.shot_id == "shot_001_t2v"
-        assert s1.display_index == 1
-        assert s1.generation_hint.preferred_mode == "t2va"
-        assert s1.continuity.start_frame_needed is False
-        assert s1.continuity.next_shot_id == "shot_002_i2v"
+        b1, b2 = sb.beats
+        assert b1.beat_id == "shot_001_t2v"
+        assert b1.sequence == 1
+        assert b1.framing == "wide"
 
-        assert s2.shot_id == "shot_002_i2v"
-        assert s2.display_index == 2
-        assert s2.generation_hint.preferred_mode == "i2v"
-        assert s2.continuity.start_frame_needed is True
-        assert s2.continuity.previous_shot_id == "shot_001_t2v"
+        assert b2.beat_id == "shot_002_i2v"
+        assert b2.sequence == 2
 
     def test_passes_intake_synopsis_to_prompt(self):
         """The synopsis content must reach the user prompt."""
@@ -212,7 +208,7 @@ class TestDecomposeHappyPath:
         llm = FakeLLMClient(response=raw)
         decomposer = StoryboardDecomposer(llm=llm, project=_make_project())
         sb = decomposer.decompose(_make_intake())
-        assert sb.shots[0].scene_id == "scene_warehouse"
+        assert sb.beats[0].scene_id == "scene_warehouse"
         assert any(s.scene_id == "scene_warehouse" for s in sb.scenes)
 
 

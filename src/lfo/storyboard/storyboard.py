@@ -11,6 +11,10 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lfo.planning.panel_pack import PanelPack
 
 # ---------------------------------------------------------------------------
 # Review status constants
@@ -360,7 +364,85 @@ class GenerationHint:
 
 
 # ---------------------------------------------------------------------------
-# Shot
+# Beat (narrative cell)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Beat:
+    """A narrative beat — source material for storyboard panels."""
+    beat_id: str = field(default_factory=lambda: f"beat_{uuid.uuid4().hex[:8]}")
+    sequence: int = 0
+    scene_id: str = ""
+    description: str = ""
+    dialogue: str = ""
+    sound: str = ""
+    characters: list[CharacterAppearance] = field(default_factory=list)
+    framing: str = "medium"
+
+    def to_dict(self) -> dict:
+        return {
+            "beat_id": self.beat_id,
+            "sequence": self.sequence,
+            "scene_id": self.scene_id,
+            "description": self.description,
+            "dialogue": self.dialogue,
+            "sound": self.sound,
+            "characters": [c.to_dict() for c in self.characters],
+            "framing": self.framing,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Beat:
+        characters = [CharacterAppearance.from_dict(c) for c in data.pop("characters", [])]
+        return cls(characters=characters, **data)
+
+
+# ---------------------------------------------------------------------------
+# Panel (execution unit)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Panel:
+    """A video execution panel grouping one or more beats."""
+    panel_id: str = field(default_factory=lambda: f"panel_{uuid.uuid4().hex[:8]}")
+    sequence: int = 0
+    beat_range: tuple[int, int] = (1, 1)
+    beat_ids: list[str] = field(default_factory=list)
+    desired_duration_ms: int = 15_000
+    bw_asset_id: str = ""
+    pack: PanelPack | None = None
+    prompt_text: str = ""
+
+    def to_dict(self) -> dict:
+        from lfo.planning.panel_pack import panel_pack_to_dict
+
+        d: dict = {
+            "panel_id": self.panel_id,
+            "sequence": self.sequence,
+            "beat_range": list(self.beat_range),
+            "beat_ids": self.beat_ids,
+            "desired_duration_ms": self.desired_duration_ms,
+            "bw_asset_id": self.bw_asset_id,
+            "prompt_text": self.prompt_text,
+        }
+        if self.pack is not None:
+            d["pack"] = panel_pack_to_dict(self.pack)
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Panel:
+        from lfo.planning.panel_pack import panel_pack_from_dict
+
+        data = dict(data)
+        beat_range_raw = data.pop("beat_range", [1, 1])
+        beat_range = (int(beat_range_raw[0]), int(beat_range_raw[1]))
+        pack_data = data.pop("pack", None)
+        pack = panel_pack_from_dict(pack_data) if pack_data else None
+        return cls(beat_range=beat_range, pack=pack, **data)
+
+
+# ---------------------------------------------------------------------------
+# Shot (legacy LLM decompose intermediate — not a Storyboard field)
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -506,8 +588,9 @@ class Storyboard:
         characters: list of characters
         scenes: list of scenes
         props: list of significant props
-        shots: ordered list of shots
-        continuity_chains: chains of shots sharing continuity
+        beats: ordered narrative beats
+        panels: video execution panels derived from beats
+        continuity_chains: chains of panels sharing continuity
         audio_policy: audio generation policy
         review: approval status
         user_constraints: free-form user constraints
@@ -518,7 +601,8 @@ class Storyboard:
     characters: list[Character] = field(default_factory=list)
     scenes: list[Scene] = field(default_factory=list)
     props: list[Prop] = field(default_factory=list)
-    shots: list[Shot] = field(default_factory=list)
+    beats: list[Beat] = field(default_factory=list)
+    panels: list[Panel] = field(default_factory=list)
     continuity_chains: list[ContinuityChain] = field(default_factory=list)
     audio_policy: AudioPolicy = field(default_factory=AudioPolicy)
     review: ReviewStatus = field(default_factory=ReviewStatus)
@@ -532,7 +616,8 @@ class Storyboard:
             "characters": [c.to_dict() for c in self.characters],
             "scenes": [s.to_dict() for s in self.scenes],
             "props": [p.to_dict() for p in self.props],
-            "shots": [s.to_dict() for s in self.shots],
+            "beats": [b.to_dict() for b in self.beats],
+            "panels": [p.to_dict() for p in self.panels],
             "continuity_chains": [c.to_dict() for c in self.continuity_chains],
             "audio_policy": self.audio_policy.to_dict(),
             "review": self.review.to_dict(),
@@ -552,22 +637,30 @@ class Storyboard:
         characters = [Character.from_dict(c) for c in data.pop("characters", [])]
         scenes = [Scene.from_dict(s) for s in data.pop("scenes", [])]
         props = [Prop.from_dict(p) for p in data.pop("props", [])]
-        shots = [Shot.from_dict(s) for s in data.pop("shots", [])]
+        beats = [Beat.from_dict(b) for b in data.pop("beats", [])]
+        panels = [Panel.from_dict(p) for p in data.pop("panels", [])]
         chains = [ContinuityChain.from_dict(c) for c in data.pop("continuity_chains", [])]
         audio = AudioPolicy.from_dict(data.pop("audio_policy", {}))
         review = ReviewStatus.from_dict(data.pop("review", {}))
         return cls(
             project=project, story=story, style=style,
             characters=characters, scenes=scenes, props=props,
-            shots=shots, continuity_chains=chains,
+            beats=beats, panels=panels, continuity_chains=chains,
             audio_policy=audio, review=review, **data,
         )
 
-    def shot_by_id(self, shot_id: str) -> Shot | None:
-        """Look up a shot by its stable ID."""
-        for s in self.shots:
-            if s.shot_id == shot_id:
-                return s
+    def beat_by_id(self, beat_id: str) -> Beat | None:
+        """Look up a beat by its stable ID."""
+        for b in self.beats:
+            if b.beat_id == beat_id:
+                return b
+        return None
+
+    def panel_by_id(self, panel_id: str) -> Panel | None:
+        """Look up a panel by its stable ID."""
+        for p in self.panels:
+            if p.panel_id == panel_id:
+                return p
         return None
 
     def character_by_id(self, character_id: str) -> Character | None:
@@ -583,12 +676,12 @@ class Storyboard:
         return None
 
     def total_duration_ms(self) -> int:
-        """Sum of all shot durations."""
-        return sum(s.desired_duration_ms for s in self.shots)
+        """Sum of all panel durations."""
+        return sum(p.desired_duration_ms for p in self.panels)
 
-    def display_index_for(self, shot_id: str) -> int:
-        """Return the 1-based display index for a shot ID."""
-        for i, s in enumerate(self.shots):
-            if s.shot_id == shot_id:
+    def display_index_for_panel(self, panel_id: str) -> int:
+        """Return the 1-based display index for a panel ID."""
+        for i, p in enumerate(self.panels):
+            if p.panel_id == panel_id:
                 return i + 1
         return 0
