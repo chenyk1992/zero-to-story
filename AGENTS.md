@@ -81,6 +81,7 @@ lfo config                  # 配置查看/修改
 - **三级验证**：STATIC_VALID → RUNTIME_COMPATIBLE → SMOKE_TESTED
 - **ComfyUI**：本地 `http://127.0.0.1:8188`，RTX 5080 16GB，fl2va int8 路径
 - **Logical URI**：`project://`、`comfy-input://`、`comfy-output://`、`cache://`、`model://`
+- **Video execution**：Panel-only — `beats[]` + `panels[]` → `PanelPack` → r2v. No per-shot video tasks; `composition_ref` is the panel BW storyboard (not a previous end frame). Legacy `shots[]` is not read for execution.
 
 ## PR & commit conventions
 

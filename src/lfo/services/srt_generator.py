@@ -1,7 +1,7 @@
 """SRT Generator — produce subtitle sidecar from EDL timeline.
 
-Reads shot narration text from the storyboard and computes time ranges
-from the assembly clip durations.
+Reads panel beat dialogue from the storyboard and computes time ranges
+from the assembly clip durations. Clip ``shot_id`` holds the panel id.
 """
 from __future__ import annotations
 
@@ -90,11 +90,7 @@ class SRTGenerator:
             result.error = "No clips in snapshot"
             return result
 
-        # Build shot_id → narration lookup from storyboard
-        narration_map: dict[str, str] = {}
-        for shot in storyboard.shots:
-            if shot.narration:
-                narration_map[shot.shot_id] = shot.narration
+        narration_map = self._panel_dialogue_map(storyboard)
 
         # Build cues from clips in order
         cues: list[SRTCue] = []
@@ -112,7 +108,7 @@ class SRTGenerator:
             current_time += clip.duration_sec if clip.duration_sec > 0 else 5.0
 
         if not cues:
-            result.error = "No subtitle text found for any shot"
+            result.error = "No subtitle text found for any panel"
             return result
 
         # Write SRT file
@@ -171,6 +167,19 @@ class SRTGenerator:
         return asset_id
 
     # -- internal helpers -------------------------------------------------
+
+    def _panel_dialogue_map(self, storyboard: Storyboard) -> dict[str, str]:
+        """Map panel_id → subtitle text from beat dialogue."""
+        narration_map: dict[str, str] = {}
+        for panel in storyboard.panels:
+            texts: list[str] = []
+            for beat_id in panel.beat_ids:
+                beat = storyboard.beat_by_id(beat_id)
+                if beat and beat.dialogue:
+                    texts.append(beat.dialogue)
+            if texts:
+                narration_map[panel.panel_id] = " ".join(texts)
+        return narration_map
 
     def _format_srt(self, cues: list[SRTCue]) -> str:
         """Format cues as complete SRT file content."""

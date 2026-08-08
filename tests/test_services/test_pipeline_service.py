@@ -9,34 +9,12 @@ from lfo.core.database import Database
 from lfo.planning.schema import PlannedTask
 from lfo.services.pipeline_service import PipelineResult, PipelineService, TaskPipelineResult
 from lfo.services.storyboard_graph_service import TaskGraph
-from lfo.storyboard.storyboard import (
-    Camera,
-    ContinuityInfo,
-    GenerationHint,
-    ProjectInfo,
-    Shot,
-    Storyboard,
-)
+from lfo.storyboard.storyboard import ProjectInfo, Storyboard
+from tests.helpers.storyboard_fixtures import make_panel_storyboard
 
 
-def make_storyboard(num_shots: int = 2) -> Storyboard:
-    """Create a test storyboard."""
-    shots = []
-    for i in range(num_shots):
-        shot = Shot(
-            shot_id=f"shot_{i + 1:03d}",
-            display_index=i + 1,
-            scene_id="scene_001",
-            description=f"Shot {i + 1}",
-            camera=Camera(shot_size="medium", movement="static"),
-            continuity=ContinuityInfo(start_frame_needed=(i > 0)),
-            generation_hint=GenerationHint(),
-        )
-        shots.append(shot)
-    return Storyboard(
-        project=ProjectInfo(project_id="proj-pipeline-test", title="Test"),
-        shots=shots,
-    )
+def make_storyboard(num_panels: int = 2) -> Storyboard:
+    return make_panel_storyboard(num_panels, project_id="proj-pipeline-test", title="Test")
 
 
 @pytest.fixture
@@ -47,16 +25,14 @@ def db() -> Database:
 
 
 class TestExecute:
-    """Test pipeline execution."""
-
     def test_empty_storyboard(self, db):
         service = PipelineService(db)
         storyboard = Storyboard(
             project=ProjectInfo(project_id="proj-empty"),
-            shots=[],
+            beats=[],
+            panels=[],
         )
 
-        # Mock graph service
         service.graph_service = MagicMock()
         service.graph_service.build_graph.return_value = TaskGraph(
             project_id="proj-empty",
@@ -72,14 +48,13 @@ class TestExecute:
         service = PipelineService(db, auto_approve=True)
         storyboard = make_storyboard(2)
 
-        # Mock graph service
         planned_tasks = [
             PlannedTask(
-                logical_task_key="video/shot_001",
-                task_id="task_shot_001",
+                logical_task_key="video/panel_001",
+                task_id="task_panel_001",
                 project_id="proj-pipeline-test",
-                target_ids=["shot_001"],
-                workflow_mode="t2va",
+                target_ids=["panel_001"],
+                workflow_mode="r2v",
             ),
         ]
         service.graph_service = MagicMock()
@@ -88,7 +63,6 @@ class TestExecute:
             tasks=planned_tasks,
         )
 
-        # Mock other services to avoid actual execution
         service.readiness_service = MagicMock()
         service.readiness_service.promote_to_ready.return_value = MagicMock(
             success=True, materialization_id="mat-001",
@@ -125,7 +99,6 @@ class TestExecute:
             success=True, file_path="/tmp/frame.png",
         )
 
-        # Mock assembly pipeline services
         service.edl_service = MagicMock()
         mock_edl = MagicMock()
         mock_edl.edl_id = "edl-001"
@@ -145,7 +118,6 @@ class TestExecute:
             success=True, issues=[],
         )
 
-        # Mock DB fetch for asset_id
         def mock_fetchone(sql, params):
             if "asset_id" in sql:
                 return ("asset-001",)
@@ -166,10 +138,10 @@ class TestExecute:
 
         planned_tasks = [
             PlannedTask(
-                logical_task_key="video/shot_001",
-                task_id="task_shot_001",
+                logical_task_key="video/panel_001",
+                task_id="task_panel_001",
                 project_id="proj-pipeline-test",
-                target_ids=["shot_001"],
+                target_ids=["panel_001"],
             ),
         ]
         service.graph_service = MagicMock()
@@ -178,7 +150,6 @@ class TestExecute:
             tasks=planned_tasks,
         )
 
-        # Mock failure at execution step
         service.readiness_service = MagicMock()
         service.readiness_service.promote_to_ready.return_value = MagicMock(success=True)
         service.execution_facade = MagicMock()
@@ -190,12 +161,10 @@ class TestExecute:
 
         assert result.success is False
         assert result.failed_tasks == 1
-        assert "task_shot_001" in result.errors
+        assert "task_panel_001" in result.errors
 
 
 class TestTaskPipelineResult:
-    """Test TaskPipelineResult dataclass."""
-
     def test_default_values(self):
         result = TaskPipelineResult(task_id="t1", shot_id="s1")
         assert result.success is False
@@ -205,8 +174,6 @@ class TestTaskPipelineResult:
 
 
 class TestPipelineResult:
-    """Test PipelineResult dataclass."""
-
     def test_default_values(self):
         result = PipelineResult(project_id="p1")
         assert result.success is False

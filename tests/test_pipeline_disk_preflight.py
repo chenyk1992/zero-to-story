@@ -20,7 +20,8 @@ from lfo.storyboard.storyboard import ProjectInfo, Storyboard
 def _make_storyboard() -> Storyboard:
     return Storyboard(
         project=ProjectInfo(project_id="proj-disk-test", title="Test"),
-        shots=[],
+        beats=[],
+        panels=[],
     )
 
 

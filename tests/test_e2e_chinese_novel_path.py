@@ -16,14 +16,12 @@ import pytest
 from lfo.core.database import Database
 from lfo.services.pipeline_service import PipelineService
 from lfo.storyboard.storyboard import (
-    Camera,
+    Beat,
     Character,
     CharacterAppearance,
-    ContinuityInfo,
-    GenerationHint,
+    Panel,
     ProjectInfo,
     Scene,
-    Shot,
     Story,
     Storyboard,
     StyleGuide,
@@ -31,7 +29,14 @@ from lfo.storyboard.storyboard import (
 
 
 def _build_storyboard(novel_id: str, chapter_id: str) -> Storyboard:
-    """A 2-shot minimal storyboard that uses Chinese novel_id and chapter_id."""
+    """A 2-panel minimal storyboard that uses Chinese novel_id and chapter_id."""
+    char_app = CharacterAppearance(
+        character_id="char_chenmo",
+        screen_position="center",
+        orientation="facing_camera",
+        action="踹翻货架",
+        expression="漫不经心",
+    )
     return Storyboard(
         project=ProjectInfo(
             project_id=f"{novel_id}-{chapter_id}",
@@ -73,38 +78,21 @@ def _build_storyboard(novel_id: str, chapter_id: str) -> Storyboard:
                 environment="interior",
             ),
         ],
-        shots=[
-            Shot(
-                shot_id="shot_001",
+        beats=[
+            Beat(
+                beat_id="beat_001",
+                sequence=1,
                 scene_id="scene_supermarket",
                 description="陈默一脚踹翻洗发水货架，新员工们表演平地摔",
-                desired_duration_ms=5000,
-                camera=Camera(shot_size="wide", angle="eye_level", movement="static"),
-                characters=[
-                    CharacterAppearance(
-                        character_id="char_chenmo",
-                        screen_position="center",
-                        orientation="facing_camera",
-                        action="踹翻货架",
-                        expression="漫不经心",
-                    ),
-                ],
-                continuity=ContinuityInfo(
-                    start_frame_needed=False,
-                    end_state="陈默比出拜拜手势转身",
-                ),
-                generation_hint=GenerationHint(
-                    preferred_family="h3_fl2va",
-                    preferred_mode="t2va",
-                    notes="首镜头 T2V，无 first_frame",
-                ),
+                framing="wide",
+                characters=[char_app],
             ),
-            Shot(
-                shot_id="shot_002",
+            Beat(
+                beat_id="beat_002",
+                sequence=2,
                 scene_id="scene_supermarket",
                 description="陈默点燃仓库里搜来的烟，靠在冰柜上听广播",
-                desired_duration_ms=5000,
-                camera=Camera(shot_size="medium", angle="low_angle", movement="slow_push_in"),
+                framing="medium",
                 characters=[
                     CharacterAppearance(
                         character_id="char_chenmo",
@@ -114,16 +102,22 @@ def _build_storyboard(novel_id: str, chapter_id: str) -> Storyboard:
                         expression="冷笑",
                     ),
                 ],
-                continuity=ContinuityInfo(
-                    start_frame_needed=True,
-                    previous_shot_id="shot_001",
-                    end_state="烟雾缭绕中广播响起",
-                ),
-                generation_hint=GenerationHint(
-                    preferred_family="h3_fl2va",
-                    preferred_mode="i2v",
-                    notes="需要 shot_001 末帧作为 first_frame",
-                ),
+            ),
+        ],
+        panels=[
+            Panel(
+                panel_id="panel_001",
+                sequence=1,
+                beat_range=(1, 1),
+                beat_ids=["beat_001"],
+                desired_duration_ms=15_000,
+            ),
+            Panel(
+                panel_id="panel_002",
+                sequence=2,
+                beat_range=(2, 2),
+                beat_ids=["beat_002"],
+                desired_duration_ms=15_000,
             ),
         ],
     )

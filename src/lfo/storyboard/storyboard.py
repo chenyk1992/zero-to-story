@@ -631,6 +631,7 @@ class Storyboard:
         # "unexpected keyword argument".
         data.pop("schema_version", None)
         data.pop("created_at", None)
+        data.pop("shots", None)  # legacy — not loaded; panel-only execution
         project = ProjectInfo.from_dict(data.pop("project", {}))
         story = Story.from_dict(data.pop("story", {}))
         style = StyleGuide.from_dict(data.pop("style", {}))

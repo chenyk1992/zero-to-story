@@ -395,18 +395,18 @@ class PipelineService:
                 return panel_plan.prompt_text
         return ""
 
+    def _get_panel_duration(self, panel_id: str) -> int:
+        """Get desired duration in seconds for a panel from the storyboard."""
+        if not panel_id or not hasattr(self, "_storyboard"):
+            return 5
+        panel = self._storyboard.panel_by_id(panel_id)
+        if panel is None:
+            return 5
+        return max(1, (panel.desired_duration_ms + 500) // 1000)
+
     def _get_shot_duration(self, shot_id: str) -> int:
-        """Get desired duration in seconds for a shot from the storyboard."""
-        if not shot_id or not hasattr(self, "_storyboard"):
-            return 5
-        shot = next(
-            (s for s in self._storyboard.shots if s.shot_id == shot_id),
-            None,
-        )
-        if shot is None:
-            return 5
-        # desired_duration_ms → seconds (round to int)
-        return max(1, (shot.desired_duration_ms + 500) // 1000)
+        """Legacy alias — target_ids are panel ids in the panel-only model."""
+        return self._get_panel_duration(shot_id)
 
     # -- continuity binding ---------------------------------------------- #
 
@@ -415,115 +415,12 @@ class PipelineService:
         source_shot_id: str,
         end_frame_asset_id: str,
     ) -> None:
-        """After extracting an end frame, bind it as the start_frame for the
-        next shot in the continuity chain.
+        """No-op in panel-only r2v execution.
 
-        This creates:
-        1. A continuity_states record (Level 0 automated continuity)
-        2. An asset_bindings record with role=start_frame for the next shot
-        3. An auto-approval review so promote_to_ready sees the binding
-
-        Without this step, I2V/R2V shots downstream would stay in
-        WAITING_ASSETS because their start_frame requirement can never be
-        satisfied — the end frame only exists after the previous shot finishes.
+        End frames must not replace composition_ref or veto r2v; continuity
+        is carried via PanelPack, not shot-to-shot start_frame binding.
         """
-        if not hasattr(self, "_storyboard"):
-            return
-
-        # Find the source shot's continuity → next_shot_id
-        source_shot = next(
-            (s for s in self._storyboard.shots if s.shot_id == source_shot_id),
-            None,
-        )
-        if source_shot is None:
-            return
-
-        next_shot_id = source_shot.continuity.next_shot_id
-        if not next_shot_id:
-            return  # Last shot in chain — nothing to bind to
-
-        # Verify next shot exists in storyboard
-        next_shot = next(
-            (s for s in self._storyboard.shots if s.shot_id == next_shot_id),
-            None,
-        )
-        if next_shot is None:
-            return
-
-        project_id = self._storyboard.project.project_id
-
-        # 1. Create continuity state record
-        try:
-            from lfo.services.continuity_service import ContinuityService
-            continuity = ContinuityService(self.db)
-            continuity.bind_end_frame_to_shot(
-                project_id=project_id,
-                source_shot_id=source_shot_id,
-                target_shot_id=next_shot_id,
-                end_frame_asset_id=end_frame_asset_id,
-                state_json={"source": "auto_end_frame_extraction"},
-            )
-            continuity.approve_continuity(
-                continuity_id=continuity.get_continuity_for_shot(
-                    project_id, next_shot_id,
-                ).continuity_id,
-                approved_by="pipeline_auto",
-            )
-            print(f"        Continuity: {source_shot_id} → {next_shot_id}")
-        except Exception as e:
-            print(f"        Continuity binding warning: {e}")
-
-        # 2. Create asset_bindings record for start_frame
-        #    This is what promote_to_ready checks via get_current_approved_asset
-        import uuid as _uuid
-        from datetime import UTC as _UTC
-        now = datetime.now(_UTC).strftime("%Y-%m-%dT%H:%M:%fZ")
-        binding_id = _uuid.uuid4().hex
-        review_id = _uuid.uuid4().hex
-
-        # Get content_hash from the end frame asset
-        asset_row = self.db.fetchone(
-            "SELECT content_hash FROM assets WHERE asset_id = ?",
-            (end_frame_asset_id,),
-        )
-        content_hash = asset_row[0] if asset_row else ""
-
-        # Insert binding (entity_type=start_frame, role=start_frame)
-        # Idempotent: INSERT OR IGNORE
-        self.db.execute(
-            """INSERT OR IGNORE INTO asset_bindings
-               (binding_id, asset_id, project_id, entity_type, entity_id,
-                asset_role, revision, validity, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 1, 'current', ?)""",
-            (
-                binding_id,
-                end_frame_asset_id,
-                project_id,
-                "start_frame",
-                next_shot_id,
-                "start_frame",
-                now,
-            ),
-        )
-
-        # 3. Auto-approve so promote_to_ready passes the gate
-        # Idempotent: only insert if no approved review exists for this asset
-        existing_review = self.db.fetchone(
-            """SELECT review_id FROM asset_reviews
-               WHERE asset_id = ? AND manual_review_status = 'approved'""",
-            (end_frame_asset_id,),
-        )
-        if existing_review is None:
-            self.db.execute(
-                """INSERT INTO asset_reviews
-                   (review_id, asset_id, dependency_hash, technical_status,
-                    manual_review_status, review_source, reviewer, created_at)
-                   VALUES (?, ?, ?, 'passed', 'approved', 'auto_pipeline',
-                           'end_frame_continuity', ?)""",
-                (review_id, end_frame_asset_id, content_hash, now),
-            )
-
-        print(f"        Bound start_frame for {next_shot_id}")
+        return
 
     # -- per-task processing --------------------------------------------- #
 
@@ -736,17 +633,17 @@ class PipelineService:
         """Run the assembly pipeline after all shots are processed."""
         result = AssemblyPipelineResult()
 
-        # 1. Build shot order from storyboard
-        shot_ids = [s.shot_id for s in storyboard.shots]
-        if not shot_ids:
-            result.error = "No shots in storyboard"
+        # 1. Build panel order from storyboard
+        panel_ids = [p.panel_id for p in storyboard.panels]
+        if not panel_ids:
+            result.error = "No panels in storyboard"
             return result
 
-        # 2. Create + approve EDL
+        # 2. Create + approve EDL (shot_ids param holds panel ids)
         print("  [Assembly] Creating EDL...")
         edl = self.edl_service.create_edl(
             project_id=storyboard.project.project_id,
-            shot_ids=shot_ids,
+            shot_ids=panel_ids,
             export_profile_id="vertical_h264_v1",
             subtitle_enabled=True,
         )

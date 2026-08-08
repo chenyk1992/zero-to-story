@@ -13,46 +13,27 @@ from lfo.core.database import Database
 from lfo.planning.schema import PlannedTask
 from lfo.services.pipeline_service import PipelineService
 from lfo.services.storyboard_graph_service import TaskGraph
-from lfo.storyboard.storyboard import (
-    Camera,
-    ContinuityInfo,
-    GenerationHint,
-    ProjectInfo,
-    Shot,
-    Storyboard,
-)
+from tests.helpers.storyboard_fixtures import make_panel_storyboard
 
 
-def make_storyboard(num_shots: int = 3) -> Storyboard:
-    shots = []
-    for i in range(num_shots):
-        shot = Shot(
-            shot_id=f"shot_{i + 1:03d}",
-            display_index=i + 1,
-            scene_id="scene_001",
-            description=f"Shot {i + 1}",
-            narration=f"第{i + 1}段旁白",
-            desired_duration_ms=5000,
-            camera=Camera(shot_size="medium", movement="static"),
-            continuity=ContinuityInfo(start_frame_needed=(i > 0)),
-            generation_hint=GenerationHint(),
-        )
-        shots.append(shot)
-    return Storyboard(
-        project=ProjectInfo(project_id="proj-integration", title="Integration Test"),
-        shots=shots,
+def make_storyboard(num_panels: int = 3):
+    return make_panel_storyboard(
+        num_panels,
+        project_id="proj-integration",
+        title="Integration Test",
+        dialogue_fn=lambda n: f"第{n}段旁白",
     )
 
 
-def make_planned_tasks(num_shots: int = 3) -> list[PlannedTask]:
+def make_planned_tasks(num_panels: int = 3) -> list[PlannedTask]:
     tasks = []
-    for i in range(num_shots):
+    for i in range(num_panels):
         tasks.append(PlannedTask(
-            logical_task_key=f"video/shot_{i + 1:03d}",
-            task_id=f"task_shot_{i + 1:03d}",
+            logical_task_key=f"video/panel_{i + 1:03d}",
+            task_id=f"task_panel_{i + 1:03d}",
             project_id="proj-integration",
-            target_ids=[f"shot_{i + 1:03d}"],
-            workflow_mode="t2va" if i == 0 else "i2v",
+            target_ids=[f"panel_{i + 1:03d}"],
+            workflow_mode="r2v",
         ))
     return tasks
 
@@ -65,10 +46,7 @@ def db() -> Database:
 
 
 class TestFullPipelineIntegration:
-    """End-to-end pipeline test with mocked FFmpeg/ComfyUI."""
-
     def test_full_pipeline_flow(self, db, tmp_path):
-        """Verify the complete flow from shot processing to final export."""
         service = PipelineService(
             db,
             output_dir=str(tmp_path / "pipeline"),
@@ -76,7 +54,6 @@ class TestFullPipelineIntegration:
         )
         storyboard = make_storyboard(3)
 
-        # Mock graph service
         planned_tasks = make_planned_tasks(3)
         service.graph_service = MagicMock()
         service.graph_service.build_graph.return_value = TaskGraph(
@@ -84,7 +61,6 @@ class TestFullPipelineIntegration:
             tasks=planned_tasks,
         )
 
-        # Mock ComfyUI execution chain
         service.readiness_service = MagicMock()
         service.readiness_service.promote_to_ready.return_value = MagicMock(
             success=True, materialization_id="mat-001",
@@ -100,7 +76,6 @@ class TestFullPipelineIntegration:
         service.qc_service = MagicMock()
         service.qc_service.check_asset.return_value = MagicMock(passed=True, status="PASS")
 
-        # Mock normalize to create real output file and register asset
         def mock_normalize(asset_id, profile_id):
             output_path = os.path.join(
                 service.media_service.output_dir,
@@ -126,7 +101,6 @@ class TestFullPipelineIntegration:
         service.media_service.normalize.side_effect = mock_normalize
         service.media_service.output_dir = str(tmp_path / "pipeline" / "normalized")
 
-        # Mock editorial service
         service.editorial_service = MagicMock()
 
         def mock_create_selection(project_id, shot_id, normalized_asset_id, **kwargs):
@@ -153,13 +127,11 @@ class TestFullPipelineIntegration:
         service.editorial_service.render_selected_clip.side_effect = mock_render
         service.editorial_service.approve_selected_clip.side_effect = mock_approve
 
-        # Mock end frame extractor
         service.end_frame_extractor = MagicMock()
         service.end_frame_extractor.extract_from_clip.return_value = MagicMock(
             success=True, file_path="/tmp/frame.png",
         )
 
-        # Mock DB fetchone for asset_id lookups
         original_fetchone = db.fetchone
         def mock_fetchone(sql, params):
             if "attempt_id" in sql:
@@ -169,7 +141,6 @@ class TestFullPipelineIntegration:
             return original_fetchone(sql, params)
         db.fetchone = mock_fetchone
 
-        # Mock assembly pipeline
         service.edl_service = MagicMock()
         mock_edl = MagicMock()
         mock_edl.edl_id = "edl-int-001"
@@ -195,10 +166,8 @@ class TestFullPipelineIntegration:
             success=True, issues=[],
         )
 
-        # Execute
         result = service.execute(storyboard)
 
-        # Verify shot processing
         assert result.total_tasks == 3
         assert result.completed_tasks == 3
         assert result.failed_tasks == 0
@@ -208,13 +177,11 @@ class TestFullPipelineIntegration:
             assert tr.selected_clip_id.startswith("clip-")
             assert tr.end_frame_extracted
 
-        # Verify assembly pipeline was triggered
         assert result.assembly_result.edl_id == "edl-int-001"
         assert result.assembly_result.output_asset_id == "asm-final-001"
         assert result.assembly_result.final_qc_passed
         assert result.success
 
-        # Verify service call chain
         assert service.edl_service.create_edl.called
         assert service.edl_service.approve_edl.called
         assert service.assembly_service.build_from_edl.called

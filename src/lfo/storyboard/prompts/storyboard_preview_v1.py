@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lfo.storyboard.storyboard import Shot, Storyboard
+from lfo.storyboard.storyboard import Panel, Storyboard
 
 _TEMPLATE_PATH = Path(__file__).resolve().parent / "storyboard_preview_v1.j2"
 
 
 def render_storyboard_preview_prompt(
     storyboard: Storyboard,
-    shots: list[Shot],
+    panels: list[Panel],
     sheet_number: int,
     total_sheets: int,
     is_bridge: bool = False,
@@ -22,8 +22,8 @@ def render_storyboard_preview_prompt(
     with the character sheet prompt rendering approach.
 
     Args:
-        storyboard: The storyboard (for style context).
-        shots: Shots to include in this preview sheet (in panel order).
+        storyboard: The storyboard (for style + beat lookup).
+        panels: Panels to include in this preview sheet (in panel order).
         sheet_number: 1-based sheet number.
         total_sheets: Total number of preview sheets.
         is_bridge: Whether panel 1 is a bridge panel from the previous sheet.
@@ -36,34 +36,34 @@ def render_storyboard_preview_prompt(
 
     style = storyboard.style
 
-    # Build panel descriptions
     panel_lines: list[str] = []
-    # Build a character_id → Character lookup for key prop + signature action
-    char_lookup: dict[str, "Character"] = {c.character_id: c for c in storyboard.characters}
-    for idx, shot in enumerate(shots):
+    char_lookup = {c.character_id: c for c in storyboard.characters}
+    for idx, panel in enumerate(panels):
         panel_no = idx + 1
-        camera = shot.camera
 
         if idx == 0 and is_bridge:
-            # Bridge panel — use previous sheet's last shot description
             panel_lines.append(
                 f"Panel {panel_no} (bridge from previous sheet): {bridge_description}"
             )
             continue
 
-        # Regular panel — include key props to anchor character identity
+        beat = storyboard.beat_by_id(panel.beat_ids[0]) if panel.beat_ids else None
+        description = beat.description if beat else ""
+        framing = beat.framing if beat else "medium"
+
         prop_notes: list[str] = []
-        for c in shot.characters:
-            ch = char_lookup.get(c.character_id)
-            if ch and ch.key_prop:
-                prop_notes.append(f"{ch.name or ch.character_id} carries {ch.key_prop}")
+        if beat:
+            for c in beat.characters:
+                ch = char_lookup.get(c.character_id)
+                if ch and ch.key_prop:
+                    prop_notes.append(f"{ch.name or ch.character_id} carries {ch.key_prop}")
         prop_str = "; ".join(prop_notes) if prop_notes else ""
 
-        char_names = [c.character_id for c in shot.characters]
+        char_names = [c.character_id for c in (beat.characters if beat else [])]
         char_str = ", ".join(char_names) if char_names else "no characters"
-        action_str = shot.action_beats[0].description if shot.action_beats else shot.description
+        action_str = description
 
-        desc_line = f"Panel {panel_no}: [{camera.shot_size}/{camera.angle}] {shot.description}"
+        desc_line = f"Panel {panel_no}: [{framing}] {description}"
         if prop_str:
             desc_line += f" ({prop_str})"
         desc_line += f" (characters: {char_str}, key action: {action_str})"
@@ -71,12 +71,11 @@ def render_storyboard_preview_prompt(
 
     panel_block = "\n".join(panel_lines)
 
-    # Style line
     style_keywords_str = ", ".join(style.style_keywords) if style.style_keywords else ""
     style_line = f"STYLE KEYWORDS: {style_keywords_str}" if style_keywords_str else ""
 
     replacements = {
-        "{{ panel_count }}": str(len(shots)),
+        "{{ panel_count }}": str(len(panels)),
         "{{ sheet_number }}": str(sheet_number),
         "{{ total_sheets }}": str(total_sheets),
         "{{ panel_block }}": panel_block,

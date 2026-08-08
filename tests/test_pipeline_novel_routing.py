@@ -237,7 +237,7 @@ class TestProjectInfoSchema:
     def test_storyboard_with_chinese_ids_loads(self):
         """A full Storyboard with Chinese novel_id + chapter_id must
         round-trip cleanly."""
-        from lfo.storyboard.storyboard import ProjectInfo, Shot, Storyboard
+        from lfo.storyboard.storyboard import Beat, Panel, ProjectInfo, Storyboard
 
         sb = Storyboard(
             project=ProjectInfo(
@@ -246,10 +246,19 @@ class TestProjectInfoSchema:
                 novel_id="我今天不上班",
                 chapter_id="chapter_01",
             ),
-            shots=[
-                Shot(
-                    shot_id="shot_1",
+            beats=[
+                Beat(
+                    beat_id="beat_001",
+                    sequence=1,
                     scene_id="scene_1",
+                    description="Beat 1",
+                ),
+            ],
+            panels=[
+                Panel(
+                    panel_id="panel_001",
+                    sequence=1,
+                    beat_ids=["beat_001"],
                     desired_duration_ms=5000,
                 ),
             ],
@@ -259,4 +268,4 @@ class TestProjectInfoSchema:
         assert loaded.project.novel_id == "我今天不上班"
         assert loaded.project.chapter_id == "chapter_01"
         assert loaded.project.title == "末日逃生篇"
-        assert loaded.shots[0].shot_id == "shot_1"
+        assert loaded.panels[0].panel_id == "panel_001"

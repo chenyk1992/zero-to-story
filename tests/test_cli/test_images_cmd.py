@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 
 from lfo.cli.images_cmd import cmd_images_build, cmd_images_collect
+from tests.helpers.storyboard_fixtures import minimal_storyboard_dict, write_storyboard_json
 
 
 def make_storyboard_json(tmp_path: Path, num_characters: int = 1, with_ref: bool = False) -> Path:
-    """Create a minimal valid storyboard JSON with characters."""
     characters = []
     for i in range(num_characters):
         char = {
@@ -27,30 +27,37 @@ def make_storyboard_json(tmp_path: Path, num_characters: int = 1, with_ref: bool
             char["ref_asset_id"] = f"asset-existing-{i}"
         characters.append(char)
 
-    data = {
-        "project": {"project_id": "proj-img-test", "title": "Image Test"},
-        "characters": characters,
-        "shots": [
+    data = minimal_storyboard_dict(
+        project_id="proj-img-test",
+        title="Image Test",
+        characters=characters,
+        beats=[
             {
-                "shot_id": "shot_001",
-                "display_index": 1,
+                "beat_id": "beat_001",
+                "sequence": 1,
                 "scene_id": "scene_001",
-                "description": "A shot",
-                "camera": {"shot_size": "medium", "movement": "static"},
-                "continuity": {"start_frame_needed": False},
-                "generation_hint": {},
+                "description": "A beat",
+                "dialogue": "",
+                "sound": "",
+                "characters": [],
+                "framing": "medium",
             }
         ],
-    }
-
-    sb_path = tmp_path / "test_storyboard.json"
-    sb_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    return sb_path
+        panels=[
+            {
+                "panel_id": "panel_001",
+                "sequence": 1,
+                "beat_range": [1, 1],
+                "beat_ids": ["beat_001"],
+                "desired_duration_ms": 15_000,
+                "prompt_text": "",
+            }
+        ],
+    )
+    return write_storyboard_json(tmp_path, data)
 
 
 class TestCmdImagesBuild:
-    """Test lfo images build command."""
-
     def test_empty_storyboard_path(self):
         result = cmd_images_build(storyboard_path="")
         assert result["success"] is False
@@ -69,7 +76,6 @@ class TestCmdImagesBuild:
         assert "failed to load" in result["error"].lower()
 
     def test_all_have_refs_skips(self, tmp_path):
-        """All characters already have ref images — should skip."""
         sb_path = make_storyboard_json(tmp_path, num_characters=2, with_ref=True)
         result = cmd_images_build(storyboard_path=str(sb_path))
         assert result["success"] is True
@@ -77,21 +83,16 @@ class TestCmdImagesBuild:
         assert result["requests_count"] == 0
 
     def test_builds_requests(self, tmp_path):
-        """Characters without refs should produce requests."""
         sb_path = make_storyboard_json(tmp_path, num_characters=2, with_ref=False)
         result = cmd_images_build(storyboard_path=str(sb_path), output_dir=str(tmp_path))
         assert result["success"] is True
         assert result["status"] == "waiting"
         assert result["requests_count"] == 2
         assert "batch_id" in result
-        assert "batch_path" in result
-        assert "results_path" in result
         assert Path(result["batch_path"]).exists()
 
     def test_partial_refs(self, tmp_path):
-        """Mix of characters with and without refs — only missing ones get requests."""
         sb_path = make_storyboard_json(tmp_path, num_characters=1, with_ref=True)
-        # Add a character without ref
         data = json.loads(sb_path.read_text(encoding="utf-8"))
         data["characters"].append({
             "character_id": "char_002",
@@ -113,8 +114,6 @@ class TestCmdImagesBuild:
 
 
 class TestCmdImagesCollect:
-    """Test lfo images collect command."""
-
     def test_empty_storyboard_path(self):
         result = cmd_images_collect(storyboard_path="")
         assert result["success"] is False
@@ -126,39 +125,29 @@ class TestCmdImagesCollect:
         assert "not found" in result["error"].lower()
 
     def test_no_image_requests_dir(self, tmp_path):
-        """No image_requests directory — should fail with helpful message."""
         sb_path = make_storyboard_json(tmp_path, num_characters=1)
         result = cmd_images_collect(storyboard_path=str(sb_path), output_dir=str(tmp_path))
         assert result["success"] is False
         assert "image_requests" in result["error"].lower()
 
     def test_no_results_file(self, tmp_path):
-        """Batch file exists but no results file yet."""
         sb_path = make_storyboard_json(tmp_path, num_characters=1)
-        # Build first to create the batch file
         cmd_images_build(storyboard_path=str(sb_path), output_dir=str(tmp_path))
-
         result = cmd_images_collect(storyboard_path=str(sb_path), output_dir=str(tmp_path))
         assert result["success"] is False
         assert "results file not found" in result["error"].lower() or "generate images" in result["error"].lower()
 
     def test_collect_results(self, tmp_path):
-        """Full flow: build → simulate agent → collect."""
         sb_path = make_storyboard_json(tmp_path, num_characters=1)
-
-        # Build requests
         build_result = cmd_images_build(storyboard_path=str(sb_path), output_dir=str(tmp_path))
         assert build_result["success"] is True
-        assert build_result["status"] == "waiting"
 
-        # Simulate agent writing results
         results_path = Path(build_result["results_path"])
         batch_path = Path(build_result["batch_path"])
         batch_data = json.loads(batch_path.read_text(encoding="utf-8"))
 
-        # Create a dummy image file
         img_path = tmp_path / "test_char.png"
-        img_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)  # minimal PNG header
+        img_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
 
         results_data = {
             "batch_id": build_result["batch_id"],
@@ -175,7 +164,6 @@ class TestCmdImagesCollect:
         }
         results_path.write_text(json.dumps(results_data, ensure_ascii=False), encoding="utf-8")
 
-        # Now collect
         collect_result = cmd_images_collect(storyboard_path=str(sb_path), output_dir=str(tmp_path))
         assert collect_result["success"] is True
         assert collect_result["status"] == "collected"
