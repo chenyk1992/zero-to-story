@@ -15,6 +15,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
+from lfo.planning.panel_density import beat_count_for_duration_ms
+
 # ---------------------------------------------------------------------------
 # Origin constants
 # ---------------------------------------------------------------------------
@@ -110,6 +112,19 @@ class IntakeConstraints:
     mood: str = ""                        # e.g. "tense", "melancholic", "hopeful"
     audio_policy: str = "effects_only"    # 'effects_only' | 'full' | 'none'
     custom: dict = field(default_factory=dict)  # user-defined extra constraints
+
+    def beat_count_target(self) -> int:
+        """Target narrative beat count for decompose (Hub density).
+
+        ``custom.shot_count_target`` is the handoff alias; ``beat_count_target``
+        is accepted as an explicit override. Otherwise derive from duration.
+        """
+        custom = self.custom or {}
+        if "shot_count_target" in custom:
+            return int(custom["shot_count_target"])
+        if "beat_count_target" in custom:
+            return int(custom["beat_count_target"])
+        return beat_count_for_duration_ms(self.target_duration_ms)
 
     def to_dict(self) -> dict:
         return {

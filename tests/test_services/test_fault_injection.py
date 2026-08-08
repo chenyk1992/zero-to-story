@@ -14,7 +14,7 @@ from lfo.core.database import Database
 from lfo.services.editorial_service import EditorialService
 from lfo.services.media_service import MediaService, SelectedClipAsset, StreamSignature
 from lfo.services.srt_generator import SRTCue, SRTGenerator
-from lfo.storyboard.storyboard import ProjectInfo, Shot, Storyboard
+from lfo.storyboard.storyboard import Beat, Panel, ProjectInfo, Storyboard
 
 
 @pytest.fixture
@@ -160,13 +160,20 @@ class TestSRTEdgeCases:
     def test_srt_with_no_narration_produces_no_cues(self, db, tmp_path):
         sb = Storyboard(
             project=ProjectInfo(project_id="proj-1"),
-            shots=[Shot(shot_id="s1", narration=""), Shot(shot_id="s2", narration="")],
+            beats=[
+                Beat(beat_id="beat_001", sequence=1, scene_id="s1", dialogue=""),
+                Beat(beat_id="beat_002", sequence=2, scene_id="s1", dialogue=""),
+            ],
+            panels=[
+                Panel(panel_id="panel_001", sequence=1, beat_ids=["beat_001"]),
+                Panel(panel_id="panel_002", sequence=2, beat_ids=["beat_002"]),
+            ],
         )
         snap = AssemblyInputSnapshot(
             edl_id="edl-1", project_id="proj-1",
-            clips=[AssemblyClip(shot_id="s1", selected_clip_id="c1", output_asset_id="a1",
+            clips=[AssemblyClip(shot_id="panel_001", selected_clip_id="c1", output_asset_id="a1",
                                 file_path="/tmp/c1.mp4", duration_sec=3.0),
-                   AssemblyClip(shot_id="s2", selected_clip_id="c2", output_asset_id="a2",
+                   AssemblyClip(shot_id="panel_002", selected_clip_id="c2", output_asset_id="a2",
                                 file_path="/tmp/c2.mp4", duration_sec=3.0)],
         )
         gen = SRTGenerator(db, output_dir=str(tmp_path / "srt"))
@@ -182,20 +189,25 @@ class TestSRTEdgeCases:
     def test_srt_with_mixed_narration(self, db, tmp_path):
         sb = Storyboard(
             project=ProjectInfo(project_id="proj-1"),
-            shots=[
-                Shot(shot_id="s1", narration="有字幕"),
-                Shot(shot_id="s2", narration=""),
-                Shot(shot_id="s3", narration="也有字幕"),
+            beats=[
+                Beat(beat_id="beat_001", sequence=1, scene_id="s1", dialogue="有字幕"),
+                Beat(beat_id="beat_002", sequence=2, scene_id="s1", dialogue=""),
+                Beat(beat_id="beat_003", sequence=3, scene_id="s1", dialogue="也有字幕"),
+            ],
+            panels=[
+                Panel(panel_id="panel_001", sequence=1, beat_ids=["beat_001"]),
+                Panel(panel_id="panel_002", sequence=2, beat_ids=["beat_002"]),
+                Panel(panel_id="panel_003", sequence=3, beat_ids=["beat_003"]),
             ],
         )
         snap = AssemblyInputSnapshot(
             edl_id="edl-1", project_id="proj-1",
             clips=[
-                AssemblyClip(shot_id="s1", selected_clip_id="c1", output_asset_id="a1",
+                AssemblyClip(shot_id="panel_001", selected_clip_id="c1", output_asset_id="a1",
                              file_path="/tmp/c1.mp4", duration_sec=3.0),
-                AssemblyClip(shot_id="s2", selected_clip_id="c2", output_asset_id="a2",
+                AssemblyClip(shot_id="panel_002", selected_clip_id="c2", output_asset_id="a2",
                              file_path="/tmp/c2.mp4", duration_sec=2.0),
-                AssemblyClip(shot_id="s3", selected_clip_id="c3", output_asset_id="a3",
+                AssemblyClip(shot_id="panel_003", selected_clip_id="c3", output_asset_id="a3",
                              file_path="/tmp/c3.mp4", duration_sec=4.0),
             ],
         )

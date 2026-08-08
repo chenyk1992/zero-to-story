@@ -8,7 +8,8 @@ import pytest
 from lfo.assembly.schema import AssemblyClip, AssemblyInputSnapshot
 from lfo.core.database import Database
 from lfo.services.srt_generator import SRTCue, SRTGenerator
-from lfo.storyboard.storyboard import ProjectInfo, Shot, Storyboard
+from lfo.storyboard.storyboard import Beat, Panel, ProjectInfo, Storyboard
+from tests.helpers.storyboard_fixtures import make_panel_storyboard
 
 
 @pytest.fixture
@@ -28,13 +29,11 @@ def db() -> Database:
 
 @pytest.fixture
 def storyboard() -> Storyboard:
-    return Storyboard(
-        project=ProjectInfo(project_id="proj-1", title="Test"),
-        shots=[
-            Shot(shot_id="shot-1", narration="第一段旁白", desired_duration_ms=5000),
-            Shot(shot_id="shot-2", narration="第二段旁白", desired_duration_ms=5000),
-            Shot(shot_id="shot-3", narration="", desired_duration_ms=3000),
-        ],
+    return make_panel_storyboard(
+        3,
+        project_id="proj-1",
+        title="Test",
+        dialogue_fn=lambda n: "第一段旁白" if n == 1 else ("第二段旁白" if n == 2 else ""),
     )
 
 
@@ -44,11 +43,11 @@ def snapshot() -> AssemblyInputSnapshot:
         edl_id="edl-1",
         project_id="proj-1",
         clips=[
-            AssemblyClip(shot_id="shot-1", selected_clip_id="c1", output_asset_id="a1",
+            AssemblyClip(shot_id="panel_001", selected_clip_id="c1", output_asset_id="a1",
                          file_path="/tmp/c1.mp4", duration_sec=5.0),
-            AssemblyClip(shot_id="shot-2", selected_clip_id="c2", output_asset_id="a2",
+            AssemblyClip(shot_id="panel_002", selected_clip_id="c2", output_asset_id="a2",
                          file_path="/tmp/c2.mp4", duration_sec=5.0),
-            AssemblyClip(shot_id="shot-3", selected_clip_id="c3", output_asset_id="a3",
+            AssemblyClip(shot_id="panel_003", selected_clip_id="c3", output_asset_id="a3",
                          file_path="/tmp/c3.mp4", duration_sec=3.0),
         ],
     )
@@ -75,7 +74,7 @@ class TestSRTGenerator:
         result = gen.generate("edl-1", storyboard, snapshot)
 
         assert result.success
-        assert result.cue_count == 2  # shot-3 has no narration
+        assert result.cue_count == 2
         assert result.file_path.endswith(".srt")
         assert os.path.exists(result.file_path)
 
@@ -84,7 +83,6 @@ class TestSRTGenerator:
 
         assert "第一段旁白" in content
         assert "第二段旁白" in content
-        # Verify SRT structure
         assert "00:00:00,000 --> 00:00:05,000" in content
         assert "00:00:05,000 --> 00:00:10,000" in content
 
@@ -99,12 +97,13 @@ class TestSRTGenerator:
         gen = SRTGenerator(db=db, output_dir=str(tmp_path / "srt"))
         sb = Storyboard(
             project=ProjectInfo(project_id="proj-1"),
-            shots=[Shot(shot_id="s1", narration="")],
+            beats=[Beat(beat_id="beat_001", sequence=1, scene_id="s1", dialogue="")],
+            panels=[Panel(panel_id="panel_001", sequence=1, beat_ids=["beat_001"])],
         )
         snap = AssemblyInputSnapshot(
             edl_id="edl-1",
             project_id="proj-1",
-            clips=[AssemblyClip(shot_id="s1", selected_clip_id="c1", output_asset_id="a1",
+            clips=[AssemblyClip(shot_id="panel_001", selected_clip_id="c1", output_asset_id="a1",
                                 file_path="/tmp/c1.mp4", duration_sec=5.0)],
         )
         result = gen.generate("edl-1", sb, snap)
@@ -112,7 +111,6 @@ class TestSRTGenerator:
         assert "No subtitle text" in result.error
 
     def test_register_srt_asset(self, db, storyboard, snapshot, tmp_path):
-        # Create EDL row so register_srt_asset can resolve task_id via project
         db.execute(
             """INSERT INTO edit_decision_lists
                (edl_id, project_id, revision, content_json, content_hash,
@@ -127,7 +125,6 @@ class TestSRTGenerator:
         asset_id = gen.register_srt_asset("edl-1", "proj-1", result.file_path, result.cue_count)
         assert asset_id != ""
 
-        # Verify asset row
         row = db.fetchone(
             "SELECT asset_type, metadata FROM assets WHERE asset_id = ?",
             (asset_id,),

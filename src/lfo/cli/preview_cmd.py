@@ -46,8 +46,8 @@ def cmd_preview_build(
     except Exception as e:
         return {"success": False, "error": f"Failed to load storyboard: {e}"}
 
-    if not storyboard.shots:
-        return {"success": False, "error": "No shots in storyboard"}
+    if not storyboard.panels:
+        return {"success": False, "error": "No panels in storyboard"}
 
     db = Database(db_path or ":memory:")
     db.init_schema()
@@ -59,7 +59,7 @@ def cmd_preview_build(
         return {
             "success": True,
             "status": "skipped",
-            "message": "No shots to preview",
+            "message": "No panels to preview",
             "requests_count": 0,
         }
 
@@ -70,13 +70,13 @@ def cmd_preview_build(
         "success": True,
         "status": "waiting",
         "requests_count": len(batch.requests),
-        "total_shots": len(storyboard.shots),
+        "total_panels": len(storyboard.panels),
         "batch_id": batch.batch_id,
         "batch_path": str(batch_path),
         "results_path": str(results_path),
         "message": (
             f"{len(batch.requests)} preview sheet request(s) written to {batch_path} "
-            f"({len(storyboard.shots)} shots across {len(batch.requests)} sheets). "
+            f"({len(storyboard.panels)} panels across {len(batch.requests)} sheets). "
             f"Use your agent to generate images, then run "
             f"'lfo preview collect {storyboard_path}' to collect results."
         ),

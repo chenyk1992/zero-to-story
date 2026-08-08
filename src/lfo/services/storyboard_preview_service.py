@@ -1,9 +1,9 @@
 """StoryboardPreviewService — build storyboard preview image requests.
 
-Groups shots into 8-per-sheet (2x4 grid) with continuity chaining:
-- Sheet 1: Shot 01-08
-- Sheet 2: Shot 08-15 (panel 1 = shot 08, bridging from sheet 1)
-- Sheet 3: Shot 15-22 (panel 1 = shot 15)
+Groups panels into 8-per-sheet (2x4 grid) with continuity chaining:
+- Sheet 1: Panel 01-08
+- Sheet 2: Panel 08-15 (panel 1 = panel 08, bridging from sheet 1)
+- Sheet 3: Panel 15-22 (panel 1 = panel 15)
 """
 from __future__ import annotations
 
@@ -43,32 +43,18 @@ class StoryboardPreviewService:
     """Build and collect storyboard preview image requests."""
 
     PANELS_PER_SHEET = 8  # 2x4 grid
-    # Each sheet overlaps the previous by 1 panel for continuity
     OVERLAP_PANELS = 1
 
     def __init__(self, db: Database, output_root: str = "") -> None:
         self.db = db
         self.output_root = Path(output_root) if output_root else Path(".")
 
-    # -- Build requests -----------------------------------------------------
-
     def build_requests(
         self,
         storyboard: Storyboard,
         project_id: str,
     ) -> ImageRequestBatch:
-        """Build preview sheet requests for all shots.
-
-        Groups shots into sheets of PANELS_PER_SHEET with overlap
-        chaining for visual continuity between sheets.
-
-        Args:
-            storyboard: The storyboard containing shots.
-            project_id: Project identifier for the batch.
-
-        Returns:
-            ImageRequestBatch with one request per preview sheet.
-        """
+        """Build preview sheet requests for all panels."""
         batch = ImageRequestBatch(
             batch_id=f"batch_preview_{uuid.uuid4().hex[:8]}",
             project_id=project_id,
@@ -76,22 +62,18 @@ class StoryboardPreviewService:
             created_at=datetime.now(UTC).isoformat(),
         )
 
-        shots = storyboard.shots
-        if not shots:
-            logger.info("No shots in storyboard, skipping preview")
+        panels = storyboard.panels
+        if not panels:
+            logger.info("No panels in storyboard, skipping preview")
             return batch
 
-        # Calculate sheet ranges with overlap
-        # Sheet 1: shots[0..7]   (8 panels)
-        # Sheet 2: shots[7..14]  (8 panels, panel 1 = shot 7 for bridge)
-        # Sheet 3: shots[14..21] (8 panels, panel 1 = shot 14 for bridge)
-        sheet_ranges: list[tuple[int, int]] = []  # (start_idx, end_idx) inclusive
+        sheet_ranges: list[tuple[int, int]] = []
         step = self.PANELS_PER_SHEET - self.OVERLAP_PANELS
         start = 0
-        while start < len(shots):
-            end = min(start + self.PANELS_PER_SHEET, len(shots))
+        while start < len(panels):
+            end = min(start + self.PANELS_PER_SHEET, len(panels))
             sheet_ranges.append((start, end))
-            if end >= len(shots):
+            if end >= len(panels):
                 break
             start = end - self.OVERLAP_PANELS
 
@@ -99,21 +81,24 @@ class StoryboardPreviewService:
 
         for sheet_idx, (start, end) in enumerate(sheet_ranges):
             sheet_number = sheet_idx + 1
-            sheet_shots = shots[start:end]
+            sheet_panels = panels[start:end]
             is_bridge = sheet_idx > 0
             bridge_description = ""
 
             if is_bridge and start > 0:
-                # The first shot in this sheet is the bridge from previous sheet
-                bridge_shot = shots[start]
-                bridge_description = (
-                    f"[{bridge_shot.camera.shot_size}/{bridge_shot.camera.angle}] "
-                    f"{bridge_shot.description}"
+                bridge_panel = panels[start]
+                beat = (
+                    storyboard.beat_by_id(bridge_panel.beat_ids[0])
+                    if bridge_panel.beat_ids
+                    else None
                 )
+                framing = beat.framing if beat else "medium"
+                desc = beat.description if beat else ""
+                bridge_description = f"[{framing}] {desc}"
 
             prompt = render_storyboard_preview_prompt(
                 storyboard=storyboard,
-                shots=sheet_shots,
+                panels=sheet_panels,
                 sheet_number=sheet_number,
                 total_sheets=total_sheets,
                 is_bridge=is_bridge,
@@ -132,34 +117,23 @@ class StoryboardPreviewService:
                 aspect_ratio="16:9",
                 resolution="2K",
                 output_path=output_path,
-                shot_range=[s.shot_id for s in sheet_shots],
+                shot_range=[p.panel_id for p in sheet_panels],
                 created_at=datetime.now(UTC).isoformat(),
             )
             batch.requests.append(req)
 
         logger.info(
-            "Built %d preview sheet requests for project %s (%d shots)",
-            len(batch.requests), project_id, len(shots),
+            "Built %d preview sheet requests for project %s (%d panels)",
+            len(batch.requests), project_id, len(panels),
         )
         return batch
 
     def write_requests(self, batch: ImageRequestBatch, novel_id: str, chapter_id: str) -> Path:
-        """Write the batch to disk for agent consumption.
-
-        Args:
-            batch: The batch to write.
-            novel_id: Novel ID for path layout.
-            chapter_id: Chapter ID for path layout.
-
-        Returns:
-            Path to the written batch file.
-        """
+        """Write the batch to disk for agent consumption."""
         path = self.output_root / novel_id / chapter_id / "image_requests" / f"{batch.batch_id}.json"
         write_batch(batch, str(path))
         logger.info("Wrote preview batch to %s", path)
         return path
-
-    # -- Collect results ----------------------------------------------------
 
     def collect_results(
         self,
@@ -167,16 +141,7 @@ class StoryboardPreviewService:
         results_path: str,
         storyboard: Storyboard,
     ) -> list[PreviewResult]:
-        """Collect agent generation results and register assets.
-
-        Args:
-            batch: The original request batch.
-            results_path: Path to the agent's results JSON file.
-            storyboard: Storyboard to backfill preview data into.
-
-        Returns:
-            List of PreviewResult for each request.
-        """
+        """Collect agent generation results and register assets."""
         try:
             result_batch = read_results(results_path)
         except FileNotFoundError:
@@ -190,7 +155,6 @@ class StoryboardPreviewService:
                 for req in batch.requests
             ]
 
-        # Build lookup from request_id to result
         result_lookup: dict[str, ImageResult] = {
             r.request_id: r for r in result_batch.results
         }
@@ -214,7 +178,6 @@ class StoryboardPreviewService:
                 ))
                 continue
 
-            # Verify file exists
             file_path = Path(result.result_asset_path)
             if not file_path.exists():
                 collected.append(PreviewResult(
@@ -224,12 +187,10 @@ class StoryboardPreviewService:
                 ))
                 continue
 
-            # Register asset in DB
             asset_id = self._register_image_asset(file_path)
 
-            # Auto-bind to all covered shots as composition_ref
             project_id = batch.project_id
-            self._bind_and_approve_scene_refs(asset_id, project_id, req.shot_range)
+            self._bind_and_approve_panel_refs(asset_id, project_id, req.shot_range)
 
             collected.append(PreviewResult(
                 sheet_id=req.request_id,
@@ -245,14 +206,6 @@ class StoryboardPreviewService:
         return collected
 
     def _register_image_asset(self, file_path: Path) -> str:
-        """Register a generated image as an asset in the database.
-
-        Args:
-            file_path: Path to the image file.
-
-        Returns:
-            The new asset_id.
-        """
         import hashlib
         import json
 
@@ -261,8 +214,6 @@ class StoryboardPreviewService:
 
         sha256 = hashlib.sha256(file_path.read_bytes()).hexdigest()
         size_bytes = file_path.stat().st_size
-
-        # content_hash for the asset (used by approval dependency check)
         content_hash = sha256
 
         width, height = None, None
@@ -281,8 +232,8 @@ class StoryboardPreviewService:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 asset_id,
-                None,  # task_id — preview sheets aren't tied to a task
-                None,  # attempt_id
+                None,
+                None,
                 "image",
                 str(file_path),
                 sha256,
@@ -298,38 +249,22 @@ class StoryboardPreviewService:
         )
         return asset_id
 
-    def _bind_and_approve_scene_refs(
+    def _bind_and_approve_panel_refs(
         self,
         asset_id: str,
         project_id: str,
-        shot_ids: list[str],
+        panel_ids: list[str],
     ) -> list[str]:
-        """Create asset_binding + auto-approve for each shot as composition_ref.
-
-        Preview sheets show all shots' composition. The full sheet is bound
-        to every shot as a composition reference so downstream R2V can pick
-        it up via the workflow_selector.
-
-        Args:
-            asset_id: Preview sheet asset_id.
-            project_id: Project identifier.
-            shot_ids: Shot IDs covered by this preview sheet.
-
-        Returns:
-            List of created binding_ids.
-        """
+        """Create asset_binding + auto-approve for each panel as composition_ref."""
         import json
 
-        # Get content_hash for review's dependency_hash
         row = self.db.fetchone(
             "SELECT content_hash, file_path FROM assets WHERE asset_id = ?",
             (asset_id,),
         )
         content_hash = row[0] if row else ""
-        file_path = row[1] if row else ""
 
         binding_ids: list[str] = []
-        # Ensure project row exists (FK target)
         existing = self.db.fetchone(
             "SELECT project_id FROM projects WHERE project_id = ?",
             (project_id,),
@@ -340,13 +275,11 @@ class StoryboardPreviewService:
                 (project_id, project_id),
             )
 
-        for shot_id in shot_ids:
+        for panel_id in panel_ids:
             binding_id = uuid.uuid4().hex
             review_id = uuid.uuid4().hex
             now = datetime.now(UTC).isoformat()
 
-            # Create binding (entity_type=shot, role=composition_ref)
-            # Use INSERT OR IGNORE — re-collecting should be idempotent
             self.db.execute(
                 """INSERT OR IGNORE INTO asset_bindings
                    (binding_id, asset_id, project_id, entity_type, entity_id,
@@ -356,14 +289,13 @@ class StoryboardPreviewService:
                     binding_id,
                     asset_id,
                     project_id,
-                    "shot",
-                    shot_id,
+                    "panel",
+                    panel_id,
                     "composition_ref",
                     now,
                 ),
             )
 
-            # Auto-approve (idempotent)
             existing_review = self.db.fetchone(
                 """SELECT review_id FROM asset_reviews
                    WHERE asset_id = ? AND manual_review_status = 'approved'""",
@@ -382,7 +314,7 @@ class StoryboardPreviewService:
             binding_ids.append(binding_id)
 
         logger.info(
-            "Bound preview sheet %s to %d shots as composition_ref",
-            asset_id, len(shot_ids),
+            "Bound preview sheet %s to %d panels as composition_ref",
+            asset_id, len(panel_ids),
         )
         return binding_ids

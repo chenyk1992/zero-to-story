@@ -119,6 +119,14 @@ def project_final_dir(novel_id: str, chapter_id: str) -> Path:
     return project_dir(novel_id, chapter_id) / "final"
 
 
+def project_panels_dir(novel_id: str, chapter_id: str) -> Path:
+    """``<workspace>/<novel_id>/<chapter_id>/panels/``
+
+    Per-panel ``panel_{nn:02d}_pack.json`` files for r2v reference binding.
+    """
+    return project_dir(novel_id, chapter_id) / "panels"
+
+
 def novel_ref_images_dir(novel_id: str) -> Path:
     """``<workspace>/<novel_id>/ref_images/``"""
     return novel_dir(novel_id) / "ref_images"

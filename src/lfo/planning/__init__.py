@@ -3,9 +3,8 @@
 Modules:
 - schema: Data structures (ExecutionPlan, PlannedTask, PromptBlueprint, etc.)
 - segmenter: Storyboard -> logical tasks
-- workflow_selector: Shot conditions -> workflow selection
-- asset_requirements: Enumerate required assets per shot
-- reference_planner: Deterministic R2V slot assignment
+- workflow_selector: Panel Pack conditions -> workflow selection
+- asset_requirements: Enumerate required assets per panel
 - prompt_blueprint: Video prompt blueprint compilers
 - duration: Frame count calculation
 - dag: Task dependency graph builder
@@ -13,7 +12,7 @@ Modules:
 - materializer: execution_plan.json -> SQLite tasks
 - render: execution_plan -> dry_run_report.md
 """
-from .asset_requirements import plan_asset_requirements
+from lfo.planning.asset_requirements import plan_asset_requirements, plan_panel_asset_requirements
 from .dag import build_task_dependencies
 from .duration import compute_aligned_frames
 from .materializer import PlanMaterializer
@@ -23,7 +22,6 @@ from .prompt_blueprint import (
     compile_r2v_blueprint,
     compile_t2va_blueprint,
 )
-from .reference_planner import plan_references
 from .render import render_dry_run_report
 from .schema import (
     AssetRequirement,
@@ -35,7 +33,7 @@ from .schema import (
 )
 from .segmenter import segment_storyboard
 from .validator import ValidationResult, validate_execution_plan
-from .workflow_selector import WorkflowSelection, select_workflow
+from .workflow_selector import WorkflowSelection, select_workflow_for_panel
 
 __all__ = [
     # schema
@@ -48,12 +46,11 @@ __all__ = [
     # segmenter
     "segment_storyboard",
     # workflow_selector
-    "select_workflow",
+    "select_workflow_for_panel",
     "WorkflowSelection",
     # asset_requirements
     "plan_asset_requirements",
-    # reference_planner
-    "plan_references",
+    "plan_panel_asset_requirements",
     # prompt_blueprint
     "compile_t2va_blueprint",
     "compile_i2v_blueprint",

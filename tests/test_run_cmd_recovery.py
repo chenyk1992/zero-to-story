@@ -24,7 +24,8 @@ from lfo.core.state_machine import TaskStatus
 
 MINIMAL_STORYBOARD = {
     "project": {"project_id": "proj-recover-test", "title": "Recover Test"},
-    "shots": [],
+    "beats": [],
+    "panels": [],
 }
 
 

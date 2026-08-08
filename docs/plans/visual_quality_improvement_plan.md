@@ -1,5 +1,7 @@
 # LFO 视觉质量提升实施计划（v2 — Agent 生图方案）
 
+> **⚠️ 2026-08-09 更新：** 视频执行已迁移为 Panel-only r2v（`beats[]` + `panels[]` → `PanelPack` → r2v）。`composition_ref` 指 Panel 黑白分镜板，**不等于**上一镜 end frame；per-shot 视频路径已废弃。详见 `docs/superpowers/specs/2026-08-09-hub-parity-panel-r2v-design.md` 与 `docs/superpowers/plans/2026-08-09-hub-parity-panel-r2v.md`。
+
 > 来源：从 `zero-to-story` skill 提取核心机制，适配 LFO 管线
 > 日期：2026-08-08
 > 变更：P0-B / P2 生图从 ComfyUI T2I 改为 Agent 生图指令方案

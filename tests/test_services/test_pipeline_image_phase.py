@@ -31,7 +31,8 @@ def make_storyboard_with_characters(num_characters: int = 1, with_ref: bool = Fa
 
     return Storyboard(
         project=ProjectInfo(project_id="proj-img-phase", title="Image Phase Test"),
-        shots=[],
+        beats=[],
+        panels=[],
         characters=characters,
     )
 

@@ -30,7 +30,17 @@ from .machine_cmd import (
     cmd_machine_validate,
 )
 from .preflight_cmd import cmd_preflight
-from .preview_cmd import PreviewCommand, cmd_preview_build, cmd_preview_collect
+from .panels_cmd import (
+    PanelsCommand,
+    cmd_panels_pack,
+    cmd_panels_plan,
+    cmd_panels_prompt,
+)
+from .preview_cmd import (
+    PreviewCommand,
+    cmd_preview_build,
+    cmd_preview_collect,
+)
 from .project_cmd import ProjectInitCommand, cmd_project_init
 from .run_cmd import RunCommand, cmd_run
 from .setup import cmd_setup
@@ -67,6 +77,7 @@ __all__ = [
     "EditSelectCommand",
     "ExportCommand",
     "ImagesCommand",
+    "PanelsCommand",
     "PreviewCommand",
     "ProjectInitCommand",
     "RecoverCommand",
@@ -98,6 +109,9 @@ __all__ = [
     "cmd_machine_list",
     "cmd_machine_migrate_project",
     "cmd_machine_validate",
+    "cmd_panels_pack",
+    "cmd_panels_plan",
+    "cmd_panels_prompt",
     "cmd_preflight",
     "cmd_preview_build",
     "cmd_preview_collect",

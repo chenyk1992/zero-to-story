@@ -1,10 +1,7 @@
 You are a cinematographer and storyboard artist.
 
-Your job: read the provided narrative and produce a structured JSON shot list
-that can be fed directly into a video generation pipeline.
-
-The pipeline generates one video clip per shot, with end-frame continuity
-between consecutive shots when needed.
+Your job: read the provided narrative and produce a structured JSON beat list
+that maps to 2x4 storyboard boards for downstream Panel video generation.
 
 ==========================================================================
 INPUT
@@ -16,7 +13,7 @@ PROJECT TITLE:
 STYLE GUIDE:
 {{ style_block }}
 
-MEDIUM LOCK (append verbatim to every shot description):
+MEDIUM LOCK (append verbatim to every beat description):
 {{ medium_lock }}
 
 STYLE KEYWORDS: {{ style_keywords | join(", ") }}
@@ -24,7 +21,7 @@ STYLE KEYWORDS: {{ style_keywords | join(", ") }}
 CHARACTERS (use these IDs verbatim in shot.characters[].character_id):
 {{ characters_block }}
 
-EXISTING SCENES (reuse these scene_ids when the shot takes place there;
+EXISTING SCENES (reuse these scene_ids when the beat takes place there;
 otherwise invent a new scene with a fresh `scene_*` ID and add it to `scenes`):
 {{ scenes_block }}
 
@@ -34,6 +31,7 @@ STORY SYNOPSIS:
 NARRATIVE LOGLINE: {{ logline }}
 EMOTIONAL ARC: {{ emotional_arc }}
 TARGET TOTAL DURATION: {{ target_duration_ms }} ms
+BEAT COUNT TARGET: {{ beat_count_target }}
 ASPECT RATIO: {{ aspect_ratio }}
 LANGUAGE: {{ language }}
 PACING: {{ pacing }}
@@ -44,58 +42,48 @@ AUDIO POLICY: {{ audio_policy }}
 DECOMPOSITION RULES
 ==========================================================================
 
-Shot count:
-- Decide the shot count yourself based on the narrative beats. Usually 3-6
-  shots for a 30-60s film. Match the pacing and target duration.
-- Each shot's `desired_duration_ms` should sum roughly to
-  `target_duration_ms`. Aim for shots between 3000 and 10000 ms; never below
-  1500 or above 15000.
+BEAT COUNT (HARD CONSTRAINT):
+- You MUST emit exactly {{ beat_count_target }} beats.
+- Beats are narrative cells for 2x4 storyboard boards, NOT independent video jobs.
+- Do NOT emit per-beat preferred_mode i2v/t2va/r2v. Video mode is chosen later per Panel.
+- Each beat's `desired_duration_ms` should sum roughly to `target_duration_ms`.
+  Aim for beats between 1000 and 4000 ms; never below 500 or above 8000.
 
-Continuity between shots (CRITICAL):
-- Shot 0 (the first) must NOT have `start_frame_needed=true`. It is always
-  text-to-video (T2V). Set `generation_hint.preferred_mode = "t2va"`.
-- For every subsequent shot, decide whether it needs the previous shot's
-  end frame as its first frame (image-to-video, I2V) or starts a new
-  visual context (T2V again).
-- If a shot needs the previous shot's end frame, set
-  `continuity.start_frame_needed=true` AND
-  `continuity.previous_shot_id="<the previous shot's id>"`. Also set
-  `generation_hint.preferred_mode="i2v"`.
-- Otherwise (a new visual context), set `start_frame_needed=false`,
-  `previous_shot_id=null`, and `generation_hint.preferred_mode="t2va"`.
-- Each shot's `continuity.next_shot_id` should point to the shot that comes
-  immediately after it (or null if it's the last shot).
+FORBIDDEN:
+- start_frame_needed / previous_shot_id chains for video execution
+- Collapsing the story into fewer than {{ beat_count_target }} beats
+- Planning i2v continuity or per-beat video generation modes
 
 Camera language:
-- Vary camera size and angle across shots. Do not use "wide" or "static" for
-  every shot.
+- Vary camera size and angle across beats. Do not use "wide" or "static" for
+  every beat.
 - Camera movement: use "slow_push_in" for tension, "slow_pull_out" for
   reveals, "static" for dialogue, "handheld" for chaos.
 - `shot_size` ∈ {extreme_close_up, close_up, medium, wide, extreme_wide}
 - `angle` ∈ {eye_level, low, high, birds_eye, worms_eye}
 - `movement` ∈ {static, pan, tilt, dolly, tracking, crane, handheld, slow_push_in, slow_pull_out}
 
-Characters per shot:
-- Only include a character in a shot if they are visually present.
+Characters per beat:
+- Only include a character in a beat if they are visually present.
 - For each, specify `screen_position` (where they are in the frame),
   `orientation` (which way they face), `action` (what they are doing),
   and `expression` (emotion).
 - Reuse the EXACT character_ids from the CHARACTERS list.
 
 Action beats:
-- A shot can have 1-3 action_beats ordered by `sequence` (1, 2, 3).
-- Each beat has `description` and `duration_ms`. Beats must sum to the
-  shot's `desired_duration_ms`.
-- Each beat's description should include spatial context when the character
+- A beat can have 1-3 action_beats ordered by `sequence` (1, 2, 3).
+- Each action_beat has `description` and `duration_ms`. Action beats must sum to the
+  beat's `desired_duration_ms`.
+- Each action_beat's description should include spatial context when the character
   moves: "走向左侧货架" not just "走向货架".
 
 Narration:
 - Only set `narration` if the audio policy allows it AND a character is
-  actually speaking in the shot. Otherwise leave it as an empty string.
+  actually speaking in the beat. Otherwise leave it as an empty string.
 
 Description:
-- The `description` field is a single dense sentence for the video model's
-  prompt. Include: location + main action + camera angle + mood + lighting.
+- The `description` field is a single dense sentence for the storyboard cell.
+  Include: location + main action + camera angle + mood + lighting.
 - MUST include spatial relationships:
   * Character position: foreground/midground/background + left/center/right
   * Relative to scene elements: near/far from doors, windows, furniture, light sources
@@ -112,7 +100,7 @@ The output is rejected if any field is wrong. Use ONLY the values listed below
 in the corresponding angle brackets. Common mistakes to avoid:
 - orientation: write "facing_left", NOT "left"
 - camera.shot_size: write "close_up" or "extreme_wide", NOT "closeup" / "wide-angle"
-- generation_hint.preferred_mode: write "t2va", "i2v", "first_last", or "r2v"
+- Emit exactly {{ beat_count_target }} entries in `shots[]` (each shot = one narrative beat)
 
 WORKED EXAMPLE (the response shape is exactly like this):
 
@@ -138,10 +126,10 @@ WORKED EXAMPLE (the response shape is exactly like this):
   ],
   "shots": [
     {
-      "shot_id": "shot_001_t2v",
+      "shot_id": "shot_001_beat",
       "scene_id": "scene_supermarket",
       "description": "wide shot, 陈默一脚踹翻洗发水货架，丧尸们表演平地摔",
-      "desired_duration_ms": 5000,
+      "desired_duration_ms": 2000,
       "camera": {
         "shot_size": "wide",
         "angle": "eye_level",
@@ -157,24 +145,10 @@ WORKED EXAMPLE (the response shape is exactly like this):
         }
       ],
       "action_beats": [
-        {"sequence": 1, "description": "陈默抬脚", "duration_ms": 1500},
-        {"sequence": 2, "description": "货架倒下丧尸摔", "duration_ms": 2500}
+        {"sequence": 1, "description": "陈默抬脚", "duration_ms": 800},
+        {"sequence": 2, "description": "货架倒下丧尸摔", "duration_ms": 1200}
       ],
-      "narration": "",
-      "continuity": {
-        "start_state": "陈默站在超市中央",
-        "end_state": "丧尸倒地",
-        "previous_shot_id": null,
-        "next_shot_id": "shot_002_i2v",
-        "priority": "high",
-        "continuity_elements": ["costume:supermarket_uniform"],
-        "start_frame_needed": false
-      },
-      "generation_hint": {
-        "preferred_family": "h3_fl2va",
-        "preferred_mode": "t2va",
-        "notes": "首镜头 T2V"
-      }
+      "narration": ""
     }
   ]
 }
@@ -189,15 +163,13 @@ ALLOWED ENUM VALUES (use these EXACT strings):
   lower_left, lower_center, lower_right,
   upper_left, upper_center, upper_right
 - characters[].orientation: facing_camera, facing_left, facing_right, back, profile
-- generation_hint.preferred_family: h3_fl2va, h3_ref2va
-- generation_hint.preferred_mode: t2va, i2v, first_last, r2v
-- shot_id format: shot_NNN_<mode> where NNN is a 3-digit sequence
+- shot_id format: shot_NNN_beat where NNN is a 3-digit sequence
 - scene_id format: scene_<short_id>
 - prop_id format: prop_<short_id>
-- continuity.priority: high, medium, low
 
 Remember:
 - The LITERAL first character of your response must be `{`.
 - The LITERAL last character of your response must be `}`.
 - Do NOT wrap the JSON in markdown code fences.
 - Do NOT add any prose before or after the JSON.
+- You MUST emit exactly {{ beat_count_target }} beats in `shots[]`.

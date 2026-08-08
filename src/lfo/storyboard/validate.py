@@ -104,7 +104,7 @@ def validate_storyboard(data: dict) -> ValidationResult:
     result = ValidationResult(valid=True)
 
     # Required top-level sections
-    for section in ("project", "story", "shots"):
+    for section in ("project", "story", "beats", "panels"):
         if section not in data:
             result.add_error(f"/{section}", f"Required section '{section}' is missing")
 
@@ -113,51 +113,54 @@ def validate_storyboard(data: dict) -> ValidationResult:
     if not project.get("project_id"):
         result.add_error("/project/project_id", "project_id is required")
 
-    # Shots
-    shots = data.get("shots", [])
-    if not shots:
-        result.add_error("/shots", "At least one shot is required")
+    # Beats
+    beats = data.get("beats", [])
+    if not beats:
+        result.add_error("/beats", "At least one beat is required")
 
-    for i, shot in enumerate(shots):
-        prefix = f"/shots/{i}"
-        if not shot.get("shot_id"):
-            result.add_error(f"{prefix}/shot_id", "shot_id is required")
-        if not shot.get("scene_id"):
+    character_ids = {c.get("character_id") for c in data.get("characters", [])}
+    scene_ids = {s.get("scene_id") for s in data.get("scenes", [])}
+    beat_ids = {b.get("beat_id") for b in beats}
+
+    for i, beat in enumerate(beats):
+        prefix = f"/beats/{i}"
+        if not beat.get("beat_id"):
+            result.add_error(f"{prefix}/beat_id", "beat_id is required")
+        if not beat.get("scene_id"):
             result.add_error(f"{prefix}/scene_id", "scene_id is required")
-        if shot.get("desired_duration_ms", 0) <= 0:
-            result.add_error(f"{prefix}/desired_duration_ms", "Must be positive")
 
-        # Validate characters reference existing character_ids
-        character_ids = {c.get("character_id") for c in data.get("characters", [])}
-        for j, char_app in enumerate(shot.get("characters", [])):
+        for j, char_app in enumerate(beat.get("characters", [])):
             cid = char_app.get("character_id")
             if cid and cid not in character_ids:
                 result.add_error(
                     f"{prefix}/characters/{j}/character_id",
-                    f"Character '{cid}' not found in storyboard.characters"
+                    f"Character '{cid}' not found in storyboard.characters",
                 )
 
-        # Validate scene_id references existing scene
-        scene_ids = {s.get("scene_id") for s in data.get("scenes", [])}
-        if shot.get("scene_id") and shot["scene_id"] not in scene_ids:
+        if beat.get("scene_id") and beat["scene_id"] not in scene_ids:
             result.add_error(
                 f"{prefix}/scene_id",
-                f"Scene '{shot['scene_id']}' not found in storyboard.scenes"
+                f"Scene '{beat['scene_id']}' not found in storyboard.scenes",
             )
 
-        # Validate continuity references
-        shot_ids = {s.get("shot_id") for s in shots}
-        continuity = shot.get("continuity", {})
-        if continuity.get("previous_shot_id") and continuity["previous_shot_id"] not in shot_ids:
-            result.add_error(
-                f"{prefix}/continuity/previous_shot_id",
-                f"previous_shot_id '{continuity['previous_shot_id']}' not found"
-            )
-        if continuity.get("next_shot_id") and continuity["next_shot_id"] not in shot_ids:
-            result.add_error(
-                f"{prefix}/continuity/next_shot_id",
-                f"next_shot_id '{continuity['next_shot_id']}' not found"
-            )
+    # Panels
+    panels = data.get("panels", [])
+    if not panels:
+        result.add_error("/panels", "At least one panel is required")
+
+    for i, panel in enumerate(panels):
+        prefix = f"/panels/{i}"
+        if not panel.get("panel_id"):
+            result.add_error(f"{prefix}/panel_id", "panel_id is required")
+        if panel.get("desired_duration_ms", 0) <= 0:
+            result.add_error(f"{prefix}/desired_duration_ms", "Must be positive")
+
+        for bid in panel.get("beat_ids", []):
+            if bid and bid not in beat_ids:
+                result.add_error(
+                    f"{prefix}/beat_ids",
+                    f"beat_id '{bid}' not found in storyboard.beats",
+                )
 
     # Review status
     review = data.get("review", {})

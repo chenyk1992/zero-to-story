@@ -68,18 +68,14 @@ def _build_real_storyboard() -> dict:
                 "environment": "interior",
             },
         ],
-        "shots": [
+        "beats": [
             {
-                "shot_id": "shot_001",
-                "display_index": 1,
+                "beat_id": "beat_001",
+                "sequence": 1,
                 "scene_id": "scene_supermarket",
                 "description": "陈默一脚踹翻洗发水货架，'新员工'们表演平地摔",
-                "desired_duration_ms": 5000,
-                "camera": {
-                    "shot_size": "wide",
-                    "angle": "eye_level",
-                    "movement": "static",
-                },
+                "dialogue": "",
+                "sound": "",
                 "characters": [
                     {
                         "character_id": "char_chenmo",
@@ -89,15 +85,17 @@ def _build_real_storyboard() -> dict:
                         "expression": "漫不经心",
                     },
                 ],
-                "continuity": {
-                    "start_frame_needed": False,
-                    "end_state": "陈默比出拜拜手势转身",
-                },
-                "generation_hint": {
-                    "preferred_family": "h3_fl2va",
-                    "preferred_mode": "t2va",
-                    "notes": "首镜头 T2V，无 first_frame",
-                },
+                "framing": "wide",
+            },
+        ],
+        "panels": [
+            {
+                "panel_id": "panel_001",
+                "sequence": 1,
+                "beat_range": [1, 1],
+                "beat_ids": ["beat_001"],
+                "desired_duration_ms": 15_000,
+                "prompt_text": "",
             },
         ],
         "audio_policy": {

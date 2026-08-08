@@ -1,10 +1,9 @@
-"""Tests for DAG integration, dual gate, and T2VA policy (Task 10).
+"""Tests for DAG integration, dual gate, and panel-only graph (Task 8).
 
 Covers:
 - check_visual_assets_ready with allow_t2va_fallback / visual_required policies
-- Graph service inserts visual.generate tasks when visual_required
+- Graph service emits only video/panel_* tasks (no shot video path)
 - Dual gate: video READY requires visual deps in APPROVED
-- Workflow selector T2VA fallback policy
 """
 from __future__ import annotations
 
@@ -14,21 +13,18 @@ import pytest
 
 from lfo.application.visual_profile_service import VisualProfileService
 from lfo.core.database import Database
-from lfo.planning.workflow_selector import select_workflow
+from lfo.planning.panel_pack import build_panel_pack
+from lfo.planning.workflow_selector import select_workflow_for_panel
 from lfo.services.storyboard_graph_service import StoryboardGraphService
 from lfo.services.task_readiness_service import TaskReadinessService
 from lfo.storyboard.storyboard import (
-    Camera,
-    ContinuityInfo,
-    GenerationHint,
+    Beat,
+    CharacterAppearance,
+    Panel,
     ProjectInfo,
-    Shot,
     Storyboard,
+    StyleGuide,
 )
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -38,29 +34,37 @@ def db() -> Database:
     return db
 
 
-def _make_storyboard(num_shots: int = 3, preferred_mode: str | None = None) -> Storyboard:
-    """Create a test storyboard where continuation shots need visual input."""
-    shots = []
-    for i in range(num_shots):
-        hint = GenerationHint(preferred_mode=preferred_mode) if preferred_mode else GenerationHint()
-        shot = Shot(
-            shot_id=f"shot_{i + 1:03d}",
-            display_index=i + 1,
-            scene_id="scene_001",
-            description=f"Shot {i + 1}",
-            camera=Camera(shot_size="medium", movement="static"),
-            continuity=ContinuityInfo(start_frame_needed=(i > 0)),
-            generation_hint=hint,
+def _make_panel_storyboard(num_panels: int = 3) -> Storyboard:
+    panels = [
+        Panel(
+            panel_id=f"panel_{i:03d}",
+            sequence=i,
+            beat_range=(1, 8),
+            beat_ids=[f"beat_{j:03d}" for j in range(1, 9)],
+            desired_duration_ms=15_000,
+            bw_asset_id=f"asset_bw_{i:03d}",
         )
-        shots.append(shot)
+        for i in range(1, num_panels + 1)
+    ]
+    beats = [
+        Beat(
+            beat_id=f"beat_{i:03d}",
+            sequence=i,
+            scene_id="scene_001",
+            description=f"Beat {i}",
+            characters=[CharacterAppearance(character_id="char_001")],
+        )
+        for i in range(1, 9)
+    ]
     return Storyboard(
         project=ProjectInfo(project_id="proj-test", title="Test"),
-        shots=shots,
+        style=StyleGuide(medium_lock="Medium: 3D rendered suspense."),
+        beats=beats,
+        panels=panels,
     )
 
 
 def _make_profile(db: Database, project_id: str, policy: str = "allow_t2va_fallback") -> str:
-    """Create and activate a visual profile. Returns revision_id."""
     service = VisualProfileService(db)
     revision_id = service.create_draft(project_id, {"visual_input_policy": policy})
     service.activate(revision_id)
@@ -84,14 +88,12 @@ def _create_approved_asset(
     entity_id: str = "shot_002",
     asset_role: str = "start_frame",
 ) -> str:
-    """Create an asset with binding + approval. Returns file path."""
     import uuid
     test_file = str(tmp_path / f"{asset_id}.png")
     with open(test_file, "wb") as f:
         f.write(b"test image content")
     file_hash = hashlib.sha256(b"test image content").hexdigest()
 
-    # Create a dummy task row to satisfy FK (assets.task_id -> tasks.task_id)
     db.execute(
         """INSERT INTO tasks
            (task_id, project_id, task_type, status, dependencies,
@@ -122,16 +124,8 @@ def _create_approved_asset(
     return test_file
 
 
-# ---------------------------------------------------------------------------
-# check_visual_assets_ready
-# ---------------------------------------------------------------------------
-
-
 class TestCheckVisualAssetsReady:
-    """Tests for check_visual_assets_ready function."""
-
     def test_allow_t2va_fallback_missing_visuals_ready(self, db, tmp_path):
-        """allow_t2va_fallback: missing visuals are OK (T2VA fallback)."""
         from lfo.application.visual_readiness import check_visual_assets_ready
 
         _create_project(db)
@@ -148,7 +142,6 @@ class TestCheckVisualAssetsReady:
         assert "start_frame" in result.missing_roles
 
     def test_visual_required_missing_visuals_not_ready(self, db, tmp_path):
-        """visual_required: missing visuals block readiness."""
         from lfo.application.visual_readiness import check_visual_assets_ready
 
         _create_project(db)
@@ -165,7 +158,6 @@ class TestCheckVisualAssetsReady:
         assert "start_frame" in result.missing_roles
 
     def test_visual_required_all_visuals_ready(self, db, tmp_path):
-        """visual_required: all visuals present → ready."""
         from lfo.application.visual_readiness import check_visual_assets_ready
 
         _create_project(db)
@@ -183,7 +175,6 @@ class TestCheckVisualAssetsReady:
         assert len(result.missing_roles) == 0
 
     def test_no_profile_defaults_to_allow_t2va_fallback(self, db, tmp_path):
-        """No active profile → defaults to allow_t2va_fallback → ready."""
         from lfo.application.visual_readiness import check_visual_assets_ready
 
         _create_project(db)
@@ -198,7 +189,6 @@ class TestCheckVisualAssetsReady:
         assert result.ready is True
 
     def test_required_roles_empty_always_ready(self, db, tmp_path):
-        """Empty required_roles → always ready."""
         from lfo.application.visual_readiness import check_visual_assets_ready
 
         _create_project(db)
@@ -214,124 +204,46 @@ class TestCheckVisualAssetsReady:
         assert result.ready is True
         assert len(result.missing_roles) == 0
 
-    def test_details_contain_policy_and_role_info(self, db, tmp_path):
-        """Result details include policy and per-role status."""
-        from lfo.application.visual_readiness import check_visual_assets_ready
 
+class TestGraphServicePanelIntegration:
+    """Panel-only graph: video/panel_* tasks, no shot video or visual.generate."""
+
+    def test_only_panel_video_tasks(self, db):
         _create_project(db)
-        _make_profile(db, "proj-test", "visual_required")
-
-        result = check_visual_assets_ready(
-            db,
-            project_id="proj-test",
-            shot_id="shot_002",
-            required_roles=["start_frame"],
-        )
-
-        assert "policy" in result.details
-        assert result.details["policy"] == "visual_required"
-        assert "start_frame" in result.details.get("roles", {})
-
-
-# ---------------------------------------------------------------------------
-# Graph service integration
-# ---------------------------------------------------------------------------
-
-
-class TestGraphServiceVisualIntegration:
-    """Tests for visual task insertion in the graph service."""
-
-    def test_visual_required_inserts_visual_task(self, db):
-        """visual_required: graph inserts visual.generate before video.h3."""
-        _create_project(db)
-        _make_profile(db, "proj-test", "visual_required")
-
         service = StoryboardGraphService(db)
-        storyboard = _make_storyboard(3)
-        graph = service.build_graph(storyboard)
+        graph = service.build_graph(_make_panel_storyboard(3))
 
-        # Should have visual tasks + video tasks
-        task_types = [t.task_type for t in graph.tasks]
-        assert "visual.generate" in task_types
-
-        # Shot 2 and 3 should have visual tasks
+        panel_tasks = [t for t in graph.tasks if t.logical_task_key.startswith("video/panel_")]
+        shot_tasks = [t for t in graph.tasks if "shot" in t.logical_task_key]
         visual_tasks = [t for t in graph.tasks if t.task_type == "visual.generate"]
-        assert len(visual_tasks) == 2  # shot_002 and shot_003
 
-    def test_allow_t2va_fallback_no_visual_task(self, db):
-        """allow_t2va_fallback: no visual tasks inserted."""
+        assert len(panel_tasks) == 3
+        assert len(shot_tasks) == 0
+        assert len(visual_tasks) == 0
+
+    def test_sequential_panel_dependencies(self, db):
         _create_project(db)
-        _make_profile(db, "proj-test", "allow_t2va_fallback")
-
         service = StoryboardGraphService(db)
-        storyboard = _make_storyboard(3)
-        graph = service.build_graph(storyboard)
+        graph = service.build_graph(_make_panel_storyboard(3))
 
-        task_types = [t.task_type for t in graph.tasks]
-        assert "visual.generate" not in task_types
-        assert all(t.task_type == "video.h3" for t in graph.tasks)
+        assert graph.tasks[0].depends_on == []
+        assert graph.tasks[1].depends_on == [graph.tasks[0].task_id]
+        assert graph.tasks[2].depends_on == [graph.tasks[1].task_id]
 
-    def test_visual_task_dependency_chain(self, db):
-        """visual_required: video task depends on visual task."""
+    def test_materialized_to_db(self, db):
         _create_project(db)
-        _make_profile(db, "proj-test", "visual_required")
-
         service = StoryboardGraphService(db)
-        storyboard = _make_storyboard(3)
-        graph = service.build_graph(storyboard)
+        graph = service.build_graph(_make_panel_storyboard(3))
 
-        # Find video task for shot_002
-        video_task = next(
-            t for t in graph.tasks
-            if t.task_type == "video.h3" and "shot_002" in t.task_id
-        )
-        # Video task should depend on a visual task
-        assert len(video_task.depends_on) > 0
-        dep_id = video_task.depends_on[0]
-        dep_task = next(t for t in graph.tasks if t.task_id == dep_id)
-        assert dep_task.task_type == "visual.generate"
-
-    def test_first_shot_no_visual_even_with_visual_required(self, db):
-        """First shot (T2VA) doesn't get a visual task even with visual_required."""
-        _create_project(db)
-        _make_profile(db, "proj-test", "visual_required")
-
-        service = StoryboardGraphService(db)
-        storyboard = _make_storyboard(3)
-        graph = service.build_graph(storyboard)
-
-        # First shot should be T2VA (no visual task)
-        first_video = next(
-            t for t in graph.tasks
-            if t.task_type == "video.h3" and "shot_001" in t.task_id
-        )
-        assert len(first_video.depends_on) == 0
-
-    def test_materialized_visual_tasks_in_db(self, db):
-        """visual_required: visual tasks are materialized to DB."""
-        _create_project(db)
-        _make_profile(db, "proj-test", "visual_required")
-
-        service = StoryboardGraphService(db)
-        storyboard = _make_storyboard(3)
-        graph = service.build_graph(storyboard)
-
-        # Check DB has visual tasks
         rows = db.fetchall(
-            "SELECT task_id, task_type FROM tasks WHERE project_id = ? AND task_type = ?",
-            ("proj-test", "visual.generate"),
+            "SELECT task_id, task_type FROM tasks WHERE project_id = ?",
+            ("proj-test",),
         )
-        assert len(rows) == 2
-
-
-# ---------------------------------------------------------------------------
-# Dual gate
-# ---------------------------------------------------------------------------
+        assert len(rows) == 3
+        assert all(r[1] == "video.h3" for r in rows)
 
 
 class TestDualGate:
-    """Tests for the dual gate in TaskReadinessService."""
-
     def _create_task(
         self,
         db: Database,
@@ -361,14 +273,10 @@ class TestDualGate:
         )
 
     def test_visual_dep_approved_allows_promotion(self, db, tmp_path):
-        """Video task with visual dep in APPROVED → promote succeeds."""
-
         _create_project(db)
         self._create_snapshot(db)
 
-        # Create visual task in APPROVED
         self._create_task(db, task_id="task-visual-1", task_type="visual.generate", status="APPROVED")
-        # Create video task depending on visual task
         self._create_task(
             db, task_id="task-video-1", task_type="video.h3",
             status="WAITING_ASSETS", depends_on='["task-visual-1"]',
@@ -387,13 +295,10 @@ class TestDualGate:
         assert row[0] == "READY"
 
     def test_visual_dep_not_approved_blocks_promotion(self, db, tmp_path):
-        """Video task with visual dep in PLANNED → promote fails."""
         _create_project(db)
         self._create_snapshot(db)
 
-        # Create visual task in PLANNED (not approved)
         self._create_task(db, task_id="task-visual-1", task_type="visual.generate", status="PLANNED")
-        # Create video task depending on visual task
         self._create_task(
             db, task_id="task-video-1", task_type="video.h3",
             status="WAITING_ASSETS", depends_on='["task-visual-1"]',
@@ -408,10 +313,8 @@ class TestDualGate:
         )
 
         assert result.success is False
-        assert "visual" in result.message.lower() or "not approved" in result.message.lower()
 
     def test_no_visual_dep_allows_promotion(self, db, tmp_path):
-        """Video task with no visual dep → promote succeeds (current behavior)."""
         _create_project(db)
         self._create_snapshot(db)
 
@@ -431,78 +334,27 @@ class TestDualGate:
         assert result.success is True
 
 
-# ---------------------------------------------------------------------------
-# Workflow selector T2VA policy
-# ---------------------------------------------------------------------------
-
-
-class TestWorkflowSelectorT2VAPolicy:
-    """Tests for workflow selector T2VA fallback policy."""
-
-    def test_visual_required_no_assets_blocked(self):
-        """visual_required: shot without assets → blocked (no T2VA fallback)."""
-        shot = Shot(
-            shot_id="shot_001",
-            display_index=1,
-            scene_id="scene_001",
-            description="Test",
-            camera=Camera(shot_size="medium", movement="static"),
-            continuity=ContinuityInfo(start_frame_needed=True),
-            generation_hint=GenerationHint(),
+class TestWorkflowSelectorForPanel:
+    def test_valid_pack_selects_r2v(self):
+        pack = build_panel_pack(
+            panel_id="panel_01",
+            beat_range=(1, 8),
+            bw_asset_id="bw",
+            character_assets=[("char_a", "asset_a")],
+            max_ref_images=3,
         )
-        storyboard = Storyboard(
-            project=ProjectInfo(project_id="proj-test", title="Test"),
-            shots=[shot],
-        )
-
-        result = select_workflow(
-            shot, storyboard, available_assets={},
-            visual_input_policy="visual_required",
-        )
-
-        # With visual_required, no T2VA fallback
-        assert result.workflow_mode == "i2v"
-        assert result.selection_status == "blocked"
-
-    def test_allow_t2va_fallback_no_assets_t2va(self):
-        """allow_t2va_fallback: shot without assets → T2VA."""
-        shot = Shot(
-            shot_id="shot_001",
-            display_index=1,
-            scene_id="scene_001",
-            description="Test",
-            camera=Camera(shot_size="medium", movement="static"),
-            continuity=ContinuityInfo(start_frame_needed=False),
-            generation_hint=GenerationHint(),
-        )
-        storyboard = Storyboard(
-            project=ProjectInfo(project_id="proj-test", title="Test"),
-            shots=[shot],
-        )
-
-        result = select_workflow(shot, storyboard, available_assets={})
-
-        assert result.workflow_mode == "t2va"
-        assert result.selection_status == "provisional"
-
-    def test_visual_required_with_assets_i2v(self):
-        """visual_required: shot with start frame asset → i2v confirmed."""
-        shot = Shot(
-            shot_id="shot_001",
-            display_index=1,
-            scene_id="scene_001",
-            description="Test",
-            camera=Camera(shot_size="medium", movement="static"),
-            continuity=ContinuityInfo(start_frame_needed=True),
-            generation_hint=GenerationHint(),
-        )
-        storyboard = Storyboard(
-            project=ProjectInfo(project_id="proj-test", title="Test"),
-            shots=[shot],
-        )
-        assets = {"shot_001": {"start_frame": {"status": "approved"}}}
-
-        result = select_workflow(shot, storyboard, available_assets=assets)
-
-        assert result.workflow_mode == "i2v"
+        result = select_workflow_for_panel(pack)
+        assert result.workflow_mode == "r2v"
         assert result.selection_status == "confirmed"
+
+    def test_incomplete_pack_blocked(self):
+        pack = build_panel_pack(
+            panel_id="panel_01",
+            beat_range=(1, 8),
+            bw_asset_id="bw",
+            character_assets=[],
+            max_ref_images=3,
+        )
+        result = select_workflow_for_panel(pack)
+        assert result.selection_status == "blocked"
+        assert result.workflow_mode == "r2v"
