@@ -36,6 +36,11 @@ from .panels_cmd import (
     cmd_panels_plan,
     cmd_panels_prompt,
 )
+from .preview_cmd import (
+    PreviewCommand,
+    cmd_preview_build,
+    cmd_preview_collect,
+)
 from .project_cmd import ProjectInitCommand, cmd_project_init
 from .run_cmd import RunCommand, cmd_run
 from .setup import cmd_setup
