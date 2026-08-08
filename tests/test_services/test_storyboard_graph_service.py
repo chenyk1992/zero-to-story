@@ -188,6 +188,76 @@ class TestBuildGraph:
             assert task.serial_group == "proj-test"
 
 
+    def test_blocked_pack_creates_waiting_assets_task(self, db):
+        """Incomplete pack → WAITING_ASSETS with non-empty asset_requirements."""
+        service = StoryboardGraphService(db)
+        storyboard = make_storyboard_with_panels(1)
+        graph = service.build_graph(storyboard)
+
+        assert len(graph.tasks) == 1
+        task = graph.tasks[0]
+        assert task.status == "WAITING_ASSETS"
+        assert task.workflow_mode == "r2v"
+        assert task.reference_bindings == []
+        assert len(task.asset_requirements) > 0
+
+    def test_confirmed_pack_with_approved_assets_is_planned(self, db, tmp_path):
+        """Approved character + composition refs → PLANNED r2v with bindings."""
+        import hashlib
+
+        service = StoryboardGraphService(db)
+        storyboard = make_storyboard_with_panels(1)
+        db.execute(
+            "INSERT INTO projects (project_id, name) VALUES (?, ?)",
+            ("proj-test", "Test"),
+        )
+        for asset_id, entity_type, entity_id, asset_role in (
+            ("asset_char_001", "character", "char_001", "character_ref"),
+            ("asset_bw_001", "panel", "panel_001", "composition_ref"),
+        ):
+            test_file = tmp_path / f"{asset_id}.png"
+            test_file.write_bytes(b"img")
+            file_hash = hashlib.sha256(b"img").hexdigest()
+            db.execute(
+                """INSERT INTO tasks
+                   (task_id, project_id, task_type, status, dependencies,
+                    content_hash, dependency_hash, params_hash, idempotency_key)
+                   VALUES (?, ?, 'visual.generate', 'APPROVED', '[]', '', '', '', ?)""",
+                (asset_id, "proj-test", asset_id),
+            )
+            db.execute(
+                """INSERT INTO assets
+                   (asset_id, task_id, asset_type, file_path, file_hash, content_hash)
+                   VALUES (?, ?, 'image', ?, ?, ?)""",
+                (asset_id, asset_id, str(test_file), file_hash, file_hash),
+            )
+            db.execute(
+                """INSERT INTO asset_bindings
+                   (binding_id, asset_id, project_id, entity_type, entity_id,
+                    asset_role, revision, validity)
+                   VALUES (?, ?, ?, ?, ?, ?, 1, 'current')""",
+                (
+                    f"bind-{asset_id}", asset_id, "proj-test",
+                    entity_type, entity_id, asset_role,
+                ),
+            )
+            db.execute(
+                """INSERT INTO asset_reviews
+                   (review_id, asset_id, dependency_hash, technical_status,
+                    manual_review_status, review_source, reviewer)
+                   VALUES (?, ?, ?, 'passed', 'approved', 'manual', 'tester')""",
+                (f"rev-{asset_id}", asset_id, file_hash),
+            )
+
+        graph = service.build_graph(storyboard)
+
+        task = graph.tasks[0]
+        assert task.status == "PLANNED"
+        assert task.workflow_mode == "r2v"
+        assert len(task.reference_bindings) >= 2
+        assert task.asset_requirements == []
+
+
 class TestModeMapping:
     """Test workflow mode to workflow_id mapping."""
 

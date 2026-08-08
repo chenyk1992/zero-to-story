@@ -17,12 +17,14 @@ from typing import ClassVar
 
 from lfo.application.visual_profile_service import VisualProfileService
 from lfo.core.database import Database
+from lfo.planning.asset_requirements import plan_panel_asset_requirements
 from lfo.planning.materializer import PlanMaterializer
 from lfo.planning.schema import (
     ExecutionPlan,
     PlannedTask,
     ReferenceBinding,
 )
+from lfo.planning.workflow_selector import WorkflowSelection
 from lfo.services.panel_generation_service import (
     GenerationPlan,
     PanelGenerationPlan,
@@ -127,12 +129,39 @@ class StoryboardGraphService:
             task_id = f"task_{panel_plan.panel_id}"
             depends_on: list[str] = [prev_task_id] if prev_task_id else []
 
-            ref_bindings = _reference_bindings_from_pack(panel_plan)
-
             panel = storyboard.panel_by_id(panel_plan.panel_id)
+            selection = WorkflowSelection(
+                workflow_id=panel_plan.workflow_id,
+                workflow_family=MODE_TO_FAMILY.get(
+                    panel_plan.workflow_mode,
+                    "h3_fl2va",
+                ),
+                workflow_mode=panel_plan.workflow_mode,
+                reason=self._selection_reason(panel_plan),
+                selection_status=panel_plan.selection_status,
+                missing_requirements=list(panel_plan.missing_requirements),
+            )
+            asset_requirements = (
+                plan_panel_asset_requirements(panel, panel_plan.pack, selection)
+                if panel is not None
+                else []
+            )
+
+            confirmed = panel_plan.selection_status == "confirmed"
+            ref_bindings = (
+                _reference_bindings_from_pack(panel_plan) if confirmed else []
+            )
+
             aligned_frames = 0
             if panel is not None:
                 aligned_frames = max(1, (panel.desired_duration_ms * 24) // 1000)
+
+            if not confirmed:
+                status = "WAITING_ASSETS"
+            elif depends_on:
+                status = "WAITING_ASSETS"
+            else:
+                status = "PLANNED"
 
             task = PlannedTask(
                 logical_task_key=f"video/{panel_plan.panel_id}",
@@ -151,9 +180,9 @@ class StoryboardGraphService:
                 serial_group=gen_plan.project_id,
                 priority_class=30,
                 prompt_blueprint_id=f"pb_{panel_plan.panel_id}",
-                asset_requirements=[],
+                asset_requirements=asset_requirements,
                 reference_bindings=ref_bindings,
-                status="WAITING_ASSETS" if depends_on else "PLANNED",
+                status=status,
                 aligned_frames=aligned_frames,
             )
 
@@ -176,7 +205,7 @@ class StoryboardGraphService:
         return "allow_t2va_fallback"
 
     def _load_available_assets(self, project_id: str) -> dict:
-        """Load approved assets from DB into the format plan_references expects."""
+        """Load approved assets from DB for panel pack resolution."""
         rows = self.db.fetchall(
             """SELECT ab.entity_id, ab.asset_role, ab.asset_id, ar.manual_review_status
                FROM asset_bindings ab

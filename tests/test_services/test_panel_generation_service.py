@@ -57,6 +57,12 @@ class TestPanelGenerationService:
                     "asset_id": "asset_char_linye",
                 },
             },
+            "panel_001": {
+                "composition_ref": {
+                    "status": "approved",
+                    "asset_id": "asset_bw_001",
+                },
+            },
         }
 
         service = PanelGenerationService()
@@ -94,6 +100,36 @@ class TestPanelGenerationService:
 
         assert plan.panel_plans[0].pack is existing_pack
         assert plan.panel_plans[0].workflow_mode == "r2v"
+
+    def test_fake_character_asset_id_blocked_when_assets_provided(self):
+        from lfo.planning.panel_pack import build_panel_pack
+        from lfo.planning.workflow_selector import select_workflow_for_panel
+
+        pack = build_panel_pack(
+            panel_id="panel_001",
+            beat_range=(1, 2),
+            bw_asset_id="asset_bw_001",
+            character_assets=[("char_linye", "asset_fake")],
+        )
+        available_assets = {
+            "char_linye": {
+                "character_ref": {
+                    "status": "approved",
+                    "asset_id": "asset_char_linye",
+                },
+            },
+            "panel_001": {
+                "composition_ref": {
+                    "status": "approved",
+                    "asset_id": "asset_bw_001",
+                },
+            },
+        }
+
+        result = select_workflow_for_panel(pack, available_assets=available_assets)
+
+        assert result.selection_status == "blocked"
+        assert any("char_linye" in req for req in result.missing_requirements)
 
     def test_empty_panels_returns_empty_plan(self):
         storyboard = Storyboard(

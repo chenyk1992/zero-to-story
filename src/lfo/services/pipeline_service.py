@@ -258,6 +258,24 @@ class PipelineService:
 
         # 2. Process each task
         for i, planned_task in enumerate(tasks):
+            if planned_task.status == "WAITING_ASSETS":
+                print(
+                    f"\n[Pipeline] Task {i + 1}/{len(tasks)}: "
+                    f"{planned_task.task_id} — waiting for assets, skipping"
+                )
+                result.task_results.append(
+                    TaskPipelineResult(
+                        task_id=planned_task.task_id,
+                        shot_id=(
+                            planned_task.target_ids[0]
+                            if planned_task.target_ids
+                            else ""
+                        ),
+                        status="WAITING_ASSETS",
+                    )
+                )
+                continue
+
             print(f"\n[Pipeline] Task {i + 1}/{len(tasks)}: {planned_task.task_id}")
             task_result = self._process_task(planned_task)
             result.task_results.append(task_result)
@@ -376,6 +394,7 @@ class PipelineService:
     def _compile_prompt_for_task(self, planned_task) -> str:
         """Compile the prompt text for a planned task from the storyboard."""
         from lfo.services.panel_generation_service import PanelGenerationService
+        from lfo.services.storyboard_graph_service import StoryboardGraphService
 
         panel_id = planned_task.target_ids[0] if planned_task.target_ids else ""
         if not panel_id or not hasattr(self, "_storyboard"):
@@ -385,10 +404,14 @@ class PipelineService:
         if panel is not None and panel.prompt_text:
             return panel.prompt_text
 
+        project_id = self._storyboard.project.project_id
+        available_assets = StoryboardGraphService(self.db)._load_available_assets(project_id)
+
         svc = PanelGenerationService()
         plan = svc.generate_plan(
             self._storyboard,
-            self._storyboard.project.project_id,
+            project_id,
+            available_assets=available_assets,
         )
         for panel_plan in plan.panel_plans:
             if panel_plan.panel_id == panel_id:

@@ -20,6 +20,7 @@ class PanelGenerationPlan:
     prompt_text: str
     pack: PanelPack
     task_type: str = "video.h3"
+    missing_requirements: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -72,7 +73,11 @@ class PanelGenerationService:
             max_ref_images=max_ref_images,
             available_assets=available_assets,
         )
-        selection = select_workflow_for_panel(pack, max_ref_images=max_ref_images)
+        selection = select_workflow_for_panel(
+            pack,
+            max_ref_images=max_ref_images,
+            available_assets=available_assets or None,
+        )
         beats = _beats_for_panel(storyboard, panel)
         prompt_text = compile_hub_style_panel_prompt(
             pack=pack,
@@ -88,6 +93,7 @@ class PanelGenerationService:
             selection_status=selection.selection_status,
             prompt_text=prompt_text,
             pack=pack,
+            missing_requirements=list(selection.missing_requirements),
         )
 
     def _resolve_pack(

@@ -168,6 +168,58 @@ def build_panel_pack(
     )
 
 
+def _is_approved_asset(
+    available_assets: dict,
+    entity_id: str,
+    asset_role: str,
+    asset_id: str,
+) -> bool:
+    """Return True when entity_id/asset_role maps to the given approved asset_id."""
+    entity_assets = available_assets.get(entity_id, {})
+    asset_info = entity_assets.get(asset_role, {})
+    return (
+        asset_info.get("status") == "approved"
+        and str(asset_info.get("asset_id", "")) == asset_id
+    )
+
+
+def validate_panel_pack_approvals(
+    pack: PanelPack,
+    available_assets: dict | None,
+) -> list[str]:
+    """Validate pack asset_ids resolve to approved assets when assets are provided."""
+    if not available_assets:
+        return []
+
+    errors: list[str] = []
+
+    composition_ok = _is_approved_asset(
+        available_assets,
+        pack.panel_id,
+        "composition_ref",
+        pack.storyboard_bw_asset_id,
+    )
+    if not composition_ok:
+        errors.append(
+            f"composition_ref {pack.storyboard_bw_asset_id!r} not approved for {pack.panel_id}"
+        )
+
+    for ref in pack.refs:
+        if ref.role != "character":
+            continue
+        if not _is_approved_asset(
+            available_assets,
+            ref.entity_id,
+            "character_ref",
+            ref.asset_id,
+        ):
+            errors.append(
+                f"character_ref for {ref.entity_id} ({ref.asset_id!r}) not approved"
+            )
+
+    return errors
+
+
 def validate_panel_pack(pack: PanelPack, *, max_ref_images: int) -> list[str]:
     errors: list[str] = []
 
