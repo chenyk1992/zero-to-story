@@ -69,7 +69,7 @@ def trim_panel_pack(
     limit = min(9, max_ref_images)
     ordered = [composition] + sorted(candidates, key=_ref_trim_priority)
     if len(ordered) <= limit:
-        return [_copy_ref(ref, slot=i + 1) for i, ref in enumerate(ordered)], None
+        return _composition_last(ordered), None
 
     kept = ordered[:limit]
     dropped = ordered[limit:]
@@ -78,7 +78,7 @@ def trim_panel_pack(
         f"trimmed {len(dropped)} ref(s) ({dropped_roles}) "
         f"to fit max_ref_images={max_ref_images}"
     )
-    return [_copy_ref(ref, slot=i + 1) for i, ref in enumerate(kept)], reason
+    return _composition_last(kept), reason
 
 
 def _composition_last(refs: list[PanelPackRef]) -> list[PanelPackRef]:
@@ -157,13 +157,12 @@ def build_panel_pack(
         composition=composition,
         max_ref_images=max_ref_images,
     )
-    refs = _composition_last(trimmed)
 
     return PanelPack(
         panel_id=panel_id,
         beat_range=beat_range,
         storyboard_bw_asset_id=bw_asset_id,
-        refs=refs,
+        refs=trimmed,
         characters_in_panel=[entity_id for entity_id, _ in character_assets],
         trim_reason=trim_reason,
     )
@@ -194,6 +193,9 @@ def validate_panel_pack(pack: PanelPack, *, max_ref_images: int) -> list[str]:
     actual_slots = [ref.slot for ref in pack.refs]
     if actual_slots != expected_slots:
         errors.append(f"ref slots must be numbered 1..{ref_count}, got {actual_slots}")
+
+    if pack.refs and pack.refs[-1].role != "composition":
+        errors.append("composition reference must be the last ref (Hub Picture N slot)")
 
     for ref in pack.refs:
         if ref.role not in _VALID_ROLES:

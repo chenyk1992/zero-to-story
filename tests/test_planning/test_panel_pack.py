@@ -1,5 +1,6 @@
 from lfo.planning.panel_pack import (
     DEFAULT_PURPOSE_COMPOSITION,
+    PanelPack,
     PanelPackRef,
     build_panel_pack,
     panel_pack_from_dict,
@@ -36,10 +37,20 @@ def test_trim_to_three_keeps_composition_and_main_chars():
     ]
     refs, reason = trim_panel_pack(candidates, composition=composition, max_ref_images=3)
     assert len(refs) == 3
-    assert any(r.role == "composition" for r in refs)
+    assert refs[-1].role == "composition"
     assert reason  # non-empty trim reason
-    # slots renumbered 1..3
     assert [r.slot for r in refs] == [1, 2, 3]
+    assert validate_panel_pack(
+        PanelPack(
+            panel_id="panel_01",
+            beat_range=(1, 8),
+            storyboard_bw_asset_id="bw",
+            refs=refs,
+            characters_in_panel=["char_1", "char_2"],
+            trim_reason=reason,
+        ),
+        max_ref_images=3,
+    ) == []
 
 
 def test_validate_rejects_missing_identity():
