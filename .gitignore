@@ -44,3 +44,7 @@ Thumbs.db
 # Local secrets / env
 .env
 .env.local
+
+# Agent scratch
+.superpowers/
+
