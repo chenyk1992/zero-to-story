@@ -1,4 +1,9 @@
-"""Command registry — maps command names to handler classes."""
+"""Command registry — maps command names to handler classes.
+
+Command modules (e.g. ``panels_cmd``, ``preview_cmd``) register via
+``@CommandRegistry.register``; ``lfo.cli.__init__`` imports them so
+decorators run at package load.
+"""
 from __future__ import annotations
 
 
