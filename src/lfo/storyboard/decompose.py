@@ -267,6 +267,7 @@ def _render_prompt(
         "{{ pacing }}": constraints.pacing,
         "{{ mood }}": constraints.mood,
         "{{ audio_policy }}": constraints.audio_policy,
+        "{{ beat_count_target }}": str(constraints.beat_count_target()),
     }
     for placeholder, value in replacements.items():
         user = user.replace(placeholder, value)
@@ -467,6 +468,13 @@ class StoryboardDecomposer:
             payload = validate_llm_payload(data)
         except DecomposeSchemaError as exc:
             raise DecomposeError(f"Invalid LLM output: {exc}") from exc
+
+        beat_target = intake.constraints.beat_count_target()
+        actual = len(payload.new_shots)
+        if actual != beat_target:
+            raise DecomposeError(
+                f"LLM emitted {actual} beats but beat_count_target is {beat_target}"
+            )
 
         # Reconcile scenes
         merged_scenes, scene_remap = _resolve_scene_refs(payload, self.scenes)

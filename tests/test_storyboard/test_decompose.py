@@ -60,13 +60,17 @@ class FakeLLMClient:
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "decompose_responses"
 
 
-def _make_intake(synopsis: str = "特价鸡蛋引发的僵尸末日里，试用期员工陈默凭摸鱼经验逃生。") -> Intake:
+def _make_intake(
+    synopsis: str = "特价鸡蛋引发的僵尸末日里，试用期员工陈默凭摸鱼经验逃生。",
+    shot_count_target: int = 2,
+) -> Intake:
     intake = Intake(
         project_id="intake_test_001",
         constraints=IntakeConstraints(
             target_duration_ms=30000,
             aspect_ratio="9:16",
             pacing="medium",
+            custom={"shot_count_target": shot_count_target},
         ),
     )
     intake.add_source(
@@ -207,7 +211,7 @@ class TestDecomposeHappyPath:
         })
         llm = FakeLLMClient(response=raw)
         decomposer = StoryboardDecomposer(llm=llm, project=_make_project())
-        sb = decomposer.decompose(_make_intake())
+        sb = decomposer.decompose(_make_intake(shot_count_target=1))
         assert sb.beats[0].scene_id == "scene_warehouse"
         assert any(s.scene_id == "scene_warehouse" for s in sb.scenes)
 
