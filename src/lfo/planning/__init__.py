@@ -13,7 +13,7 @@ Modules:
 - materializer: execution_plan.json -> SQLite tasks
 - render: execution_plan -> dry_run_report.md
 """
-from .asset_requirements import plan_asset_requirements
+from lfo.planning.asset_requirements import plan_asset_requirements, plan_panel_asset_requirements
 from .dag import build_task_dependencies
 from .duration import compute_aligned_frames
 from .materializer import PlanMaterializer

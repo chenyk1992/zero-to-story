@@ -51,9 +51,10 @@ class PromptPart:
 @dataclass
 class PromptBlueprint:
     """A video prompt blueprint — semantic parts before asset materialization."""
-    blueprint_id: str              # e.g. "pb_video_shot_003"
+    blueprint_id: str              # e.g. "pb_panel_01"
     compiler_name: str             # e.g. "h3_r2v_prompt_blueprint"
-    target_shot_ids: list[str] = field(default_factory=list)
+    target_panel_ids: list[str] = field(default_factory=list)
+    target_shot_ids: list[str] = field(default_factory=list)  # legacy alias
     workflow_mode: str = ""        # 't2va' | 'i2v' | 'first_last' | 'r2v'
     parts: list[PromptPart] = field(default_factory=list)
     symbolic_references: list[ReferenceBinding] = field(default_factory=list)
@@ -64,6 +65,7 @@ class PromptBlueprint:
         return {
             "blueprint_id": self.blueprint_id,
             "compiler_name": self.compiler_name,
+            "target_panel_ids": self.target_panel_ids,
             "target_shot_ids": self.target_shot_ids,
             "workflow_mode": self.workflow_mode,
             "parts": [p.to_dict() for p in self.parts],
@@ -108,8 +110,8 @@ class AssetRequirement:
 @dataclass
 class PlannedTask:
     """A single planned task in the execution plan."""
-    logical_task_key: str          # e.g. "video/shot_003"
-    task_id: str                   # e.g. "task_video_shot_003"
+    logical_task_key: str          # e.g. "video/panel_01"
+    task_id: str                   # e.g. "task_panel_01"
     project_id: str = ""
     task_type: str = "video.h3"
     target_ids: list[str] = field(default_factory=list)
