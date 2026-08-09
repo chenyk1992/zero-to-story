@@ -1,4 +1,5 @@
 """Tests for TechnicalQC."""
+
 from __future__ import annotations
 
 from lfo.media.qc import QCContract, TechnicalQC
@@ -8,12 +9,19 @@ class TestTechnicalQC:
     def test_passing_media(self) -> None:
         qc = TechnicalQC()
         probe = {
-            "width": 1080, "height": 1920, "fps": 24.0,
-            "duration_ms": 5000, "codec": "h264", "has_audio": True,
+            "width": 1080,
+            "height": 1920,
+            "fps": 24.0,
+            "duration_ms": 5000,
+            "codec": "h264",
+            "has_audio": True,
         }
         contract = QCContract(
-            expected_width=1080, expected_height=1920,
-            expected_fps=24.0, expected_codec="h264", requires_audio=True,
+            expected_width=1080,
+            expected_height=1920,
+            expected_fps=24.0,
+            expected_codec="h264",
+            requires_audio=True,
         )
         report = qc.check(probe, contract)
         assert report.passed
@@ -53,7 +61,14 @@ class TestTechnicalQC:
 
     def test_fails_audio_missing(self) -> None:
         qc = TechnicalQC()
-        probe = {"width": 1080, "height": 1920, "fps": 24.0, "duration_ms": 5000, "codec": "h264", "has_audio": False}
+        probe = {
+            "width": 1080,
+            "height": 1920,
+            "fps": 24.0,
+            "duration_ms": 5000,
+            "codec": "h264",
+            "has_audio": False,
+        }
         contract = QCContract(requires_audio=True)
         report = qc.check(probe, contract)
         assert not report.passed
@@ -70,7 +85,14 @@ class TestTechnicalQC:
     def test_no_audio_required_passes_without_audio(self) -> None:
         """When audio is not required, absence of audio is OK."""
         qc = TechnicalQC()
-        probe = {"width": 1080, "height": 1920, "fps": 24.0, "duration_ms": 5000, "codec": "h264", "has_audio": False}
+        probe = {
+            "width": 1080,
+            "height": 1920,
+            "fps": 24.0,
+            "duration_ms": 5000,
+            "codec": "h264",
+            "has_audio": False,
+        }
         contract = QCContract()
         report = qc.check(probe, contract)
         assert report.passed

@@ -5,7 +5,7 @@ import pytest
 
 from lfo.backends.capabilities import CapabilityManifest
 from lfo.backends.registry import BackendRegistry
-from lfo.backends.selector import select_backend, SelectionFailure
+from lfo.backends.selector import SelectionFailure, select_backend
 
 
 def _h3_manifest(

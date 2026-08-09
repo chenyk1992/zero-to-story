@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from lfo.execution.invalidation import (
     INVALIDATE_REGENERATE_CLIP,
-    InvalidationEvent,
     build_forward_graph,
     invalidate_scope,
 )

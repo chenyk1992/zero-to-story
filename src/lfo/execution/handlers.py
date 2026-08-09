@@ -122,6 +122,14 @@ class FakeMediaHandler(TaskHandler):
         attempt_id: str,
     ) -> HandlerResult:
         result_type = metadata.get("fake_result", "success")
+        if task_type == "media.qc" and result_type == "qc_fail":
+            return HandlerResult(
+                success=True,
+                artifact_type="qc_report",
+                artifact_metadata={"passed": False},
+                error="QC failed",
+                qc_passed=False,
+            )
         if result_type == "success":
             return HandlerResult(success=True, artifact_type="normalized_video")
         return HandlerResult(success=False, error="normalization failed", retryable=True)

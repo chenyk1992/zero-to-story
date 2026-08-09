@@ -12,6 +12,7 @@ Constraints:
 from __future__ import annotations
 
 from .assets import AssetSource, AssetSpec, ProvenanceSpec, ReviewDeclaration
+from .builder import VideoPackageBuilder
 from .clips import (
     AudioPolicy,
     AudioTrackSpec,
@@ -55,6 +56,7 @@ __all__ = [
     "ValidationError",
     "ValidationResult",
     "VideoExecutionPackage",
+    "VideoPackageBuilder",
     "package_content_hash",
     "validate_package",
 ]

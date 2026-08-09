@@ -12,7 +12,10 @@ from lfo.cli.registry import CommandRegistry
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the top-level argument parser with all registered subcommands."""
-    parser = argparse.ArgumentParser(prog="lfo", description="LFO — Story pipeline orchestrator")
+    parser = argparse.ArgumentParser(
+        prog="lfo",
+        description="LFO — reusable local video generation and media runtime",
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--json", action="store_true", help="JSON output for machines")
     parser.add_argument("--db", default=None, help="Database path (default: from config)")

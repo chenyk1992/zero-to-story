@@ -1,39 +1,36 @@
-"""VideoRuntime — the Python facade for the LFO v1 runtime.
-
-This is the primary entry point for programmatic use:
-    run = VideoRuntime().execute("execution-package.json")
-
-Also provides validate, plan, status, retry, cancel, review, export.
-"""
+"""Persistent public facade for LFO Runtime v1."""
 from __future__ import annotations
 
+import hashlib
+import json
 import pathlib
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from lfo.assets.importer import AssetImporter
+from lfo.assets.store import ContentAddressedStore
+from lfo.backends.comfy_h3 import ComfyH3VideoHandler, build_h3_backend_registry
 from lfo.backends.registry import BackendRegistry
-from lfo.core.canonical import hash_value
-from lfo.execution.dag import build_dag
-from lfo.execution.handlers import default_fake_registry
-from lfo.execution.materializer import MaterializationError, materialize
-from lfo.execution.runtime import Runtime
 from lfo.contracts.package import VideoExecutionPackage, validate_package
-from lfo.contracts.errors import ValidationResult
+from lfo.core.canonical import hash_value
+from lfo.execution import ExecutionStore
+from lfo.execution.dag import build_dag
+from lfo.execution.handlers import HandlerRegistry
+from lfo.execution.materializer import MaterializationError, MaterializedRun, materialize
+from lfo.execution.runtime import PersistentRuntime
+from lfo.execution.states import TaskState
+from lfo.media.handlers import build_media_handler_registry
 
 
 @dataclass
 class ValidationResult2:
-    """Result of validate() call."""
-
     valid: bool
     errors: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
 class PlanResult:
-    """Result of plan() call — a dry-run materialization."""
-
     plan_id: str
     clip_plans: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -43,8 +40,6 @@ class PlanResult:
 
 @dataclass
 class RunResult:
-    """Result of execute() call."""
-
     run_id: str
     status: str
     clip_count: int = 0
@@ -53,8 +48,6 @@ class RunResult:
 
 @dataclass
 class StatusResult:
-    """Result of status() call."""
-
     run_id: str
     status: str
     tasks: dict[str, str] = field(default_factory=dict)
@@ -63,8 +56,6 @@ class StatusResult:
 
 @dataclass
 class ReviewResult:
-    """Result of review() call."""
-
     review_id: str
     decision: str
     error: str | None = None
@@ -72,8 +63,6 @@ class ReviewResult:
 
 @dataclass
 class ExportResult2:
-    """Result of export() call."""
-
     export_id: str
     status: str
     file_path: str | None = None
@@ -81,68 +70,314 @@ class ExportResult2:
 
 
 class VideoRuntime:
-    """Python facade for the LFO v1 video runtime.
+    """Validate, plan and execute immutable video packages with durable state."""
 
-    In production, this would use ExecutionStore for persistence. Here we
-    use in-memory state for integration testing.
-    """
+    def __init__(
+        self,
+        registry: BackendRegistry | None = None,
+        *,
+        db_path: str | pathlib.Path | None = None,
+        workspace_root: str | pathlib.Path | None = None,
+        handler_registry: HandlerRegistry | None = None,
+    ) -> None:
+        self.workspace_root = pathlib.Path(workspace_root or "workspace").resolve()
+        self.workspace_root.mkdir(parents=True, exist_ok=True)
+        self.db_path = pathlib.Path(db_path or self.workspace_root / "db" / "runtime-v1.sqlite3")
+        self.store = ExecutionStore(self.db_path)
+        self.store.init_schema()
+        self.registry = registry or build_h3_backend_registry()
+        self.handlers = handler_registry or self._production_handlers()
+        self.cas = ContentAddressedStore(self.workspace_root / "assets")
 
-    def __init__(self, registry: BackendRegistry | None = None) -> None:
-        self.registry = registry or BackendRegistry()
-        self._runs: dict[str, dict[str, Any]] = {}  # run_id -> run state
+    def _production_handlers(self) -> HandlerRegistry:
+        handlers = build_media_handler_registry(self.workspace_root)
+        handlers.register("video.generate", ComfyH3VideoHandler())
+        return handlers
 
     def validate(self, path: pathlib.Path | str) -> ValidationResult2:
-        """Validate a package file without importing or executing.
-
-        Checks schema, paths, and capability requirements.
-        """
-        p = pathlib.Path(path)
-        if not p.exists():
-            return ValidationResult2(valid=False, errors=[{"path": str(path), "message": "File not found", "code": "not_found"}])
-
+        package_path = pathlib.Path(path).resolve()
         try:
-            data = p.read_text(encoding="utf-8")
-            import json
-            package_data = json.loads(data)
-        except Exception as e:
-            return ValidationResult2(valid=False, errors=[{"path": str(path), "message": str(e), "code": "parse_error"}])
-
-        result = validate_package(package_data)
-        return ValidationResult2(
-            valid=result.ok,
-            errors=[e.to_dict() for e in result.errors()],
-        )
+            data = self._read_json(package_path)
+        except Exception as exc:
+            return ValidationResult2(False, [_error(str(path), str(exc), "parse_error")])
+        result = validate_package(data)
+        errors = [error.to_dict() for error in result.errors()]
+        if result.ok:
+            package = VideoExecutionPackage.from_dict(data)
+            errors.extend(self._validate_asset_sources(package_path, package))
+        return ValidationResult2(not errors, errors)
 
     def plan(self, path: pathlib.Path | str) -> PlanResult:
-        """Import assets and generate a materialization plan without executing."""
-        p = pathlib.Path(path)
-        plan_id = f"plan-{uuid.uuid4().hex[:8]}"
-
-        if not p.exists():
-            return PlanResult(plan_id=plan_id, error="File not found")
-
+        package_path = pathlib.Path(path).resolve()
+        plan_id = f"plan-{uuid.uuid4().hex[:12]}"
         try:
-            import json
-            data = json.loads(p.read_text(encoding="utf-8"))
-            package = VideoExecutionPackage.from_dict(data)
-        except Exception as e:
-            return PlanResult(plan_id=plan_id, error=str(e))
-
-        pkg_hash = hash_value(package.to_dict())
-
-        try:
-            mat = materialize(
+            package, package_hash = self._validated_package(package_path)
+            assets = self._import_assets(package_path, package)
+            snapshot = materialize(
                 run_id=plan_id,
                 package=package,
-                package_hash=pkg_hash,
+                package_hash=package_hash,
                 registry=self.registry,
+                asset_resolutions=assets,
             )
-        except MaterializationError as e:
-            return PlanResult(plan_id=plan_id, error=e.message, warnings=e.details)
+        except MaterializationError as exc:
+            return PlanResult(plan_id, error=exc.message, warnings=exc.details)
+        except Exception as exc:
+            return PlanResult(plan_id, error=str(exc))
+        return self._plan_result(plan_id, snapshot)
 
-        clip_plans = []
-        for clip in mat.clips:
-            clip_plans.append({
+    def execute(self, path: pathlib.Path | str, approval: bool = False) -> RunResult:
+        package_path = pathlib.Path(path).resolve()
+        run_id = f"run-{uuid.uuid4().hex[:12]}"
+        try:
+            package, package_hash = self._validated_package(package_path)
+            if not approval:
+                return RunResult("", "REJECTED", error="Explicit execution approval is required")
+            assets = self._import_assets(package_path, package)
+            revision_id = self.store.create_package_revision(
+                package_id=package.package_id,
+                project_title=package.project.title,
+                locale=package.project.locale,
+                revision=package.revision,
+                content_hash=package_hash,
+                raw_json=json.dumps(package.to_dict(), sort_keys=True, ensure_ascii=False),
+            )
+            snapshot = materialize(
+                run_id=run_id,
+                package=package,
+                package_hash=package_hash,
+                registry=self.registry,
+                asset_resolutions=assets,
+            )
+            graph = build_dag(snapshot)
+            self.store.create_run(
+                run_id=run_id,
+                package_id=package.package_id,
+                revision_id=revision_id,
+                status="ACCEPTED",
+            )
+            self.store.create_snapshot(
+                snapshot_id=f"snapshot-{uuid.uuid4().hex}",
+                run_id=run_id,
+                snapshot_hash=snapshot.materialization_hash,
+                snapshot_json=json.dumps(_snapshot_dict(snapshot), sort_keys=True, ensure_ascii=False),
+            )
+            review_id = f"review-{uuid.uuid4().hex}"
+            self.store.create_review(
+                review_id=review_id,
+                target_type="package",
+                target_id=run_id,
+                content_hash=package_hash,
+                bindings={"package_id": package.package_id, "revision": package.revision},
+            )
+            self.store.transition_review(
+                review_id,
+                "PENDING",
+                "APPROVED",
+                package.approval.notes or "explicit runtime approval",
+                decided_by=package.approval.approved_by or "runtime-user",
+            )
+            runtime = PersistentRuntime(self.store, self.handlers, run_id)
+            runtime.load_graph(graph)
+            self.store.transition_run(run_id, "ACCEPTED", "RUNNING", "execution started")
+            return self._drive_runtime(runtime, len(snapshot.clips))
+        except MaterializationError as exc:
+            return RunResult(run_id, "FAILED", error=str(exc))
+        except Exception as exc:
+            run = self.store.get_run(run_id)
+            if run is not None and str(run["status"]) in {"ACCEPTED", "RUNNING"}:
+                self.store.transition_run(run_id, str(run["status"]), "FAILED", str(exc))
+            return RunResult(run_id, "FAILED", error=str(exc))
+
+    def status(self, run_id: str) -> StatusResult:
+        run = self.store.get_run(run_id)
+        if run is None:
+            return StatusResult(run_id, "UNKNOWN", error="Run not found")
+        tasks = {
+            str(task["logical_key"]): str(task["status"])
+            for task in self.store.list_tasks(run_id)
+        }
+        return StatusResult(run_id, str(run["status"]), tasks)
+
+    def retry(self, run_id: str, scope: str | None = None) -> RunResult:
+        run = self.store.get_run(run_id)
+        if run is None:
+            return RunResult(run_id, "FAILED", error="Run not found")
+        runtime = PersistentRuntime(self.store, self.handlers, run_id)
+        runtime.restore()
+        reset = 0
+        for task in runtime.tasks.values():
+            if task.status != TaskState.FAILED_RETRYABLE.value:
+                continue
+            if scope and not (task.logical_key.startswith(f"{scope}:") or task.task_id == scope):
+                continue
+            if runtime.retry(task.task_id):
+                reset += 1
+        if reset == 0:
+            return RunResult(run_id, str(run["status"]), error="No retryable tasks in scope")
+        current = str(run["status"])
+        self.store.transition_run(run_id, current, "RUNNING", "manual retry")
+        clip_count = len({str(task["logical_key"]).split(":", 1)[0] for task in self.store.list_tasks(run_id) if ":" in str(task["logical_key"])})
+        return self._drive_runtime(runtime, clip_count)
+
+    def cancel(self, run_id: str) -> None:
+        run = self.store.get_run(run_id)
+        if run is None:
+            return
+        for task in self.store.list_tasks(run_id):
+            status = str(task["status"])
+            if status not in {"SUCCEEDED", "FAILED_TERMINAL", "CANCELLED"}:
+                self.store.transition_task(str(task["task_id"]), status, "CANCELLED", "run cancelled")
+        current = str(run["status"])
+        if current != "CANCELLED":
+            self.store.transition_run(run_id, current, "CANCELLED", "user cancelled")
+
+    def review(self, run_id: str, target: str, decision: str) -> ReviewResult:
+        review_id = f"review-{uuid.uuid4().hex}"
+        if self.store.get_run(run_id) is None:
+            return ReviewResult(review_id, decision, "Run not found")
+        if decision not in {"approved", "rejected"}:
+            return ReviewResult(review_id, decision, "Invalid decision")
+        self.store.create_review(
+            review_id=review_id,
+            target_type="runtime-target",
+            target_id=target,
+            bindings={"run_id": run_id},
+        )
+        self.store.transition_review(
+            review_id,
+            "PENDING",
+            decision.upper(),
+            f"runtime review: {decision}",
+            decided_by="runtime-user",
+        )
+        return ReviewResult(review_id, decision)
+
+    def export(self, run_id: str) -> ExportResult2:
+        run = self.store.get_run(run_id)
+        if run is None:
+            return ExportResult2("", "FAILED", error="Run not found")
+        if str(run["status"]) != "COMPLETED":
+            return ExportResult2("", "FAILED", error=f"Run is {run['status']}")
+        final = None
+        for artifact in reversed(self.store.list_artifacts(run_id)):
+            if artifact["artifact_type"] == "final_video":
+                final = artifact
+                break
+        if final is None or not isinstance(final.get("file_path"), str):
+            return ExportResult2("", "FAILED", error="Completed run has no durable final artifact")
+        file_path = pathlib.Path(str(final["file_path"]))
+        if not file_path.is_file():
+            return ExportResult2("", "FAILED", error=f"Final artifact is missing: {file_path}")
+        existing = self.store.latest_export(run_id)
+        if existing is not None:
+            return ExportResult2(str(existing["export_id"]), str(existing["status"]), str(existing["file_path"]))
+        metadata = json.loads(str(final.get("metadata") or "{}"))
+        export_id = f"export-{uuid.uuid4().hex}"
+        self.store.create_export(
+            export_id=export_id,
+            run_id=run_id,
+            status="READY",
+            file_path=str(file_path),
+            file_hash=str(final.get("file_hash") or ""),
+            manifest_path=metadata.get("manifest_path"),
+            subtitles_path=metadata.get("subtitles_path"),
+        )
+        return ExportResult2(export_id, "READY", str(file_path))
+
+    def _drive_runtime(self, runtime: PersistentRuntime, clip_count: int) -> RunResult:
+        for _ in range(max(50, len(runtime.tasks) * 5)):
+            if runtime.is_complete() or runtime.is_stalled():
+                break
+            runtime.tick()
+        if runtime.has_failures():
+            status = "FAILED"
+        elif runtime.is_complete():
+            status = "COMPLETED"
+        else:
+            status = "WAITING_RETRY"
+        run = self.store.get_run(runtime.run_id)
+        if run is not None and str(run["status"]) != status:
+            self.store.transition_run(runtime.run_id, str(run["status"]), status, "scheduler stopped")
+        failed = [task.error for task in runtime.tasks.values() if task.error]
+        return RunResult(runtime.run_id, status, clip_count, "; ".join(failed) or None)
+
+    def _validated_package(self, package_path: pathlib.Path) -> tuple[VideoExecutionPackage, str]:
+        validation = self.validate(package_path)
+        if not validation.valid:
+            messages = "; ".join(str(item.get("message")) for item in validation.errors)
+            raise ValueError(messages)
+        package = VideoExecutionPackage.from_dict(self._read_json(package_path))
+        return package, hash_value(package.to_dict())
+
+    def _import_assets(
+        self, package_path: pathlib.Path, package: VideoExecutionPackage
+    ) -> dict[str, dict[str, str]]:
+        importer = AssetImporter(self.cas)
+        resolutions: dict[str, dict[str, str]] = {}
+        for asset in package.assets:
+            imported = importer.import_asset(
+                asset.asset_key,
+                asset.source.uri,
+                package_path.parent,
+                asset.media_type,
+            )
+            if asset.source.sha256 and imported.blob_ref.blob_hash.lower() != asset.source.sha256.lower():
+                raise ValueError(f"Asset hash mismatch for {asset.asset_key!r}")
+            asset_id = "asset-" + hashlib.sha256(
+                f"{package.package_id}\0{asset.asset_key}".encode()
+            ).hexdigest()[:24]
+            revision_id = self.store.record_asset_revision(
+                asset_id=asset_id,
+                asset_key=asset.asset_key,
+                media_type=asset.media_type,
+                blob_hash=imported.blob_ref.blob_hash,
+                blob_size=imported.blob_ref.size,
+                blob_path=str(imported.blob_ref.path),
+                file_hash=imported.blob_ref.blob_hash,
+                probe_result=imported.probe.to_dict(),
+                source_uri=asset.source.uri,
+                original_filename=imported.original_filename,
+                provenance=asset.provenance.to_dict(),
+                review_required=asset.review.required,
+                metadata=asset.metadata,
+            )
+            resolutions[asset.asset_key] = {
+                "asset_revision_id": revision_id,
+                "blob_path": str(imported.blob_ref.path.resolve()),
+                "file_path": str(imported.blob_ref.path.resolve()),
+                "file_hash": imported.blob_ref.blob_hash,
+            }
+        return resolutions
+
+    def _validate_asset_sources(
+        self, package_path: pathlib.Path, package: VideoExecutionPackage
+    ) -> list[dict[str, Any]]:
+        errors: list[dict[str, Any]] = []
+        from lfo.assets.paths import resolve_package_uri
+
+        for index, asset in enumerate(package.assets):
+            try:
+                source = resolve_package_uri(asset.source.uri, package_path.parent)
+                if not source.is_file():
+                    raise FileNotFoundError(f"Asset source does not exist: {source}")
+            except Exception as exc:
+                errors.append(_error(f"$.assets[{index}].source.uri", str(exc), "asset_path"))
+        return errors
+
+    @staticmethod
+    def _read_json(path: pathlib.Path) -> dict[str, Any]:
+        if not path.is_file():
+            raise FileNotFoundError(f"Package file not found: {path}")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise TypeError("Package JSON must be an object")
+        return data
+
+    @staticmethod
+    def _plan_result(plan_id: str, snapshot: MaterializedRun) -> PlanResult:
+        clips = [
+            {
                 "clip_id": clip.clip_id,
                 "operation": clip.operation,
                 "backend_id": clip.backend_id,
@@ -150,133 +385,29 @@ class VideoRuntime:
                 "workflow_hash": clip.workflow_hash,
                 "duration_ms": clip.duration_ms,
                 "reference_count": len(clip.resolved_references),
-            })
-
-        backends = [
-            {"backend_id": c.backend_id, "revision": c.backend_revision}
-            for c in mat.clips
+                "dropped_references": clip.dropped_references,
+            }
+            for clip in snapshot.clips
         ]
-
+        backends = sorted(
+            {
+                (clip.backend_id, clip.backend_revision)
+                for clip in snapshot.clips
+            }
+        )
         return PlanResult(
-            plan_id=plan_id,
-            clip_plans=clip_plans,
-            warnings=mat.warnings,
-            backend_summary=backends,
+            plan_id,
+            clips,
+            snapshot.warnings,
+            [{"backend_id": backend_id, "revision": revision} for backend_id, revision in backends],
         )
 
-    def execute(
-        self,
-        path: pathlib.Path | str,
-        approval: bool = False,
-    ) -> RunResult:
-        """Create or restore a Run from a package file."""
-        p = pathlib.Path(path)
-        if not p.exists():
-            return RunResult(run_id="", status="FAILED", error="File not found")
 
-        try:
-            import json
-            data = json.loads(p.read_text(encoding="utf-8"))
-            package = VideoExecutionPackage.from_dict(data)
-        except Exception as e:
-            return RunResult(run_id="", status="FAILED", error=str(e))
+def _snapshot_dict(snapshot: MaterializedRun) -> dict[str, Any]:
+    from dataclasses import asdict
 
-        pkg_hash = hash_value(package.to_dict())
-        run_id = f"run-{uuid.uuid4().hex[:12]}"
+    return asdict(snapshot)
 
-        try:
-            mat = materialize(
-                run_id=run_id,
-                package=package,
-                package_hash=pkg_hash,
-                registry=self.registry,
-            )
-        except MaterializationError as e:
-            return RunResult(run_id=run_id, status="FAILED", error=e.message)
 
-        # Build DAG and run
-        graph = build_dag(mat)
-        rt = Runtime(default_fake_registry())
-        rt.load_graph(graph)
-
-        max_ticks = 100
-        ticks = 0
-        while not rt.is_complete() and ticks < max_ticks:
-            rt.tick()
-            ticks += 1
-
-        # Store run state
-        self._runs[run_id] = {
-            "graph": graph,
-            "runtime": rt,
-            "materialization": mat,
-            "status": "COMPLETED" if not rt.has_failures() else "FAILED",
-        }
-
-        return RunResult(
-            run_id=run_id,
-            status=self._runs[run_id]["status"],
-            clip_count=len(mat.clips),
-        )
-
-    def status(self, run_id: str) -> StatusResult:
-        """Get the status of a run."""
-        run = self._runs.get(run_id)
-        if run is None:
-            return StatusResult(run_id=run_id, status="UNKNOWN", error="Run not found")
-        rt = run["runtime"]
-        tasks = {tid: t.status for tid, t in rt.tasks.items()}
-        return StatusResult(
-            run_id=run_id,
-            status=run["status"],
-            tasks=tasks,
-        )
-
-    def retry(self, run_id: str, scope: str | None = None) -> RunResult:
-        """Retry a failed run or a specific clip."""
-        run = self._runs.get(run_id)
-        if run is None:
-            return RunResult(run_id=run_id, status="FAILED", error="Run not found")
-
-        rt = run["runtime"]
-        reset_count = rt.reset_retryable()
-        if reset_count == 0:
-            return RunResult(run_id=run_id, status=run["status"], error="No retryable tasks")
-
-        # Re-tick
-        max_ticks = 100
-        ticks = 0
-        while not rt.is_complete() and ticks < max_ticks:
-            rt.tick()
-            ticks += 1
-
-        run["status"] = "COMPLETED" if not rt.has_failures() else "FAILED"
-        return RunResult(
-            run_id=run_id,
-            status=run["status"],
-            clip_count=len(run["materialization"].clips),
-        )
-
-    def cancel(self, run_id: str) -> None:
-        """Cancel a run."""
-        run = self._runs.get(run_id)
-        if run is None:
-            return
-        run["status"] = "CANCELLED"
-
-    def review(self, run_id: str, target: str, decision: str) -> ReviewResult:
-        """Submit a review decision."""
-        review_id = f"rev-{uuid.uuid4().hex[:8]}"
-        if decision not in ("approved", "rejected"):
-            return ReviewResult(review_id=review_id, decision=decision, error="Invalid decision")
-        return ReviewResult(review_id=review_id, decision=decision)
-
-    def export(self, run_id: str) -> ExportResult2:
-        """Export a completed run."""
-        run = self._runs.get(run_id)
-        if run is None:
-            return ExportResult2(export_id="", status="FAILED", error="Run not found")
-        if run["status"] != "COMPLETED":
-            return ExportResult2(export_id="", status="FAILED", error=f"Run is {run['status']}")
-        export_id = f"exp-{uuid.uuid4().hex[:8]}"
-        return ExportResult2(export_id=export_id, status="READY", file_path=f"/tmp/{run_id}.mp4")
+def _error(path: str, message: str, code: str) -> dict[str, Any]:
+    return {"path": path, "message": message, "code": code}

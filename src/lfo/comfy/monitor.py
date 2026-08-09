@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
+from contextlib import suppress
 
 from .client import ComfyApiClient
 
@@ -128,11 +129,9 @@ class ComfyMonitor:
             if event_type in ("executed", "execution_error"):
                 ws_completed = True
 
-        try:
+        with suppress(Exception):
             # WebSocket may not always fire for completed prompts; use short timeout
             self.listen_events(prompt_id, _on_ws_event, client_id=client_id)
-        except Exception:
-            pass
 
         if ws_completed:
             return self.poll_status(prompt_id)

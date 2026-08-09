@@ -10,7 +10,7 @@ import json
 import pathlib
 import shutil
 import subprocess
-import struct
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -221,10 +221,8 @@ class MediaProbe:
         # Duration and fps.
         duration_ms = None
         if fmt.get("duration"):
-            try:
+            with suppress(ValueError, TypeError):
                 duration_ms = float(fmt["duration"]) * 1000
-            except (ValueError, TypeError):
-                pass
 
         fps = None
         if video_stream:
@@ -246,16 +244,12 @@ class MediaProbe:
         sample_rate = None
         channels = None
         if audio_stream:
-            try:
+            with suppress(ValueError, TypeError):
                 sample_rate = (
                     int(audio_stream.get("sample_rate", 0)) or None
                 )
-            except (ValueError, TypeError):
-                pass
-            try:
+            with suppress(ValueError, TypeError):
                 channels = int(audio_stream.get("channels", 0)) or None
-            except (ValueError, TypeError):
-                pass
 
         return ProbeResult(
             media_type=media_type or "document",

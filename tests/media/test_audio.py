@@ -1,7 +1,8 @@
 """Tests for audio mixer."""
+
 from __future__ import annotations
 
-from lfo.media.audio import AudioMixRequest, AudioMixer, AudioTrack
+from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
 
 
 class TestAudioMixer:

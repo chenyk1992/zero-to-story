@@ -35,7 +35,7 @@ def apply_json_pointer(base: dict, pointer: str, value: Any) -> dict:
     parts = [p.replace("~1", "/").replace("~0", "~") for p in parts]
 
     current = base
-    for i, part in enumerate(parts[:-1]):
+    for part in parts[:-1]:
         if part not in current or not isinstance(current[part], dict):
             current[part] = {}
         current = current[part]
@@ -95,18 +95,18 @@ def expand_env_vars(value: Any) -> Any:
 def _expand_string(s: str) -> str:
     """Expand env vars in a single string."""
     # Handle %VAR% pattern
-    def replace_pct(match):
+    def replace_pct(match: re.Match[str]) -> str:
         var_name = match.group(1)
-        return os.environ.get(var_name, match.group(0))
+        return os.environ.get(var_name) or match.group(0)
 
     s = re.sub(r"%(\w+)%", replace_pct, s)
 
     # Handle ${VAR} and $VAR patterns
-    def replace_dollar(match):
+    def replace_dollar(match: re.Match[str]) -> str:
         var_name = match.group(1)
         if var_name.startswith("{") and var_name.endswith("}"):
             var_name = var_name[1:-1]
-        return os.environ.get(var_name, match.group(0))
+        return os.environ.get(var_name) or match.group(0)
 
     s = re.sub(r"\$(\w+|\{[^}]*\})", replace_dollar, s)
     return s
@@ -234,7 +234,6 @@ def resolve_config(
     if machine_id:
         profile = load_machine_profile(machine_id)
         if profile is not None:
-            profile_dict = profile.to_dict()
             # Extract relevant config sections from profile
             config = merge_config_layers(config, {
                 "comfyui": {

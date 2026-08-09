@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import pathlib
-from unittest import mock
 
 import pytest
 
-from lfo.assets.importer import AssetImporter, ImportResult
+from lfo.assets.importer import AssetImporter
 from lfo.assets.paths import PathSecurityError
-from lfo.assets.probe import MediaProbe, ProbeResult
+from lfo.assets.probe import MediaProbe
 from lfo.assets.store import ContentAddressedStore
 
 

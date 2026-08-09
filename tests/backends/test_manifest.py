@@ -4,8 +4,6 @@ from __future__ import annotations
 import json
 import pathlib
 
-import pytest
-
 from lfo.backends.manifest import BackendManifest, validate_manifest
 
 

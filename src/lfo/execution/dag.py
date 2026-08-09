@@ -14,8 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from lfo.execution.materializer import MaterializedClip, MaterializedRun
-
+from lfo.execution.materializer import MaterializedRun
 
 # Standard task types
 TASK_VIDEO_GENERATE = "video.generate"
@@ -104,6 +103,23 @@ class TaskGraph:
                     return False
         return True
 
+    def validate(self) -> None:
+        """Reject malformed graphs before a scheduler can observe them."""
+        ids = self.task_ids
+        if len(ids) != len(set(ids)):
+            raise ValueError("Task graph contains duplicate task ids")
+        known = set(ids)
+        for task in self.tasks:
+            for dependency in task.dependencies:
+                if dependency == task.task_id:
+                    raise ValueError(f"Task {task.task_id!r} cannot depend on itself")
+                if dependency not in known:
+                    raise ValueError(
+                        f"Task {task.task_id!r} depends on unknown task {dependency!r}"
+                    )
+        if not self.is_acyclic():
+            raise ValueError("Task graph contains a cycle")
+
 
 def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     """Build a task graph from a materialized run.
@@ -129,19 +145,32 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
         ValueError if the resulting graph has a cycle.
     """
     tasks: list[TaskNode] = []
-    # Track generate tasks per clip for dependency wiring
-    generate_tasks: dict[str, str] = {}  # clip_id -> task_id
+    # ``tasks.task_id`` is the database primary key, so it must be unique
+    # across runs rather than only inside one graph. ``logical_key`` remains
+    # the stable run-independent identity used for idempotency and reporting.
+    task_prefix = f"{materialized_run.run_id}."
+    # Build the complete map before adding edges. This deliberately permits a
+    # clip to depend on a later sequence item, while still validating cycles.
+    clip_ids = [clip.clip_id for clip in materialized_run.clips]
+    if len(clip_ids) != len(set(clip_ids)):
+        raise ValueError("Materialized run contains duplicate clip ids")
+    generate_tasks = {
+        clip_id: f"{task_prefix}clip-{clip_id}.video.generate" for clip_id in clip_ids
+    }
 
     # Build clip-level tasks
     for clip in materialized_run.clips:
         clip_id = clip.clip_id
-        base = f"clip-{clip_id}"
+        base = f"{task_prefix}clip-{clip_id}"
 
         # Determine dependencies from Package-level clip dependencies
         clip_deps: list[str] = []
         for dep_clip_id in clip.dependencies:
-            if dep_clip_id in generate_tasks:
-                clip_deps.append(generate_tasks[dep_clip_id])
+            if dep_clip_id == clip_id:
+                raise ValueError(f"Clip {clip_id!r} cannot depend on itself")
+            if dep_clip_id not in generate_tasks:
+                raise ValueError(f"Clip {clip_id!r} depends on unknown clip {dep_clip_id!r}")
+            clip_deps.append(generate_tasks[dep_clip_id])
 
         # 1. video.generate
         gen_id = f"{base}.video.generate"
@@ -152,16 +181,25 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             dependencies=clip_deps,
             clip_id=clip_id,
             metadata={
+                "run_id": materialized_run.run_id,
                 "backend_id": clip.backend_id,
                 "backend_revision": clip.backend_revision,
                 "workflow_hash": clip.workflow_hash,
                 "operation": clip.operation,
                 "prompt": clip.prompt,
+                "negative_prompt": clip.negative_prompt,
+                "seed": clip.seed,
                 "duration_ms": clip.duration_ms,
+                "aspect_ratio": clip.aspect_ratio,
+                "width": clip.width,
+                "height": clip.height,
+                "fps": clip.fps,
+                "native_audio": clip.native_audio,
+                "resolved_references": list(clip.resolved_references),
+                "output_policy": dict(materialized_run.output_policy),
             },
         )
         tasks.append(gen_task)
-        generate_tasks[clip_id] = gen_id
 
         # 2. media.normalize
         norm_id = f"{base}.media.normalize"
@@ -171,6 +209,13 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             logical_key=f"{clip_id}:media.normalize",
             dependencies=[gen_id],
             clip_id=clip_id,
+            metadata={
+                "run_id": materialized_run.run_id,
+                "clip_id": clip_id,
+                "duration_ms": clip.duration_ms,
+                "input_task_ids": [gen_id],
+                "output_policy": dict(materialized_run.output_policy),
+            },
         )
         tasks.append(norm_task)
 
@@ -182,6 +227,13 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             logical_key=f"{clip_id}:media.qc",
             dependencies=[norm_id],
             clip_id=clip_id,
+            metadata={
+                "run_id": materialized_run.run_id,
+                "clip_id": clip_id,
+                "duration_ms": clip.duration_ms,
+                "input_task_ids": [norm_id],
+                "output_policy": dict(materialized_run.output_policy),
+            },
         )
         tasks.append(qc_task)
 
@@ -193,6 +245,14 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             logical_key=f"{clip_id}:audio.mix",
             dependencies=[qc_id],
             clip_id=clip_id,
+            metadata={
+                "run_id": materialized_run.run_id,
+                "clip_id": clip_id,
+                "duration_ms": clip.duration_ms,
+                "audio_policy": dict(clip.audio_policy),
+                "input_task_ids": [qc_id],
+                "output_policy": dict(materialized_run.output_policy),
+            },
         )
         tasks.append(mix_task)
 
@@ -204,6 +264,15 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             logical_key=f"{clip_id}:subtitle.render",
             dependencies=[qc_id],
             clip_id=clip_id,
+            metadata={
+                "run_id": materialized_run.run_id,
+                "clip_id": clip_id,
+                "sequence": clip.sequence,
+                "duration_ms": clip.duration_ms,
+                "subtitles": dict(clip.subtitles),
+                "input_task_ids": [qc_id],
+                "output_policy": dict(materialized_run.output_policy),
+            },
         )
         tasks.append(sub_task)
 
@@ -212,29 +281,53 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     all_sub_ids = [t.task_id for t in tasks if t.task_type == TASK_SUBTITLE_RENDER]
 
     # 6. timeline.assemble
-    timeline_id = "timeline.assemble"
+    timeline_id = f"{task_prefix}timeline.assemble"
     timeline_task = TaskNode(
         task_id=timeline_id,
         task_type=TASK_TIMELINE_ASSEMBLE,
         logical_key="timeline.assemble",
         dependencies=all_mix_ids,
+        metadata={
+            "run_id": materialized_run.run_id,
+            "segments": [
+                {
+                    "clip_id": clip.clip_id,
+                    "sequence": clip.sequence,
+                    "duration_ms": clip.duration_ms,
+                    "input_task_id": f"{task_prefix}clip-{clip.clip_id}.audio.mix",
+                }
+                for clip in sorted(materialized_run.clips, key=lambda item: item.sequence)
+            ],
+            "input_task_ids": list(all_mix_ids),
+            "output_policy": dict(materialized_run.output_policy),
+        },
     )
     tasks.append(timeline_task)
 
     # 7. export.finalize
-    export_id = "export.finalize"
+    export_id = f"{task_prefix}export.finalize"
     export_deps = [timeline_id] + all_sub_ids
     export_task = TaskNode(
         task_id=export_id,
         task_type=TASK_EXPORT_FINALIZE,
         logical_key="export.finalize",
         dependencies=export_deps,
+        metadata={
+            "run_id": materialized_run.run_id,
+            "package_id": materialized_run.package_id,
+            "package_hash": materialized_run.package_hash,
+            "materialization_hash": materialized_run.materialization_hash,
+            "segments": timeline_task.metadata["segments"],
+            "backend_ids": sorted({clip.backend_id for clip in materialized_run.clips}),
+            "workflow_hashes": sorted({clip.workflow_hash for clip in materialized_run.clips}),
+            "input_task_ids": list(export_deps),
+            "output_policy": dict(materialized_run.output_policy),
+        },
     )
     tasks.append(export_task)
 
     graph = TaskGraph(run_id=materialized_run.run_id, tasks=tasks)
 
-    if not graph.is_acyclic():
-        raise ValueError("Generated task graph contains a cycle")
+    graph.validate()
 
     return graph

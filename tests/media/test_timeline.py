@@ -1,4 +1,5 @@
 """Tests for timeline assembler."""
+
 from __future__ import annotations
 
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
@@ -7,19 +8,23 @@ from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
 class TestTimelineAssembler:
     def test_assemble_single_segment(self) -> None:
         assembler = TimelineAssembler()
-        spec = TimelineSpec(segments=[
-            ClipSegment(clip_id="c1", file_path="/tmp/c1.mp4", duration_ms=5000),
-        ])
+        spec = TimelineSpec(
+            segments=[
+                ClipSegment(clip_id="c1", file_path="/tmp/c1.mp4", duration_ms=5000),
+            ]
+        )
         result = assembler.assemble(spec)
         assert result.success
         assert result.total_duration_ms == 5000
 
     def test_assemble_multiple_segments(self) -> None:
         assembler = TimelineAssembler()
-        spec = TimelineSpec(segments=[
-            ClipSegment(clip_id="c1", file_path="/tmp/c1.mp4", duration_ms=5000),
-            ClipSegment(clip_id="c2", file_path="/tmp/c2.mp4", duration_ms=3000),
-        ])
+        spec = TimelineSpec(
+            segments=[
+                ClipSegment(clip_id="c1", file_path="/tmp/c1.mp4", duration_ms=5000),
+                ClipSegment(clip_id="c2", file_path="/tmp/c2.mp4", duration_ms=3000),
+            ]
+        )
         result = assembler.assemble(spec)
         assert result.success
         assert result.total_duration_ms == 8000

@@ -7,14 +7,13 @@ from __future__ import annotations
 
 import json
 import pathlib
-import tempfile
 
 import pytest
 
 from lfo.application.video_runtime import VideoRuntime
 from lfo.backends.capabilities import CapabilityManifest
 from lfo.backends.registry import BackendRegistry
-from lfo.contracts.package import VideoExecutionPackage, validate_package
+from lfo.execution.handlers import default_fake_registry
 
 
 @pytest.fixture
@@ -126,6 +125,9 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
             "approved_at": "2026-08-09T12:00:00Z",
         },
     }
+    asset_dir = tmp_dir / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    (asset_dir / "hero.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"test-image")
     pkg_path = tmp_dir / "package.json"
     pkg_path.write_text(json.dumps(pkg, ensure_ascii=False, indent=2), encoding="utf-8")
     return pkg_path
@@ -134,21 +136,21 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
 class TestSmokeFlow:
     def test_validate(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         pkg_path = _make_package(tmp_path)
-        runtime = VideoRuntime(h3_registry)
+        runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
         result = runtime.validate(pkg_path)
         assert result.valid, f"Validation failed: {result.errors}"
 
     def test_plan(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         pkg_path = _make_package(tmp_path)
-        runtime = VideoRuntime(h3_registry)
+        runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
         result = runtime.plan(pkg_path)
         assert result.error is None, f"Plan failed: {result.error}"
         assert len(result.clip_plans) == 2
 
     def test_execute_completes(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         pkg_path = _make_package(tmp_path)
-        runtime = VideoRuntime(h3_registry)
-        result = runtime.execute(pkg_path)
+        runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
+        result = runtime.execute(pkg_path, approval=True)
         assert result.status == "COMPLETED", f"Execute failed: {result.error}"
         assert result.clip_count == 2
         assert result.run_id
@@ -156,7 +158,7 @@ class TestSmokeFlow:
     def test_full_flow(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         """Validate → plan → execute → status → export."""
         pkg_path = _make_package(tmp_path)
-        runtime = VideoRuntime(h3_registry)
+        runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
 
         # Validate
         val_result = runtime.validate(pkg_path)
@@ -168,7 +170,7 @@ class TestSmokeFlow:
         assert len(plan_result.clip_plans) == 2
 
         # Execute
-        exec_result = runtime.execute(pkg_path)
+        exec_result = runtime.execute(pkg_path, approval=True)
         assert exec_result.status == "COMPLETED"
         run_id = exec_result.run_id
 
@@ -178,21 +180,21 @@ class TestSmokeFlow:
         assert status_result.status == "COMPLETED"
         assert len(status_result.tasks) > 0
 
-        # Export
+        # Fake handlers deliberately do not claim a durable final media file.
         export_result = runtime.export(run_id)
-        assert export_result.status == "READY"
-        assert export_result.file_path
+        assert export_result.status == "FAILED"
+        assert "durable final artifact" in (export_result.error or "")
 
     def test_invalid_package_rejected(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         """An invalid package should fail validation."""
         pkg = {"schema": "wrong-schema"}
         pkg_path = tmp_path / "bad.json"
         pkg_path.write_text(json.dumps(pkg), encoding="utf-8")
-        runtime = VideoRuntime(h3_registry)
+        runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
         result = runtime.validate(pkg_path)
         assert not result.valid
 
-    def test_nonexistent_file(self, h3_registry: BackendRegistry) -> None:
-        runtime = VideoRuntime(h3_registry)
+    def test_nonexistent_file(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
+        runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
         result = runtime.validate("/nonexistent/path.json")
         assert not result.valid

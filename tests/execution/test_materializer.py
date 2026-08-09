@@ -7,11 +7,10 @@ from lfo.backends.capabilities import CapabilityManifest
 from lfo.backends.registry import BackendRegistry
 from lfo.contracts.assets import (
     AssetSource,
-    ProvenanceSpec,
-    ReviewDeclaration,
     AssetSpec,
+    ProvenanceSpec,
 )
-from lfo.contracts.clips import ClipSpec, GenerationSpec, ReferenceSpec, BindingPolicy
+from lfo.contracts.clips import BindingPolicy, ClipSpec, GenerationSpec, ReferenceSpec
 from lfo.contracts.package import ProjectInfo, VideoExecutionPackage
 from lfo.execution.materializer import MaterializationError, materialize
 
@@ -170,6 +169,45 @@ class TestMaterialize:
         # Check the reference was resolved
         mat_clip = result.clips[0]
         assert mat_clip.resolved_references[0]["asset_revision_id"] == "asset-rev-abc"
+
+    def test_required_reference_without_imported_revision_fails(self) -> None:
+        ref = ReferenceSpec(
+            reference_id="hero", asset_key="hero.png", semantic_usage="subject.identity",
+            binding=BindingPolicy(required=True),
+        )
+        asset = AssetSpec(
+            asset_key="hero.png", media_type="image", source=AssetSource(uri="hero.png"),
+            provenance=ProvenanceSpec(source_type="skill", producer="test", operation="image.generate"),
+        )
+        package = _make_package([_make_clip("c1", references=[ref])])
+        package.assets = [asset]
+        with pytest.raises(MaterializationError) as error:
+            materialize("run", package, "hash", _h3_registry())
+        assert "no imported revision" in error.value.details[0]
+
+    def test_optional_reference_is_dropped_by_priority_when_backend_is_full(self) -> None:
+        registry = BackendRegistry()
+        registry.register(CapabilityManifest(
+            backend_id="small", revision="1", workflow_hash="small-wf",
+            operations=["video.reference_to_video"], accepted_media_types=["image"], max_references=1,
+        ))
+        refs = [
+            ReferenceSpec("required", "required.png", "subject.identity", BindingPolicy(required=True, priority=10)),
+            ReferenceSpec("optional", "optional.png", "style", BindingPolicy(required=False, priority=0, on_unsupported="drop")),
+        ]
+        assets = [
+            AssetSpec(asset_key=key, media_type="image", source=AssetSource(uri=key),
+                      provenance=ProvenanceSpec(source_type="skill", producer="test", operation="image.generate"))
+            for key in ("required.png", "optional.png")
+        ]
+        package = VideoExecutionPackage(package_id="pkg", revision=1, project=ProjectInfo(title="T"), assets=assets,
+                                        clips=[_make_clip("c1", operation="video.reference_to_video", references=refs)])
+        result = materialize("run", package, "hash", registry, {
+            "required.png": {"asset_revision_id": "r1", "file_path": "C:/required.png"},
+            "optional.png": {"asset_revision_id": "r2", "file_path": "C:/optional.png"},
+        })
+        assert [ref["reference_id"] for ref in result.clips[0].resolved_references] == ["required"]
+        assert result.clips[0].dropped_references[0]["reference_id"] == "optional"
 
     def test_output_policy_captured(self) -> None:
         from lfo.contracts.timeline import OutputPolicy

@@ -7,15 +7,13 @@ function that uses rowcount for safe concurrent updates.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any
-
+from enum import StrEnum
 
 # ===========================================================================
 # Run states
 # ===========================================================================
 
-class RunState(str, Enum):
+class RunState(StrEnum):
     ACCEPTED = "ACCEPTED"
     IMPORTING = "IMPORTING"
     PLANNING = "PLANNING"
@@ -52,7 +50,7 @@ RUN_TERMINAL_STATES = {
 # Task states
 # ===========================================================================
 
-class TaskState(str, Enum):
+class TaskState(StrEnum):
     BLOCKED = "BLOCKED"
     READY = "READY"
     RUNNING = "RUNNING"
@@ -86,7 +84,7 @@ TASK_TERMINAL_STATES = {
 # Attempt states
 # ===========================================================================
 
-class AttemptState(str, Enum):
+class AttemptState(StrEnum):
     CREATED = "CREATED"
     SUBMITTING = "SUBMITTING"
     SUBMITTED = "SUBMITTED"
@@ -117,7 +115,7 @@ ATTEMPT_TERMINAL_STATES = {
 # Review states
 # ===========================================================================
 
-class ReviewState(str, Enum):
+class ReviewState(StrEnum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
@@ -138,7 +136,7 @@ REVIEW_TERMINAL_STATES: set[ReviewState] = set()  # no truly terminal states
 # Export states
 # ===========================================================================
 
-class ExportState(str, Enum):
+class ExportState(StrEnum):
     PENDING = "PENDING"
     ASSEMBLING = "ASSEMBLING"
     VALIDATING = "VALIDATING"

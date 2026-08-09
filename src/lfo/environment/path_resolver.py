@@ -96,10 +96,10 @@ class PathResolver:
         resolved = result.resolve()
         try:
             resolved.relative_to(base.resolve())
-        except ValueError:
+        except ValueError as exc:
             raise ValueError(
                 f"Resolved path {resolved} is outside base {base}"
-            )
+            ) from exc
 
         return resolved
 

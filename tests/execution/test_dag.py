@@ -72,7 +72,7 @@ class TestBuildDag:
     def test_timeline_depends_on_all_mix_tasks(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
         graph = build_dag(_make_run(clips))
-        timeline = graph.task_by_id("timeline.assemble")
+        timeline = graph.task_by_id("run-1.timeline.assemble")
         assert timeline is not None
         mix_tasks = graph.tasks_by_type(TASK_AUDIO_MIX)
         for mt in mix_tasks:
@@ -81,19 +81,19 @@ class TestBuildDag:
     def test_export_depends_on_timeline_and_subtitles(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
         graph = build_dag(_make_run(clips))
-        export = graph.task_by_id("export.finalize")
+        export = graph.task_by_id("run-1.export.finalize")
         assert export is not None
-        assert "timeline.assemble" in export.dependencies
+        assert "run-1.timeline.assemble" in export.dependencies
         sub_tasks = graph.tasks_by_type(TASK_SUBTITLE_RENDER)
         for st in sub_tasks:
             assert st.task_id in export.dependencies
 
     def test_chain_dependencies_within_clip(self) -> None:
         graph = build_dag(_make_run([_make_clip()]))
-        gen = graph.task_by_id("clip-clip-001.video.generate")
-        norm = graph.task_by_id("clip-clip-001.media.normalize")
-        qc = graph.task_by_id("clip-clip-001.media.qc")
-        mix = graph.task_by_id("clip-clip-001.audio.mix")
+        gen = graph.task_by_id("run-1.clip-clip-001.video.generate")
+        norm = graph.task_by_id("run-1.clip-clip-001.media.normalize")
+        qc = graph.task_by_id("run-1.clip-clip-001.media.qc")
+        mix = graph.task_by_id("run-1.clip-clip-001.audio.mix")
         assert gen is not None and norm is not None and qc is not None and mix is not None
         assert gen.task_id in norm.dependencies
         assert norm.task_id in qc.dependencies
@@ -106,10 +106,36 @@ class TestBuildDag:
             _make_clip("clip-002", sequence=2, dependencies=["clip-001"]),
         ]
         graph = build_dag(_make_run(clips))
-        gen2 = graph.task_by_id("clip-clip-002.video.generate")
-        gen1 = graph.task_by_id("clip-clip-001.video.generate")
+        gen2 = graph.task_by_id("run-1.clip-clip-002.video.generate")
+        gen1 = graph.task_by_id("run-1.clip-clip-001.video.generate")
         assert gen2 is not None and gen1 is not None
         assert gen1.task_id in gen2.dependencies
+
+    def test_forward_clip_dependency_is_wired(self) -> None:
+        clips = [
+            _make_clip("clip-001", dependencies=["clip-002"]),
+            _make_clip("clip-002", sequence=2),
+        ]
+        graph = build_dag(_make_run(clips))
+        assert "run-1.clip-clip-002.video.generate" in graph.task_by_id(
+            "run-1.clip-clip-001.video.generate"
+        ).dependencies
+
+    def test_unknown_clip_dependency_is_rejected(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="unknown clip"):
+            build_dag(_make_run([_make_clip(dependencies=["missing"])]))
+
+    def test_self_clip_dependency_is_rejected(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="cannot depend on itself"):
+            build_dag(_make_run([_make_clip(dependencies=["clip-001"])]))
+
+    def test_clip_dependency_cycle_is_rejected(self) -> None:
+        import pytest
+        clips = [_make_clip("one", dependencies=["two"]), _make_clip("two", dependencies=["one"])]
+        with pytest.raises(ValueError, match="cycle"):
+            build_dag(_make_run(clips))
 
     def test_is_acyclic(self) -> None:
         graph = build_dag(_make_run([_make_clip()]))
@@ -126,7 +152,7 @@ class TestBuildDag:
         graph = build_dag(_make_run([_make_clip()]))
         leaves = graph.leaves()
         leaf_ids = {t.task_id for t in leaves}
-        assert "export.finalize" in leaf_ids
+        assert "run-1.export.finalize" in leaf_ids
 
     def test_stable_task_ids(self) -> None:
         """Same run produces same task ids."""
@@ -148,6 +174,14 @@ class TestTaskGraph:
             TaskNode(task_id="c", task_type="x", logical_key="c", dependencies=["b"]),
         ])
         assert not g.is_acyclic()
+
+    def test_validate_rejects_missing_task_dependency(self) -> None:
+        import pytest
+        graph = TaskGraph(run_id="test", tasks=[
+            TaskNode(task_id="a", task_type="x", logical_key="a", dependencies=["missing"]),
+        ])
+        with pytest.raises(ValueError, match="unknown task"):
+            graph.validate()
 
     def test_tasks_by_clip(self) -> None:
         g = TaskGraph(run_id="test", tasks=[

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import pathlib
 import sqlite3
-import tempfile
 
 import pytest
 
@@ -319,3 +318,46 @@ class TestForeignKeyConstraints:
                 ("orphan-task", "nonexistent-run", "video.generate", "clip"),
             )
         conn.rollback()
+
+
+class TestRuntimePersistencePrimitives:
+    def test_cas_task_transition_and_dependency_advancement(self, store: ExecutionStore) -> None:
+        revision_id = store.create_package_revision(
+            package_id="pkg", project_title="Demo", revision=1,
+            content_hash="package-hash", raw_json="{}",
+        )
+        store.create_run(run_id="run", package_id="pkg", revision_id=revision_id)
+
+        class Task:
+            def __init__(self, task_id: str, dependencies: list[str]) -> None:
+                self.task_id = task_id
+                self.task_type = "video.generate"
+                self.logical_key = task_id
+                self.dependencies = dependencies
+                self.metadata = {}
+
+        store.persist_tasks("run", [Task("first", []), Task("second", ["first"])])
+        assert store.get_task("first")["status"] == "READY"
+        assert store.transition_task("first", "READY", "RUNNING")
+        assert store.transition_task("first", "RUNNING", "SUCCEEDED")
+        assert store.advance_ready_tasks("run") == ["second"]
+        assert not store.transition_task("second", "BLOCKED", "RUNNING")
+
+    def test_lease_is_compare_and_set(self, store: ExecutionStore) -> None:
+        revision_id = store.create_package_revision(
+            package_id="pkg", project_title="Demo", revision=1,
+            content_hash="package-hash", raw_json="{}",
+        )
+        store.create_run(run_id="run", package_id="pkg", revision_id=revision_id)
+
+        class Task:
+            def __init__(self) -> None:
+                self.task_id = "task"
+                self.task_type = "video.generate"
+                self.logical_key = "task"
+                self.dependencies: list[str] = []
+                self.metadata: dict[str, object] = {}
+
+        store.persist_tasks("run", [Task()])
+        assert store.acquire_task_lease(task_id="task", worker_id="one", expires_at="2999-01-01T00:00:00Z")
+        assert store.acquire_task_lease(task_id="task", worker_id="two", expires_at="2999-01-01T00:00:00Z") is None

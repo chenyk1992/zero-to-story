@@ -10,6 +10,7 @@ Responsibilities:
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -69,7 +70,7 @@ class RuntimeProfileService:
         self,
         profile_id: str,
         *,
-        running_task_check: callable | None = None,
+        running_task_check: Callable[[], bool] | None = None,
         timeout_sec: int = 120,
     ) -> RuntimeProfileResult:
         """Ensure the named profile is active, switching if necessary.

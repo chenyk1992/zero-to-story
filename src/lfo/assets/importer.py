@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from lfo.assets.paths import (
-    PathSecurityError,
     resolve_package_uri,
     validate_readable_file,
 )

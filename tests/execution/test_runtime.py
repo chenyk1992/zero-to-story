@@ -1,12 +1,11 @@
 """Tests for Runtime scheduler."""
 from __future__ import annotations
 
-import pytest
-
+from lfo.execution import ExecutionStore
 from lfo.execution.dag import build_dag
 from lfo.execution.handlers import default_fake_registry
 from lfo.execution.materializer import MaterializedClip, MaterializedRun
-from lfo.execution.runtime import Runtime
+from lfo.execution.runtime import PersistentRuntime, Runtime
 from lfo.execution.states import TaskState
 
 
@@ -84,7 +83,7 @@ class TestRuntime:
         result = rt.tick()
         assert result.tasks_processed >= 1
         # timeline.assemble should still be BLOCKED
-        timeline_task = rt.tasks["timeline.assemble"]
+        timeline_task = rt.tasks["run-1.timeline.assemble"]
         assert timeline_task.status == TaskState.BLOCKED.value
 
     def test_retry_transient_failure(self) -> None:
@@ -94,7 +93,7 @@ class TestRuntime:
         rt = Runtime(default_fake_registry(), max_retries=2)
         rt.load_graph(graph)
         # Force the video.generate task to fail transiently
-        gen_task = rt.tasks["clip-clip-001.video.generate"]
+        gen_task = rt.tasks["run-1.clip-clip-001.video.generate"]
         gen_task.metadata["fake_result"] = "transient_fail"
 
         # Tick: should fail and become FAILED_RETRYABLE
@@ -113,6 +112,25 @@ class TestRuntime:
         rt.tick()
         assert gen_task.status == TaskState.FAILED_TERMINAL.value
 
+    def test_qc_failure_is_terminal_failure_not_success(self) -> None:
+        run = _make_run(["clip-001"])
+        rt = Runtime(default_fake_registry())
+        rt.load_graph(build_dag(run))
+        qc_task = rt.tasks["run-1.clip-clip-001.media.qc"]
+        qc_task.metadata["fake_result"] = "qc_fail"
+        for _ in range(5):
+            rt.tick()
+        assert qc_task.status == TaskState.FAILED_TERMINAL.value
+        assert rt.has_failures()
+
+    def test_retryable_failure_is_stalled_not_complete(self) -> None:
+        rt = Runtime(default_fake_registry())
+        rt.load_graph(build_dag(_make_run(["clip-001"])))
+        rt.tasks["run-1.clip-clip-001.video.generate"].metadata["fake_result"] = "transient_fail"
+        rt.tick()
+        assert not rt.is_complete()
+        assert rt.is_stalled()
+
     def test_terminal_failure_stops_clip(self) -> None:
         """A terminal failure stops the clip but doesn't affect unrelated clips."""
         run = _make_run(["clip-001", "clip-002"])
@@ -120,7 +138,7 @@ class TestRuntime:
         rt = Runtime(default_fake_registry())
         rt.load_graph(graph)
         # Force clip-001's generate to fail terminally
-        gen_task = rt.tasks["clip-clip-001.video.generate"]
+        gen_task = rt.tasks["run-1.clip-clip-001.video.generate"]
         gen_task.metadata["fake_result"] = "terminal_fail"
 
         # Run to completion
@@ -148,15 +166,13 @@ class TestRuntime:
         graph = build_dag(run)
         rt = Runtime(default_fake_registry())
         rt.load_graph(graph)
-        task_id = "clip-clip-001.video.generate"
+        task_id = "run-1.clip-clip-001.video.generate"
         attempt_id = rt.create_attempt(task_id)
         assert attempt_id is not None
         assert task_id in [a.task_id for a in rt.attempts.values()]
 
     def test_dispatch_unknown_task_type(self) -> None:
-        from lfo.execution.handlers import HandlerRegistry, TaskHandler
-        from lfo.execution.materializer import MaterializedClip, MaterializedRun
-        from lfo.execution.dag import TaskGraph, TaskNode
+        from lfo.execution.handlers import HandlerRegistry
 
         rt = Runtime(HandlerRegistry())
         # Manually add a task with no handler
@@ -172,3 +188,21 @@ class TestRuntime:
     def test_is_complete_empty(self) -> None:
         rt = Runtime(default_fake_registry())
         assert rt.is_complete()
+
+    def test_persistent_runtime_restores_tasks_and_artifacts(self, tmp_path) -> None:
+        store = ExecutionStore(tmp_path / "runtime.db")
+        revision_id = store.create_package_revision(
+            package_id="pkg-1", project_title="Test", revision=1,
+            content_hash="pkg-hash", raw_json="{}",
+        )
+        store.create_run(run_id="run-1", package_id="pkg-1", revision_id=revision_id)
+        runtime = PersistentRuntime(store, default_fake_registry(), "run-1")
+        runtime.load_graph(build_dag(_make_run(["clip-001"])))
+        runtime.tick()
+        assert store.get_task("run-1.clip-clip-001.video.generate")["status"] == "SUCCEEDED"
+        normalize_row = store.get_task("run-1.clip-clip-001.media.normalize")
+        assert "run-1.clip-clip-001.video.generate" in normalize_row["metadata"]
+        restored = PersistentRuntime(store, default_fake_registry(), "run-1")
+        restored.restore()
+        assert restored.tasks["run-1.clip-clip-001.video.generate"].status == TaskState.SUCCEEDED.value
+        assert "run-1.clip-clip-001.video.generate" in restored.artifacts_by_task

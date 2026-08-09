@@ -5,4 +5,6 @@ canonical VideoExecutionPackage v1 contract. Adapters contain no I/O.
 """
 from __future__ import annotations
 
-__all__ = ["zero_to_story", "product_promo"]
+from . import product_promo, zero_to_story
+
+__all__ = ["product_promo", "zero_to_story"]

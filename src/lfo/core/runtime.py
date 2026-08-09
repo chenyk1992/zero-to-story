@@ -143,7 +143,7 @@ def update_task_status(
     params.append(task_id)
     cursor = db.execute(
         f"UPDATE tasks SET {', '.join(updates)} WHERE task_id = ?",
-        params,
+        tuple(params),
     )
     return cursor.rowcount > 0
 
@@ -184,7 +184,7 @@ def promote_task_to_ready(
 
         current_status = row["status"]
         project_id = row["project_id"]
-        dependencies = _load_json(row["dependencies"], [])
+        dependencies = _load_json(row["dependencies"], []) or []
 
         # Can only promotable from PLANNED, STALE, FAILED_RETRYABLE,
         # or active states (RUNNING/QUEUED) for crash recovery
@@ -273,7 +273,7 @@ def update_task_hashes(
 
     db.execute(
         f"UPDATE tasks SET {', '.join(updates)} WHERE task_id = ?",
-        params,
+        tuple(params),
     )
 
 
@@ -373,7 +373,11 @@ def get_attempts_by_task(db: Database, task_id: str) -> list[dict]:
         "SELECT * FROM attempts WHERE task_id = ? ORDER BY created_at",
         (task_id,),
     )
-    return [get_attempt(db, r["attempt_id"]) for r in rows]
+    return [
+        attempt
+        for row in rows
+        if (attempt := get_attempt(db, row["attempt_id"])) is not None
+    ]
 
 
 # ===========================================================================
@@ -452,7 +456,7 @@ def transition_journal(
     cursor = db.execute(
         f"UPDATE submission_journal SET {', '.join(set_parts)} "
         f"WHERE journal_id = ? AND state = ?",
-        params,
+        tuple(params),
     )
 
     return cursor.rowcount > 0

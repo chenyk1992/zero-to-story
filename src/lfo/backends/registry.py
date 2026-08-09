@@ -7,7 +7,6 @@ backend_id + revision or by operation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from .capabilities import CapabilityManifest
 

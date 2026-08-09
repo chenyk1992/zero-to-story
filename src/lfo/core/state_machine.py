@@ -5,10 +5,10 @@ States, transitions, and project-level aggregation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Task lifecycle statuses."""
     PLANNED = "PLANNED"
     WAITING_ASSETS = "WAITING_ASSETS"
@@ -27,7 +27,7 @@ class TaskStatus(str, Enum):
     SUPERSEDED = "SUPERSEDED"
 
 
-class SubmissionState(str, Enum):
+class SubmissionState(StrEnum):
     """Submission journal states."""
     PREPARED = "PREPARED"
     SUBMITTING = "SUBMITTING"
@@ -64,7 +64,7 @@ TASK_BLOCKING_STATES = {
 }
 
 
-class FailureClassification(str, Enum):
+class FailureClassification(StrEnum):
     """Classification of failures for retry decisions."""
     TRANSIENT = "transient"      # retry same contract
     PERSISTENT = "persistent"    # must modify, new idempotency_key

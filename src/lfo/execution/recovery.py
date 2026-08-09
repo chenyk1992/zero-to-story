@@ -6,8 +6,8 @@ failed or has no backend record.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from lfo.execution.states import AttemptState
 
@@ -36,14 +36,14 @@ class RecoveryDecision:
     """Decision for an UNKNOWN attempt."""
 
     attempt_id: str
-    action: str  # "reuse" | "retry" | "mark_failed"
+    action: str  # "reuse" | "retry" | "mark_failed" | "wait"
     reason: str
     backend_status: BackendStatus | None = None
 
 
 def reconcile_unknown_attempt(
     attempt: AttemptRecord,
-    query_backend: callable,
+    query_backend: Callable[[str], BackendStatus],
 ) -> RecoveryDecision:
     """Reconcile an UNKNOWN attempt.
 
@@ -72,11 +72,13 @@ def reconcile_unknown_attempt(
     try:
         status = query_backend(attempt.provider_job_id)
     except Exception as e:
-        # Backend query itself failed — can't determine status
+        # Backend query itself failed — submission state is indeterminate.
+        # Retrying here can create a duplicate paid generation, so preserve the
+        # UNKNOWN attempt and let a later recovery pass reconcile it.
         return RecoveryDecision(
             attempt_id=attempt.attempt_id,
-            action="retry",
-            reason=f"Backend query failed: {e}",
+            action="wait",
+            reason=f"Backend query failed; keep UNKNOWN and retry reconciliation later: {e}",
             backend_status=None,
         )
 

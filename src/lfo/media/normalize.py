@@ -1,110 +1,126 @@
-"""Normalizer — resolution/fps normalization and audio loudness normalization.
+"""FFmpeg-backed, atomic media normalization."""
 
-In production this would call FFmpeg. Here we define the interface and
-validation logic.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
+
+from lfo.media._ffmpeg import MediaCommandError, atomic_replace, probe, run_command
 
 
 @dataclass
 class NormalizeTarget:
-    """Target normalization parameters."""
-
     width: int | None = None
     height: int | None = None
     fps: float | None = None
     sample_rate: int | None = None
-    loudness_db: float | None = None  # target integrated loudness (LUFS)
+    loudness_db: float | None = None
     codec: str | None = None
     container: str | None = None
 
 
 @dataclass
 class NormalizeResult:
-    """Result of normalization."""
-
     success: bool
     output_metadata: dict[str, Any] | None = None
     error: str | None = None
-    command: list[str] | None = None  # the FFmpeg command that would run
+    command: list[str] | None = None
+    output_path: str | None = None
 
 
 class Normalizer:
-    """Normalize media to a target specification."""
+    """Normalize a media file using a temporary file and atomic publication."""
+
+    def build_command(
+        self, source: str | Path, output: str | Path, target: NormalizeTarget
+    ) -> list[str]:
+        self._validate_target(target)
+        filters: list[str] = []
+        if target.width and target.height:
+            filters.append(
+                f"scale={target.width}:{target.height}:force_original_aspect_ratio=decrease"
+            )
+            filters.append(f"pad={target.width}:{target.height}:(ow-iw)/2:(oh-ih)/2")
+        if target.fps:
+            filters.append(f"fps={target.fps}")
+        command = ["ffmpeg", "-y", "-i", str(source)]
+        if filters:
+            command += ["-vf", ",".join(filters)]
+        if target.sample_rate:
+            command += ["-ar", str(target.sample_rate)]
+        if target.loudness_db is not None:
+            command += ["-af", f"loudnorm=I={target.loudness_db}:TP=-1.5:LRA=11"]
+        command += ["-c:v", target.codec or "libx264", "-pix_fmt", "yuv420p"]
+        command += ["-c:a", "aac", "-movflags", "+faststart", str(output)]
+        return command
 
     def normalize(
         self,
-        source_metadata: dict[str, Any],
-        target: NormalizeTarget,
+        source: str | Path | dict[str, Any],
+        output_or_target: str | Path | NormalizeTarget,
+        target: NormalizeTarget | None = None,
+        *,
+        timeout_s: float = 300.0,
     ) -> NormalizeResult:
-        """Compute the normalization operation needed.
+        """Normalize a real file, or retain legacy metadata-only planning.
 
-        Args:
-            source_metadata: Probe result of the source media.
-            target: Desired output specification.
-
-        Returns:
-            NormalizeResult with the computed command and expected output.
+        Real invocation is ``normalize(source_path, output_path, target)``. The
+        two-argument ``normalize(metadata, target)`` form remains a pure plan.
         """
-        # Validate target
-        if target.width is not None and target.width <= 0:
-            return NormalizeResult(success=False, error="Invalid target width")
-        if target.height is not None and target.height <= 0:
-            return NormalizeResult(success=False, error="Invalid target height")
+        if isinstance(source, dict):
+            if not isinstance(output_or_target, NormalizeTarget):
+                return NormalizeResult(False, error="Planning requires NormalizeTarget")
+            return self._plan(source, output_or_target)
+        if target is None or isinstance(output_or_target, NormalizeTarget):
+            return NormalizeResult(
+                False, error="Real normalization requires source, output, and target"
+            )
+        source_path, output_path = Path(source), Path(output_or_target)
+        if not source_path.is_file():
+            return NormalizeResult(False, error=f"Source media does not exist: {source_path}")
+        temp_path = output_path.with_name(
+            f".{output_path.stem}.{uuid4().hex}.tmp{output_path.suffix}"
+        )
+        command = self.build_command(source_path, temp_path, target)
+        try:
+            run_command(command, timeout_s=timeout_s)
+            atomic_replace(temp_path, output_path)
+            return NormalizeResult(
+                True, probe(output_path), command=command, output_path=str(output_path)
+            )
+        except MediaCommandError as exc:
+            temp_path.unlink(missing_ok=True)
+            return NormalizeResult(False, error=str(exc), command=command)
 
-        # Build FFmpeg filter chain
-        filters: list[str] = []
-        if target.width and target.height:
-            filters.append(f"scale={target.width}:{target.height}")
-        if target.fps:
-            filters.append(f"fps={target.fps}")
-
-        # Compute expected output metadata
+    def _plan(self, source_metadata: dict[str, Any], target: NormalizeTarget) -> NormalizeResult:
+        self._validate_target(target)
         output_meta = dict(source_metadata)
-        if target.width:
-            output_meta["width"] = target.width
-        if target.height:
-            output_meta["height"] = target.height
-        if target.fps:
-            output_meta["fps"] = target.fps
-        if target.sample_rate:
-            output_meta["sample_rate"] = target.sample_rate
-        if target.codec:
-            output_meta["codec"] = target.codec
-
-        # Build command (for audit/debugging)
-        cmd = ["ffmpeg", "-i", "input"]
-        if filters:
-            cmd.extend(["-vf", ",".join(filters)])
-        if target.sample_rate:
-            cmd.extend(["-ar", str(target.sample_rate)])
-        if target.loudness_db is not None:
-            cmd.extend(["-af", f"loudnorm=I={target.loudness_db}"])
-        if target.codec:
-            cmd.extend(["-c:v", target.codec])
-        cmd.append("output")
-
+        for field in ("width", "height", "fps", "sample_rate", "codec"):
+            value = getattr(target, field)
+            if value is not None:
+                output_meta[field] = value
         return NormalizeResult(
-            success=True,
-            output_metadata=output_meta,
-            command=cmd,
+            True, output_meta, command=self.build_command("input", "output", target)
         )
 
-    def needs_normalization(
-        self,
-        source_metadata: dict[str, Any],
-        target: NormalizeTarget,
-    ) -> bool:
-        """Check if source already matches the target."""
-        if target.width and source_metadata.get("width") != target.width:
-            return True
-        if target.height and source_metadata.get("height") != target.height:
-            return True
-        if target.fps and abs(float(source_metadata.get("fps", 0)) - float(target.fps)) > 0.01:
-            return True
-        if target.codec and source_metadata.get("codec") != target.codec:
-            return True
-        return False
+    def _validate_target(self, target: NormalizeTarget) -> None:
+        if target.width is not None and target.width <= 0:
+            raise ValueError("Invalid target width")
+        if target.height is not None and target.height <= 0:
+            raise ValueError("Invalid target height")
+        if target.fps is not None and target.fps <= 0:
+            raise ValueError("Invalid target fps")
+
+    def needs_normalization(self, source_metadata: dict[str, Any], target: NormalizeTarget) -> bool:
+        return any(
+            value is not None and source_metadata.get(field) != value
+            for field, value in (
+                ("width", target.width),
+                ("height", target.height),
+                ("codec", target.codec),
+            )
+        ) or (
+            target.fps is not None and abs(float(source_metadata.get("fps", 0)) - target.fps) > 0.01
+        )

@@ -1,4 +1,5 @@
 """Tests for subtitle renderer."""
+
 from __future__ import annotations
 
 from lfo.media.subtitles import (

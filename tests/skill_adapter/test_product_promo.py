@@ -1,8 +1,6 @@
 """Tests for the product promo skill adapter."""
 from __future__ import annotations
 
-import pytest
-
 from lfo.contracts.package import VideoExecutionPackage, validate_package
 from lfo.skill_adapter.product_promo import build_package
 

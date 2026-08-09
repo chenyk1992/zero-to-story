@@ -1,7 +1,7 @@
 [project]
 name = "lfo"
-version = "0.3.0"
-description = "LFO — Local Film Orchestrator. 本地 AI 影视生成编排系统。"
+version = "1.0.0"
+description = "LFO — reusable local video generation, media processing, and export runtime."
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32",
@@ -54,14 +54,16 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["E501", "SIM", "RUF059", "F841", "B007", "RUF001", "E402", "F811", "B905", "RUF043"]
-"**/__init__.py" = ["F401"]
+"tests/**" = ["E501", "SIM", "RUF059", "F841", "B007", "B017", "RUF001", "E402", "F811", "B905", "RUF043"]
+"**/__init__.py" = ["F401", "RUF022"]
+"src/lfo/environment/tools/resource_probe.py" = ["SIM112"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 
 [tool.pyright]
+include = ["src/lfo"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 reportMissingTypeStubs = false

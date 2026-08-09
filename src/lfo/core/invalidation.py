@@ -5,6 +5,8 @@ marked stale, not the entire project.
 """
 from __future__ import annotations
 
+import json
+
 from .database import Database
 from .runtime import _log_event, _now, get_task, update_task_status
 from .state_machine import TaskStatus
@@ -36,7 +38,6 @@ def invalidate_upstream(
     for row in all_tasks:
         deps = row["dependencies"]
         if isinstance(deps, str):
-            import json
             deps = json.loads(deps)
 
         if source_task_id in deps:

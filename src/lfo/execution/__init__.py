@@ -16,9 +16,12 @@ Tables:
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import sqlite3
+import uuid
 from contextlib import contextmanager
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -124,7 +127,7 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS run_snapshots (
     snapshot_id     TEXT PRIMARY KEY,
     run_id          TEXT NOT NULL REFERENCES runs(run_id),
-    snapshot_hash   TEXT NOT NULL UNIQUE,
+    snapshot_hash   TEXT NOT NULL,
     snapshot_json   TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -144,6 +147,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     status          TEXT NOT NULL DEFAULT 'BLOCKED',
     content_hash    TEXT,
     params_hash     TEXT,
+    metadata        TEXT NOT NULL DEFAULT '{}',
+    retry_count     INTEGER NOT NULL DEFAULT 0,
     idempotency_key TEXT UNIQUE,
     error           TEXT,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -313,6 +318,13 @@ class ExecutionStore:
         """Create all tables if they don't exist."""
         conn = self.connect()
         conn.executescript(SCHEMA_SQL)
+        # v1 was initially published with the table but without task metadata.
+        # Keep initialisation idempotent for databases created by that build.
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+        if "metadata" not in columns:
+            conn.execute("ALTER TABLE tasks ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
+        if "retry_count" not in columns:
+            conn.execute("ALTER TABLE tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0")
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()
 
@@ -332,3 +344,385 @@ class ExecutionStore:
         conn = self.connect()
         row = conn.execute("PRAGMA user_version").fetchone()
         return row[0] if row else 0
+
+    # The methods below are intentionally small, explicit persistence primitives.
+    # The application facade owns orchestration; this store owns atomic database
+    # changes and the corresponding audit trail.
+
+    @staticmethod
+    def _json(value: object) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    @staticmethod
+    def _row(row: sqlite3.Row | None) -> dict[str, object] | None:
+        return dict(row) if row is not None else None
+
+    def create_package_revision(
+        self, *, package_id: str, project_title: str, revision: int,
+        content_hash: str, raw_json: str, locale: str | None = None,
+        revision_id: str | None = None,
+    ) -> str:
+        """Persist a package revision, returning its stable internal id.
+
+        Repeating an identical package is idempotent; conflicting package ids
+        or revision numbers are left to SQLite's uniqueness constraints.
+        """
+        self.init_schema()
+        revision_id = revision_id or f"pkg-rev-{uuid.uuid4().hex}"
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT revision_id FROM package_revisions WHERE content_hash = ?", (content_hash,)
+            ).fetchone()
+            if existing is not None:
+                return str(existing["revision_id"])
+            conn.execute(
+                "INSERT OR IGNORE INTO packages (package_id, project_title, locale) VALUES (?, ?, ?)",
+                (package_id, project_title, locale),
+            )
+            conn.execute(
+                """INSERT INTO package_revisions
+                   (revision_id, package_id, revision, content_hash, raw_json)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (revision_id, package_id, revision, content_hash, raw_json),
+            )
+        return revision_id
+
+    def get_package_revision(self, revision_id: str) -> dict[str, object] | None:
+        return self._row(self.connect().execute(
+            "SELECT * FROM package_revisions WHERE revision_id = ?", (revision_id,)
+        ).fetchone())
+
+    def record_asset_revision(
+        self,
+        *,
+        asset_id: str,
+        asset_key: str,
+        media_type: str,
+        blob_hash: str,
+        blob_size: int,
+        blob_path: str,
+        file_hash: str,
+        probe_result: dict[str, object],
+        source_uri: str,
+        original_filename: str,
+        provenance: dict[str, object],
+        review_required: bool,
+        metadata: dict[str, object] | None = None,
+        asset_revision_id: str | None = None,
+    ) -> str:
+        """Persist one imported CAS blob and its logical asset revision idempotently."""
+        asset_revision_id = asset_revision_id or f"asset-rev-{uuid.uuid4().hex}"
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO blobs (blob_hash, size, blob_path) VALUES (?, ?, ?)",
+                (blob_hash, blob_size, blob_path),
+            )
+            conn.execute(
+                """INSERT OR IGNORE INTO assets
+                   (asset_id, asset_key, media_type, provenance, review_required, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    asset_id,
+                    asset_key,
+                    media_type,
+                    self._json(provenance),
+                    int(review_required),
+                    self._json(metadata or {}),
+                ),
+            )
+            existing = conn.execute(
+                "SELECT asset_revision_id FROM asset_revisions WHERE asset_id=? AND file_hash=?",
+                (asset_id, file_hash),
+            ).fetchone()
+            if existing is not None:
+                return str(existing["asset_revision_id"])
+            conn.execute(
+                """INSERT INTO asset_revisions
+                   (asset_revision_id, asset_id, blob_hash, file_hash, probe_result,
+                    source_uri, original_filename)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    asset_revision_id,
+                    asset_id,
+                    blob_hash,
+                    file_hash,
+                    self._json(probe_result),
+                    source_uri,
+                    original_filename,
+                ),
+            )
+        return asset_revision_id
+
+    def create_run(self, *, run_id: str, package_id: str, revision_id: str,
+                   status: str = "ACCEPTED") -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT INTO runs (run_id, package_id, revision_id, status) VALUES (?, ?, ?, ?)",
+                (run_id, package_id, revision_id, status),
+            )
+            self._journal(conn, "run", run_id, None, status, "run created")
+
+    def get_run(self, run_id: str) -> dict[str, object] | None:
+        return self._row(self.connect().execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone())
+
+    def transition_run(self, run_id: str, from_state: str, to_state: str,
+                       reason: str | None = None) -> bool:
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE runs SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   WHERE run_id = ? AND status = ?""", (to_state, run_id, from_state),
+            )
+            if cursor.rowcount != 1:
+                return False
+            self._journal(conn, "run", run_id, from_state, to_state, reason)
+            return True
+
+    def create_snapshot(self, *, snapshot_id: str, run_id: str,
+                        snapshot_hash: str, snapshot_json: str) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT INTO run_snapshots (snapshot_id, run_id, snapshot_hash, snapshot_json) VALUES (?, ?, ?, ?)",
+                (snapshot_id, run_id, snapshot_hash, snapshot_json),
+            )
+
+    def persist_tasks(self, run_id: str, tasks: list[Any]) -> None:
+        """Atomically persist a validated TaskGraph's nodes and dependencies."""
+        with self.transaction() as conn:
+            for task in tasks:
+                conn.execute(
+                    """INSERT INTO tasks (task_id, run_id, task_type, logical_key, status, metadata)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (task.task_id, run_id, task.task_type, task.logical_key,
+                     "BLOCKED" if task.dependencies else "READY", self._json(task.metadata)),
+                )
+            for task in tasks:
+                for dependency in task.dependencies:
+                    conn.execute(
+                        "INSERT INTO task_dependencies (task_id, depends_on) VALUES (?, ?)",
+                        (task.task_id, dependency),
+                    )
+
+    def get_task(self, task_id: str) -> dict[str, object] | None:
+        return self._row(self.connect().execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone())
+
+    def update_task_metadata(self, task_id: str, metadata: dict[str, object]) -> bool:
+        """Persist fully materialized task metadata without changing its state."""
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE tasks SET metadata=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   WHERE task_id=?""", (self._json(metadata), task_id),
+            )
+            return cursor.rowcount == 1
+
+    def list_tasks(self, run_id: str) -> list[dict[str, object]]:
+        rows = self.connect().execute(
+            "SELECT * FROM tasks WHERE run_id = ? ORDER BY created_at, task_id", (run_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_attempts(self, run_id: str) -> list[dict[str, object]]:
+        rows = self.connect().execute(
+            """SELECT a.* FROM attempts a JOIN tasks t ON t.task_id=a.task_id
+               WHERE t.run_id=? ORDER BY a.created_at, a.attempt_id""",
+            (run_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_artifacts(self, run_id: str) -> list[dict[str, object]]:
+        rows = self.connect().execute(
+            """SELECT a.* FROM artifacts a JOIN tasks t ON t.task_id=a.task_id
+               WHERE t.run_id=? ORDER BY a.created_at, a.artifact_id""",
+            (run_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_reviews(self, *, target_id: str | None = None) -> list[dict[str, object]]:
+        if target_id is None:
+            rows = self.connect().execute("SELECT * FROM reviews ORDER BY created_at").fetchall()
+        else:
+            rows = self.connect().execute(
+                "SELECT * FROM reviews WHERE target_id=? ORDER BY created_at", (target_id,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def transition_task(self, task_id: str, from_state: str, to_state: str,
+                        reason: str | None = None, error: str | None = None) -> bool:
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE tasks SET status = ?, error = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   WHERE task_id = ? AND status = ?""",
+                (to_state, error, task_id, from_state),
+            )
+            if cursor.rowcount != 1:
+                return False
+            self._journal(conn, "task", task_id, from_state, to_state, reason)
+            return True
+
+    def advance_ready_tasks(self, run_id: str) -> list[str]:
+        """Advance only BLOCKED tasks whose *every* dependency succeeded."""
+        with self.transaction() as conn:
+            rows = conn.execute(
+                """SELECT t.task_id FROM tasks t
+                   WHERE t.run_id = ? AND t.status = 'BLOCKED'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM task_dependencies d
+                       JOIN tasks dep ON dep.task_id = d.depends_on
+                       WHERE d.task_id = t.task_id AND dep.status != 'SUCCEEDED'
+                   )""", (run_id,),
+            ).fetchall()
+            advanced: list[str] = []
+            for row in rows:
+                task_id = str(row["task_id"])
+                cursor = conn.execute(
+                    "UPDATE tasks SET status='READY', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE task_id=? AND status='BLOCKED'",
+                    (task_id,),
+                )
+                if cursor.rowcount == 1:
+                    self._journal(conn, "task", task_id, "BLOCKED", "READY", "dependencies satisfied")
+                    advanced.append(task_id)
+            return advanced
+
+    def create_attempt(self, *, attempt_id: str, task_id: str,
+                       idempotency_key: str, status: str = "CREATED") -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                "INSERT INTO attempts (attempt_id, task_id, idempotency_key, status) VALUES (?, ?, ?, ?)",
+                (attempt_id, task_id, idempotency_key, status),
+            )
+            self._journal(conn, "attempt", attempt_id, None, status, "attempt created")
+
+    def transition_attempt(self, attempt_id: str, from_state: str, to_state: str,
+                           reason: str | None = None, error: str | None = None,
+                           provider_job_id: str | None = None) -> bool:
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE attempts SET status=?, error=?, provider_job_id=COALESCE(?, provider_job_id),
+                   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE attempt_id=? AND status=?""",
+                (to_state, error, provider_job_id, attempt_id, from_state),
+            )
+            if cursor.rowcount != 1:
+                return False
+            self._journal(conn, "attempt", attempt_id, from_state, to_state, reason)
+            return True
+
+    def acquire_task_lease(self, *, task_id: str, worker_id: str, expires_at: str,
+                           lease_id: str | None = None) -> str | None:
+        """CAS READY→RUNNING and acquire one active lease in one transaction."""
+        lease_id = lease_id or f"lease-{uuid.uuid4().hex}"
+        with self.transaction() as conn:
+            active = conn.execute(
+                "SELECT 1 FROM task_leases WHERE task_id=? AND released=0 AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+                (task_id,),
+            ).fetchone()
+            if active is not None:
+                return None
+            cursor = conn.execute("UPDATE tasks SET status='RUNNING' WHERE task_id=? AND status='READY'", (task_id,))
+            if cursor.rowcount != 1:
+                return None
+            conn.execute(
+                "INSERT INTO task_leases (lease_id, task_id, worker_id, expires_at) VALUES (?, ?, ?, ?)",
+                (lease_id, task_id, worker_id, expires_at),
+            )
+            self._journal(conn, "task", task_id, "READY", "RUNNING", "lease acquired")
+            return lease_id
+
+    def release_task_lease(self, lease_id: str) -> bool:
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE task_leases SET released=1, released_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   WHERE lease_id=? AND released=0""", (lease_id,),
+            )
+            return cursor.rowcount == 1
+
+    def record_artifact(self, *, artifact_id: str, task_id: str, artifact_type: str,
+                        attempt_id: str | None = None, file_path: str | None = None,
+                        file_hash: str | None = None, media_type: str | None = None,
+                        metadata: dict[str, object] | None = None) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                """INSERT INTO artifacts (artifact_id, task_id, attempt_id, artifact_type, file_path, file_hash, media_type, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (artifact_id, task_id, attempt_id, artifact_type, file_path, file_hash,
+                 media_type, self._json(metadata or {})),
+            )
+
+    def create_review(self, *, review_id: str, target_type: str, target_id: str,
+                      content_hash: str | None = None, file_hash: str | None = None,
+                      metadata_hash: str | None = None, bindings: dict[str, object] | None = None) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                """INSERT INTO reviews (review_id, target_type, target_id, content_hash, file_hash, metadata_hash, bindings)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (review_id, target_type, target_id, content_hash, file_hash, metadata_hash,
+                 self._json(bindings or {})),
+            )
+            self._journal(conn, "review", review_id, None, "PENDING", "review created")
+
+    def transition_review(self, review_id: str, from_state: str, to_state: str,
+                          reason: str | None = None, decided_by: str | None = None) -> bool:
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE reviews SET status=?, decided_by=?, decided_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), notes=?
+                   WHERE review_id=? AND status=?""", (to_state, decided_by, reason, review_id, from_state),
+            )
+            if cursor.rowcount != 1:
+                return False
+            self._journal(conn, "review", review_id, from_state, to_state, reason)
+            return True
+
+    def record_invalidation(self, *, run_id: str, source_task_id: str,
+                            target_task_id: str, reason: str,
+                            scope: dict[str, object] | None = None) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                """INSERT INTO invalidations (run_id, source_task_id, target_task_id, reason, scope_json)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (run_id, source_task_id, target_task_id, reason, self._json(scope or {})),
+            )
+
+    def create_export(
+        self,
+        *,
+        export_id: str,
+        run_id: str,
+        status: str,
+        file_path: str | None = None,
+        file_hash: str | None = None,
+        manifest_path: str | None = None,
+        subtitles_path: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        with self.transaction() as conn:
+            conn.execute(
+                """INSERT INTO exports
+                   (export_id, run_id, status, file_path, file_hash, manifest_path,
+                    subtitles_path, error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    export_id,
+                    run_id,
+                    status,
+                    file_path,
+                    file_hash,
+                    manifest_path,
+                    subtitles_path,
+                    error,
+                ),
+            )
+            self._journal(conn, "export", export_id, None, status, error)
+
+    def latest_export(self, run_id: str) -> dict[str, object] | None:
+        return self._row(
+            self.connect().execute(
+                "SELECT * FROM exports WHERE run_id=? ORDER BY created_at DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+        )
+
+    @staticmethod
+    def _journal(conn: sqlite3.Connection, entity_type: str, entity_id: str,
+                 from_state: str | None, to_state: str, reason: str | None) -> None:
+        conn.execute(
+            """INSERT INTO transition_journal (entity_type, entity_id, from_state, to_state, reason)
+               VALUES (?, ?, ?, ?, ?)""", (entity_type, entity_id, from_state, to_state, reason),
+        )

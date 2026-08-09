@@ -1,8 +1,6 @@
 """Tests for state transition matrices."""
 from __future__ import annotations
 
-import pytest
-
 from lfo.execution.states import (
     AttemptState,
     ExportState,

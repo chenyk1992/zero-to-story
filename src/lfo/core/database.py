@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pathlib
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 # Schema version for migrations
 SCHEMA_VERSION = 10  # v10: visual production tables + attempt_kind
@@ -847,25 +847,19 @@ class Database:
     def _migrate_v2_to_v3(self):
         """Migration v2 → v3: Add environment_snapshots, preflights, attempts columns."""
         # Add columns to attempts table (ignore if already exists)
-        try:
+        with suppress(Exception):
             self.conn.execute(
                 "ALTER TABLE attempts ADD COLUMN machine_id TEXT"
             )
-        except Exception:
-            pass  # column already exists
-        try:
+        with suppress(Exception):
             self.conn.execute(
                 "ALTER TABLE attempts ADD COLUMN environment_snapshot_id "
                 "TEXT REFERENCES environment_snapshots(snapshot_id)"
             )
-        except Exception:
-            pass
-        try:
+        with suppress(Exception):
             self.conn.execute(
                 "ALTER TABLE attempts ADD COLUMN execution_environment_hash TEXT"
             )
-        except Exception:
-            pass
         # Create new tables
         self.conn.executescript("""
             CREATE TABLE IF NOT EXISTS environment_snapshots (

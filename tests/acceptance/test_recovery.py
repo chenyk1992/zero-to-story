@@ -1,12 +1,11 @@
 """Recovery drill — simulate crash and verify no double-submission."""
 from __future__ import annotations
 
-from lfo.execution.dag import TaskGraph, TaskNode, build_dag
+from lfo.execution.dag import TaskGraph, TaskNode
 from lfo.execution.handlers import default_fake_registry
-from lfo.execution.materializer import MaterializedClip, MaterializedRun
-from lfo.execution.recovery import reconcile_unknown_attempt
+from lfo.execution.materializer import MaterializedRun
 from lfo.execution.runtime import Runtime
-from lfo.execution.states import AttemptState, TaskState
+from lfo.execution.states import AttemptState
 
 
 def _make_graph() -> TaskGraph:
@@ -54,7 +53,7 @@ class TestRecovery:
         )
         decision2 = reconcile_unknown_attempt(
             attempt2,
-            lambda _: BackendStatus(exists=False),
+            lambda _: BackendStatus(exists=False, completed=False),
         )
         assert decision2.action == "retry"
 
@@ -140,7 +139,7 @@ class TestIdempotency:
 
 def _make_package() -> object:
     """Minimal package-like object for materialization testing."""
-    from lfo.contracts.package import VideoExecutionPackage, ProjectInfo
+    from lfo.contracts.package import ProjectInfo, VideoExecutionPackage
     return VideoExecutionPackage(
         package_id="idem-test",
         revision=1,

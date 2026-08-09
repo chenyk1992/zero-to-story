@@ -1,15 +1,20 @@
-"""Exporter — final file assembly with atomic rename and provenance manifest."""
+"""Atomic final export, sidecars, and provenance manifest publication."""
+
 from __future__ import annotations
 
+import hashlib
 import json
-from dataclasses import dataclass, field
-from typing import Any
+import shutil
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
+from lfo.media._ffmpeg import MediaCommandError, probe
 
 
 @dataclass
 class ExportSpec:
-    """Specification for final export."""
-
     run_id: str
     package_id: str
     package_hash: str
@@ -21,10 +26,9 @@ class ExportSpec:
     width: int | None = None
     height: int | None = None
     fps: int | None = None
-    subtitles_mode: str = "sidecar"  # sidecar | burnin | both
+    subtitles_mode: str = "sidecar"
     subtitle_paths: list[str] = field(default_factory=list)
     clip_hashes: dict[str, str] = field(default_factory=dict)
-    # Provenance
     backend_ids: list[str] = field(default_factory=list)
     workflow_hashes: list[str] = field(default_factory=list)
     model_versions: list[str] = field(default_factory=list)
@@ -32,8 +36,6 @@ class ExportSpec:
 
 @dataclass
 class ExportResult:
-    """Result of export."""
-
     success: bool
     file_path: str | None = None
     file_hash: str | None = None
@@ -46,81 +48,106 @@ class ExportResult:
 
 @dataclass
 class ExportManifest:
-    """Provenance manifest written alongside the export."""
-
     run_id: str
     package_id: str
     package_hash: str
     materialization_hash: str
-    clips: list[dict[str, Any]] = field(default_factory=list)
+    clips: list[dict[str, object]] = field(default_factory=list)
     backends: list[str] = field(default_factory=list)
     workflows: list[str] = field(default_factory=list)
     models: list[str] = field(default_factory=list)
     export_timestamp: str = ""
-    output: dict[str, Any] = field(default_factory=dict)
+    output: dict[str, object] = field(default_factory=dict)
 
     def to_json(self) -> str:
-        return json.dumps(self.__dict__, indent=2, ensure_ascii=False)
+        return json.dumps(asdict(self), indent=2, ensure_ascii=False, sort_keys=True)
 
 
 class Exporter:
-    """Final export with atomic rename and manifest generation."""
+    """Publish an already assembled timeline only after a QC gate passes."""
 
     def export(
-        self,
-        spec: ExportSpec,
-        source_timeline_path: str,
-        qc_passed: bool = True,
+        self, spec: ExportSpec, source_timeline_path: str, qc_passed: bool = True
     ) -> ExportResult:
-        """Execute the final export.
-
-        In production this would:
-        1. Copy source to a temp file next to the final destination
-        2. Run final QC gate
-        3. Atomically rename temp to final path
-        4. Write manifest.json sidecar
-        5. Write subtitle sidecars
-
-        Here we validate and compute the result without actual file I/O.
-        """
         if not qc_passed:
-            return ExportResult(success=False, error="QC gate failed")
-
+            return ExportResult(False, error="QC gate failed")
         if not spec.run_id:
-            return ExportResult(success=False, error="Missing run_id")
+            return ExportResult(False, error="Missing run_id")
+        source, output = Path(source_timeline_path), Path(spec.output_path)
+        if not source.is_file():
+            return ExportResult(False, error=f"Timeline source does not exist: {source}")
+        if spec.subtitles_mode not in {"sidecar", "burnin", "both", "none"}:
+            return ExportResult(False, error=f"Unsupported subtitles mode: {spec.subtitles_mode}")
+        if any(not Path(path).is_file() for path in spec.subtitle_paths):
+            return ExportResult(False, error="Subtitle sidecar does not exist")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temp = output.with_name(f".{output.stem}.{uuid4().hex}.tmp{output.suffix}")
+        try:
+            shutil.copy2(source, temp)
+            if not temp.is_file() or temp.stat().st_size == 0:
+                raise MediaCommandError("Export copy produced no file")
+            # Decode/probe before publishing to ensure callers never receive a dead path.
+            metadata = probe(temp)
+            if metadata["width"] is None:
+                raise MediaCommandError("Timeline output has no video stream")
+            temp.replace(output)
+            subtitle_path = self._publish_sidecars(spec, output)
+            manifest = self.build_manifest(spec)
+            manifest.clips = [
+                {"clip_id": key, "hash": value} for key, value in sorted(spec.clip_hashes.items())
+            ]
+            manifest.export_timestamp = datetime.now(UTC).isoformat()
+            manifest.output.update(
+                {
+                    "path": str(output),
+                    "sha256": self._sha256(output),
+                    "size": output.stat().st_size,
+                    **metadata,
+                }
+            )
+            manifest_path = Path(f"{output}.manifest.json")
+            self._atomic_text(manifest_path, manifest.to_json())
+            return ExportResult(
+                True,
+                str(output),
+                self._sha256(output),
+                output.stat().st_size,
+                str(manifest_path),
+                subtitle_path,
+                metadata["duration_ms"],
+            )
+        except (OSError, MediaCommandError) as exc:
+            temp.unlink(missing_ok=True)
+            return ExportResult(False, error=str(exc))
 
-        # Compute manifest
-        manifest = ExportManifest(
-            run_id=spec.run_id,
-            package_id=spec.package_id,
-            package_hash=spec.package_hash,
-            materialization_hash=spec.materialization_hash,
-            backends=spec.backend_ids,
-            workflows=spec.workflow_hashes,
-            models=spec.model_versions,
-            output={
-                "container": spec.container,
-                "video_encoder": spec.video_encoder,
-                "audio_encoder": spec.audio_encoder,
-                "width": spec.width,
-                "height": spec.height,
-                "fps": spec.fps,
-            },
-        )
+    def _publish_sidecars(self, spec: ExportSpec, output: Path) -> str | None:
+        if spec.subtitles_mode not in {"sidecar", "both"} or not spec.subtitle_paths:
+            return None
+        source = Path(spec.subtitle_paths[0])
+        destination = output.with_suffix(source.suffix)
+        temp = destination.with_name(f".{destination.stem}.{uuid4().hex}.tmp{destination.suffix}")
+        shutil.copy2(source, temp)
+        temp.replace(destination)
+        return str(destination)
 
-        return ExportResult(
-            success=True,
-            file_path=spec.output_path,
-            manifest_path=spec.output_path + ".manifest.json",
-        )
+    def _atomic_text(self, path: Path, text: str) -> None:
+        temp = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        temp.write_text(text, encoding="utf-8")
+        temp.replace(path)
+
+    def _sha256(self, path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def build_manifest(self, spec: ExportSpec) -> ExportManifest:
-        """Build the provenance manifest."""
         return ExportManifest(
-            run_id=spec.run_id,
-            package_id=spec.package_id,
-            package_hash=spec.package_hash,
-            materialization_hash=spec.materialization_hash,
+            spec.run_id,
+            spec.package_id,
+            spec.package_hash,
+            spec.materialization_hash,
             backends=list(spec.backend_ids),
             workflows=list(spec.workflow_hashes),
             models=list(spec.model_versions),

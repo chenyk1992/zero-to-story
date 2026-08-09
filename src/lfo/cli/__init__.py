@@ -16,10 +16,11 @@ from .machine_cmd import (
 from .preflight_cmd import cmd_preflight
 from .runtime_cmd import (
     cmd_cancel,
-    cmd_export,
     cmd_execute,
+    cmd_export,
     cmd_plan,
     cmd_retry,
+    cmd_review,
     cmd_runtime_status,
     cmd_validate,
 )
@@ -30,8 +31,8 @@ __all__ = [
     "cmd_cancel",
     "cmd_config_resolve",
     "cmd_doctor",
-    "cmd_export",
     "cmd_execute",
+    "cmd_export",
     "cmd_machine_add",
     "cmd_machine_inspect",
     "cmd_machine_list",
@@ -40,6 +41,7 @@ __all__ = [
     "cmd_plan",
     "cmd_preflight",
     "cmd_retry",
+    "cmd_review",
     "cmd_runtime_status",
     "cmd_setup",
     "cmd_validate",

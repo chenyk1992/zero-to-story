@@ -9,13 +9,13 @@ When any bound content changes, the review is INVALIDATED automatically.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
 
-class ReviewStatus(str, Enum):
+class ReviewStatus(StrEnum):
     """Review lifecycle states."""
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -24,7 +24,7 @@ class ReviewStatus(str, Enum):
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass

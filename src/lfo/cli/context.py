@@ -11,7 +11,7 @@ from lfo.core.database import Database
 class CLIContext:
     """Shared state passed to every CLI command handler."""
 
-    config: ResolvedConfig
+    config: ResolvedConfig | None
     db: Database | None
     verbose: bool
     json_output: bool

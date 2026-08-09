@@ -13,6 +13,7 @@ import hashlib
 import pathlib
 import shutil
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -101,6 +102,7 @@ class ContentAddressedStore:
         dest_file = dest_dir / original_filename
 
         # Stream copy via temp file + atomic rename.
+        tmp_path: pathlib.Path | None = None
         with source.open("rb") as src_f:
             tmp_fd, tmp_path_str = tempfile.mkstemp(
                 prefix=".tmp_", dir=str(dest_dir)
@@ -112,10 +114,9 @@ class ContentAddressedStore:
                 tmp_path.replace(dest_file)
             except BaseException:
                 # Clean up temp file on failure.
-                try:
-                    tmp_path.unlink()
-                except (OSError, FileNotFoundError):
-                    pass
+                if tmp_path is not None:
+                    with suppress(OSError, FileNotFoundError):
+                        tmp_path.unlink()
                 raise
 
         return BlobRef(blob_hash=blob_hash, size=size, path=dest_file)

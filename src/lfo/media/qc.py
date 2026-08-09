@@ -3,6 +3,7 @@
 QC rules check decodability, duration tolerance, resolution, fps, codec,
 and audio presence against the contract defined at materialization time.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -91,7 +92,9 @@ class TechnicalQC:
         )
 
     def check_duration(
-        self, probe_result: dict[str, Any], contract: QCContract,
+        self,
+        probe_result: dict[str, Any],
+        contract: QCContract,
     ) -> QCRuleResult:
         """Check duration is within tolerance of expected."""
         actual = probe_result.get("duration_ms")
@@ -101,20 +104,26 @@ class TechnicalQC:
         # Check min/max constraints
         if contract.min_duration_ms is not None and actual < contract.min_duration_ms:
             return QCRuleResult(
-                rule="duration", passed=False,
+                rule="duration",
+                passed=False,
                 message=f"Duration {actual}ms < min {contract.min_duration_ms}ms",
-                expected=contract.min_duration_ms, actual=actual,
+                expected=contract.min_duration_ms,
+                actual=actual,
             )
         if contract.max_duration_ms is not None and actual > contract.max_duration_ms:
             return QCRuleResult(
-                rule="duration", passed=False,
+                rule="duration",
+                passed=False,
                 message=f"Duration {actual}ms > max {contract.max_duration_ms}ms",
-                expected=contract.max_duration_ms, actual=actual,
+                expected=contract.max_duration_ms,
+                actual=actual,
             )
         return QCRuleResult(rule="duration", passed=True)
 
     def check_resolution(
-        self, probe_result: dict[str, Any], contract: QCContract,
+        self,
+        probe_result: dict[str, Any],
+        contract: QCContract,
     ) -> QCRuleResult:
         """Check resolution matches expected or is within bounds."""
         width = probe_result.get("width")
@@ -125,27 +134,35 @@ class TechnicalQC:
         # Exact match if expected
         if contract.expected_width is not None and width != contract.expected_width:
             return QCRuleResult(
-                rule="resolution", passed=False,
+                rule="resolution",
+                passed=False,
                 message=f"Width {width} != expected {contract.expected_width}",
-                expected=contract.expected_width, actual=width,
+                expected=contract.expected_width,
+                actual=width,
             )
         if contract.expected_height is not None and height != contract.expected_height:
             return QCRuleResult(
-                rule="resolution", passed=False,
+                rule="resolution",
+                passed=False,
                 message=f"Height {height} != expected {contract.expected_height}",
-                expected=contract.expected_height, actual=height,
+                expected=contract.expected_height,
+                actual=height,
             )
         # Bounds check
         if contract.min_width is not None and width < contract.min_width:
-            return QCRuleResult(rule="resolution", passed=False,
-                message=f"Width {width} < min {contract.min_width}")
+            return QCRuleResult(
+                rule="resolution", passed=False, message=f"Width {width} < min {contract.min_width}"
+            )
         if contract.max_width is not None and width > contract.max_width:
-            return QCRuleResult(rule="resolution", passed=False,
-                message=f"Width {width} > max {contract.max_width}")
+            return QCRuleResult(
+                rule="resolution", passed=False, message=f"Width {width} > max {contract.max_width}"
+            )
         return QCRuleResult(rule="resolution", passed=True)
 
     def check_fps(
-        self, probe_result: dict[str, Any], contract: QCContract,
+        self,
+        probe_result: dict[str, Any],
+        contract: QCContract,
     ) -> QCRuleResult:
         """Check fps matches expected."""
         if contract.expected_fps is None:
@@ -155,14 +172,18 @@ class TechnicalQC:
             return QCRuleResult(rule="fps", passed=False, message="No fps info")
         if abs(float(actual) - float(contract.expected_fps)) > 0.01:
             return QCRuleResult(
-                rule="fps", passed=False,
+                rule="fps",
+                passed=False,
                 message=f"FPS {actual} != expected {contract.expected_fps}",
-                expected=contract.expected_fps, actual=actual,
+                expected=contract.expected_fps,
+                actual=actual,
             )
         return QCRuleResult(rule="fps", passed=True)
 
     def check_codec(
-        self, probe_result: dict[str, Any], contract: QCContract,
+        self,
+        probe_result: dict[str, Any],
+        contract: QCContract,
     ) -> QCRuleResult:
         """Check codec matches expected."""
         if contract.expected_codec is None:
@@ -172,14 +193,18 @@ class TechnicalQC:
             return QCRuleResult(rule="codec", passed=False, message="No codec info")
         if actual != contract.expected_codec:
             return QCRuleResult(
-                rule="codec", passed=False,
+                rule="codec",
+                passed=False,
                 message=f"Codec {actual} != expected {contract.expected_codec}",
-                expected=contract.expected_codec, actual=actual,
+                expected=contract.expected_codec,
+                actual=actual,
             )
         return QCRuleResult(rule="codec", passed=True)
 
     def check_audio(
-        self, probe_result: dict[str, Any], contract: QCContract,
+        self,
+        probe_result: dict[str, Any],
+        contract: QCContract,
     ) -> QCRuleResult:
         """Check audio presence matches contract."""
         if contract.requires_audio is None:
@@ -188,5 +213,7 @@ class TechnicalQC:
         if contract.requires_audio and not has_audio:
             return QCRuleResult(rule="audio", passed=False, message="Audio required but missing")
         if not contract.requires_audio and has_audio:
-            return QCRuleResult(rule="audio", passed=False, message="Audio present but not expected")
+            return QCRuleResult(
+                rule="audio", passed=False, message="Audio present but not expected"
+            )
         return QCRuleResult(rule="audio", passed=True)
