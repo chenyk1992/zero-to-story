@@ -30,11 +30,14 @@ def registry(workflow_dir):
 
 
 class TestKnownWorkflows:
-    def test_three_workflows_defined(self):
-        assert len(KNOWN_WORKFLOWS) == 3
+    def test_six_workflows_defined(self):
+        assert len(KNOWN_WORKFLOWS) == 6
         assert "h3_standard_t2v" in KNOWN_WORKFLOWS
         assert "h3_standard_i2v" in KNOWN_WORKFLOWS
         assert "h3_standard_r2v" in KNOWN_WORKFLOWS
+        assert "h3_vertical_t2v" in KNOWN_WORKFLOWS
+        assert "h3_vertical_i2v" in KNOWN_WORKFLOWS
+        assert "h3_vertical_r2v" in KNOWN_WORKFLOWS
 
     def test_t2v_manifest_fields(self):
         m = KNOWN_WORKFLOWS["h3_standard_t2v"]
@@ -72,7 +75,7 @@ class TestRegistration:
     def test_register_all(self, registry):
         results = registry.register_all()
         assert all(v == "ok" for v in results.values())
-        assert len(registry.list_workflows()) == 3
+        assert len(registry.list_workflows()) == 6
 
     def test_register_single(self, registry):
         report = registry.register("h3_standard_t2v")
