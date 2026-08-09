@@ -48,6 +48,8 @@ def invalidate_scope(
     affected: set[str] = set()
 
     # BFS/DFS forward propagation through the dependency graph
+    # Note: source_task is intentionally excluded — it's the already-known
+    # invalidated task; this function computes downstream dependents.
     _propagate(source_task, task_graph, affected)
 
     return InvalidationEvent(
