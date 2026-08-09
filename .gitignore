@@ -48,3 +48,5 @@ Thumbs.db
 # Agent scratch
 .superpowers/
 
+.codex-mimo/
+pipeline_run.log
