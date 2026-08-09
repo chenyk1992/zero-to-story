@@ -1,0 +1,273 @@
+{
+  "schema": "lfo.video-execution.v1",
+  "package_id": "product-promo-mixed-001",
+  "revision": 1,
+  "project": {
+    "title": "产品宣传：智能咖啡机",
+    "locale": "zh-CN"
+  },
+  "assets": [
+    {
+      "asset_key": "product.photo.front",
+      "media_type": "image",
+      "source": {
+        "uri": "assets/coffee_machine_front.png"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.imagegen",
+        "operation": "image.generate"
+      },
+      "review": {
+        "required": true
+      }
+    },
+    {
+      "asset_key": "product.photo.angle",
+      "media_type": "image",
+      "source": {
+        "uri": "assets/coffee_machine_angle.png"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.imagegen",
+        "operation": "image.generate"
+      },
+      "review": {
+        "required": true
+      }
+    },
+    {
+      "asset_key": "logo.brand",
+      "media_type": "image",
+      "source": {
+        "uri": "assets/brand_logo.png"
+      },
+      "provenance": {
+        "source_type": "user_upload",
+        "producer": "user",
+        "operation": "asset.upload"
+      },
+      "review": {
+        "required": false
+      }
+    },
+    {
+      "asset_key": "voiceover.main",
+      "media_type": "audio",
+      "source": {
+        "uri": "assets/voiceover.mp3"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.tts",
+        "operation": "audio.synthesize"
+      },
+      "review": {
+        "required": false
+      }
+    },
+    {
+      "asset_key": "bgm.upbeat",
+      "media_type": "audio",
+      "source": {
+        "uri": "assets/bgm_upbeat.mp3"
+      },
+      "provenance": {
+        "source_type": "user_upload",
+        "producer": "user",
+        "operation": "asset.upload"
+      },
+      "review": {
+        "required": false
+      }
+    }
+  ],
+  "clips": [
+    {
+      "clip_id": "clip-001",
+      "sequence": 1,
+      "duration_ms": 5000,
+      "generation": {
+        "operation": "video.text_to_video",
+        "prompt": "一台高端智能咖啡机在极简白色厨房中，镜头缓慢推近，蒸汽升腾，晨光透过窗户洒落，产品广告质感，16:9横屏",
+        "requirements": {
+          "aspect_ratio": "16:9",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24,
+          "native_audio": "mute"
+        },
+        "references": []
+      },
+      "audio": {
+        "native_audio": "mute",
+        "tracks": [
+          {
+            "asset_key": "voiceover.main",
+            "role": "narration",
+            "offset_ms": 200,
+            "gain_db": "0",
+            "fade_in_ms": 200,
+            "fade_out_ms": 300
+          },
+          {
+            "asset_key": "bgm.upbeat",
+            "role": "bgm",
+            "offset_ms": 0,
+            "gain_db": "-12",
+            "fade_in_ms": 500,
+            "fade_out_ms": 1000,
+            "duck_group": "background"
+          }
+        ]
+      },
+      "subtitles": {
+        "cues": [
+          {
+            "start_ms": 200,
+            "end_ms": 4800,
+            "text": "全新智能咖啡机，一键唤醒清晨。"
+          }
+        ]
+      },
+      "source_context": {
+        "skill": "product-promo",
+        "script_line": "intro"
+      }
+    },
+    {
+      "clip_id": "clip-002",
+      "sequence": 2,
+      "duration_ms": 4000,
+      "generation": {
+        "operation": "video.image_to_video",
+        "prompt": "咖啡机特写，按钮被按下，咖啡缓缓流出，蒸汽缭绕，慢动作，产品质感，16:9横屏",
+        "requirements": {
+          "aspect_ratio": "16:9",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24,
+          "native_audio": "mute"
+        },
+        "references": [
+          {
+            "reference_id": "ref-001",
+            "asset_key": "product.photo.front",
+            "semantic_usage": "product.main_view",
+            "instruction": "保持咖啡机外观、颜色和细节一致",
+            "binding": {
+              "required": true,
+              "priority": 100,
+              "placement": "first",
+              "on_unsupported": "fail"
+            }
+          }
+        ]
+      },
+      "audio": {
+        "native_audio": "mute",
+        "tracks": [
+          {
+            "asset_key": "bgm.upbeat",
+            "role": "bgm",
+            "offset_ms": 0,
+            "gain_db": "-12",
+            "fade_in_ms": 0,
+            "fade_out_ms": 500,
+            "duck_group": "background"
+          }
+        ]
+      },
+      "source_context": {
+        "skill": "product-promo",
+        "script_line": "feature-1"
+      }
+    },
+    {
+      "clip_id": "clip-003",
+      "sequence": 3,
+      "duration_ms": 3000,
+      "generation": {
+        "operation": "video.image_to_video",
+        "prompt": "咖啡机45度角特写，Logo清晰可见，镜头缓慢平移，高端质感，16:9横屏",
+        "requirements": {
+          "aspect_ratio": "16:9",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24,
+          "native_audio": "mute"
+        },
+        "references": [
+          {
+            "reference_id": "ref-001",
+            "asset_key": "product.photo.angle",
+            "semantic_usage": "product.angle_view",
+            "instruction": "保持咖啡机外观一致，展示Logo",
+            "binding": {
+              "required": true,
+              "priority": 100,
+              "placement": "first",
+              "on_unsupported": "fail"
+            }
+          },
+          {
+            "reference_id": "ref-002",
+            "asset_key": "logo.brand",
+            "semantic_usage": "brand.logo",
+            "instruction": "作为Logo水印叠加在右下角",
+            "binding": {
+              "required": false,
+              "priority": 10,
+              "placement": "fixed",
+              "slot": "overlay_brand",
+              "on_unsupported": "drop"
+            }
+          }
+        ]
+      },
+      "audio": {
+        "native_audio": "mute",
+        "tracks": [
+          {
+            "asset_key": "bgm.upbeat",
+            "role": "bgm",
+            "offset_ms": 0,
+            "gain_db": "-15",
+            "fade_in_ms": 0,
+            "fade_out_ms": 800,
+            "duck_group": "background"
+          }
+        ]
+      },
+      "subtitles": {
+        "cues": [
+          {
+            "start_ms": 200,
+            "end_ms": 2800,
+            "text": "精准萃取，每一杯都是匠心之作。"
+          }
+        ]
+      },
+      "source_context": {
+        "skill": "product-promo",
+        "script_line": "feature-2"
+      }
+    }
+  ],
+  "output": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 24,
+    "sample_rate": 44100,
+    "directory": "product-promo-mixed-001"
+  },
+  "approval": {
+    "approved_by": "user",
+    "approved_at": "2026-08-09T12:00:00Z",
+    "notes": "产品宣传素材已确认"
+  },
+  "extensions": {
+    "product-promo.campaign_id": "campaign-2026-q3"
+  }
+}

@@ -1,27 +1,11 @@
-"""LFO CLI package — command entry points."""
-from .business_cmd import (
-    AssembleCommand,
-    AttemptsListCommand,
-    ContinuityInspectCommand,
-    ExportCommand,
-    RecoverCommand,
-    RetryCommand,
-    cmd_assemble,
-    cmd_attempts_list,
-    cmd_continuity_inspect,
-    cmd_export,
-    cmd_recover,
-    cmd_retry,
-)
+"""LFO CLI package — command entry points.
+
+Commands register via @CommandRegistry.register at import time.
+"""
+from __future__ import annotations
+
 from .config_cmd import cmd_config_resolve
 from .doctor_cmd import cmd_doctor
-from .edit_cmd import (
-    EditApproveCommand,
-    EditSelectCommand,
-    cmd_edit_approve,
-    cmd_edit_select,
-)
-from .images_cmd import ImagesCommand, cmd_images_build, cmd_images_collect
 from .machine_cmd import (
     cmd_machine_add,
     cmd_machine_inspect,
@@ -30,106 +14,36 @@ from .machine_cmd import (
     cmd_machine_validate,
 )
 from .preflight_cmd import cmd_preflight
-from .panels_cmd import (
-    PanelsCommand,
-    cmd_panels_pack,
-    cmd_panels_plan,
-    cmd_panels_prompt,
+from .runtime_cmd import (
+    cmd_cancel,
+    cmd_execute,
+    cmd_export,
+    cmd_plan,
+    cmd_retry,
+    cmd_review,
+    cmd_runtime_status,
+    cmd_validate,
 )
-from .preview_cmd import (
-    PreviewCommand,
-    cmd_preview_build,
-    cmd_preview_collect,
-)
-from .project_cmd import ProjectInitCommand, cmd_project_init
-from .run_cmd import RunCommand, cmd_run
 from .setup import cmd_setup
-from .status_cmd import StatusCommand, cmd_status
-from .visual_cmd import (
-    VisualProfileActivateCommand,
-    VisualProfileCloneCommand,
-    VisualProfileCreateCommand,
-    VisualProfileShowCommand,
-    VisualProviderCreateCommand,
-    VisualProviderDisableCommand,
-    VisualProviderListCommand,
-    VisualRouteDryRunCommand,
-    VisualTaskListCommand,
-    VisualTaskShowCommand,
-    cmd_visual_profile_activate,
-    cmd_visual_profile_clone,
-    cmd_visual_profile_create,
-    cmd_visual_profile_show,
-    cmd_visual_provider_create,
-    cmd_visual_provider_disable,
-    cmd_visual_provider_list,
-    cmd_visual_route_dry_run,
-    cmd_visual_task_list,
-    cmd_visual_task_show,
-)
 from .workflow_cmd import cmd_workflow_fork
 
 __all__ = [
-    "AssembleCommand",
-    "AttemptsListCommand",
-    "ContinuityInspectCommand",
-    "EditApproveCommand",
-    "EditSelectCommand",
-    "ExportCommand",
-    "ImagesCommand",
-    "PanelsCommand",
-    "PreviewCommand",
-    "ProjectInitCommand",
-    "RecoverCommand",
-    "RetryCommand",
-    "RunCommand",
-    "StatusCommand",
-    "VisualProfileActivateCommand",
-    "VisualProfileCloneCommand",
-    "VisualProfileCreateCommand",
-    "VisualProfileShowCommand",
-    "VisualProviderCreateCommand",
-    "VisualProviderDisableCommand",
-    "VisualProviderListCommand",
-    "VisualRouteDryRunCommand",
-    "VisualTaskListCommand",
-    "VisualTaskShowCommand",
-    "cmd_assemble",
-    "cmd_attempts_list",
+    "cmd_cancel",
     "cmd_config_resolve",
-    "cmd_continuity_inspect",
     "cmd_doctor",
-    "cmd_edit_approve",
-    "cmd_edit_select",
+    "cmd_execute",
     "cmd_export",
-    "cmd_images_build",
-    "cmd_images_collect",
     "cmd_machine_add",
     "cmd_machine_inspect",
     "cmd_machine_list",
     "cmd_machine_migrate_project",
     "cmd_machine_validate",
-    "cmd_panels_pack",
-    "cmd_panels_plan",
-    "cmd_panels_prompt",
+    "cmd_plan",
     "cmd_preflight",
-    "cmd_preview_build",
-    "cmd_preview_collect",
-    "cmd_project_init",
-    "cmd_recover",
     "cmd_retry",
-    "cmd_run",
+    "cmd_review",
+    "cmd_runtime_status",
     "cmd_setup",
-    "cmd_status",
-    "cmd_visual_profile_activate",
-    "cmd_visual_profile_clone",
-    "cmd_visual_profile_create",
-    "cmd_visual_profile_show",
-    "cmd_visual_provider_create",
-    "cmd_visual_provider_disable",
-    "cmd_visual_provider_list",
-    "cmd_visual_route_dry_run",
-    "cmd_visual_task_list",
-    "cmd_visual_task_show",
+    "cmd_validate",
     "cmd_workflow_fork",
 ]

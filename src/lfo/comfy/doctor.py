@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 from .client import ComfyApiClient
 from .exceptions import ComfyUnreachableError
@@ -52,7 +53,7 @@ class ComfyDoctor:
     MIN_C_DRIVE_GB = 50
     MIN_GPU_VRAM_MB = 8192
 
-    REQUIRED_H3_NODES = [
+    REQUIRED_H3_NODES: ClassVar[list[str]] = [
         "MiniMaxH3ImageToVideo",
         "MiniMaxH3ReferenceToVideo",
         "MiniMaxH3SigmaShift",

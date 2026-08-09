@@ -88,7 +88,7 @@ class PromptSubmitter:
                 "No SaveVideo node found in workflow — cannot set filename_prefix"
             )
 
-        for node_id, node_data in save_nodes:
+        for _node_id, node_data in save_nodes:
             if "inputs" not in node_data:
                 node_data["inputs"] = {}
             node_data["inputs"]["filename_prefix"] = filename_prefix

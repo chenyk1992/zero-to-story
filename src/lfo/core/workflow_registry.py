@@ -661,7 +661,7 @@ class WorkflowRegistry:
         Returns {workflow_id: status} where status is 'ok' or error message.
         """
         results = {}
-        for wf_id, manifest in KNOWN_WORKFLOWS.items():
+        for wf_id in KNOWN_WORKFLOWS:
             try:
                 self.register(wf_id)
                 results[wf_id] = "ok"

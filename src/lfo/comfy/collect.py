@@ -7,8 +7,10 @@ import json
 import shutil
 import subprocess
 import time
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 from .exceptions import OutputNotFoundError, OutputUnstableError
 
@@ -61,7 +63,9 @@ class CollectResult:
 class ComfyOutputCollector:
     """Discover, validate, and register ComfyUI outputs."""
 
-    DEFAULT_EXTENSIONS = {".mp4", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".wav"}
+    DEFAULT_EXTENSIONS: ClassVar[set[str]] = {
+        ".mp4", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".wav"
+    }
 
     def __init__(
         self,
@@ -181,19 +185,15 @@ class ComfyOutputCollector:
         fps_str = video_stream.get("r_frame_rate", "")
         if "/" in fps_str:
             num, den = fps_str.split("/", 1)
-            try:
+            with suppress(ValueError):
                 fps = float(num) / float(den) if float(den) != 0 else 0.0
-            except ValueError:
-                pass
 
         # Duration from format section
         duration = 0.0
         dur_str = probe.get("format", {}).get("duration")
         if dur_str:
-            try:
+            with suppress(ValueError):
                 duration = float(dur_str)
-            except ValueError:
-                pass
 
         return MediaInfo(
             codec=video_stream.get("codec_name", ""),

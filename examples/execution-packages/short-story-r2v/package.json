@@ -1,0 +1,203 @@
+{
+  "schema": "lfo.video-execution.v1",
+  "package_id": "short-story-r2v-001",
+  "revision": 1,
+  "project": {
+    "title": "示例短剧：雨夜重逢",
+    "locale": "zh-CN"
+  },
+  "assets": [
+    {
+      "asset_key": "hero.identity.front",
+      "media_type": "image",
+      "source": {
+        "uri": "assets/hero_front.png"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.imagegen",
+        "operation": "image.generate",
+        "prompt_hash": "sha256:abc123..."
+      },
+      "review": {
+        "required": true
+      }
+    },
+    {
+      "asset_key": "heroine.identity.front",
+      "media_type": "image",
+      "source": {
+        "uri": "assets/heroine_front.png"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.imagegen",
+        "operation": "image.generate",
+        "prompt_hash": "sha256:def456..."
+      },
+      "review": {
+        "required": true
+      }
+    },
+    {
+      "asset_key": "bg.rainy.alley",
+      "media_type": "image",
+      "source": {
+        "uri": "assets/rainy_alley.png"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.imagegen",
+        "operation": "image.generate"
+      },
+      "review": {
+        "required": true
+      }
+    },
+    {
+      "asset_key": "dialogue.clip-001",
+      "media_type": "audio",
+      "source": {
+        "uri": "assets/dialogue_001.wav"
+      },
+      "provenance": {
+        "source_type": "external_skill",
+        "producer": "codex.tts",
+        "operation": "audio.synthesize",
+        "producer_version": "v2.5"
+      },
+      "review": {
+        "required": false
+      }
+    }
+  ],
+  "clips": [
+    {
+      "clip_id": "clip-001",
+      "sequence": 1,
+      "duration_ms": 8000,
+      "generation": {
+        "operation": "video.reference_to_video",
+        "prompt": "雨夜小巷，霓虹灯光倒映在积水中，男主角独自站在路灯下等待，神情焦虑，电影感，9:16竖屏",
+        "requirements": {
+          "aspect_ratio": "9:16",
+          "width": 1080,
+          "height": 1920,
+          "fps": 24,
+          "native_audio": "allowed"
+        },
+        "references": [
+          {
+            "reference_id": "ref-001",
+            "asset_key": "hero.identity.front",
+            "semantic_usage": "subject.identity",
+            "instruction": "保持男主角外貌、发型和服装一致",
+            "binding": {
+              "required": true,
+              "priority": 100,
+              "placement": "any",
+              "on_unsupported": "fail"
+            }
+          },
+          {
+            "reference_id": "ref-002",
+            "asset_key": "bg.rainy.alley",
+            "semantic_usage": "environment.background",
+            "instruction": "作为雨夜小巷背景",
+            "binding": {
+              "required": false,
+              "priority": 50,
+              "placement": "any",
+              "on_unsupported": "drop"
+            }
+          }
+        ]
+      },
+      "audio": {
+        "native_audio": "preserve",
+        "tracks": [
+          {
+            "asset_key": "dialogue.clip-001",
+            "role": "dialogue",
+            "offset_ms": 500,
+            "gain_db": "0",
+            "fade_in_ms": 100,
+            "fade_out_ms": 200,
+            "duck_group": "foreground"
+          }
+        ]
+      },
+      "subtitles": {
+        "cues": [
+          {
+            "start_ms": 500,
+            "end_ms": 3500,
+            "text": "十年了，我终于又回到了这条巷子。"
+          },
+          {
+            "start_ms": 4000,
+            "end_ms": 7500,
+            "text": "你还会在这里等我吗？"
+          }
+        ]
+      },
+      "source_context": {
+        "skill": "zero-to-story",
+        "panel_id": "panel-001"
+      }
+    },
+    {
+      "clip_id": "clip-002",
+      "sequence": 2,
+      "duration_ms": 6000,
+      "generation": {
+        "operation": "video.reference_to_video",
+        "prompt": "女主角从巷口走来，撑着黑色雨伞，看到男主角后停下脚步，眼中含泪，电影感，9:16竖屏",
+        "requirements": {
+          "aspect_ratio": "9:16",
+          "width": 1080,
+          "height": 1920,
+          "fps": 24,
+          "native_audio": "allowed"
+        },
+        "references": [
+          {
+            "reference_id": "ref-001",
+            "asset_key": "heroine.identity.front",
+            "semantic_usage": "subject.identity",
+            "instruction": "保持女主角外貌、发型和服装一致",
+            "binding": {
+              "required": true,
+              "priority": 100,
+              "placement": "any",
+              "on_unsupported": "fail"
+            }
+          }
+        ]
+      },
+      "audio": {
+        "native_audio": "mute"
+      },
+      "source_context": {
+        "skill": "zero-to-story",
+        "panel_id": "panel-002"
+      }
+    }
+  ],
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 24,
+    "sample_rate": 44100,
+    "subtitles_mode": "both",
+    "directory": "short-story-r2v-001"
+  },
+  "approval": {
+    "approved_by": "user",
+    "approved_at": "2026-08-09T12:00:00Z",
+    "notes": "故事板和提示词已确认"
+  },
+  "extensions": {
+    "zero-to-story.storyboard_cell_ids": ["cell-001", "cell-002"]
+  }
+}

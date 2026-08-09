@@ -52,7 +52,7 @@ def cmd_setup(
             snap_svc = EnvironmentSnapshotService(db)
             record = snap_svc.capture_and_save(profile)
             snapshot_id = record.snapshot_id
-        except Exception as snap_exc:  # noqa: BLE001 — best-effort
+        except Exception as snap_exc:
             # Snapshot creation is best-effort; setup itself succeeded.
             snapshot_id = f"failed: {snap_exc}"
 
@@ -75,8 +75,8 @@ def cmd_setup(
 
 def _workspace_db_path() -> str:
     """Resolve the workspace SQLite path for the snapshot."""
-    import os
     from pathlib import Path
+
     from lfo.services.workspace import db_path
     p = db_path()
     Path(p).parent.mkdir(parents=True, exist_ok=True)

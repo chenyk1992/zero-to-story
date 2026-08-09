@@ -3,16 +3,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
+
+from lfo.config.machine_profile import MachineProfile
 
 
-class CheckSeverity(str, Enum):
+class CheckSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
     BLOCKER = "blocker"
 
 
-class CheckStatus(str, Enum):
+class CheckStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -34,7 +36,7 @@ class CheckResult:
 class CheckContext:
     """Context passed to every check."""
 
-    machine_profile: object | None = None
+    machine_profile: MachineProfile | None = None
     env_snapshot: dict | None = None
     required_workflow_ids: set[str] = field(default_factory=set)
     required_model_ids: set[str] = field(default_factory=set)

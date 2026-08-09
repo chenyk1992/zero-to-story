@@ -115,7 +115,8 @@ def _detect_gpu_nvml() -> tuple[str, int]:
         if isinstance(name, bytes):
             name = name.decode("utf-8")
         mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        vram_mib = int(mem_info.total / (1024 * 1024))
+        total_bytes = int(mem_info.total)
+        vram_mib = total_bytes // (1024 * 1024)
         pynvml.nvmlShutdown()
         return name, vram_mib
     except Exception:
