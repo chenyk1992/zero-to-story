@@ -202,6 +202,12 @@ class Runtime:
         if task.status != TaskState.FAILED_RETRYABLE.value:
             return False
         task.status = TaskState.READY.value
+        # Populate input_artifacts from dependencies so downstream handlers
+        # (audio.mix, media.normalize, media.qc) receive their upstream file_path.
+        task.metadata["input_artifacts"] = {
+            dep_id: dict(self.artifacts_by_task.get(dep_id, {}))
+            for dep_id in task.dependencies
+        }
         return True
 
     def _advance_downstream(self, completed_task_id: str) -> list[str]:
@@ -440,4 +446,6 @@ class PersistentRuntime(Runtime):
         if not super().retry(task_id):
             return False
         self.store.transition_task(task_id, "FAILED_RETRYABLE", "READY", "manual retry")
+        # Persist input_artifacts so subsequent retries see upstream artifacts
+        self.store.update_task_metadata(task_id, self.tasks[task_id].metadata)
         return True

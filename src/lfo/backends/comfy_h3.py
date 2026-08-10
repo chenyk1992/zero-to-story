@@ -25,6 +25,7 @@ from lfo.execution.handlers import HandlerResult, TaskHandler
 
 H3_BACKEND_ID = "comfyui.h3"
 H3_BACKEND_REVISION = "3.0.0"
+H3_MAX_REFERENCE_IMAGES = 9
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ def build_h3_backend_registry(
                 "video.reference_to_video",
             ],
             accepted_media_types=["image"],
-            max_references=3,
+            max_references=H3_MAX_REFERENCE_IMAGES,
             duration_constraints={"min_ms": 200, "max_ms": 150_000},
             frame_constraints={"formula": "17k+5", "fps": 24},
             resolution_constraints={
@@ -237,16 +238,67 @@ class ComfyH3VideoHandler(TaskHandler):
         elif manifest.workflow_mode == "r2v":
             if not uploaded:
                 raise ValueError(f"{workflow_id} requires at least one reference image")
-            # The bundled H3 R2V graph exposes three non-optional loader nodes.
-            padded = (uploaded + [uploaded[-1]] * 3)[:3]
-            for index, value in enumerate(padded):
+            if len(uploaded) > H3_MAX_REFERENCE_IMAGES:
+                raise ValueError(
+                    f"{workflow_id} supports at most {H3_MAX_REFERENCE_IMAGES} reference images"
+                )
+            # The bundled graph contains three convenience loaders.  H3 itself
+            # supports a dynamic ref_images group, so bind only the declared
+            # slots here and add loader nodes for reference four through nine.
+            for index, value in enumerate(uploaded[:3]):
                 values[f"ref_image_{index}"] = value
 
         resolved_values = [(bindings[key], value) for key, value in values.items() if key in bindings]
         prepared = BindingResolver(workflow).apply_values(cast(Any, resolved_values))
+        if manifest.workflow_mode == "r2v":
+            self._configure_r2v_reference_slots(prepared, bindings, uploaded)
+            self._apply_reference_image_size(prepared, metadata.get("reference_image_size"))
         self._apply_seed(prepared, metadata.get("seed"))
         self._apply_fps(prepared, metadata.get("fps"))
         return prepared, uploaded
+
+    @staticmethod
+    def _configure_r2v_reference_slots(
+        workflow: dict[str, Any],
+        bindings: dict[str, Binding],
+        uploaded: list[str],
+    ) -> None:
+        """Bind exactly the requested dynamic H3 reference-image slots."""
+        prefix = "ref_images.ref_image_"
+        generator_nodes: list[dict[str, Any]] = []
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            if any(key.startswith(prefix) for key in inputs):
+                generator_nodes.append(node)
+        if len(generator_nodes) != 1:
+            raise ValueError("H3 R2V workflow requires exactly one reference-image generator node")
+
+        generator_inputs = generator_nodes[0]["inputs"]
+        for key in list(generator_inputs):
+            if key.startswith(prefix):
+                del generator_inputs[key]
+
+        numeric_node_ids = [int(node_id) for node_id in workflow if node_id.isdigit()]
+        next_node_id = max(numeric_node_ids, default=0) + 1
+        for index, value in enumerate(uploaded):
+            if index < 3:
+                binding = bindings[f"ref_image_{index}"]
+                if binding.resolved_node_id is None:
+                    raise ValueError(f"H3 R2V reference binding {index} was not resolved")
+                source_node_id = binding.resolved_node_id
+            else:
+                source_node_id = str(next_node_id)
+                next_node_id += 1
+                workflow[source_node_id] = {
+                    "_meta": {"title": f"LFO.DynamicReference{index + 1}"},
+                    "class_type": "LoadImage",
+                    "inputs": {"image": value},
+                }
+            generator_inputs[f"{prefix}{index}"] = [source_node_id, 0]
 
     @staticmethod
     def _resolve_bindings(
@@ -282,6 +334,17 @@ class ComfyH3VideoHandler(TaskHandler):
         if len(nodes) != 1:
             raise ValueError(f"Expected one RandomNoise node, found {len(nodes)}")
         nodes[0][1].setdefault("inputs", {})["noise_seed"] = seed
+
+    @staticmethod
+    def _apply_reference_image_size(workflow: dict[str, Any], value: object) -> None:
+        if value is None:
+            return
+        if value not in {"match", "max"}:
+            raise ValueError("H3 reference_image_size must be 'match' or 'max'")
+        nodes = WorkflowLoader.find_nodes_by_class(workflow, "MiniMaxH3ReferenceToVideo")
+        if len(nodes) != 1:
+            raise ValueError(f"Expected one MiniMaxH3ReferenceToVideo node, found {len(nodes)}")
+        nodes[0][1].setdefault("inputs", {})["ref_image_size"] = value
 
     @staticmethod
     def _apply_fps(workflow: dict[str, Any], fps: object) -> None:

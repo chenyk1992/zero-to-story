@@ -195,6 +195,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "height": clip.height,
                 "fps": clip.fps,
                 "native_audio": clip.native_audio,
+                "reference_image_size": clip.reference_image_size,
                 "resolved_references": list(clip.resolved_references),
                 "output_policy": dict(materialized_run.output_policy),
             },

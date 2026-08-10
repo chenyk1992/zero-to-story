@@ -4,8 +4,8 @@
   "audience": "20–35岁，男女通吃",
   "tone": "悬疑烧脑",
   "totalEpisodes": 60,
-  "completedEpisodes": [1, 2, 3, 4],
-  "bridgedEpisodes": [1, 2, 3, 4],
+  "completedEpisodes": [1, 2, 3, 4, 5],
+  "bridgedEpisodes": [1, 2, 3, 4, 5],
   "language": "zh",
   "mode": "domestic",
   "dramaTitle": "午夜不接单",
@@ -17,5 +17,15 @@
   "hiddenBoss": "老K",
   "paywallEpisodes": [10, 16, 22, 28, 36, 40, 45, 48, 52, 56],
   "handoffNovelId": "午夜不接单",
-  "handoffChapterPattern": "epNNN→chapter_NN"
+  "handoffChapterPattern": "epNNN→chapter_NN",
+  "workspaceSync": {
+    "enabled": true,
+    "root": "workspace/午夜不接单",
+    "policy": "sync_on_bridge",
+    "artifacts": [
+      "intake.json",
+      "storyboard_brief.md",
+      "cut_notes.md"
+    ]
+  }
 }

@@ -49,7 +49,7 @@ description: |
 - `episodes/epNNN.md` 是编剧主产物；`handoff/` 是给下游用的伴生包。
 - `storyboard_brief.md` → 交给 **zero-to-story**（设定图 / 黑白分镜 / 视频提示词）。
 - `intake.json` → 交给 **LFO**（decompose / `lfo run` 的上游输入）。
-- 需要进 LFO 工作区时，由人/agent **复制**到 `workspace/{drama_title}/chapter_{NN}/`（小说名 / 章节名，与仓库 `workspace/README` 一致；第 N 集 → `chapter_NN`），skill 不强制写入 `workspace/`。
+- 默认由人/agent 将桥接产物复制到 `workspace/{drama_title}/chapter_{NN}/`。若项目状态显式设置 `workspaceSync.enabled = true`，视为用户已授权：每次 `/桥接` 完成后自动同步 `workspaceSync.artifacts` 到正式工作区；正式根目录只能是仓库根的 `workspace/`，不得写入 `src/lfo/workspace/`。
 
 ## 状态跟踪
 
@@ -70,6 +70,19 @@ description: |
   "endingType": "大团圆|开放式|悲剧|反转"
 }
 ```
+
+可选的项目级正式工作区同步配置：
+
+```json
+"workspaceSync": {
+  "enabled": true,
+  "root": "workspace/{drama_title}",
+  "policy": "sync_on_bridge",
+  "artifacts": ["intake.json", "storyboard_brief.md", "cut_notes.md"]
+}
+```
+
+启用后以 `handoff/epNNN/` 为源，自动同步到 `workspace/{drama_title}/chapter_NN/`。
 
 每次会话开始时检查是否存在状态文件，如存在则恢复进度并告知用户当前阶段。
 
@@ -444,7 +457,7 @@ CLOSE-UP — {character} {action}
 ### 边界（必须遵守）
 - **不改写** `episodes/epNNN.md` 编剧正文
 - **不生成**完整 `lfo.storyboard.v1` JSON（避免与管线字段漂移；JSON 由 LFO decompose / 人工审镜产出）
-- **不写入** `workspace/`（需要时提示用户复制路径）
+- 默认**不写入** `workspace/`；仅当 `.drama-state.json` 中 `workspaceSync.enabled = true` 时，按已授权配置自动同步
 - 与 **zero-to-story** / **LFO** 零代码耦合：只产文档与 JSON intake 伴生包
 
 ### 流程
@@ -473,9 +486,16 @@ CLOSE-UP — {character} {action}
    - LFO `project_id` 建议：`{drama_title}-chapter_01`（与 workspace README 一致）
    - 映射：`episodes/ep001.md` / `handoff/ep001/` → `workspace/.../chapter_01/`（第 N 集 → `chapter_NN`）
 
+5. **可选正式工作区自动同步**：
+   - 读取 `.drama-state.json.workspaceSync`；仅在 `enabled = true` 时执行
+   - 将本集 `handoff/epNNN/` 中列入 `artifacts` 的文件同步到 `{root}/chapter_NN/`
+   - `handoff/epNNN/` 始终是桥接源文件；同步后校验源文件与正式副本内容一致，并校验 `intake.json`
+   - 目标必须解析在仓库根 `workspace/` 下；拒绝 `src/lfo/workspace/` 或仓库外路径
+
 ### 输出
 - 写入 `handoff/` 下对应文件
 - 更新 `.drama-state.json` 的 `bridgedEpisodes`（可与 `completedEpisodes` 并存）
+- 若启用 `workspaceSync`，同步正式工作区并报告目标路径
 
 ---
 

@@ -154,6 +154,7 @@ class GenerationRequirements:
     height: int | None = None
     fps: int | None = None
     native_audio: str | None = None
+    reference_image_size: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], path: str) -> GenerationRequirements:
@@ -184,12 +185,16 @@ class GenerationRequirements:
         if native_audio is not None:
             if not isinstance(native_audio, str):
                 raise TypeError(f"{path}.native_audio: expected string or null")
+        reference_image_size = data.get("reference_image_size")
+        if reference_image_size is not None and reference_image_size not in {"match", "max"}:
+            raise ValueError(f"{path}.reference_image_size: expected 'match' or 'max'")
         return cls(
             aspect_ratio=aspect_ratio,
             width=width,
             height=height,
             fps=fps,
             native_audio=native_audio,
+            reference_image_size=reference_image_size,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -204,6 +209,8 @@ class GenerationRequirements:
             d["fps"] = self.fps
         if self.native_audio is not None:
             d["native_audio"] = self.native_audio
+        if self.reference_image_size is not None:
+            d["reference_image_size"] = self.reference_image_size
         return d
 
 

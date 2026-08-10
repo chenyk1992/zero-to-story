@@ -166,7 +166,8 @@
         "width": { "type": "integer", "minimum": 1 },
         "height": { "type": "integer", "minimum": 1 },
         "fps": { "type": "integer", "minimum": 1 },
-        "native_audio": { "type": "string" }
+        "native_audio": { "type": "string" },
+        "reference_image_size": { "type": "string", "enum": ["match", "max"] }
       }
     },
     "ReferenceSpec": {

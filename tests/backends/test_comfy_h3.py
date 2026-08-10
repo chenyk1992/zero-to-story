@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pathlib
 
+import pytest
+
 from lfo.backends.comfy_h3 import (
     H3_BACKEND_ID,
     ComfyH3Config,
@@ -56,7 +58,7 @@ def test_build_h3_backend_registry_uses_bundled_workflows() -> None:
     assert "video.reference_to_video" in manifest.operations
     assert "video.first_last_frame" not in manifest.operations
     assert len(manifest.workflow_hash) == 64
-    assert manifest.max_references == 3
+    assert manifest.max_references == 9
 
 
 def test_select_workflow_by_operation_and_orientation() -> None:
@@ -68,9 +70,16 @@ def test_select_workflow_by_operation_and_orientation() -> None:
     ) == "h3_vertical_r2v"
 
 
-def test_prepare_r2v_uploads_once_and_pads_three_slots(tmp_path: pathlib.Path) -> None:
-    reference = tmp_path / "hero.png"
-    reference.write_bytes(b"image")
+@pytest.mark.parametrize("reference_count", [1, 2, 3, 4, 9])
+def test_prepare_r2v_uses_only_declared_reference_slots(
+    tmp_path: pathlib.Path,
+    reference_count: int,
+) -> None:
+    references = []
+    for index in range(reference_count):
+        reference = tmp_path / f"reference-{index}.png"
+        reference.write_bytes(b"image")
+        references.append(reference)
     output_root = tmp_path / "output"
     output_root.mkdir()
     client = FakeClient(output_root / "unused.mp4")
@@ -85,19 +94,53 @@ def test_prepare_r2v_uploads_once_and_pads_three_slots(tmp_path: pathlib.Path) -
             "duration_ms": 5_000,
             "seed": 42,
             "fps": 24,
-            "resolved_references": [{"reference_id": "hero", "blob_path": str(reference)}],
+            "resolved_references": [
+                {"reference_id": f"reference-{index}", "blob_path": str(reference)}
+                for index, reference in enumerate(references)
+            ],
         },
         output_prefix="lfo/run/task/attempt/video",
     )
 
-    assert uploaded == ["lfo-input/hero.png"]
-    assert client.uploaded == [reference.resolve()]
-    assert [workflow[str(node)]["inputs"]["image"] for node in (6, 7, 8)] == [
-        "lfo-input/hero.png",
-        "lfo-input/hero.png",
-        "lfo-input/hero.png",
+    expected_uploaded = [f"lfo-input/{reference.name}" for reference in references]
+    assert uploaded == expected_uploaded
+    assert client.uploaded == [reference.resolve() for reference in references]
+    generator_inputs = workflow["12"]["inputs"]
+    assert [generator_inputs[f"ref_images.ref_image_{index}"] for index in range(min(reference_count, 3))] == [
+        [str(node), 0] for node in range(6, 6 + min(reference_count, 3))
     ]
+    assert all(f"ref_images.ref_image_{index}" in generator_inputs for index in range(reference_count))
+    for index in range(reference_count, 3):
+        assert f"ref_images.ref_image_{index}" not in generator_inputs
+    for index in range(3, reference_count):
+        node_id = generator_inputs[f"ref_images.ref_image_{index}"][0]
+        assert workflow[node_id]["class_type"] == "LoadImage"
+        assert workflow[node_id]["inputs"]["image"] == expected_uploaded[index]
     assert workflow["15"]["inputs"]["noise_seed"] == 42
+
+
+def test_prepare_r2v_can_use_max_reference_image_size(tmp_path: pathlib.Path) -> None:
+    reference = tmp_path / "reference.png"
+    reference.write_bytes(b"image")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_vertical_r2v",
+        {
+            "prompt": "A cinematic portrait",
+            "duration_ms": 5_000,
+            "reference_image_size": "max",
+            "resolved_references": [{"blob_path": str(reference)}],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    assert workflow["12"]["inputs"]["ref_image_size"] == "max"
 
 
 def test_execute_returns_durable_file_metadata(tmp_path: pathlib.Path) -> None:

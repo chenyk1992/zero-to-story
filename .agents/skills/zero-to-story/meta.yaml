@@ -1,5 +1,5 @@
 display-name-zh: 从零开始创作短片
-version: 0.7.13
+version: 0.8.1
 tag-en: "Visual Production / Image Generation"
 tag-cn: "视觉创作 / 图像生成"
 complete-tags-en:
@@ -8,10 +8,10 @@ complete-tags-en:
 complete-tags-cn:
   - "短剧漫剧 / 计划制定"
   - "动画 / 计划制定"
-summary-en: "Create storyboard from scratch, from idea to grid and video"
-summary-cn: "从灵感开始逐步构建完整故事分镜并生成视频"
-desc-en: "For creators starting without a finished script who need to build a complete storyboard from a single idea. Walks through story design, storyboard brief drafting, character reference image generation, monochrome panel layout creation, and final video prompt confirmation. Takes a one-sentence story concept or rough idea as input and produces a complete storyboard document with character sheets, black-and-white panels, and ready-to-use video prompts for downstream video generation."
-desc-cn: "适用于没有现成剧本、想从一个灵感逐步构建完整故事分镜并生成视频的创作者。流程涵盖故事设计、故事板概要撰写、角色参考图生成、黑白分镜图布局、视频提示词确认五个阶段。输入一句话故事概念或粗略想法,输出完整故事板文档、角色设定图、黑白分镜图,以及可直接送入视频生成管线的镜头提示词列表,作为完整创作链路的起点。"
+summary-en: "Create approved 2x3 storyboards and H3 video packages"
+summary-cn: "从灵感构建经确认的 2×3 六镜分镜与 H3 视频包"
+desc-en: "Guides creators from an idea, novel, screenplay, or short-drama handoff through an approved storyboard brief, character sheets, directly generated 2x3 six-shot boards, structured MiniMax H3 prompts, and an LFO execution package. A single editable brief records stage status and prevents unapproved work from progressing."
+desc-cn: "适用于从灵感、小说、剧本或短剧 handoff 构建视频的创作者。流程依次完成故事板概要、角色设定图、一次直出的 2×3 六镜黑白分镜板、MiniMax H3 双层时间轴提示词和 LFO 执行包，并在唯一可编辑主文档中记录阶段状态，阻止未确认内容进入后续步骤。"
 cover: ""
 author-en: "MiniMax Hub"
 author-cn: "MiniMax Hub"

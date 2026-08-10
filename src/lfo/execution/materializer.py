@@ -39,6 +39,7 @@ class MaterializedClip:
     height: int | None = None
     fps: int | None = None
     native_audio: str | None = None
+    reference_image_size: str | None = None
     # Dependencies on other clip_ids
     dependencies: list[str] = field(default_factory=list)
     # Media types consumed
@@ -260,6 +261,8 @@ def materialize(
             requirements["fps"] = req.fps
         if req.native_audio is not None:
             requirements["native_audio"] = req.native_audio
+        if req.reference_image_size is not None:
+            requirements["reference_image_size"] = req.reference_image_size
         if clip.generation.seed is not None:
             requirements["seed"] = clip.generation.seed
         if req.aspect_ratio is not None:
@@ -363,6 +366,7 @@ def materialize(
             height=req.height,
             fps=req.fps,
             native_audio=req.native_audio,
+            reference_image_size=req.reference_image_size,
             dependencies=list(clip.dependencies),
             input_media_types=[
                 media_type
@@ -421,6 +425,7 @@ def _clip_to_dict(clip: MaterializedClip) -> dict[str, Any]:
         "height": clip.height,
         "fps": clip.fps,
         "native_audio": clip.native_audio,
+        "reference_image_size": clip.reference_image_size,
         "dependencies": clip.dependencies,
         "input_media_types": clip.input_media_types,
         "audio_policy": clip.audio_policy,
