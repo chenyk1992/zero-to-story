@@ -55,7 +55,7 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`。使用 `
       "duration_ms": 10000,
       "generation": {
         "operation": "video.reference_to_video",
-        "prompt": "用户确认后的完整 H3 六镜结构化提示词；其中图片1=角色卡，图片2=分镜板",
+        "prompt": "用户确认后的完整 H3 Panel 视频提示词（紧凑档 ≤ 900 中文字符，或成片档 1.5–3KB，按 video_prompt_list.md 用户确认版本原样填入）；其中图片1=角色卡，图片2=分镜板",
         "negative_prompt": "split screen, storyboard grid, monochrome line art, identity drift, prop duplication, random text",
         "requirements": {
           "aspect_ratio": "9:16",
@@ -129,7 +129,7 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`。使用 `
 
 - `1 Panel = 1 张 2×3 分镜板 = 6 个镜头 = 1 Clip`。
 - P001 的 `source_context.shot_range` 为 `[1, 6]`；P002 为 `[6, 11]`；后续同理。重叠镜头是连续性承接。
-- 每个 Clip 的提示词必须是 `video_prompt_list.md` 中用户确认的完整文本，不做摘要、翻译或散文化改写。
+- 每个 Clip 的提示词必须是 `video_prompt_list.md` 中用户确认的完整文本，不做摘要、翻译或散文化改写。提示词支持两档（紧凑档 ≤ 900 中文字符 / 成片档 1.5–3KB），均由用户确认后原样填入 `generation.prompt`；LFO 不做长度调整或档位判断。
 - 默认 `duration_ms: 10000`。H3 工作流会把时长对齐到 `17k+5 @ 24fps` 的帧网格，10 秒请求约为 10.1 秒；不要手工写帧数。
 - 自定义单段时长保持 4–15 秒。所有 Clip 请求时长之和等于用户确认的目标时长。
 - `dependencies` 只控制执行顺序，不会自动把上一 Clip 末帧传给下一 Clip。首轮批量连续性依靠重叠分镜和提示词末态；实际末帧只能在生成后作为新 revision 素材加入。
@@ -153,7 +153,7 @@ python -m lfo.cli.main plan execution-package.json
 - Clip 数 = Panel 数 = 2×3 分镜板数。
 - 每个 `source.uri` 指向实际存在且已获用户确认的文件。
 - 每个提示词图片编号与 `resolved_references` 的槽位、asset key、角色/分镜用途一致。
-- 时长和六镜时间轴一致；字幕 cue 未越界。
+- 时长与项目规格一致，提示词完整覆盖当前分镜六格动作链；字幕 cue 未越界。
 - `negative_prompt` 不与正向提示词矛盾。
 - 后端为预期 H3 路径，没有素材数、画幅或能力警告。
 
