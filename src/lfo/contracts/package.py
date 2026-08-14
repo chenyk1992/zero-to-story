@@ -8,15 +8,17 @@ from .assets import AssetSpec
 from .clips import ClipSpec
 from .errors import ValidationResult
 from .timeline import ApprovalDeclaration, OutputPolicy
+from .upscale import UPSCALE_EXTENSION_KEY, validate_upscale_options
 
 SCHEMA_ID = "lfo.video-execution.v1"
 
 
 @dataclass
 class ProjectInfo:
-    """Project metadata (informational, not used for execution)."""
+    """Project identity and display metadata used by the Runtime layout."""
 
     title: str
+    project_id: str
     locale: str | None = None
 
     @classmethod
@@ -29,12 +31,16 @@ class ProjectInfo:
         locale = data.get("locale")
         if locale is not None and not isinstance(locale, str):
             raise TypeError(f"{path}.locale: expected string or null")
-        return cls(title=title, locale=locale)
+        project_id = data.get("project_id")
+        if not isinstance(project_id, str) or not project_id:
+            raise ValueError(f"{path}.project_id: required string")
+        return cls(title=title, project_id=project_id, locale=locale)
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {"title": self.title}
         if self.locale is not None:
             d["locale"] = self.locale
+        d["project_id"] = self.project_id
         return d
 
 
@@ -152,11 +158,18 @@ def validate_package(data: Any) -> ValidationResult:
         VideoExecutionPackage.from_dict(data)
     except (TypeError, ValueError) as e:
         result.add("$", str(e), "parse")
+    _validate_upscale_extension(result, data.get("extensions", {}), "$.extensions")
     # Cross-field: clip_id uniqueness
     clips = data.get("clips", [])
     if isinstance(clips, list):
         seen_ids: dict[str, int] = {}
         for i, c in enumerate(clips):
+            if isinstance(c, dict):
+                _validate_upscale_extension(
+                    result,
+                    c.get("extensions", {}),
+                    f"$.clips[{i}].extensions",
+                )
             if isinstance(c, dict) and isinstance(c.get("clip_id"), str):
                 cid = c["clip_id"]
                 if cid in seen_ids:
@@ -211,3 +224,18 @@ def validate_package(data: Any) -> ValidationResult:
                         ak,
                     )
     return result
+
+
+def _validate_upscale_extension(
+    result: ValidationResult,
+    extensions: object,
+    path: str,
+) -> None:
+    """Validate the optional LFO-owned video-upscale extension namespace."""
+    if not isinstance(extensions, dict) or UPSCALE_EXTENSION_KEY not in extensions:
+        return
+    for issue in validate_upscale_options(
+        extensions[UPSCALE_EXTENSION_KEY],
+        f"{path}.{UPSCALE_EXTENSION_KEY}",
+    ):
+        result.add(issue.path, issue.message, issue.code, issue.value)

@@ -92,11 +92,24 @@ class ComfyApiClient:
         """Interrupt the currently executing prompt."""
         self._request("POST", "/interrupt", timeout=10)
 
-    def upload_image(self, image_path: Path, subfolder: str = "") -> dict:
-        """Upload an image file to the ComfyUI input directory."""
-        path = Path(image_path)
+    def free_memory(self, *, unload_models: bool = True, free_memory: bool = True) -> None:
+        """Ask ComfyUI to release cached models and GPU memory."""
+        self._request(
+            "POST",
+            "/free",
+            json={"unload_models": unload_models, "free_memory": free_memory},
+            timeout=30,
+        )
+
+    def upload_file(self, file_path: Path, subfolder: str = "") -> dict:
+        """Upload a file to ComfyUI's input directory.
+
+        ComfyUI's historical ``/upload/image`` endpoint accepts generic input
+        files; video loaders use that same endpoint.
+        """
+        path = Path(file_path)
         if not path.exists():
-            raise FileNotFoundError(f"Image not found: {path}")
+            raise FileNotFoundError(f"Input file not found: {path}")
 
         with path.open("rb") as fh:
             files = {"image": (path.name, fh, "application/octet-stream")}
@@ -105,3 +118,7 @@ class ComfyApiClient:
                 "POST", "/upload/image", files=files, data=data, timeout=60
             )
         return resp.json()
+
+    def upload_image(self, image_path: Path, subfolder: str = "") -> dict:
+        """Upload an image file to the ComfyUI input directory."""
+        return self.upload_file(image_path, subfolder)

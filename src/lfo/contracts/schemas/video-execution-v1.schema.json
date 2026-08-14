@@ -50,11 +50,12 @@
   "definitions": {
     "ProjectInfo": {
       "type": "object",
-      "required": ["title"],
+      "required": ["title", "project_id"],
       "additionalProperties": false,
       "properties": {
         "title": { "type": "string", "minLength": 1 },
-        "locale": { "type": "string" }
+        "locale": { "type": "string" },
+        "project_id": { "type": "string", "minLength": 1 }
       }
     },
     "AssetSpec": {

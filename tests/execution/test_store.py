@@ -49,7 +49,7 @@ class TestSchemaInit:
         assert expected.issubset(tables)
 
     def test_schema_version(self, store: ExecutionStore) -> None:
-        assert store.schema_version == 1
+        assert store.schema_version == 2
 
     def test_wal_mode(self, store: ExecutionStore) -> None:
         conn = store.connect()
@@ -286,6 +286,41 @@ class TestTasksAndDependencies:
             ("task-2",),
         ).fetchone()
         assert row[0] == "task-1"
+
+    def test_recover_interrupted_task_without_live_lease(self, store: ExecutionStore) -> None:
+        revision_id = store.create_package_revision(
+            package_id="pkg-recover", project_title="Recover", revision=1,
+            content_hash="recover-hash", raw_json="{}",
+        )
+        store.create_run(run_id="run-recover", package_id="pkg-recover", revision_id=revision_id)
+        conn = store.connect()
+        conn.execute(
+            """INSERT INTO tasks (task_id, run_id, task_type, logical_key, status)
+               VALUES (?, ?, ?, ?, 'RUNNING')""",
+            ("task-recover", "run-recover", "video.upscale", "clip-1:video.upscale"),
+        )
+        conn.execute(
+            """INSERT INTO attempts (attempt_id, task_id, idempotency_key, status)
+               VALUES (?, ?, ?, 'CREATED')""",
+            ("attempt-recover", "task-recover", "recover-key"),
+        )
+        conn.execute(
+            """INSERT INTO task_leases (lease_id, task_id, worker_id, expires_at)
+               VALUES (?, ?, ?, ?)""",
+            ("lease-recover", "task-recover", "worker-old", "2000-01-01T00:00:00Z"),
+        )
+        conn.commit()
+
+        assert store.recover_interrupted_tasks("run-recover") == ["task-recover"]
+        assert store.get_task("task-recover")["status"] == "FAILED_RETRYABLE"
+        attempt = conn.execute(
+            "SELECT status FROM attempts WHERE attempt_id=?", ("attempt-recover",)
+        ).fetchone()
+        assert attempt["status"] == "FAILED"
+        lease = conn.execute(
+            "SELECT released FROM task_leases WHERE lease_id=?", ("lease-recover",)
+        ).fetchone()
+        assert lease["released"] == 1
 
 
 class TestTransitionJournal:

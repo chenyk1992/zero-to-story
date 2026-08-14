@@ -1,49 +1,16 @@
-"""Workspace path resolution — single source of truth for user-data paths.
+"""Workspace path resolution — the single source of truth for user data.
 
-LFO has a strict two-layer layout:
-
-- **System space** (git-tracked): the project root, containing
-  ``src/lfo/``, ``templates/``, ``tests/``, ``docs/``, and
-  ``pyproject.toml``. The user touches this only when upgrading or
-  debugging the tool itself.
-
-- **Workspace** (git-ignored): ``<repo_root>/workspace/`` by default,
-  overridable via the ``LFO_WORKSPACE`` environment variable. Holds
-  user novels, storyboards, run outputs, and the SQLite database.
-
-The workspace itself is novel-centric: every novel is a subtree under
-the workspace root, and every chapter of a novel is one LFO video
-project (one intake.json, one storyboard.json, one set of outputs).
-
-    workspace/
-    ├── <novel_id>/
-    │   ├── chapter_01.md           # novel source text (per chapter)
-    │   ├── chapter_02.md
-    │   ├── notes.md                # character / world / style notes
-    │   ├── ref_images/             # per-novel reference images
-    │   ├── <chapter_id>/           # one chapter = one video project
-    │   │   ├── intake.json
-    │   │   ├── storyboard.json
-    │   │   ├── inputs/             # manual first frames / per-novel ref copies
-    │   │   ├── outputs/            # raw ComfyUI outputs, normalized MP4, end frames
-    │   │   ├── final/              # final MP4 + SRT
-    │   │   └── notes.md
-    │   └── spikes/                 # per-novel experimental data
-    ├── _orphans/                   # user assets / experiments not yet assigned to a novel
-    │   ├── ref_images/
-    │   └── spikes/
-    ├── db/
-    │   └── lfo.db
-    └── README.md
-
-This module centralises path derivation so the rest of the codebase
-never hardcodes ``cwd / "pipeline_output"`` or similar. Everything
-returns absolute paths.
+The Runtime owns project-scoped media under
+``<workspace>/projects/<project_id>/``.  The SQLite database and CAS remain
+global workspace services; generated media must never be routed through
+workspace-level ``runs`` or ``exports`` directories.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
+
+from lfo.services.artifact_layout import safe_component
 
 #: Environment variable that overrides the default workspace location.
 #: Set this to point LFO at a different drive or parent directory.
@@ -78,6 +45,28 @@ def resolve_workspace_root() -> Path:
     return _repo_root() / "workspace"
 
 
+def project_dir(project_id: str) -> Path:
+    """Return ``<workspace>/projects/<project_id>`` as an absolute path."""
+    return resolve_workspace_root() / "projects" / safe_component(project_id, field="project_id")
+
+
+def project_outputs_dir(project_id: str, run_id: str) -> Path:
+    """Return the managed output root for one project Run."""
+    return project_dir(project_id) / "outputs" / safe_component(run_id, field="run_id")
+
+
+def project_final_dir(project_id: str, publication_directory: str) -> Path:
+    """Return the versioned final directory for one project."""
+    return project_dir(project_id) / "final" / safe_component(
+        publication_directory, field="output.directory"
+    )
+
+
+def runtime_db_path() -> Path:
+    """Return the Runtime v1 database path under the active workspace."""
+    return resolve_workspace_root() / "db" / "runtime-v1.sqlite3"
+
+
 def novel_dir(novel_id: str) -> Path:
     """``<workspace>/<novel_id>/``
 
@@ -86,45 +75,6 @@ def novel_dir(novel_id: str) -> Path:
     subdirectories.
     """
     return resolve_workspace_root() / novel_id
-
-
-def project_dir(novel_id: str, chapter_id: str) -> Path:
-    """``<workspace>/<novel_id>/<chapter_id>/``
-
-    A chapter is one LFO video project — owns its own intake.json,
-    storyboard.json, inputs/, outputs/, and final/.
-    """
-    return novel_dir(novel_id) / chapter_id
-
-
-def project_inputs_dir(novel_id: str, chapter_id: str) -> Path:
-    """``<workspace>/<novel_id>/<chapter_id>/inputs/``"""
-    return project_dir(novel_id, chapter_id) / "inputs"
-
-
-def project_output_dir(novel_id: str, chapter_id: str) -> Path:
-    """``<workspace>/<novel_id>/<chapter_id>/outputs/``
-
-    LFO's pipeline drops raw ComfyUI output, normalized MP4s, end
-    frames, and assembly intermediates here.
-    """
-    return project_dir(novel_id, chapter_id) / "outputs"
-
-
-def project_final_dir(novel_id: str, chapter_id: str) -> Path:
-    """``<workspace>/<novel_id>/<chapter_id>/final/``
-
-    Where the final MP4 + SRT land after the assembly step.
-    """
-    return project_dir(novel_id, chapter_id) / "final"
-
-
-def project_panels_dir(novel_id: str, chapter_id: str) -> Path:
-    """``<workspace>/<novel_id>/<chapter_id>/panels/``
-
-    Per-panel ``panel_{nn:02d}_pack.json`` files for r2v reference binding.
-    """
-    return project_dir(novel_id, chapter_id) / "panels"
 
 
 def novel_ref_images_dir(novel_id: str) -> Path:

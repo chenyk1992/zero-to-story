@@ -63,6 +63,7 @@ class MaterializedRun:
     # Asset key -> asset revision id mapping
     asset_resolutions: dict[str, Any] = field(default_factory=dict)
     output_policy: dict[str, Any] = field(default_factory=dict)
+    artifact_layout: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     extensions: dict[str, Any] = field(default_factory=dict)
 
@@ -210,6 +211,7 @@ def materialize(
     registry: BackendRegistry,
     asset_resolutions: dict[str, Any] | None = None,
     preferred_backends: list[tuple[str, str]] | None = None,
+    artifact_layout: dict[str, Any] | None = None,
 ) -> MaterializedRun:
     """Materialize a Package into an immutable Run snapshot.
 
@@ -388,6 +390,7 @@ def materialize(
         "clips": [_clip_to_dict(c) for c in clips_materialized],
         "asset_resolutions": dict(asset_resolutions),
         "output_policy": package.output.to_dict(),
+        "artifact_layout": _layout_hash_payload(artifact_layout or {}),
     }
     mat_hash = _compute_hash(snapshot_data)
 
@@ -400,6 +403,7 @@ def materialize(
         clips=clips_materialized,
         asset_resolutions=dict(asset_resolutions),
         output_policy=package.output.to_dict(),
+        artifact_layout=dict(artifact_layout or {}),
         warnings=all_warnings,
         extensions=dict(package.extensions),
     )
@@ -433,3 +437,16 @@ def _clip_to_dict(clip: MaterializedClip) -> dict[str, Any]:
         "source_context": clip.source_context,
         "extensions": clip.extensions,
     }
+
+
+def _layout_hash_payload(layout: dict[str, Any]) -> dict[str, Any]:
+    """Keep filesystem realization out of the content-derived snapshot hash."""
+    keys = (
+        "layout_version",
+        "project_id",
+        "package_id",
+        "package_revision",
+        "publication_directory",
+        "container",
+    )
+    return {key: layout[key] for key in keys if key in layout}

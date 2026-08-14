@@ -59,6 +59,8 @@ def test_build_h3_backend_registry_uses_bundled_workflows() -> None:
     assert "video.first_last_frame" not in manifest.operations
     assert len(manifest.workflow_hash) == 64
     assert manifest.max_references == 9
+    assert "seedvr2_3b_int8_convrot.safetensors" not in manifest.required_models
+    assert "seedvr2_upscale" not in manifest.extensions["workflow_ids"]
 
 
 def test_select_workflow_by_operation_and_orientation() -> None:
@@ -68,6 +70,11 @@ def test_select_workflow_by_operation_and_orientation() -> None:
     assert ComfyH3VideoHandler._select_workflow(
         {"operation": "video.reference_to_video", "width": 448, "height": 800}
     ) == "h3_vertical_r2v"
+
+
+def test_h3_handler_rejects_non_h3_explicit_workflow() -> None:
+    with pytest.raises(ValueError, match="Unknown H3 workflow_id"):
+        ComfyH3VideoHandler._select_workflow({"workflow_id": "seedvr2_upscale"})
 
 
 @pytest.mark.parametrize("reference_count", [1, 2, 3, 4, 9])
@@ -160,6 +167,11 @@ def test_execute_returns_durable_file_metadata(tmp_path: pathlib.Path) -> None:
         "clip-1:video.generate",
         {
             "run_id": "run-1",
+            "output_path": str((tmp_path / "workspace" / "projects" / "test-project" / "outputs" / "run-1" / "clips" / "clip-1" / "generated.mp4").resolve()),
+            "artifact_layout": {
+                "workspace_root": str((tmp_path / "workspace").resolve()),
+                "project_root": str((tmp_path / "workspace" / "projects" / "test-project").resolve()),
+            },
             "operation": "video.text_to_video",
             "prompt": "A quiet corridor at night",
             "duration_ms": 5_000,
@@ -168,7 +180,10 @@ def test_execute_returns_durable_file_metadata(tmp_path: pathlib.Path) -> None:
     )
 
     assert result.success is True
-    assert result.artifact_metadata["file_path"] == str(output.resolve())
+    managed = pathlib.Path(result.artifact_metadata["file_path"])
+    assert managed.name == "generated.mp4"
+    assert managed.read_bytes() == output.read_bytes()
+    assert result.artifact_metadata["provider_source_path"] == str(output.resolve())
     assert result.artifact_metadata["provider_job_id"] == "prompt-123"
     assert result.artifact_metadata["file_hash"]
     assert client.submitted is not None

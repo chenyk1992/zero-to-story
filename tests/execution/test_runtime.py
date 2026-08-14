@@ -32,6 +32,15 @@ def _make_run(clip_ids: list[str]) -> MaterializedRun:
         package_hash="h",
         materialization_hash="mh",
         clips=clips,
+        artifact_layout={
+            "project_id": "test-project",
+            "run_id": "run-1",
+            "package_id": "pkg-1",
+            "container": "mp4",
+            "clips_root": "C:/lfo-test/projects/test-project/outputs/run-1/clips",
+            "global_root": "C:/lfo-test/projects/test-project/outputs/run-1/global",
+            "final_path": "C:/lfo-test/projects/test-project/final/pkg-1/pkg-1-run-1.mp4",
+        },
     )
 
 

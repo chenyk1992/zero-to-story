@@ -23,25 +23,13 @@ def _make_runtime(
     workspace_root: str | None = None,
     runtime_factory: RuntimeFactory = VideoRuntime,
 ) -> VideoRuntime:
-    """Construct the public facade without choosing a backend or handler.
-
-    ``VideoRuntime`` gained persistence arguments in Runtime v1.  The narrow
-    compatibility fallback keeps the CLI importable while an older facade is
-    present during a staged source update; it is not a fake runtime.
-    """
+    """Construct the public facade without choosing a backend or handler."""
     kwargs: dict[str, Any] = {}
     if db_path:
         kwargs["db_path"] = Path(db_path)
     if workspace_root:
         kwargs["workspace_root"] = Path(workspace_root)
-    if not kwargs:
-        return runtime_factory()
-    try:
-        return runtime_factory(**kwargs)
-    except TypeError as exc:
-        if runtime_factory is VideoRuntime and "unexpected keyword argument" in str(exc):
-            return runtime_factory()
-        raise
+    return runtime_factory(**kwargs)
 
 
 def cmd_validate(
@@ -59,7 +47,12 @@ def cmd_validate(
         workspace_root=workspace_root,
         runtime_factory=runtime_factory,
     ).validate(package_path)
-    return {"success": result.valid, "valid": result.valid, "errors": result.errors}
+    return {
+        "success": result.valid,
+        "valid": result.valid,
+        "errors": result.errors,
+        "warnings": result.warnings,
+    }
 
 
 def cmd_plan(
@@ -83,6 +76,7 @@ def cmd_plan(
         "clips": result.clip_plans,
         "warnings": result.warnings,
         "backend_summary": result.backend_summary,
+        "output_layout": result.output_layout,
         "error": result.error,
     }
 
@@ -108,6 +102,7 @@ def cmd_execute(
         "run_id": result.run_id,
         "status": result.status,
         "clip_count": result.clip_count,
+        "output_layout": result.output_layout,
         "error": result.error,
     }
 
@@ -132,6 +127,8 @@ def cmd_runtime_status(
         "run_id": result.run_id,
         "status": result.status,
         "tasks": result.tasks,
+        "progress": result.progress,
+        "output_layout": result.output_layout,
         "error": result.error,
     }
 
@@ -156,6 +153,7 @@ def cmd_retry(
         "success": result.status == "COMPLETED",
         "run_id": result.run_id,
         "status": result.status,
+        "output_layout": result.output_layout,
         "error": result.error,
     }
 

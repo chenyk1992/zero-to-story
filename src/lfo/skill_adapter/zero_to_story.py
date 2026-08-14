@@ -155,9 +155,12 @@ def _panel_to_clip(
 
 def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
     project_data = creative.get("project", {})
-    package_id = project_data.get("package_id") or project_data.get("project_id")
+    project_id = project_data.get("project_id") or creative.get("project_id")
+    if not isinstance(project_id, str) or not project_id:
+        raise ValueError("Panel-first input requires a stable project_id for workspace routing")
+    package_id = project_data.get("package_id") or project_id
     if not isinstance(package_id, str) or not package_id:
-        raise ValueError("Panel-first input requires project.project_id or project.package_id")
+        raise ValueError("Panel-first input requires a non-empty package_id")
     raw_assets = creative.get("assets", [])
     if not isinstance(raw_assets, list):
         raise ValueError("assets must be a list")
@@ -166,6 +169,7 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
         project_data.get("title", "Untitled"),
         revision=project_data.get("revision", 1),
         locale=project_data.get("locale"),
+        project_id=project_id,
     )
     for asset in raw_assets:
         builder.add_asset(_asset_spec(asset))
@@ -212,11 +216,15 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
 def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackage:
     """Explicit compatibility conversion kept inside the zero-to-story Skill."""
     project_data = storyboard.get("project", {})
+    project_id = project_data.get("project_id") or storyboard.get("project_id")
+    if not isinstance(project_id, str) or not project_id:
+        raise ValueError("Storyboard requires project.project_id for workspace routing")
     builder = VideoPackageBuilder(
         project_data.get("package_id") or storyboard.get("project_id", "unknown"),
         project_data.get("title", "Untitled"),
         revision=project_data.get("revision", 1),
         locale=project_data.get("locale"),
+        project_id=project_id,
     )
     assets = storyboard.get("assets", [])
     for raw_asset in assets:

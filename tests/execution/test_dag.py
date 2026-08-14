@@ -9,6 +9,7 @@ from lfo.execution.dag import (
     TASK_SUBTITLE_RENDER,
     TASK_TIMELINE_ASSEMBLE,
     TASK_VIDEO_GENERATE,
+    TASK_VIDEO_UPSCALE,
     TaskGraph,
     TaskNode,
     build_dag,
@@ -21,6 +22,7 @@ def _make_clip(
     sequence: int = 1,
     operation: str = "video.text_to_video",
     dependencies: list[str] | None = None,
+    extensions: dict | None = None,
 ) -> MaterializedClip:
     return MaterializedClip(
         clip_id=clip_id,
@@ -34,10 +36,14 @@ def _make_clip(
         backend_revision="1.0.0",
         workflow_hash="wf123",
         dependencies=dependencies or [],
+        extensions=extensions or {},
     )
 
 
-def _make_run(clips: list[MaterializedClip]) -> MaterializedRun:
+def _make_run(
+    clips: list[MaterializedClip],
+    extensions: dict | None = None,
+) -> MaterializedRun:
     return MaterializedRun(
         run_id="run-1",
         package_id="pkg-1",
@@ -45,6 +51,16 @@ def _make_run(clips: list[MaterializedClip]) -> MaterializedRun:
         package_hash="pkghash",
         materialization_hash="mathash",
         clips=clips,
+        artifact_layout={
+            "project_id": "test-project",
+            "run_id": "run-1",
+            "package_id": "pkg-1",
+            "container": "mp4",
+            "clips_root": "C:/lfo-test/projects/test-project/outputs/run-1/clips",
+            "global_root": "C:/lfo-test/projects/test-project/outputs/run-1/global",
+            "final_path": "C:/lfo-test/projects/test-project/final/pkg-1/pkg-1-run-1.mp4",
+        },
+        extensions=extensions or {},
     )
 
 
@@ -98,6 +114,37 @@ class TestBuildDag:
         assert gen.task_id in norm.dependencies
         assert norm.task_id in qc.dependencies
         assert qc.task_id in mix.dependencies
+
+    def test_enabled_upscale_is_inserted_before_normalize(self) -> None:
+        graph = build_dag(
+            _make_run(
+                [_make_clip()],
+                extensions={"upscale": {"enabled": True, "scale_multiplier": 2, "seed": 7}},
+            )
+        )
+        upscale = graph.task_by_id("run-1.clip-clip-001.video.upscale")
+        normalize = graph.task_by_id("run-1.clip-clip-001.media.normalize")
+        assert upscale is not None and normalize is not None
+        assert upscale.task_type == TASK_VIDEO_UPSCALE
+        assert upscale.dependencies == ["run-1.clip-clip-001.video.generate"]
+        assert normalize.dependencies == [upscale.task_id]
+        assert upscale.metadata["upscale"] == {
+            "enabled": True,
+            "scale_multiplier": 2.0,
+            "seed": 7,
+        }
+        assert str(upscale.metadata["output_path"]).replace("\\", "/").endswith(
+            "/clip-001/upscaled.mp4"
+        )
+
+    def test_clip_can_disable_package_upscale_default(self) -> None:
+        graph = build_dag(
+            _make_run(
+                [_make_clip(extensions={"upscale": {"enabled": False}})],
+                extensions={"upscale": {"enabled": True}},
+            )
+        )
+        assert not graph.tasks_by_type(TASK_VIDEO_UPSCALE)
 
     def test_clip_dependencies_wired(self) -> None:
         """Clip 2 depends on Clip 1 — generate task of clip 2 depends on generate of clip 1."""

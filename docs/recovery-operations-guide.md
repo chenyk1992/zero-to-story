@@ -22,12 +22,17 @@ the user's approval.
 - QC failure is a failed task, never a successful artifact.
 
 Cancellation prevents new work; it does not erase attempts or assets. Preserve the database,
-CAS and provider output directory during incident analysis. Record the run ID, task ID,
-attempt ID, provider job ID, package/content hashes and the relevant transition journal.
+CAS and the project-managed output tree during incident analysis. The provider output
+directory is only a source cache; the Runtime copies the completed file into
+`workspace/projects/<project_id>/outputs/<run_id>/` before recording it. Record the run ID,
+task ID, attempt ID, provider job ID, package/content hashes, managed artifact path and the
+relevant transition journal.
 
 ## Backup and cleanup
 
 Back up the SQLite database together with the CAS. Do not delete CAS blobs solely because a
 source file disappeared. Garbage collection is safe only after checking asset revisions,
-artifacts, lineage and exports. Final exports are written atomically and include a provenance
-manifest so results can be audited independently.
+artifacts, lineage and exports. Final exports are written atomically under the project's
+`final/<output.directory>/` path and include a provenance manifest so results can be audited
+independently. The old `workspace/runs` and `workspace/exports` locations are not recreated
+or migrated.

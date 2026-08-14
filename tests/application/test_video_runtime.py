@@ -35,13 +35,17 @@ def _registry() -> BackendRegistry:
     return reg
 
 
-def _package_json(tmp_path: pathlib.Path, clips: list[dict] | None = None) -> pathlib.Path:
+def _package_json(
+    tmp_path: pathlib.Path,
+    clips: list[dict] | None = None,
+    extensions: dict | None = None,
+) -> pathlib.Path:
     """Write a minimal package JSON to a temp file."""
     data = {
         "schema": "lfo.video-execution.v1",
         "package_id": "test-pkg",
         "revision": 1,
-        "project": {"title": "Test"},
+        "project": {"title": "Test", "project_id": "test-project"},
         "assets": [],
         "clips": clips or [
             {
@@ -56,6 +60,7 @@ def _package_json(tmp_path: pathlib.Path, clips: list[dict] | None = None) -> pa
             }
         ],
         "output": {},
+        "extensions": extensions or {},
     }
     p = tmp_path / "package.json"
     p.write_text(json.dumps(data), encoding="utf-8")
@@ -63,6 +68,10 @@ def _package_json(tmp_path: pathlib.Path, clips: list[dict] | None = None) -> pa
 
 
 class TestVideoRuntime:
+    def test_production_handlers_include_video_upscale(self, tmp_path: pathlib.Path) -> None:
+        runtime = VideoRuntime(workspace_root=tmp_path / "workspace")
+        assert runtime.handlers.has_handler("video.upscale")
+
     def test_validate_valid_package(self, tmp_path: pathlib.Path) -> None:
         p = _package_json(tmp_path)
         rt = _runtime(tmp_path)
@@ -113,6 +122,39 @@ class TestVideoRuntime:
         assert result.status == "COMPLETED"
         assert result.run_id
         assert result.clip_count == 1
+
+    def test_execute_with_optional_upscale_uses_fake_task_handler(self, tmp_path: pathlib.Path) -> None:
+        package = _package_json(tmp_path, extensions={"upscale": {"enabled": True}})
+        runtime = _runtime(tmp_path)
+        result = runtime.execute(package, approval=True)
+        assert result.status == "COMPLETED"
+        assert any(
+            task["task_type"] == "video.upscale"
+            for task in runtime.store.list_tasks(result.run_id)
+        )
+
+    def test_execute_uses_project_scoped_artifact_layout(self, tmp_path: pathlib.Path) -> None:
+        package = _package_json(tmp_path)
+        runtime = _runtime(tmp_path)
+        result = runtime.execute(package, approval=True)
+
+        layout = result.output_layout
+        assert layout["project_id"] == "test-project"
+        assert pathlib.Path(layout["run_root"]).is_relative_to(
+            (tmp_path / "workspace" / "projects" / "test-project").resolve()
+        )
+        assert pathlib.Path(layout["final_path"]).parent == (
+            tmp_path / "workspace" / "projects" / "test-project" / "final" / "test-pkg"
+        ).resolve()
+        assert not (tmp_path / "workspace" / "runs").exists()
+        assert not (tmp_path / "workspace" / "exports").exists()
+        generate = next(
+            task for task in runtime.store.list_tasks(result.run_id)
+            if task["task_type"] == "video.generate"
+        )
+        assert pathlib.Path(json.loads(generate["metadata"])["output_path"]).is_relative_to(
+            (tmp_path / "workspace" / "projects" / "test-project").resolve()
+        )
 
     def test_execute_requires_explicit_approval(self, tmp_path: pathlib.Path) -> None:
         p = _package_json(tmp_path)

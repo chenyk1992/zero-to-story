@@ -2,6 +2,7 @@
 
 Standard task types:
 - video.generate
+- video.upscale (optional)
 - media.normalize
 - media.qc
 - audio.mix
@@ -11,13 +12,17 @@ Standard task types:
 """
 from __future__ import annotations
 
+import pathlib
 from dataclasses import dataclass, field
 from typing import Any
 
+from lfo.contracts.upscale import resolve_upscale_options
 from lfo.execution.materializer import MaterializedRun
+from lfo.services.artifact_layout import safe_component
 
 # Standard task types
 TASK_VIDEO_GENERATE = "video.generate"
+TASK_VIDEO_UPSCALE = "video.upscale"
 TASK_MEDIA_NORMALIZE = "media.normalize"
 TASK_MEDIA_QC = "media.qc"
 TASK_AUDIO_MIX = "audio.mix"
@@ -126,7 +131,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
 
     Structure per clip:
     - video.generate (depends on clip dependencies' generate tasks)
-    - media.normalize (depends on generate)
+    - video.upscale (optional; depends on generate)
+    - media.normalize (depends on generate or upscale)
     - media.qc (depends on normalize)
     - audio.mix (depends on qc)
     - subtitle.render (depends on qc)
@@ -149,6 +155,9 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     # across runs rather than only inside one graph. ``logical_key`` remains
     # the stable run-independent identity used for idempotency and reporting.
     task_prefix = f"{materialized_run.run_id}."
+    layout = materialized_run.artifact_layout
+    if not layout:
+        raise ValueError("Materialized run is missing its project artifact layout")
     # Build the complete map before adding edges. This deliberately permits a
     # clip to depend on a later sequence item, while still validating cycles.
     clip_ids = [clip.clip_id for clip in materialized_run.clips]
@@ -198,9 +207,35 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "reference_image_size": clip.reference_image_size,
                 "resolved_references": list(clip.resolved_references),
                 "output_policy": dict(materialized_run.output_policy),
+                "output_path": _task_output_path(layout, "video.generate", clip.clip_id),
+                "artifact_layout": dict(layout),
             },
         )
         tasks.append(gen_task)
+
+        upstream_video_id = gen_id
+        upscale = resolve_upscale_options(materialized_run.extensions, clip.extensions)
+        if upscale.enabled:
+            upscale_id = f"{base}.video.upscale"
+            tasks.append(
+                TaskNode(
+                    task_id=upscale_id,
+                    task_type=TASK_VIDEO_UPSCALE,
+                    logical_key=f"{clip_id}:video.upscale",
+                    dependencies=[gen_id],
+                    clip_id=clip_id,
+                    metadata={
+                        "run_id": materialized_run.run_id,
+                        "clip_id": clip_id,
+                        "input_task_ids": [gen_id],
+                        "upscale": upscale.to_dict(),
+                        "output_policy": dict(materialized_run.output_policy),
+                        "output_path": _task_output_path(layout, "video.upscale", clip.clip_id),
+                        "artifact_layout": dict(layout),
+                    },
+                )
+            )
+            upstream_video_id = upscale_id
 
         # 2. media.normalize
         norm_id = f"{base}.media.normalize"
@@ -208,14 +243,16 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             task_id=norm_id,
             task_type=TASK_MEDIA_NORMALIZE,
             logical_key=f"{clip_id}:media.normalize",
-            dependencies=[gen_id],
+            dependencies=[upstream_video_id],
             clip_id=clip_id,
             metadata={
                 "run_id": materialized_run.run_id,
                 "clip_id": clip_id,
                 "duration_ms": clip.duration_ms,
-                "input_task_ids": [gen_id],
+                "input_task_ids": [upstream_video_id],
                 "output_policy": dict(materialized_run.output_policy),
+                "output_path": _task_output_path(layout, "media.normalize", clip.clip_id),
+                "artifact_layout": dict(layout),
             },
         )
         tasks.append(norm_task)
@@ -234,6 +271,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "duration_ms": clip.duration_ms,
                 "input_task_ids": [norm_id],
                 "output_policy": dict(materialized_run.output_policy),
+                "artifact_layout": dict(layout),
             },
         )
         tasks.append(qc_task)
@@ -253,6 +291,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "audio_policy": dict(clip.audio_policy),
                 "input_task_ids": [qc_id],
                 "output_policy": dict(materialized_run.output_policy),
+                "output_path": _task_output_path(layout, "audio.mix", clip.clip_id),
+                "artifact_layout": dict(layout),
             },
         )
         tasks.append(mix_task)
@@ -273,6 +313,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "subtitles": dict(clip.subtitles),
                 "input_task_ids": [qc_id],
                 "output_policy": dict(materialized_run.output_policy),
+                "output_path": _task_output_path(layout, "subtitle.render", clip.clip_id),
+                "artifact_layout": dict(layout),
             },
         )
         tasks.append(sub_task)
@@ -301,6 +343,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             ],
             "input_task_ids": list(all_mix_ids),
             "output_policy": dict(materialized_run.output_policy),
+            "output_path": _task_output_path(layout, "timeline.assemble"),
+            "artifact_layout": dict(layout),
         },
     )
     tasks.append(timeline_task)
@@ -323,6 +367,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             "workflow_hashes": sorted({clip.workflow_hash for clip in materialized_run.clips}),
             "input_task_ids": list(export_deps),
             "output_policy": dict(materialized_run.output_policy),
+            "output_path": _task_output_path(layout, "export.finalize"),
+            "artifact_layout": dict(layout),
         },
     )
     tasks.append(export_task)
@@ -332,3 +378,37 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     graph.validate()
 
     return graph
+
+
+def _task_output_path(
+    layout: dict[str, Any], task_type: str, clip_id: str | None = None,
+) -> str:
+    """Resolve a concrete task path from the immutable layout snapshot."""
+    clips_root = pathlib.Path(str(layout["clips_root"]))
+    global_root = pathlib.Path(str(layout["global_root"]))
+    container = str(layout.get("container") or "mp4").lstrip(".")
+    if task_type == "video.generate":
+        if clip_id is None:
+            raise ValueError("video.generate requires clip_id")
+        return str(clips_root / safe_component(clip_id, field="clip_id") / "generated.mp4")
+    if task_type == "video.upscale":
+        if clip_id is None:
+            raise ValueError("video.upscale requires clip_id")
+        return str(clips_root / safe_component(clip_id, field="clip_id") / "upscaled.mp4")
+    if task_type == "media.normalize":
+        if clip_id is None:
+            raise ValueError("media.normalize requires clip_id")
+        return str(clips_root / safe_component(clip_id, field="clip_id") / f"normalized.{container}")
+    if task_type == "audio.mix":
+        if clip_id is None:
+            raise ValueError("audio.mix requires clip_id")
+        return str(clips_root / safe_component(clip_id, field="clip_id") / f"mixed.{container}")
+    if task_type == "subtitle.render":
+        if clip_id is None:
+            raise ValueError("subtitle.render requires clip_id")
+        return str(clips_root / safe_component(clip_id, field="clip_id") / "subtitles.srt")
+    if task_type == "timeline.assemble":
+        return str(global_root / f"timeline.{container}")
+    if task_type == "export.finalize":
+        return str(layout["final_path"])
+    raise ValueError(f"Unknown task type for output path: {task_type}")

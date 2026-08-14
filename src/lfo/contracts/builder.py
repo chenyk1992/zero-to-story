@@ -31,10 +31,13 @@ class VideoPackageBuilder:
         *,
         revision: int = 1,
         locale: str | None = None,
+        project_id: str,
     ) -> None:
         self._package_id = package_id
         self._revision = revision
-        self._project = ProjectInfo(title=title, locale=locale)
+        if not project_id:
+            raise ValueError("project_id is required for workspace routing")
+        self._project = ProjectInfo(title=title, project_id=project_id, locale=locale)
         self._assets: list[AssetSpec] = []
         self._clips: list[ClipSpec] = []
         self._output = OutputPolicy()
@@ -42,9 +45,17 @@ class VideoPackageBuilder:
         self._timeline: dict[str, Any] = {}
         self._extensions: dict[str, Any] = {}
 
-    def project(self, title: str, *, locale: str | None = None) -> VideoPackageBuilder:
+    def project(
+        self,
+        title: str,
+        *,
+        locale: str | None = None,
+        project_id: str,
+    ) -> VideoPackageBuilder:
         """Replace package-level project metadata."""
-        self._project = ProjectInfo(title=title, locale=locale)
+        if not project_id:
+            raise ValueError("project_id is required for workspace routing")
+        self._project = ProjectInfo(title=title, project_id=project_id, locale=locale)
         return self
 
     def add_asset(

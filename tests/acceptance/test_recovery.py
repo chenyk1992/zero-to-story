@@ -143,7 +143,7 @@ def _make_package() -> object:
     return VideoExecutionPackage(
         package_id="idem-test",
         revision=1,
-        project=ProjectInfo(title="Test"),
+        project=ProjectInfo(title="Test", project_id="test-project"),
         clips=[],  # No clips = no backend selection needed
     )
 

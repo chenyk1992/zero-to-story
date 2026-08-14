@@ -22,6 +22,7 @@ from lfo.comfy.workflow import WorkflowLoader
 from lfo.core.hashing import compute_workflow_hash
 from lfo.core.workflow_registry import KNOWN_WORKFLOWS, WorkflowManifest
 from lfo.execution.handlers import HandlerResult, TaskHandler
+from lfo.services.artifact_layout import ArtifactLayoutError, atomic_copy_verified, managed_path
 
 H3_BACKEND_ID = "comfyui.h3"
 H3_BACKEND_REVISION = "3.0.0"
@@ -49,7 +50,11 @@ def build_h3_backend_registry(
     root = pathlib.Path(workflow_dir) if workflow_dir is not None else ComfyH3Config().workflow_dir
     workflow_hashes: list[str] = []
     required_models: set[str] = set()
+    h3_workflow_ids: list[str] = []
     for manifest in KNOWN_WORKFLOWS.values():
+        if not manifest.family.startswith("h3_"):
+            continue
+        h3_workflow_ids.append(manifest.workflow_id)
         workflow = WorkflowLoader.load(root / manifest.source_file)
         errors = WorkflowLoader.validate_workflow(workflow)
         if errors:
@@ -92,7 +97,7 @@ def build_h3_backend_registry(
                 "SaveVideo",
             ],
             output_signature={"media_type": "video", "container": "mp4", "codec": "h264"},
-            extensions={"workflow_ids": sorted(KNOWN_WORKFLOWS)},
+            extensions={"workflow_ids": sorted(h3_workflow_ids)},
         )
     )
     return registry
@@ -157,17 +162,21 @@ class ComfyH3VideoHandler(TaskHandler):
                 )
 
             output = self._find_output(prompt_id, status)
+            managed = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
+            managed_hash, managed_size = atomic_copy_verified(output, managed)
             return HandlerResult(
                 success=True,
                 artifact_type="video",
                 artifact_metadata={
-                    "file_path": str(output),
-                    "file_hash": _sha256_file(output),
+                    "file_path": str(managed.resolve()),
+                    "file_hash": managed_hash,
                     "media_type": "video",
                     "provider_job_id": prompt_id,
                     "workflow_id": workflow_id,
                     "uploaded_references": uploaded,
-                    "size": output.stat().st_size,
+                    "size": managed_size,
+                    "provider_source_path": str(output),
+                    "provider_file_hash": _sha256_file(output),
                 },
             )
         except (FileNotFoundError, ValueError, KeyError, TypeError) as exc:
@@ -181,7 +190,8 @@ class ComfyH3VideoHandler(TaskHandler):
     def _select_workflow(metadata: dict[str, Any]) -> str:
         explicit = metadata.get("workflow_id")
         if explicit is not None:
-            if explicit not in KNOWN_WORKFLOWS:
+            manifest = KNOWN_WORKFLOWS.get(str(explicit))
+            if manifest is None or not manifest.family.startswith("h3_"):
                 raise ValueError(f"Unknown H3 workflow_id: {explicit}")
             return str(explicit)
 

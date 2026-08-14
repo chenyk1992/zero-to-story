@@ -94,6 +94,18 @@ def _format_status_panel(data: dict) -> str:
             lines.append(f"  {status:<25} {count:>5}")
         lines.append("")
 
+    progress = data.get("progress", {})
+    if isinstance(progress, dict) and progress:
+        lines.append(bold("Active Progress:"))
+        for logical_key, event in progress.items():
+            if not isinstance(event, dict):
+                continue
+            completed = event.get("completed_segments", 0)
+            total = event.get("segment_count", 0)
+            status = event.get("status", "unknown")
+            lines.append(f"  {cyan('→')} {logical_key}: {status} ({completed}/{total} segments)")
+        lines.append("")
+
     # Blockers
     blockers = data.get("blockers", [])
     if blockers:

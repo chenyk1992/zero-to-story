@@ -11,6 +11,7 @@ from typing import Any
 from lfo.assets.importer import AssetImporter
 from lfo.assets.store import ContentAddressedStore
 from lfo.backends.comfy_h3 import ComfyH3VideoHandler, build_h3_backend_registry
+from lfo.backends.comfy_seedvr2 import ComfyUpscaleVideoHandler
 from lfo.backends.registry import BackendRegistry
 from lfo.contracts.package import VideoExecutionPackage, validate_package
 from lfo.core.canonical import hash_value
@@ -21,12 +22,15 @@ from lfo.execution.materializer import MaterializationError, MaterializedRun, ma
 from lfo.execution.runtime import PersistentRuntime
 from lfo.execution.states import TaskState
 from lfo.media.handlers import build_media_handler_registry
+from lfo.services.artifact_layout import ArtifactLayoutError, RunArtifactLayout
+from lfo.services.workspace import resolve_workspace_root
 
 
 @dataclass
 class ValidationResult2:
     valid: bool
     errors: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -35,6 +39,7 @@ class PlanResult:
     clip_plans: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     backend_summary: list[dict[str, str]] = field(default_factory=list)
+    output_layout: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
 
 
@@ -43,6 +48,7 @@ class RunResult:
     run_id: str
     status: str
     clip_count: int = 0
+    output_layout: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
 
 
@@ -51,6 +57,8 @@ class StatusResult:
     run_id: str
     status: str
     tasks: dict[str, str] = field(default_factory=dict)
+    output_layout: dict[str, Any] = field(default_factory=dict)
+    progress: dict[str, dict[str, Any]] = field(default_factory=dict)
     error: str | None = None
 
 
@@ -80,7 +88,11 @@ class VideoRuntime:
         workspace_root: str | pathlib.Path | None = None,
         handler_registry: HandlerRegistry | None = None,
     ) -> None:
-        self.workspace_root = pathlib.Path(workspace_root or "workspace").resolve()
+        self.workspace_root = (
+            pathlib.Path(workspace_root).resolve()
+            if workspace_root is not None
+            else resolve_workspace_root()
+        )
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         self.db_path = pathlib.Path(db_path or self.workspace_root / "db" / "runtime-v1.sqlite3")
         self.store = ExecutionStore(self.db_path)
@@ -92,7 +104,23 @@ class VideoRuntime:
     def _production_handlers(self) -> HandlerRegistry:
         handlers = build_media_handler_registry(self.workspace_root)
         handlers.register("video.generate", ComfyH3VideoHandler())
+        handlers.register(
+            "video.upscale",
+            ComfyUpscaleVideoHandler(progress_callback=self._record_task_progress),
+        )
         return handlers
+
+    def _record_task_progress(self, event: dict[str, Any]) -> None:
+        """Persist live handler progress without changing task state."""
+        task_id = event.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            return
+        task = self.store.get_task(task_id)
+        if task is None:
+            return
+        metadata = json.loads(str(task.get("metadata") or "{}"))
+        metadata["progress"] = dict(event)
+        self.store.update_task_metadata(task_id, metadata)
 
     def validate(self, path: pathlib.Path | str) -> ValidationResult2:
         package_path = pathlib.Path(path).resolve()
@@ -102,10 +130,19 @@ class VideoRuntime:
             return ValidationResult2(False, [_error(str(path), str(exc), "parse_error")])
         result = validate_package(data)
         errors = [error.to_dict() for error in result.errors()]
+        warnings: list[str] = []
         if result.ok:
             package = VideoExecutionPackage.from_dict(data)
             errors.extend(self._validate_asset_sources(package_path, package))
-        return ValidationResult2(not errors, errors)
+            try:
+                RunArtifactLayout.from_package(
+                    workspace_root=self.workspace_root,
+                    run_id="run-validation",
+                    package=package,
+                )
+            except ArtifactLayoutError as exc:
+                errors.append(_error("$.project.project_id", str(exc), "project_layout"))
+        return ValidationResult2(not errors, errors, warnings)
 
     def plan(self, path: pathlib.Path | str) -> PlanResult:
         package_path = pathlib.Path(path).resolve()
@@ -113,12 +150,18 @@ class VideoRuntime:
         try:
             package, package_hash = self._validated_package(package_path)
             assets = self._import_assets(package_path, package)
+            layout = RunArtifactLayout.from_package(
+                workspace_root=self.workspace_root,
+                run_id=plan_id,
+                package=package,
+            )
             snapshot = materialize(
                 run_id=plan_id,
                 package=package,
                 package_hash=package_hash,
                 registry=self.registry,
                 asset_resolutions=assets,
+                artifact_layout=layout.to_dict(),
             )
         except MaterializationError as exc:
             return PlanResult(plan_id, error=exc.message, warnings=exc.details)
@@ -133,9 +176,15 @@ class VideoRuntime:
             package, package_hash = self._validated_package(package_path)
             if not approval:
                 return RunResult("", "REJECTED", error="Explicit execution approval is required")
+            layout = RunArtifactLayout.from_package(
+                workspace_root=self.workspace_root,
+                run_id=run_id,
+                package=package,
+            )
             assets = self._import_assets(package_path, package)
             revision_id = self.store.create_package_revision(
                 package_id=package.package_id,
+                project_id=package.project.project_id,
                 project_title=package.project.title,
                 locale=package.project.locale,
                 revision=package.revision,
@@ -148,12 +197,15 @@ class VideoRuntime:
                 package_hash=package_hash,
                 registry=self.registry,
                 asset_resolutions=assets,
+                artifact_layout=layout.to_dict(),
             )
             graph = build_dag(snapshot)
+            layout.prepare()
             self.store.create_run(
                 run_id=run_id,
                 package_id=package.package_id,
                 revision_id=revision_id,
+                layout_json=json.dumps(layout.to_dict(), sort_keys=True, ensure_ascii=False),
                 status="ACCEPTED",
             )
             self.store.create_snapshot(
@@ -180,7 +232,7 @@ class VideoRuntime:
             runtime = PersistentRuntime(self.store, self.handlers, run_id)
             runtime.load_graph(graph)
             self.store.transition_run(run_id, "ACCEPTED", "RUNNING", "execution started")
-            return self._drive_runtime(runtime, len(snapshot.clips))
+            return self._drive_runtime(runtime, len(snapshot.clips), layout.to_dict())
         except MaterializationError as exc:
             return RunResult(run_id, "FAILED", error=str(exc))
         except Exception as exc:
@@ -197,7 +249,14 @@ class VideoRuntime:
             str(task["logical_key"]): str(task["status"])
             for task in self.store.list_tasks(run_id)
         }
-        return StatusResult(run_id, str(run["status"]), tasks)
+        progress: dict[str, dict[str, Any]] = {}
+        for task in self.store.list_tasks(run_id):
+            metadata = json.loads(str(task.get("metadata") or "{}"))
+            task_progress = metadata.get("progress")
+            if isinstance(task_progress, dict):
+                progress[str(task["logical_key"])] = task_progress
+        layout = json.loads(str(run.get("layout_json") or "{}"))
+        return StatusResult(run_id, str(run["status"]), tasks, layout, progress)
 
     def retry(self, run_id: str, scope: str | None = None) -> RunResult:
         run = self.store.get_run(run_id)
@@ -218,7 +277,8 @@ class VideoRuntime:
         current = str(run["status"])
         self.store.transition_run(run_id, current, "RUNNING", "manual retry")
         clip_count = len({str(task["logical_key"]).split(":", 1)[0] for task in self.store.list_tasks(run_id) if ":" in str(task["logical_key"])})
-        return self._drive_runtime(runtime, clip_count)
+        layout = json.loads(str(run.get("layout_json") or "{}"))
+        return self._drive_runtime(runtime, clip_count, layout)
 
     def cancel(self, run_id: str) -> None:
         run = self.store.get_run(run_id)
@@ -285,7 +345,12 @@ class VideoRuntime:
         )
         return ExportResult2(export_id, "READY", str(file_path))
 
-    def _drive_runtime(self, runtime: PersistentRuntime, clip_count: int) -> RunResult:
+    def _drive_runtime(
+        self,
+        runtime: PersistentRuntime,
+        clip_count: int,
+        output_layout: dict[str, Any] | None = None,
+    ) -> RunResult:
         for _ in range(max(50, len(runtime.tasks) * 5)):
             if runtime.is_complete() or runtime.is_stalled():
                 break
@@ -300,7 +365,13 @@ class VideoRuntime:
         if run is not None and str(run["status"]) != status:
             self.store.transition_run(runtime.run_id, str(run["status"]), status, "scheduler stopped")
         failed = [task.error for task in runtime.tasks.values() if task.error]
-        return RunResult(runtime.run_id, status, clip_count, "; ".join(failed) or None)
+        return RunResult(
+            runtime.run_id,
+            status,
+            clip_count,
+            dict(output_layout or {}),
+            "; ".join(failed) or None,
+        )
 
     def _validated_package(self, package_path: pathlib.Path) -> tuple[VideoExecutionPackage, str]:
         validation = self.validate(package_path)
@@ -396,10 +467,14 @@ class VideoRuntime:
             }
         )
         return PlanResult(
-            plan_id,
-            clips,
-            snapshot.warnings,
-            [{"backend_id": backend_id, "revision": revision} for backend_id, revision in backends],
+            plan_id=plan_id,
+            clip_plans=clips,
+            warnings=snapshot.warnings,
+            backend_summary=[
+                {"backend_id": backend_id, "revision": revision}
+                for backend_id, revision in backends
+            ],
+            output_layout=dict(snapshot.artifact_layout),
         )
 
 

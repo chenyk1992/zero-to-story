@@ -68,7 +68,7 @@ def _make_package(**overrides) -> dict:
         "schema": SCHEMA_ID,
         "package_id": "test-001",
         "revision": 1,
-        "project": {"title": "Test"},
+        "project": {"title": "Test", "project_id": "test-project"},
         "assets": [_make_asset()],
         "clips": [_make_clip()],
         "output": {},
@@ -401,7 +401,7 @@ class TestVideoExecutionPackage:
     def test_missing_package_id(self):
         with pytest.raises(ValueError, match="package_id"):
             VideoExecutionPackage.from_dict(
-                {"schema": SCHEMA_ID, "revision": 1, "project": {"title": "T"}}
+                {"schema": SCHEMA_ID, "revision": 1, "project": {"title": "T", "project_id": "test-project"}}
             )
 
     def test_revision_minimum(self):
@@ -411,7 +411,7 @@ class TestVideoExecutionPackage:
                     "schema": SCHEMA_ID,
                     "package_id": "x",
                     "revision": 0,
-                    "project": {"title": "T"},
+                    "project": {"title": "T", "project_id": "test-project"},
                 }
             )
 
@@ -422,7 +422,7 @@ class TestVideoExecutionPackage:
                     "schema": SCHEMA_ID,
                     "package_id": "x",
                     "revision": "1",
-                    "project": {"title": "T"},
+                    "project": {"title": "T", "project_id": "test-project"},
                 }
             )
 

@@ -336,6 +336,7 @@ class PersistentRuntime(Runtime):
 
     def restore(self) -> None:
         """Hydrate scheduler state and dependency metadata from persistent rows."""
+        self.store.recover_interrupted_tasks(self.run_id)
         rows = self.store.list_tasks(self.run_id)
         conn = self.store.connect()
         self.tasks.clear()

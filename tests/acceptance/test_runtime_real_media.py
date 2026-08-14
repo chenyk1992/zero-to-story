@@ -60,7 +60,7 @@ def test_persistent_runtime_executes_real_media_pipeline(tmp_path: pathlib.Path)
         "schema": "lfo.video-execution.v1",
         "package_id": "real-media-smoke",
         "revision": 1,
-        "project": {"title": "Real media smoke"},
+        "project": {"title": "Real media smoke", "project_id": "real-media-smoke"},
         "clips": [
             {
                 "clip_id": "clip-001",

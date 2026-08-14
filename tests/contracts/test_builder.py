@@ -53,7 +53,7 @@ def _clip() -> ClipSpec:
 
 def test_builder_builds_a_valid_package() -> None:
     package = (
-        VideoPackageBuilder("pkg-001", "A test", locale="zh-CN")
+        VideoPackageBuilder("pkg-001", "A test", locale="zh-CN", project_id="test-project")
         .add_asset(_asset())
         .add_clip(_clip())
         .output(OutputPolicy(width=1080, height=1920, fps=24))
@@ -66,7 +66,7 @@ def test_builder_builds_a_valid_package() -> None:
 
 def test_builder_writes_stable_valid_json(tmp_path: Path) -> None:
     destination = tmp_path / "nested" / "execution-package.json"
-    builder = VideoPackageBuilder("pkg-001", "A test").add_asset(_asset()).add_clip(_clip())
+    builder = VideoPackageBuilder("pkg-001", "A test", project_id="test-project").add_asset(_asset()).add_clip(_clip())
     assert builder.write(destination) == destination
     data = json.loads(destination.read_text(encoding="utf-8"))
     assert validate_package(data).ok
@@ -89,12 +89,12 @@ def test_builder_rejects_invalid_references() -> None:
         ),
     )
     with pytest.raises(ValueError, match="invalid VideoExecutionPackage"):
-        VideoPackageBuilder("pkg-001", "A test").add_clip(bad_clip).build()
+        VideoPackageBuilder("pkg-001", "A test", project_id="test-project").add_clip(bad_clip).build()
 
 
 def test_builder_convenience_fields_round_trip(tmp_path: Path) -> None:
     destination = tmp_path / "execution-package.json"
-    builder = VideoPackageBuilder("pkg-fields", "Fields")
+    builder = VideoPackageBuilder("pkg-fields", "Fields", project_id="test-project")
     builder.add_asset(
         asset_key="hero",
         media_type="image",

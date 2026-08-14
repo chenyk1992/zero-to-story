@@ -3,6 +3,7 @@
   "package_id": "short-story-r2v-001",
   "revision": 1,
   "project": {
+    "project_id": "short-story-r2v",
     "title": "示例短剧：雨夜重逢",
     "locale": "zh-CN"
   },

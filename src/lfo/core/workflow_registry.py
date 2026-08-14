@@ -577,6 +577,75 @@ H3_VERTICAL_R2V_MANIFEST = WorkflowManifest(
     tags=["reference-to-video", "audio", "ref2va", "vertical", "9:16"],
 )
 
+SEEDVR2_UPSCALE_MANIFEST = WorkflowManifest(
+    workflow_id="seedvr2_upscale",
+    version="1.0.0",
+    family="seedvr2",
+    workflow_mode="upscale",
+    description="SeedVR2 3B INT8 video restoration and 2x upscale with source audio passthrough.",
+    source_file="seedvr2_upscale.json",
+    workflow_hash="",
+    frame_constraints=FrameConstraints(
+        step=1,
+        min_frames=1,
+        max_frames=3600,
+        default_frames=1,
+        fps=24,
+    ),
+    resolution_constraints=ResolutionConstraints(
+        min_width=1,
+        max_width=16384,
+        min_height=1,
+        max_height=16384,
+        width_multiple=1,
+        height_multiple=1,
+        default_width=864,
+        default_height=480,
+    ),
+    input_slots=[
+        InputSlot(
+            binding_id="input_video",
+            selector_title="LFO.InputVideo",
+            selector_class_type="LoadVideo",
+            input_name="file",
+            value_type="video",
+            description="Generated source video uploaded to ComfyUI input storage.",
+        ),
+        InputSlot(
+            binding_id="scale_multiplier",
+            selector_title="LFO.ScaleMultiplier",
+            selector_class_type="ResizeImageMaskNode",
+            input_name="resize_type.multiplier",
+            value_type="float",
+            description="SeedVR2 output scale relative to the source video.",
+        ),
+        InputSlot(
+            binding_id="seed",
+            selector_title="LFO.Seed",
+            selector_class_type="KSampler",
+            input_name="seed",
+            value_type="int",
+            description="Optional deterministic SeedVR2 sampling seed.",
+            optional=True,
+        ),
+        InputSlot(
+            binding_id="filename_prefix",
+            selector_title="LFO.SaveVideo",
+            selector_class_type="SaveVideo",
+            input_name="filename_prefix",
+            value_type="string",
+            description="Output filename prefix managed by LFO.",
+        ),
+    ],
+    output_spec=OutputSpec(asset_type="video", count=1, format="mp4"),
+    model_dependencies=[
+        ModelDependency(role="unet", filename="seedvr2_3b_int8_convrot.safetensors"),
+        ModelDependency(role="vae", filename="seedvr2_ema_vae_fp16.safetensors"),
+    ],
+    generates_audio=True,
+    tags=["video-upscale", "video-restoration", "seedvr2", "int8"],
+)
+
 # Registry of all known workflow manifests
 KNOWN_WORKFLOWS = {
     "h3_standard_t2v": H3_T2V_MANIFEST,
@@ -585,6 +654,7 @@ KNOWN_WORKFLOWS = {
     "h3_vertical_t2v": H3_VERTICAL_T2V_MANIFEST,
     "h3_vertical_i2v": H3_VERTICAL_I2V_MANIFEST,
     "h3_vertical_r2v": H3_VERTICAL_R2V_MANIFEST,
+    "seedvr2_upscale": SEEDVR2_UPSCALE_MANIFEST,
 }
 
 
@@ -638,6 +708,16 @@ def make_capability(manifest: WorkflowManifest) -> WorkflowCapability:
             produces_video=True,
             produces_audio=True,
             limitations=["Fixed 3 reference slots"],
+        )
+    elif mode == "upscale":
+        return WorkflowCapability(
+            workflow_id=manifest.workflow_id,
+            modes=["upscale"],
+            accepts_prompt=False,
+            accepts_image=False,
+            produces_video=True,
+            produces_audio=manifest.generates_audio,
+            limitations=["Requires a source video artifact"],
         )
     return WorkflowCapability(workflow_id=manifest.workflow_id)
 

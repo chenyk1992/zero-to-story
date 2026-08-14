@@ -51,7 +51,7 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
         "schema": "lfo.video-execution.v1",
         "package_id": "smoke-test-001",
         "revision": 1,
-        "project": {"title": "Smoke Test", "locale": "zh-CN"},
+        "project": {"title": "Smoke Test", "project_id": "smoke-project", "locale": "zh-CN"},
         "assets": [
             {
                 "asset_key": "hero.identity.front",

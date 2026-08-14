@@ -99,7 +99,11 @@ class ComfyMonitor:
             status = self.poll_status(prompt_id)
             if on_tick:
                 on_tick(status)
-            if status.get("completed") or status.get("error"):
+            if (
+                status.get("completed")
+                or status.get("error")
+                or status.get("status") == "error"
+            ):
                 return status
             time.sleep(interval)
 

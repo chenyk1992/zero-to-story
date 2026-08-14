@@ -40,7 +40,7 @@ src layout — all system code lives under `src/lfo/`, user data under `workspac
 - `workspace/` — 用户数据（gitignored）。`novels/`、`projects/`、`db/`、`ref_images/`、`spikes/`
 - `scripts/` — Live E2E 脚本
 - `tests/` — pytest 测试套件（按模块分子目录）
-- `templates/` — 用户可复用的模板文件（git-tracked）
+- `.agents/skills/zero-to-story/assets/` — zero-to-story 可复用项目骨架与生成 Prompt（与 Skill 一起维护，git-tracked）
 
 ## Code style
 
@@ -84,6 +84,11 @@ lfo setup                   # 初始化环境
 - **三级验证**：STATIC_VALID → RUNTIME_COMPATIBLE → SMOKE_TESTED
 - **ComfyUI**：本地 `http://127.0.0.1:8188`，RTX 5080 16GB，fl2va int8 路径
 - **素材导入**：Package 相对路径在导入时解析；之后只读取 CAS 内不可变副本
+- **产物布局**：所有新 Run 的中间/最终媒体必须使用 `RunArtifactLayout` 写入
+  `workspace/projects/<project_id>/outputs/<run_id>/` 和
+  `workspace/projects/<project_id>/final/<output.directory>/`；不得创建 workspace 根部
+  的 `runs` 或 `exports` 目录。ComfyUI 输出仅作提供方缓存，必须复制到项目 Run 目录后
+  才记录为 LFO artifact。
 - **Video execution**：每个 `clips[]` 是可独立重做的执行单元；创作侧可将 PanelPack 映射为 Clip，但 Runtime 不理解故事板语义
 
 ## PR & commit conventions

@@ -88,8 +88,16 @@ class OutputPolicy:
         if directory is not None:
             if not isinstance(directory, str):
                 raise TypeError(f"{path}.directory: expected string or null")
-            if directory.startswith("/") or (len(directory) >= 2 and directory[1] == ":"):
-                raise ValueError(f"{path}.directory: must be a logical name, not a path")
+            if (
+                not directory
+                or directory in {".", ".."}
+                or "/" in directory
+                or "\\" in directory
+                or directory.startswith("/")
+                or (len(directory) >= 2 and directory[1] == ":")
+                or directory.rstrip(" .") != directory
+            ):
+                raise ValueError(f"{path}.directory: must be one safe logical path component")
         return cls(
             container=container,
             video_encoder=video_encoder,

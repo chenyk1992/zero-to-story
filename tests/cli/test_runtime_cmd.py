@@ -33,7 +33,7 @@ def _package_json(tmp_path: pathlib.Path) -> pathlib.Path:
         "schema": "lfo.video-execution.v1",
         "package_id": "test-pkg",
         "revision": 1,
-        "project": {"title": "Test"},
+        "project": {"title": "Test", "project_id": "test-project"},
         "assets": [],
         "clips": [{
             "clip_id": "clip-001",

@@ -90,6 +90,31 @@ class TestComfyApiClient:
         with patch.object(client, "_request", return_value=MagicMock()):
             client.interrupt()  # should not raise
 
+    def test_free_memory(self, client):
+        with patch.object(client, "_request", return_value=MagicMock()) as request:
+            client.free_memory()
+
+        assert request.call_args.args == ("POST", "/free")
+        assert request.call_args.kwargs["json"] == {
+            "unload_models": True,
+            "free_memory": True,
+        }
+
+    def test_upload_file_uses_comfy_input_endpoint(self, client, tmp_path):
+        source = tmp_path / "generated.mp4"
+        source.write_bytes(b"video")
+        with patch.object(
+            client,
+            "_request",
+            return_value=_mock_response({"name": source.name, "subfolder": "lfo-input"}),
+        ) as request:
+            result = client.upload_file(source, subfolder="lfo-input")
+
+        assert result["name"] == "generated.mp4"
+        assert request.call_args.args == ("POST", "/upload/image")
+        assert request.call_args.kwargs["data"] == {"subfolder": "lfo-input"}
+        assert "image" in request.call_args.kwargs["files"]
+
     def test_unreachable_raises(self, client):
         with patch.object(
             client._session,

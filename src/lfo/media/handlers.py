@@ -14,6 +14,7 @@ from lfo.media.normalize import Normalizer, NormalizeTarget
 from lfo.media.qc import QCContract, TechnicalQC
 from lfo.media.subtitles import SubtitleCue, SubtitleRenderer
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
+from lfo.services.artifact_layout import ArtifactLayoutError, managed_path
 
 
 def build_media_handler_registry(workspace_root: pathlib.Path | str) -> HandlerRegistry:
@@ -40,7 +41,7 @@ class NormalizeHandler(TaskHandler):
         if source is None:
             return _terminal("Normalization input artifact has no file_path")
         policy = _policy(metadata)
-        output = _work_path(self.root, metadata, "normalized", ".mp4")
+        output = _managed_output(self.root, metadata)
         result = Normalizer().normalize(
             source,
             output,
@@ -126,7 +127,7 @@ class AudioHandler(TaskHandler):
                     duration_ms=_optional_int(item.get("duration_ms")),
                 )
             )
-        output = _work_path(self.root, metadata, "audio", ".mp4")
+        output = _managed_output(self.root, metadata)
         try:
             source_metadata = probe(source)
         except Exception as exc:
@@ -170,11 +171,11 @@ class SubtitleHandler(TaskHandler):
                 source = pathlib.Path(str(external))
                 if not source.is_file():
                     return _terminal(f"Subtitle file does not exist: {source}")
-                output = _work_path(self.root, metadata, "subtitles", source.suffix.lower() or ".srt")
+                output = _managed_output(self.root, metadata)
                 output.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, output)
             elif cues:
-                output = _work_path(self.root, metadata, "subtitles", ".srt")
+                output = _managed_output(self.root, metadata)
                 SubtitleRenderer().render_srt(cues, output, duration_ms=duration)
             else:
                 return HandlerResult(
@@ -223,7 +224,7 @@ class TimelineHandler(TaskHandler):
                 )
             )
         policy = _policy(metadata)
-        output = _work_path(self.root, metadata, "timeline", ".mp4")
+        output = _managed_output(self.root, metadata)
         result = TimelineAssembler().assemble(
             TimelineSpec(
                 segments=segments,
@@ -270,17 +271,21 @@ class ExportHandler(TaskHandler):
         mode = str(policy.get("subtitles_mode", "sidecar"))
         source_path = pathlib.Path(str(timeline["file_path"]))
         if subtitle_path is not None and mode in {"burnin", "both"}:
-            burned = _work_path(self.root, metadata, "timeline-subtitled", ".mp4")
+            burned = _global_output(
+                self.root,
+                metadata,
+                "timeline-subtitled",
+                f".{str(policy.get('container', 'mp4'))}",
+            )
             try:
                 SubtitleRenderer().burn_in(source_path, subtitle_path, burned)
             except Exception as exc:
                 return _terminal(f"Subtitle burn-in failed: {exc}")
             source_path = burned
+        output = _managed_output(self.root, metadata)
         package_id = str(metadata.get("package_id", "package"))
         run_id = str(metadata.get("run_id", "run"))
-        directory = _safe_component(str(policy.get("directory") or package_id))
         container = str(policy.get("container", "mp4"))
-        output = self.root / "exports" / directory / f"{_safe_component(package_id)}-{run_id}.{container}"
         result = Exporter().export(
             ExportSpec(
                 run_id=run_id,
@@ -354,7 +359,7 @@ class ExportHandler(TaskHandler):
             # structured cues were available for global retiming.
             path = subtitle_artifacts[0].get("file_path")
             return pathlib.Path(path) if isinstance(path, str) else None
-        output = _work_path(self.root, metadata, "subtitles-global", ".srt")
+        output = _global_output(self.root, metadata, "subtitles-global", ".srt")
         SubtitleRenderer().render_srt(sorted(cues, key=lambda cue: cue.start_ms), output)
         return output
 
@@ -376,17 +381,41 @@ def _policy(metadata: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _work_path(root: pathlib.Path, metadata: dict[str, Any], name: str, suffix: str) -> pathlib.Path:
-    run_id = _safe_component(str(metadata.get("run_id", "run")))
-    clip_id = _safe_component(str(metadata.get("clip_id", "global")))
-    path = root / "runs" / run_id / "work" / clip_id / f"{name}{suffix}"
+def _managed_output(
+    root: pathlib.Path,
+    metadata: dict[str, Any],
+) -> pathlib.Path:
+    """Return the task path supplied by the immutable project layout."""
+    path = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
+    projects_root = (root / "projects").resolve(strict=False)
+    try:
+        path.relative_to(projects_root)
+    except ValueError as exc:
+        raise ArtifactLayoutError(f"Managed output escapes projects root: {path}") from exc
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def _safe_component(value: str) -> str:
-    safe = "".join(character if character.isalnum() or character in "-_." else "_" for character in value)
-    return safe.strip(". ") or "item"
+def _global_output(
+    root: pathlib.Path,
+    metadata: dict[str, Any],
+    name: str,
+    suffix: str,
+) -> pathlib.Path:
+    layout = metadata.get("artifact_layout")
+    if not isinstance(layout, dict) or not isinstance(layout.get("global_root"), str):
+        raise ArtifactLayoutError("Task is missing its project artifact_layout")
+    path = managed_path(
+        str(pathlib.Path(str(layout["global_root"])) / f"{name}{suffix}"),
+        layout,
+    )
+    projects_root = (root / "projects").resolve(strict=False)
+    try:
+        path.relative_to(projects_root)
+    except ValueError as exc:
+        raise ArtifactLayoutError(f"Managed global output escapes projects root: {path}") from exc
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _terminal(error: str, *, qc_passed: bool | None = None) -> HandlerResult:

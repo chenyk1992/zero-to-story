@@ -56,7 +56,7 @@ def _make_package(clips: list[ClipSpec] | None = None) -> VideoExecutionPackage:
     return VideoExecutionPackage(
         package_id="pkg-test",
         revision=1,
-        project=ProjectInfo(title="Test Project"),
+        project=ProjectInfo(title="Test Project", project_id="test-project"),
         assets=[],
         clips=clips or [_make_clip()],
     )
@@ -85,12 +85,12 @@ class TestMaterialize:
         clip_b.generation.prompt = "Different prompt"
         pkg_a = VideoExecutionPackage(
             package_id="pkg", revision=1,
-            project=ProjectInfo(title="T"),
+        project=ProjectInfo(title="T", project_id="test-project"),
             clips=[clip_a],
         )
         pkg_b = VideoExecutionPackage(
             package_id="pkg", revision=1,
-            project=ProjectInfo(title="T"),
+        project=ProjectInfo(title="T", project_id="test-project"),
             clips=[clip_b],
         )
         r_a = materialize("r", pkg_a, "h", _h3_registry())
@@ -159,7 +159,7 @@ class TestMaterialize:
         ]
         pkg = VideoExecutionPackage(
             package_id="pkg", revision=1,
-            project=ProjectInfo(title="T"),
+        project=ProjectInfo(title="T", project_id="test-project"),
             assets=assets,
             clips=[_make_clip("c1", references=refs)],
         )
@@ -200,7 +200,7 @@ class TestMaterialize:
                       provenance=ProvenanceSpec(source_type="skill", producer="test", operation="image.generate"))
             for key in ("required.png", "optional.png")
         ]
-        package = VideoExecutionPackage(package_id="pkg", revision=1, project=ProjectInfo(title="T"), assets=assets,
+        package = VideoExecutionPackage(package_id="pkg", revision=1, project=ProjectInfo(title="T", project_id="test-project"), assets=assets,
                                         clips=[_make_clip("c1", operation="video.reference_to_video", references=refs)])
         result = materialize("run", package, "hash", registry, {
             "required.png": {"asset_revision_id": "r1", "file_path": "C:/required.png"},

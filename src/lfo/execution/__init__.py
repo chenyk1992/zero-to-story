@@ -1,6 +1,8 @@
 """LFO Runtime v1 — SQLite store.
 
-New database for the v1 runtime. No migration from older schemas.
+Schema v2 persists project identity and the resolved artifact layout. Existing
+database rows may remain as audit history, but their deleted legacy file paths
+are not used for new execution or export.
 
 Tables:
 - packages / package_revisions
@@ -23,7 +25,7 @@ import uuid
 from contextlib import contextmanager
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 -- ===========================================================================
@@ -32,6 +34,7 @@ SCHEMA_SQL = """
 
 CREATE TABLE IF NOT EXISTS packages (
     package_id      TEXT PRIMARY KEY,
+    project_id      TEXT,
     project_title   TEXT NOT NULL,
     locale          TEXT,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -119,6 +122,7 @@ CREATE TABLE IF NOT EXISTS runs (
     run_id          TEXT PRIMARY KEY,
     package_id      TEXT NOT NULL REFERENCES packages(package_id),
     revision_id     TEXT NOT NULL REFERENCES package_revisions(revision_id),
+    layout_json     TEXT NOT NULL DEFAULT '{}',
     status          TEXT NOT NULL DEFAULT 'ACCEPTED',
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -325,6 +329,13 @@ class ExecutionStore:
             conn.execute("ALTER TABLE tasks ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
         if "retry_count" not in columns:
             conn.execute("ALTER TABLE tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0")
+        package_columns = {row[1] for row in conn.execute("PRAGMA table_info(packages)")}
+        if "project_id" not in package_columns:
+            conn.execute("ALTER TABLE packages ADD COLUMN project_id TEXT")
+        run_columns = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+        if "layout_json" not in run_columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN layout_json TEXT NOT NULL DEFAULT '{}'")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_packages_project ON packages(project_id)")
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()
 
@@ -358,7 +369,7 @@ class ExecutionStore:
         return dict(row) if row is not None else None
 
     def create_package_revision(
-        self, *, package_id: str, project_title: str, revision: int,
+        self, *, package_id: str, project_id: str = "", project_title: str, revision: int,
         content_hash: str, raw_json: str, locale: str | None = None,
         revision_id: str | None = None,
     ) -> str:
@@ -376,9 +387,21 @@ class ExecutionStore:
             if existing is not None:
                 return str(existing["revision_id"])
             conn.execute(
-                "INSERT OR IGNORE INTO packages (package_id, project_title, locale) VALUES (?, ?, ?)",
-                (package_id, project_title, locale),
+                "INSERT OR IGNORE INTO packages (package_id, project_id, project_title, locale) VALUES (?, ?, ?, ?)",
+                (package_id, project_id, project_title, locale),
             )
+            stored = conn.execute(
+                "SELECT project_id FROM packages WHERE package_id = ?", (package_id,)
+            ).fetchone()
+            if stored is not None and stored["project_id"] not in (None, project_id):
+                raise ValueError(
+                    f"Package {package_id!r} is already bound to project {stored['project_id']!r}"
+                )
+            if stored is not None and stored["project_id"] is None:
+                conn.execute(
+                    "UPDATE packages SET project_id=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE package_id=?",
+                    (project_id, package_id),
+                )
             conn.execute(
                 """INSERT INTO package_revisions
                    (revision_id, package_id, revision, content_hash, raw_json)
@@ -453,12 +476,14 @@ class ExecutionStore:
             )
         return asset_revision_id
 
-    def create_run(self, *, run_id: str, package_id: str, revision_id: str,
-                   status: str = "ACCEPTED") -> None:
+    def create_run(
+        self, *, run_id: str, package_id: str, revision_id: str,
+        layout_json: str = "{}", status: str = "ACCEPTED",
+    ) -> None:
         with self.transaction() as conn:
             conn.execute(
-                "INSERT INTO runs (run_id, package_id, revision_id, status) VALUES (?, ?, ?, ?)",
-                (run_id, package_id, revision_id, status),
+                "INSERT INTO runs (run_id, package_id, revision_id, layout_json, status) VALUES (?, ?, ?, ?, ?)",
+                (run_id, package_id, revision_id, layout_json, status),
             )
             self._journal(conn, "run", run_id, None, status, "run created")
 
@@ -633,6 +658,66 @@ class ExecutionStore:
                    WHERE lease_id=? AND released=0""", (lease_id,),
             )
             return cursor.rowcount == 1
+
+    def recover_interrupted_tasks(self, run_id: str) -> list[str]:
+        """Recover RUNNING tasks that no longer have a live worker lease.
+
+        A live lease protects a task owned by another process.  Once the lease
+        is absent or expired, the task is safe to retry after an interrupted
+        local process, and any non-terminal attempt is closed for auditability.
+        """
+        recovered: list[str] = []
+        with self.transaction() as conn:
+            rows = conn.execute(
+                "SELECT task_id FROM tasks WHERE run_id=? AND status='RUNNING'",
+                (run_id,),
+            ).fetchall()
+            for row in rows:
+                task_id = str(row["task_id"])
+                live_lease = conn.execute(
+                    """SELECT 1 FROM task_leases
+                       WHERE task_id=? AND released=0
+                         AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                       LIMIT 1""",
+                    (task_id,),
+                ).fetchone()
+                if live_lease is not None:
+                    continue
+
+                reason = "recovered interrupted task without a live worker lease"
+                attempt = conn.execute(
+                    """SELECT attempt_id, status FROM attempts
+                       WHERE task_id=? ORDER BY created_at DESC LIMIT 1""",
+                    (task_id,),
+                ).fetchone()
+                if attempt is not None and attempt["status"] not in {"SUCCEEDED", "FAILED"}:
+                    conn.execute(
+                        """UPDATE attempts SET status='FAILED', error=?,
+                           updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                           WHERE attempt_id=?""",
+                        (reason, attempt["attempt_id"]),
+                    )
+                    self._journal(
+                        conn, "attempt", str(attempt["attempt_id"]),
+                        str(attempt["status"]), "FAILED", reason,
+                    )
+                cursor = conn.execute(
+                    """UPDATE tasks SET status='FAILED_RETRYABLE', error=?,
+                       updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                       WHERE task_id=? AND status='RUNNING'""",
+                    (reason, task_id),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                self._journal(conn, "task", task_id, "RUNNING", "FAILED_RETRYABLE", reason)
+                conn.execute(
+                    """UPDATE task_leases SET released=1,
+                       released_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                       WHERE task_id=? AND released=0""",
+                    (task_id,),
+                )
+                recovered.append(task_id)
+        return recovered
 
     def record_artifact(self, *, artifact_id: str, task_id: str, artifact_type: str,
                         attempt_id: str | None = None, file_path: str | None = None,

@@ -12,7 +12,7 @@ processing and exports a reproducible result.
 | `schema` | yes | Must be `lfo.video-execution.v1`. |
 | `package_id` | yes | Stable project/package identifier. |
 | `revision` | yes | Positive integer; increase whenever an execution-affecting field changes. |
-| `project` | yes | Display metadata: `title` and optional `locale`. |
+| `project` | yes | Routing metadata: required stable `project_id`, display `title`, and optional `locale`. |
 | `assets` | no | Files imported into LFO's content-addressed store. |
 | `clips` | no | Ordered, independently retryable video-generation units. |
 | `output` | no | Final resolution, codecs, subtitles and destination policy. |
@@ -63,3 +63,18 @@ python -m lfo.cli.main plan path/to/execution-package.json
 ```
 
 The machine-readable schema is `src/lfo/contracts/schemas/video-execution-v1.schema.json`.
+
+`project.project_id` is the single routing key for generated media and must be one safe
+path component. `output.directory` is only a logical publication/version directory name;
+it is never an absolute path. New runs use this layout:
+
+```text
+workspace/projects/<project_id>/
+├── outputs/<run_id>/clips/<clip_id>/   # provider copy, normalized, mixed, subtitles
+├── outputs/<run_id>/global/             # timeline and global subtitles
+└── final/<output.directory>/            # final video, sidecar and manifest
+```
+
+The Runtime does not write the legacy `workspace/runs` or `workspace/exports` directories.
+Provider caches (for example ComfyUI's own output directory) are source caches only; the
+managed copy under the project tree is the durable artifact recorded by LFO.

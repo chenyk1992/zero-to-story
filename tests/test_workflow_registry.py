@@ -4,6 +4,7 @@ import pathlib
 
 import pytest
 
+from lfo.comfy.workflow import WorkflowLoader
 from lfo.core.workflow_registry import (
     KNOWN_WORKFLOWS,
     WorkflowManifest,
@@ -20,6 +21,8 @@ def workflow_dir(tmp_path):
     dst.mkdir()
     for f in src.glob("*.json"):
         (dst / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    seedvr2 = pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / "seedvr2_upscale.json"
+    (dst / seedvr2.name).write_text(seedvr2.read_text(encoding="utf-8"), encoding="utf-8")
     return dst
 
 
@@ -30,14 +33,15 @@ def registry(workflow_dir):
 
 
 class TestKnownWorkflows:
-    def test_six_workflows_defined(self):
-        assert len(KNOWN_WORKFLOWS) == 6
+    def test_seven_workflows_defined(self):
+        assert len(KNOWN_WORKFLOWS) == 7
         assert "h3_standard_t2v" in KNOWN_WORKFLOWS
         assert "h3_standard_i2v" in KNOWN_WORKFLOWS
         assert "h3_standard_r2v" in KNOWN_WORKFLOWS
         assert "h3_vertical_t2v" in KNOWN_WORKFLOWS
         assert "h3_vertical_i2v" in KNOWN_WORKFLOWS
         assert "h3_vertical_r2v" in KNOWN_WORKFLOWS
+        assert "seedvr2_upscale" in KNOWN_WORKFLOWS
 
     def test_t2v_manifest_fields(self):
         m = KNOWN_WORKFLOWS["h3_standard_t2v"]
@@ -70,12 +74,23 @@ class TestKnownWorkflows:
         assert m.frame_constraints.default_frames == 124
         assert m.frame_constraints.fps == 24
 
+    def test_seedvr2_upscale_manifest(self):
+        manifest = KNOWN_WORKFLOWS["seedvr2_upscale"]
+        assert manifest.workflow_mode == "upscale"
+        assert {slot.binding_id for slot in manifest.input_slots} == {
+            "input_video", "scale_multiplier", "seed", "filename_prefix",
+        }
+        assert {dependency.filename for dependency in manifest.model_dependencies} == {
+            "seedvr2_3b_int8_convrot.safetensors",
+            "seedvr2_ema_vae_fp16.safetensors",
+        }
+
 
 class TestRegistration:
     def test_register_all(self, registry):
         results = registry.register_all()
         assert all(v == "ok" for v in results.values())
-        assert len(registry.list_workflows()) == 6
+        assert len(registry.list_workflows()) == 7
 
     def test_register_single(self, registry):
         report = registry.register("h3_standard_t2v")
@@ -136,6 +151,13 @@ class TestBindingResolution:
                 # Node IDs in API format are numeric strings
                 assert b["node_id"].isdigit()
 
+    def test_seedvr2_workflow_is_api_format_and_binds(self, registry):
+        workflow = WorkflowLoader.load(registry.workflow_dir / "seedvr2_upscale.json")
+        assert WorkflowLoader.is_api_format(workflow)
+        report = registry.register("seedvr2_upscale")
+        assert report.status == "ok"
+        assert not report.unresolved
+
 
 class TestCapabilities:
     def test_t2v_capability(self):
@@ -159,6 +181,12 @@ class TestCapabilities:
         cap = make_capability(m)
         assert "r2v" in cap.modes
         assert cap.accepts_reference_images is True
+
+    def test_seedvr2_upscale_capability(self):
+        cap = make_capability(KNOWN_WORKFLOWS["seedvr2_upscale"])
+        assert cap.modes == ["upscale"]
+        assert cap.accepts_prompt is False
+        assert cap.produces_audio is True
 
 
 class TestValidation:

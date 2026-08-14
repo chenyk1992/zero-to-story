@@ -31,6 +31,7 @@ def build_package(
     scripts: list[dict[str, Any]],
     dialogue_audio: list[dict[str, str]] | None = None,
     locale: str = "en-US",
+    project_id: str | None = None,
     aspect_ratio: str = "9:16",
     width: int = 1080,
     height: int = 1920,
@@ -57,6 +58,7 @@ def build_package(
         package_id,
         title,
         locale=locale,
+        project_id=project_id or package_id,
     )
 
     # Build assets

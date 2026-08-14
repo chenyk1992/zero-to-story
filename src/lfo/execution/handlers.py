@@ -211,6 +211,7 @@ def default_fake_registry() -> HandlerRegistry:
     """Create a registry with all fake handlers for testing."""
     reg = HandlerRegistry()
     reg.register("video.generate", FakeVideoHandler())
+    reg.register("video.upscale", FakeVideoHandler())
     reg.register("media.normalize", FakeMediaHandler())
     reg.register("media.qc", FakeMediaHandler())
     reg.register("audio.mix", FakeAudioHandler())
