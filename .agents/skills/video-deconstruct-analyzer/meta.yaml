@@ -1,9 +1,9 @@
 display-name-zh: 视频拆解分析师
-version: 0.2.4
-summary-en: "Deconstruct AI videos with dense keyframes and Seedance prompts."
-summary-cn: "高密度拆解AI视频"
-desc-en: "Deep AI-video deconstruction with replica prompts. Reads video metadata and builds a canvas evidence chain from dense keyframes, outputs a structured Markdown deconstruction report, and reverse-engineers Seedance 2.0 Chinese timestamp storyboard prompts under the rule of preferably fifteen seconds or less per clip and as few prompts as possible. Aimed at reference analysis, not general editing or subtitle work."
-desc-cn: "AI 视频深度拆解与复刻提示词。读取视频元信息 + 高密度关键帧建立画布证据链，输出结构化 Markdown 拆解报告，并按“每条尽量≤15 秒、提示词数量尽量少”反推 Seedance 2.0 中文时间戳分镜复刻提示词；面向参考分析，不做普通剪辑/字幕。"
+version: 0.3.0
+summary-en: "Deconstruct AI videos with dense keyframes and route copyable prompts to MiniMax-H3 by default or Seedance 2.0 when requested."
+summary-cn: "高密度拆解 AI 视频，默认 MiniMax-H3，支持 Seedance 2.0 复刻提示词"
+desc-en: "Deep AI-video deconstruction with replica prompts. Reads video metadata, builds a canvas evidence chain from dense keyframes, and outputs a structured Markdown report. Routes the target prompt to MiniMax-H3 by default or Seedance 2.0 when explicitly requested; source-model inference and target-model routing remain separate. Aimed at reference analysis, not general editing or subtitle work."
+desc-cn: "AI 视频深度拆解与复刻提示词。读取视频元信息并用高密度关键帧建立画布证据链，输出结构化 Markdown 报告；目标提示词未指定时默认 MiniMax-H3，明确指定时使用 Seedance 2.0，原视频来源模型推测与目标模型路由分开；面向参考分析，不做普通剪辑/字幕。"
 tag-en: "Short Drama / Intent Brainstorming"
 tag-cn: "短剧漫剧 / 意图脑爆"
 complete-tags-en:
