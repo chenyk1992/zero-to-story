@@ -50,3 +50,18 @@ Thumbs.db
 
 .codex-mimo/
 pipeline_run.log
+
+# Throwaway debug scripts (created during one-off investigations, not part of the toolkit).
+# Add a real script under scripts/ with a meaningful name when it graduates from debugging.
+scripts/check_*.py
+scripts/clear_*.py
+scripts/fix_*.py
+scripts/test_*.py
+scripts/trace_*.py
+scripts/update_*.py
+
+# Temporary prompt / scratch text files at the repo root
+tmp_*.txt
+
+# Throwaway storyboard image at the repo root
+/storyboard-bw-*.jpg
