@@ -1,6 +1,6 @@
 # LFO command-line guide
 
-Install the project once with `pip install -e ".[dev]"`. Runtime state defaults to the
+Install the project once with `python -m pip install -e ".[dev]"`. Runtime state defaults to the
 workspace database and survives separate command invocations.
 
 ```text
@@ -10,6 +10,7 @@ python -m lfo.cli.main execute execution-package.json --approve
 python -m lfo.cli.main status RUN_ID
 python -m lfo.cli.main retry RUN_ID
 python -m lfo.cli.main cancel RUN_ID
+python -m lfo.cli.main review RUN_ID TARGET approved
 python -m lfo.cli.main export RUN_ID
 ```
 

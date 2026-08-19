@@ -35,15 +35,28 @@ Each clip contains:
 
 - stable `clip_id`, integer `sequence`, and positive `duration_ms`;
 - `generation.operation` and a complete provider-ready `prompt`;
-- optional seed, negative prompt and requirements (`width`, `height`, `fps`, aspect ratio,
-  native audio);
+- optional seed, negative prompt and requirements (`width`, `height`, `megapixels`, `fps`,
+  aspect ratio, native audio); `megapixels` and explicit dimensions are mutually exclusive;
 - explicitly ordered references with required/optional policy, priority, placement and
   unsupported behavior;
 - native/external audio policy, subtitle cues, and other clip dependencies.
 
 Known operations are `video.text_to_video`, `video.image_to_video`,
-`video.reference_to_video`, and `video.first_last_frame`. Operation strings remain open so
-new backends can add capabilities without revising the package schema.
+`video.reference_to_video`, `video.first_last_frame`, `video.virtual_presenter`, and
+`video.passthrough`. Operation strings remain open so new backends can add capabilities
+without revising the package schema.
+
+`video.virtual_presenter` selects the independent `comfyui.h3-presenter` capability. Its
+fixed reference slots are part of the operation contract: `ref_image_0..8` map to
+`<Picture 1..9>`, `ref_video_0..2` map to `<Video 1..3>` and their paired soundtracks, and
+`ref_audio_0..2` map to `<Audio 1..3>`. Slots are zero-based and must be contiguous within
+each media type; duplicates, gaps, out-of-range indices and media-type mismatches fail
+before submission to ComfyUI.
+
+`video.passthrough` selects `builtin.video-passthrough` and requires exactly one video
+reference in the fixed `source_video` slot. It copies an already accepted clip into the
+normal LFO DAG so normalization, technical QC, audio, subtitles, timeline assembly and
+final export remain unchanged.
 
 Dependencies must name existing clips and must form an acyclic graph. A required reference
 must resolve to an imported asset revision. Optional references may be dropped only when
