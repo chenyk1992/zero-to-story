@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import pathlib
 import uuid
 from collections.abc import Callable
@@ -36,7 +37,10 @@ class ComfyUpscaleConfig:
     base_url: str = "http://127.0.0.1:8188"
     workflow_dir: pathlib.Path = pathlib.Path(__file__).resolve().parents[1] / "registry"
     output_root: pathlib.Path = pathlib.Path(
-        "D:/ComfyUI/Comfy-Desktop/ComfyUI/ComfyUI/output"
+        os.environ.get(
+            "LFO_COMFY_OUTPUT_ROOT",
+            "D:/ComfyUI/Comfy-Desktop/ComfyUI/ComfyUI/output",
+        )
     )
     poll_interval_seconds: float = 3.0
     timeout_seconds: float = 1_200.0

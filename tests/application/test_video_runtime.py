@@ -6,7 +6,9 @@ import pathlib
 
 from lfo.application.video_runtime import VideoRuntime
 from lfo.backends.capabilities import CapabilityManifest
+from lfo.backends.passthrough import PASSTHROUGH_BACKEND_ID, PASSTHROUGH_BACKEND_REVISION
 from lfo.backends.registry import BackendRegistry
+from lfo.backends.video_router import VideoTaskRouter
 from lfo.execution.handlers import default_fake_registry
 
 
@@ -68,6 +70,14 @@ def _package_json(
 
 
 class TestVideoRuntime:
+    def test_default_production_video_registry_and_router(self, tmp_path: pathlib.Path) -> None:
+        runtime = VideoRuntime(workspace_root=tmp_path / "workspace")
+        assert isinstance(runtime.handlers.get("video.generate"), VideoTaskRouter)
+        assert runtime.registry.get(
+            PASSTHROUGH_BACKEND_ID,
+            PASSTHROUGH_BACKEND_REVISION,
+        ) is not None
+
     def test_production_handlers_include_video_upscale(self, tmp_path: pathlib.Path) -> None:
         runtime = VideoRuntime(workspace_root=tmp_path / "workspace")
         assert runtime.handlers.has_handler("video.upscale")

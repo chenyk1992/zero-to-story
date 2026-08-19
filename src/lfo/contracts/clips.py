@@ -6,6 +6,7 @@ can be re-done without touching others.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,6 +16,8 @@ KNOWN_OPERATIONS = frozenset({
     "video.image_to_video",
     "video.reference_to_video",
     "video.first_last_frame",
+    "video.virtual_presenter",
+    "video.passthrough",
 })
 
 # Placement values for BindingPolicy.
@@ -150,6 +153,7 @@ class GenerationRequirements:
     """Output requirements that backends must satisfy."""
 
     aspect_ratio: str | None = None
+    megapixels: float | None = None
     width: int | None = None
     height: int | None = None
     fps: int | None = None
@@ -163,6 +167,17 @@ class GenerationRequirements:
         aspect_ratio = data.get("aspect_ratio")
         if aspect_ratio is not None and not isinstance(aspect_ratio, str):
             raise TypeError(f"{path}.aspect_ratio: expected string or null")
+        megapixels = data.get("megapixels")
+        megapixels_value: float | None = None
+        if megapixels is not None:
+            if isinstance(megapixels, bool) or not isinstance(megapixels, (int, float, str)):
+                raise TypeError(f"{path}.megapixels: expected positive number")
+            try:
+                megapixels_value = float(megapixels)
+            except (TypeError, ValueError):
+                raise TypeError(f"{path}.megapixels: expected positive number") from None
+            if not math.isfinite(megapixels_value) or megapixels_value <= 0:
+                raise ValueError(f"{path}.megapixels: must be positive")
         width = data.get("width")
         if width is not None:
             if not isinstance(width, int) or isinstance(width, bool):
@@ -175,6 +190,8 @@ class GenerationRequirements:
                 raise TypeError(f"{path}.height: expected integer")
             if height <= 0:
                 raise ValueError(f"{path}.height: must be positive")
+        if megapixels is not None and (width is not None or height is not None):
+            raise ValueError(f"{path}.megapixels: cannot be combined with width or height")
         fps = data.get("fps")
         if fps is not None:
             if not isinstance(fps, int) or isinstance(fps, bool):
@@ -190,6 +207,7 @@ class GenerationRequirements:
             raise ValueError(f"{path}.reference_image_size: expected 'match' or 'max'")
         return cls(
             aspect_ratio=aspect_ratio,
+            megapixels=megapixels_value,
             width=width,
             height=height,
             fps=fps,
@@ -201,6 +219,8 @@ class GenerationRequirements:
         d: dict[str, Any] = {}
         if self.aspect_ratio is not None:
             d["aspect_ratio"] = self.aspect_ratio
+        if self.megapixels is not None:
+            d["megapixels"] = format(self.megapixels, ".15g")
         if self.width is not None:
             d["width"] = self.width
         if self.height is not None:

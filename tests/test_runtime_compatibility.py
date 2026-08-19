@@ -276,6 +276,9 @@ MOCK_OBJECT_INFO = {
         "description": "Get image dimensions",
         "category": "image",
     },
+    "LoadVideo": {},
+    "GetVideoComponents": {},
+    "LoadAudio": {},
     # --- R2V-specific nodes ---
     "ResolutionSelector": {
         "input": {
@@ -363,6 +366,8 @@ def workflow_dir(tmp_path):
     dst.mkdir()
     for f in src.glob("*.json"):
         (dst / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    presenter = pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / "h3_presenter_r2v.json"
+    (dst / presenter.name).write_text(presenter.read_text(encoding="utf-8"), encoding="utf-8")
     return dst
 
 
@@ -404,6 +409,15 @@ class TestRuntimeCompatibilityHappy:
         assert result["compatible"] is True
         assert result["level"] == "RUNTIME_COMPATIBLE"
 
+    def test_presenter_runtime_compatible(self, registry):
+        registry.register("h3_presenter_r2v")
+        result = registry.check_runtime_compatibility(
+            "h3_presenter_r2v",
+            comfy_client=MockComfyClient(),
+        )
+        assert result["compatible"] is True
+        assert result["level"] == "RUNTIME_COMPATIBLE"
+
     def test_check_names_included(self, registry):
         registry.register("h3_standard_t2v")
         result = registry.check_runtime_compatibility(
@@ -432,6 +446,20 @@ class TestRuntimeCompatibilityFailures:
         )
         assert result["compatible"] is False
         assert any(c["status"] == "fail" for c in result["checks"])
+
+    def test_presenter_requires_dynamic_media_nodes(self, registry):
+        registry.register("h3_presenter_r2v")
+        partial_info = dict(MOCK_OBJECT_INFO)
+        partial_info.pop("LoadAudio")
+        result = registry.check_runtime_compatibility(
+            "h3_presenter_r2v",
+            comfy_client=MockComfyClient(object_info=partial_info),
+        )
+        assert result["compatible"] is False
+        assert any(
+            check["name"] == "node_class_LoadAudio" and check["status"] == "fail"
+            for check in result["checks"]
+        )
 
     def test_missing_input_name(self, registry):
         """When a bound input doesn't exist on the node."""

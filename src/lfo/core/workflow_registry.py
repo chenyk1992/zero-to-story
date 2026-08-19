@@ -387,6 +387,71 @@ H3_R2V_MANIFEST = WorkflowManifest(
     tags=["reference-to-video", "audio", "ref2va", "multi-reference", "auto-duration"],
 )
 
+H3_PRESENTER_R2V_MANIFEST = WorkflowManifest(
+    workflow_id="h3_presenter_r2v",
+    version="3.0.0",
+    family="h3_presenter_r2v",
+    workflow_mode="r2v",
+    description=(
+        "H3 virtual-presenter Reference-to-Video-Audio workflow with explicit "
+        "materialized image, video and audio reference slots."
+    ),
+    source_file="h3_presenter_r2v.json",
+    workflow_hash="",
+    frame_constraints=FrameConstraints(
+        step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24
+    ),
+    resolution_constraints=ResolutionConstraints(
+        min_width=256,
+        max_width=4096,
+        min_height=256,
+        max_height=4096,
+        width_multiple=32,
+        height_multiple=32,
+        default_width=864,
+        default_height=480,
+    ),
+    input_slots=[
+        InputSlot(
+            binding_id="prompt",
+            selector_title="LFO.Prompt",
+            selector_class_type="PrimitiveStringMultiline",
+            input_name="value",
+            value_type="string",
+            description=(
+                "Presenter prompt; materialized ref_image_N, ref_video_N and "
+                "ref_audio_N map to Picture, Video and Audio N+1."
+            ),
+        ),
+        InputSlot(
+            binding_id="duration",
+            selector_title="LFO.Duration",
+            selector_class_type="PrimitiveFloat",
+            input_name="value",
+            value_type="float",
+            description="Duration in seconds, converted to the H3 17k+5 frame grid.",
+        ),
+        InputSlot(
+            binding_id="filename_prefix",
+            selector_title="LFO.SaveVideo",
+            selector_class_type="SaveVideo",
+            input_name="filename_prefix",
+            value_type="string",
+            description="Output filename prefix managed by LFO.",
+        ),
+    ],
+    output_spec=OutputSpec(asset_type="video", count=1, format="mp4"),
+    model_dependencies=[
+        ModelDependency(role="unet", filename="minimax_h3_ref2va_pruned_int8_convrot.safetensors"),
+        ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
+        ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
+        ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
+    ],
+    resource_profile=ResourceProfile(cold_start_sec=370.6, hot_start_sec=370.0, peak_vram_mb=0),
+    generates_audio=True,
+    tags=["virtual-presenter", "reference-to-video", "audio", "ref2va", "auto-duration"],
+)
+
 # Vertical (9:16) workflow manifests for H3
 
 H3_VERTICAL_T2V_MANIFEST = WorkflowManifest(
@@ -651,6 +716,7 @@ KNOWN_WORKFLOWS = {
     "h3_standard_t2v": H3_T2V_MANIFEST,
     "h3_standard_i2v": H3_I2V_MANIFEST,
     "h3_standard_r2v": H3_R2V_MANIFEST,
+    "h3_presenter_r2v": H3_PRESENTER_R2V_MANIFEST,
     "h3_vertical_t2v": H3_VERTICAL_T2V_MANIFEST,
     "h3_vertical_i2v": H3_VERTICAL_I2V_MANIFEST,
     "h3_vertical_r2v": H3_VERTICAL_R2V_MANIFEST,
@@ -699,6 +765,14 @@ def make_capability(manifest: WorkflowManifest) -> WorkflowCapability:
             limitations=[],
         )
     elif mode == "r2v":
+        limitations = (
+            [
+                "Presenter slots are explicit and type-specific: ref_image_0..8, "
+                "ref_video_0..2 and ref_audio_0..2"
+            ]
+            if manifest.workflow_id == "h3_presenter_r2v"
+            else ["Fixed 3 reference slots"]
+        )
         return WorkflowCapability(
             workflow_id=manifest.workflow_id,
             modes=["r2v"],
@@ -707,7 +781,7 @@ def make_capability(manifest: WorkflowManifest) -> WorkflowCapability:
             accepts_reference_images=True,
             produces_video=True,
             produces_audio=True,
-            limitations=["Fixed 3 reference slots"],
+            limitations=limitations,
         )
     elif mode == "upscale":
         return WorkflowCapability(
@@ -970,6 +1044,48 @@ class WorkflowRegistry:
                     "message": f"Cannot reach ComfyUI: {e}",
                 }],
             }
+
+        # Check every class used by the static API graph as well as the
+        # explicitly bound inputs below.  Presenter reference loader classes
+        # are injected dynamically by the backend and are declared by its
+        # capability manifest; the core graph still must expose its H3 R2V
+        # generator and decode/encode pipeline to /object_info.
+        wf_path = self.workflow_dir / manifest.source_file
+        try:
+            workflow = json.loads(wf_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            return {
+                "compatible": False,
+                "level": "STATIC_VALID",
+                "checks": [{
+                    "name": "workflow_graph",
+                    "status": "fail",
+                    "message": f"Cannot load workflow graph: {exc}",
+                }],
+            }
+        graph_classes: set[str] = {
+            class_type
+            for node in workflow.values()
+            if isinstance(node, dict)
+            and isinstance((class_type := node.get("class_type")), str)
+        }
+        if manifest.workflow_id == "h3_presenter_r2v":
+            # These upload/decomposition nodes are injected per declared
+            # reference slot, so they are runtime requirements even though
+            # the static template deliberately contains no placeholder media.
+            graph_classes.update(
+                {"LoadImage", "LoadVideo", "GetVideoComponents", "LoadAudio"}
+            )
+        for class_type in sorted(graph_classes):
+            checks.append({
+                "name": f"node_class_{class_type}",
+                "status": "pass" if class_type in object_info else "fail",
+                "message": (
+                    f"Node class '{class_type}' exists in ComfyUI"
+                    if class_type in object_info
+                    else f"Node class '{class_type}' not found in ComfyUI"
+                ),
+            })
 
         # Check each input slot's node class and input name
         for slot in manifest.input_slots:

@@ -10,9 +10,9 @@ from typing import Any
 
 from lfo.assets.importer import AssetImporter
 from lfo.assets.store import ContentAddressedStore
-from lfo.backends.comfy_h3 import ComfyH3VideoHandler, build_h3_backend_registry
 from lfo.backends.comfy_seedvr2 import ComfyUpscaleVideoHandler
 from lfo.backends.registry import BackendRegistry
+from lfo.backends.video_router import VideoTaskRouter, build_video_backend_registry
 from lfo.contracts.package import VideoExecutionPackage, validate_package
 from lfo.core.canonical import hash_value
 from lfo.execution import ExecutionStore
@@ -97,13 +97,13 @@ class VideoRuntime:
         self.db_path = pathlib.Path(db_path or self.workspace_root / "db" / "runtime-v1.sqlite3")
         self.store = ExecutionStore(self.db_path)
         self.store.init_schema()
-        self.registry = registry or build_h3_backend_registry()
+        self.registry = registry or build_video_backend_registry()
         self.handlers = handler_registry or self._production_handlers()
         self.cas = ContentAddressedStore(self.workspace_root / "assets")
 
     def _production_handlers(self) -> HandlerRegistry:
         handlers = build_media_handler_registry(self.workspace_root)
-        handlers.register("video.generate", ComfyH3VideoHandler())
+        handlers.register("video.generate", VideoTaskRouter())
         handlers.register(
             "video.upscale",
             ComfyUpscaleVideoHandler(progress_callback=self._record_task_progress),
@@ -456,6 +456,9 @@ class VideoRuntime:
                 "workflow_hash": clip.workflow_hash,
                 "duration_ms": clip.duration_ms,
                 "reference_count": len(clip.resolved_references),
+                "megapixels": clip.megapixels,
+                "width": clip.width,
+                "height": clip.height,
                 "dropped_references": clip.dropped_references,
             }
             for clip in snapshot.clips

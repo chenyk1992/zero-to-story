@@ -23,6 +23,8 @@ def workflow_dir(tmp_path):
         (dst / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     seedvr2 = pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / "seedvr2_upscale.json"
     (dst / seedvr2.name).write_text(seedvr2.read_text(encoding="utf-8"), encoding="utf-8")
+    presenter = pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / "h3_presenter_r2v.json"
+    (dst / presenter.name).write_text(presenter.read_text(encoding="utf-8"), encoding="utf-8")
     return dst
 
 
@@ -33,11 +35,12 @@ def registry(workflow_dir):
 
 
 class TestKnownWorkflows:
-    def test_seven_workflows_defined(self):
-        assert len(KNOWN_WORKFLOWS) == 7
+    def test_eight_workflows_defined(self):
+        assert len(KNOWN_WORKFLOWS) == 8
         assert "h3_standard_t2v" in KNOWN_WORKFLOWS
         assert "h3_standard_i2v" in KNOWN_WORKFLOWS
         assert "h3_standard_r2v" in KNOWN_WORKFLOWS
+        assert "h3_presenter_r2v" in KNOWN_WORKFLOWS
         assert "h3_vertical_t2v" in KNOWN_WORKFLOWS
         assert "h3_vertical_i2v" in KNOWN_WORKFLOWS
         assert "h3_vertical_r2v" in KNOWN_WORKFLOWS
@@ -68,6 +71,26 @@ class TestKnownWorkflows:
         unet = next(d for d in m.model_dependencies if d.role == "unet")
         assert "ref2va" in unet.filename
 
+    def test_presenter_manifest_uses_strict_r2v_slots(self):
+        manifest = KNOWN_WORKFLOWS["h3_presenter_r2v"]
+        assert manifest.family.startswith("h3_")
+        assert manifest.workflow_mode == "r2v"
+        assert {slot.binding_id for slot in manifest.input_slots} == {
+            "prompt", "duration", "filename_prefix",
+        }
+        assert all(slot.selector_title for slot in manifest.input_slots)
+
+    def test_presenter_graph_is_core_r2v_without_static_reference_loaders(self):
+        workflow = WorkflowLoader.load(
+            pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / "h3_presenter_r2v.json"
+        )
+        classes = {node["class_type"] for node in workflow.values()}
+        assert "MiniMaxH3ReferenceToVideo" in classes
+        assert {"LoadImage", "LoadVideo", "GetVideoComponents", "LoadAudio"}.isdisjoint(classes)
+        assert workflow["12"]["inputs"]["steps"] == 20
+        assert workflow["17"]["inputs"]["fps"] == 24
+        assert workflow["9"]["inputs"]["length"] == ["8", 1]
+
     def test_frame_constraints(self):
         m = KNOWN_WORKFLOWS["h3_standard_t2v"]
         assert m.frame_constraints.step == 17
@@ -90,7 +113,7 @@ class TestRegistration:
     def test_register_all(self, registry):
         results = registry.register_all()
         assert all(v == "ok" for v in results.values())
-        assert len(registry.list_workflows()) == 7
+        assert len(registry.list_workflows()) == 8
 
     def test_register_single(self, registry):
         report = registry.register("h3_standard_t2v")
@@ -143,6 +166,13 @@ class TestBindingResolution:
         assert "ref_image_0" in binding_ids
         assert "ref_image_1" in binding_ids
         assert "ref_image_2" in binding_ids
+
+    def test_presenter_bindings_resolve(self, registry):
+        report = registry.register("h3_presenter_r2v")
+        assert report.status == "ok"
+        assert [binding["binding_id"] for binding in report.bindings] == [
+            "prompt", "duration", "filename_prefix",
+        ]
 
     def test_binding_node_ids_valid(self, registry):
         report = registry.register("h3_standard_t2v")
@@ -267,6 +297,9 @@ class TestExport:
             "h3_standard_r2v_manifest.json",
             "h3_standard_r2v_capability.json",
             "h3_standard_r2v_binding_report.json",
+            "h3_presenter_r2v_manifest.json",
+            "h3_presenter_r2v_capability.json",
+            "h3_presenter_r2v_binding_report.json",
         ]
         for fname in expected_files:
             fpath = out_dir / fname

@@ -35,6 +35,7 @@ class MaterializedClip:
     dropped_references: list[dict[str, Any]] = field(default_factory=list)
     # Requirements snapshot
     aspect_ratio: str | None = None
+    megapixels: float | None = None
     width: int | None = None
     height: int | None = None
     fps: int | None = None
@@ -259,6 +260,8 @@ def materialize(
             requirements["width"] = req.width
         if req.height is not None:
             requirements["height"] = req.height
+        if req.megapixels is not None:
+            requirements["megapixels"] = req.megapixels
         if req.fps is not None:
             requirements["fps"] = req.fps
         if req.native_audio is not None:
@@ -327,6 +330,7 @@ def materialize(
                 "asset_key": ref.asset_key,
                 "asset_revision_id": asset_rev,
                 "file_path": _asset_path(asset_value),
+                "media_type": _asset_media_type(ref.asset_key, package),
                 "semantic_usage": ref.semantic_usage,
                 "slot": ref.binding.slot or str(index),
                 "required": ref.binding.required,
@@ -364,6 +368,7 @@ def materialize(
             resolved_references=resolved_refs,
             dropped_references=dropped_refs,
             aspect_ratio=req.aspect_ratio,
+            megapixels=req.megapixels,
             width=req.width,
             height=req.height,
             fps=req.fps,
@@ -425,6 +430,7 @@ def _clip_to_dict(clip: MaterializedClip) -> dict[str, Any]:
         "resolved_references": clip.resolved_references,
         "dropped_references": clip.dropped_references,
         "aspect_ratio": clip.aspect_ratio,
+        "megapixels": clip.megapixels,
         "width": clip.width,
         "height": clip.height,
         "fps": clip.fps,

@@ -10,7 +10,13 @@ from lfo.contracts.assets import (
     AssetSpec,
     ProvenanceSpec,
 )
-from lfo.contracts.clips import BindingPolicy, ClipSpec, GenerationSpec, ReferenceSpec
+from lfo.contracts.clips import (
+    BindingPolicy,
+    ClipSpec,
+    GenerationRequirements,
+    GenerationSpec,
+    ReferenceSpec,
+)
 from lfo.contracts.package import ProjectInfo, VideoExecutionPackage
 from lfo.execution.materializer import MaterializationError, materialize
 
@@ -70,6 +76,15 @@ class TestMaterialize:
         assert result.package_id == "pkg-test"
         assert len(result.clips) == 1
         assert result.clips[0].backend_id == "comfyui.h3"
+
+    def test_megapixels_are_materialized(self) -> None:
+        clip = _make_clip()
+        clip.generation.requirements = GenerationRequirements(
+            aspect_ratio="16:9",
+            megapixels=0.3,
+        )
+        result = materialize("run-1", _make_package([clip]), "pkghash", _h3_registry())
+        assert result.clips[0].megapixels == 0.3
 
     def test_deterministic_hash(self) -> None:
         """Same inputs produce same materialization hash."""
@@ -169,6 +184,75 @@ class TestMaterialize:
         # Check the reference was resolved
         mat_clip = result.clips[0]
         assert mat_clip.resolved_references[0]["asset_revision_id"] == "asset-rev-abc"
+        assert mat_clip.resolved_references[0]["media_type"] == "image"
+
+    def test_resolved_references_carry_mixed_media_types(self) -> None:
+        refs = [
+            ReferenceSpec(
+                reference_id="motion-reference",
+                asset_key="reference.mp4",
+                semantic_usage="motion.reference",
+                binding=BindingPolicy(required=True, priority=20),
+            ),
+            ReferenceSpec(
+                reference_id="character-reference",
+                asset_key="character.png",
+                semantic_usage="subject.identity",
+                binding=BindingPolicy(required=True, priority=10),
+            ),
+        ]
+        assets = [
+            AssetSpec(
+                asset_key="reference.mp4",
+                media_type="video",
+                source=AssetSource(uri="references/reference.mp4"),
+                provenance=ProvenanceSpec(
+                    source_type="skill",
+                    producer="codex",
+                    operation="video.reference",
+                ),
+            ),
+            AssetSpec(
+                asset_key="character.png",
+                media_type="image",
+                source=AssetSource(uri="references/character.png"),
+                provenance=ProvenanceSpec(
+                    source_type="skill",
+                    producer="codex",
+                    operation="image.reference",
+                ),
+            ),
+        ]
+        package = VideoExecutionPackage(
+            package_id="pkg",
+            revision=1,
+            project=ProjectInfo(title="T", project_id="test-project"),
+            assets=assets,
+            clips=[_make_clip("c1", operation="video.reference_to_video", references=refs)],
+        )
+        result = materialize(
+            "run",
+            package,
+            "hash",
+            _h3_registry(),
+            asset_resolutions={
+                "reference.mp4": {
+                    "asset_revision_id": "video-rev",
+                    "file_path": "C:/reference.mp4",
+                },
+                "character.png": {
+                    "asset_revision_id": "image-rev",
+                    "file_path": "C:/character.png",
+                },
+            },
+        )
+
+        resolved = {
+            reference["reference_id"]: reference
+            for reference in result.clips[0].resolved_references
+        }
+        assert resolved["motion-reference"]["media_type"] == "video"
+        assert resolved["character-reference"]["media_type"] == "image"
 
     def test_required_reference_without_imported_revision_fails(self) -> None:
         ref = ReferenceSpec(

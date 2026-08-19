@@ -1,0 +1,27 @@
+{
+  "workflow_id": "h3_presenter_r2v",
+  "bindings": [
+    {
+      "binding_id": "prompt",
+      "node_id": "6",
+      "input_name": "value",
+      "class_type": "PrimitiveStringMultiline"
+    },
+    {
+      "binding_id": "duration",
+      "node_id": "7",
+      "input_name": "value",
+      "class_type": "PrimitiveFloat"
+    },
+    {
+      "binding_id": "filename_prefix",
+      "node_id": "18",
+      "input_name": "filename_prefix",
+      "class_type": "SaveVideo"
+    }
+  ],
+  "unresolved": [],
+  "status": "ok",
+  "mode": "strict",
+  "warnings": []
+}

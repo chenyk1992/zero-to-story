@@ -85,7 +85,9 @@ class ComfyApiClient:
 
     def get_history(self, prompt_id: str) -> dict:
         """Return execution history for a given prompt."""
-        resp = self._request("GET", f"/history/{prompt_id}", timeout=10)
+        # H3 can keep ComfyUI's request thread busy while a long sample is
+        # running; do not turn a slow history response into a false failure.
+        resp = self._request("GET", f"/history/{prompt_id}", timeout=60)
         return resp.json()
 
     def interrupt(self) -> None:
@@ -109,7 +111,7 @@ class ComfyApiClient:
         """
         path = Path(file_path)
         if not path.exists():
-            raise FileNotFoundError(f"Input file not found: {path}")
+            raise FileNotFoundError("Input file is unavailable")
 
         with path.open("rb") as fh:
             files = {"image": (path.name, fh, "application/octet-stream")}

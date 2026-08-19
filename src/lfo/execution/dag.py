@@ -200,6 +200,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "seed": clip.seed,
                 "duration_ms": clip.duration_ms,
                 "aspect_ratio": clip.aspect_ratio,
+                "megapixels": clip.megapixels,
                 "width": clip.width,
                 "height": clip.height,
                 "fps": clip.fps,

@@ -6,6 +6,7 @@ import pytest
 
 from lfo.backends.comfy_h3 import (
     H3_BACKEND_ID,
+    H3_PRESENTER_BACKEND_ID,
     ComfyH3Config,
     ComfyH3VideoHandler,
     build_h3_backend_registry,
@@ -16,10 +17,15 @@ class FakeClient:
     def __init__(self, output: pathlib.Path) -> None:
         self.output = output
         self.uploaded: list[pathlib.Path] = []
+        self.uploaded_files: list[pathlib.Path] = []
         self.submitted: dict | None = None
 
     def upload_image(self, path: pathlib.Path) -> dict:
         self.uploaded.append(path)
+        return {"name": path.name, "subfolder": "lfo-input"}
+
+    def upload_file(self, path: pathlib.Path, subfolder: str = "") -> dict:
+        self.uploaded_files.append(path)
         return {"name": path.name, "subfolder": "lfo-input"}
 
     def submit_prompt(self, workflow: dict, client_id: str) -> dict:
@@ -70,6 +76,32 @@ def test_select_workflow_by_operation_and_orientation() -> None:
     assert ComfyH3VideoHandler._select_workflow(
         {"operation": "video.reference_to_video", "width": 448, "height": 800}
     ) == "h3_vertical_r2v"
+
+
+def test_select_workflow_forces_virtual_presenter_workflow() -> None:
+    assert ComfyH3VideoHandler._select_workflow(
+        {"operation": "video.virtual_presenter"}
+    ) == "h3_presenter_r2v"
+    with pytest.raises(ValueError, match="fixed to h3_presenter_r2v"):
+        ComfyH3VideoHandler._select_workflow(
+            {"operation": "video.virtual_presenter", "workflow_id": "h3_standard_r2v"}
+        )
+
+
+def test_presenter_capability_is_independent() -> None:
+    registry = build_h3_backend_registry()
+    presenter = registry.get(H3_PRESENTER_BACKEND_ID, "3.0.0")
+    standard = registry.get(H3_BACKEND_ID, "3.0.0")
+    assert presenter is not None
+    assert standard is not None
+    assert presenter.operations == ["video.virtual_presenter"]
+    assert presenter.accepted_media_types == ["image", "video", "audio"]
+    assert presenter.max_references == 15
+    assert presenter.duration_constraints == {"min_ms": 4_000, "max_ms": 15_000}
+    assert "LoadVideo" in presenter.required_nodes
+    assert "GetVideoComponents" in presenter.required_nodes
+    assert "LoadAudio" in presenter.required_nodes
+    assert "video.virtual_presenter" not in standard.operations
 
 
 def test_h3_handler_rejects_non_h3_explicit_workflow() -> None:
@@ -126,6 +158,153 @@ def test_prepare_r2v_uses_only_declared_reference_slots(
     assert workflow["15"]["inputs"]["noise_seed"] == 42
 
 
+def test_prepare_r2v_mixes_video_and_image_references(
+    tmp_path: pathlib.Path,
+) -> None:
+    video = tmp_path / "reference-video.mp4"
+    image = tmp_path / "reference-image.png"
+    video.write_bytes(b"video")
+    image.write_bytes(b"image")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, uploaded = handler._prepare_workflow(
+        "h3_standard_r2v",
+        {
+            "prompt": "A cinematic reference-to-video shot",
+            "duration_ms": 5_000,
+            "resolved_references": [
+                {
+                    "reference_id": "motion-reference",
+                    "media_type": "video",
+                    "blob_path": str(video),
+                },
+                {
+                    "reference_id": "character-reference",
+                    "media_type": "image",
+                    "blob_path": str(image),
+                },
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    expected_video = f"lfo-input/{video.name}"
+    expected_image = f"lfo-input/{image.name}"
+    assert client.uploaded_files == [video.resolve()]
+    assert client.uploaded == [image.resolve()]
+    assert set(uploaded) == {expected_video, expected_image}
+
+    load_video_nodes = [
+        (node_id, node)
+        for node_id, node in workflow.items()
+        if node.get("class_type") == "LoadVideo"
+    ]
+    component_nodes = [
+        (node_id, node)
+        for node_id, node in workflow.items()
+        if node.get("class_type") == "GetVideoComponents"
+    ]
+    generator_nodes = [
+        node
+        for node in workflow.values()
+        if node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+    ]
+    assert len(load_video_nodes) == 1
+    assert len(component_nodes) == 1
+    assert len(generator_nodes) == 1
+
+    load_video_id, load_video = load_video_nodes[0]
+    component_id, components = component_nodes[0]
+    assert load_video["inputs"]["file"] == expected_video
+    assert components["inputs"]["video"] == [load_video_id, 0]
+    generator_inputs = generator_nodes[0]["inputs"]
+    assert generator_inputs["ref_videos.ref_video_0"] == [component_id, 0]
+
+
+def test_prepare_presenter_uses_materialized_typed_slots(
+    tmp_path: pathlib.Path,
+) -> None:
+    image = tmp_path / "picture.png"
+    video = tmp_path / "motion.mp4"
+    audio = tmp_path / "voice.wav"
+    image.write_bytes(b"image")
+    video.write_bytes(b"video")
+    audio.write_bytes(b"audio")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, uploaded = handler._prepare_workflow(
+        "h3_presenter_r2v",
+        {
+            "prompt": "Picture 1 speaks with Video 1 while Audio 1 is heard",
+            "duration_ms": 5_000,
+            "resolved_references": [
+                {"reference_id": "voice", "slot": "ref_audio_0", "media_type": "audio", "blob_path": str(audio)},
+                {"reference_id": "motion", "slot": "ref_video_0", "media_type": "video", "blob_path": str(video)},
+                {"reference_id": "identity", "slot": "ref_image_0", "media_type": "image", "blob_path": str(image)},
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    assert uploaded == [f"lfo-input/{image.name}", f"lfo-input/{video.name}", f"lfo-input/{audio.name}"]
+    assert client.uploaded == [image.resolve()]
+    assert client.uploaded_files == [video.resolve(), audio.resolve()]
+    generator = workflow["9"]["inputs"]
+    assert generator["ref_images.ref_image_0"][0] != "0"
+    assert generator["ref_videos.ref_video_0"][1] == 0
+    assert generator["ref_video_audios.ref_video_audio_0"][1] == 1
+    assert generator["ref_audios.ref_audio_0"][1] == 0
+    assert workflow["12"]["inputs"]["steps"] == 20
+    assert workflow["17"]["inputs"]["fps"] == 24
+    assert all(str(tmp_path) not in str(node) for node in workflow.values())
+
+
+@pytest.mark.parametrize(
+    ("slot", "media_type"),
+    [
+        ("ref_image_1", "image"),
+        ("ref_image_0", "video"),
+        ("ref_video_3", "video"),
+        ("ref_audio_3", "audio"),
+        ("ref_image_0", "image"),
+    ],
+)
+def test_prepare_presenter_rejects_invalid_slots(
+    tmp_path: pathlib.Path,
+    slot: str,
+    media_type: str,
+) -> None:
+    reference = tmp_path / "reference.bin"
+    reference.write_bytes(b"reference")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+    references = [{"reference_id": "ref", "slot": slot, "media_type": media_type, "blob_path": str(reference)}]
+    if slot == "ref_image_0" and media_type == "image":
+        references.append({"reference_id": "duplicate", "slot": slot, "media_type": media_type, "blob_path": str(reference)})
+    with pytest.raises(ValueError):
+        handler._prepare_workflow(
+            "h3_presenter_r2v",
+            {"prompt": "Presenter", "resolved_references": references},
+            output_prefix="lfo/run/task/attempt/video",
+        )
+    assert client.uploaded == []
+    assert client.uploaded_files == []
+
+
 def test_prepare_r2v_can_use_max_reference_image_size(tmp_path: pathlib.Path) -> None:
     reference = tmp_path / "reference.png"
     reference.write_bytes(b"image")
@@ -148,6 +327,61 @@ def test_prepare_r2v_can_use_max_reference_image_size(tmp_path: pathlib.Path) ->
     )
 
     assert workflow["12"]["inputs"]["ref_image_size"] == "max"
+
+
+def test_prepare_h3_applies_requested_resolution(tmp_path: pathlib.Path) -> None:
+    reference = tmp_path / "reference.png"
+    reference.write_bytes(b"image")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_standard_r2v",
+        {
+            "prompt": "A cinematic 768p shot",
+            "duration_ms": 5_000,
+            "width": 1344,
+            "height": 768,
+            "resolved_references": [{"blob_path": str(reference)}],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    generator = workflow["12"]["inputs"]
+    assert generator["width"] == 1344
+    assert generator["height"] == 768
+    assert workflow["14"]["inputs"]["steps"] == 20
+
+
+def test_prepare_h3_applies_requested_megapixels(tmp_path: pathlib.Path) -> None:
+    reference = tmp_path / "reference.png"
+    reference.write_bytes(b"image")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_standard_r2v",
+        {
+            "prompt": "A cinematic low-resolution shot",
+            "duration_ms": 5_000,
+            "aspect_ratio": "16:9",
+            "megapixels": 0.3,
+            "resolved_references": [{"blob_path": str(reference)}],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    assert workflow["5"]["inputs"]["megapixels"] == 0.3
+    assert workflow["12"]["inputs"]["width"] == ["5", 0]
+    assert workflow["12"]["inputs"]["height"] == ["5", 1]
 
 
 def test_execute_returns_durable_file_metadata(tmp_path: pathlib.Path) -> None:

@@ -233,8 +233,24 @@ class TestReferenceSpec:
 class TestGenerationRequirements:
     def test_defaults(self):
         r = GenerationRequirements.from_dict({}, "$")
+        assert r.megapixels is None
         assert r.width is None
         assert r.height is None
+
+    def test_megapixels_is_positive_number(self):
+        r = GenerationRequirements.from_dict({"megapixels": 0.3}, "$")
+        assert r.megapixels == 0.3
+        assert r.to_dict()["megapixels"] == "0.3"
+
+        from_string = GenerationRequirements.from_dict({"megapixels": "0.3"}, "$")
+        assert from_string.megapixels == 0.3
+
+    def test_megapixels_cannot_be_combined_with_dimensions(self):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            GenerationRequirements.from_dict(
+                {"megapixels": 0.3, "width": 1344},
+                "$",
+            )
 
     def test_positive_integers(self):
         with pytest.raises(ValueError, match="positive"):

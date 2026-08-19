@@ -27,12 +27,14 @@ class UpscaleOptions:
     enabled: bool = False
     scale_multiplier: float = DEFAULT_SCALE_MULTIPLIER
     seed: int | None = None
+    segment_seconds: float | None = 8.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
             "scale_multiplier": self.scale_multiplier,
             "seed": self.seed,
+            "segment_seconds": self.segment_seconds,
         }
 
 
@@ -99,7 +101,29 @@ def validate_upscale_options(config: object, path: str) -> list[UpscaleOptionIss
                     "range",
                     seed,
                 )
-            )
+                )
+
+    if "segment_seconds" in config:
+        segment_seconds = config["segment_seconds"]
+        if segment_seconds is not None:
+            if isinstance(segment_seconds, bool) or not isinstance(segment_seconds, (int, float)):
+                issues.append(
+                    UpscaleOptionIssue(
+                        f"{path}.segment_seconds",
+                        "expected positive number or null",
+                        "type",
+                        segment_seconds,
+                    )
+                )
+            elif float(segment_seconds) <= 0:
+                issues.append(
+                    UpscaleOptionIssue(
+                        f"{path}.segment_seconds",
+                        "must be > 0 or null",
+                        "minimum",
+                        segment_seconds,
+                    )
+                )
     return issues
 
 
@@ -118,6 +142,11 @@ def resolve_upscale_options(
         enabled=bool(merged.get("enabled", False)),
         scale_multiplier=float(merged.get("scale_multiplier", DEFAULT_SCALE_MULTIPLIER)),
         seed=merged.get("seed"),
+        segment_seconds=(
+            None
+            if merged.get("segment_seconds", 8.0) is None
+            else float(merged.get("segment_seconds", 8.0))
+        ),
     )
 
 

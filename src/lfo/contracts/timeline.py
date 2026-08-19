@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-SUBTITLE_MODES = frozenset({"sidecar", "burnin", "both"})
+SUBTITLE_MODES = frozenset({"none", "sidecar", "burnin", "both"})
 CONTAINER_FORMATS = frozenset({"mp4", "mov", "mkv", "webm"})
 VIDEO_ENCODERS = frozenset({"h264", "h265", "av1", "vp9"})
 AUDIO_ENCODERS = frozenset({"aac", "mp3", "opus", "flac", "pcm"})

@@ -5,6 +5,14 @@ canonical VideoExecutionPackage v1 contract. Adapters contain no I/O.
 """
 from __future__ import annotations
 
-from . import product_promo, zero_to_story
+from . import mg_voiceover, product_promo, virtual_presenter, zero_to_story
+from .virtual_presenter import build_assembly_package, build_shot_package
 
-__all__ = ["product_promo", "zero_to_story"]
+__all__ = [
+    "build_assembly_package",
+    "build_shot_package",
+    "mg_voiceover",
+    "product_promo",
+    "virtual_presenter",
+    "zero_to_story",
+]

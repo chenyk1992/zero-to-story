@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, cast
@@ -22,11 +23,17 @@ from lfo.comfy.workflow import WorkflowLoader
 from lfo.core.hashing import compute_workflow_hash
 from lfo.core.workflow_registry import KNOWN_WORKFLOWS, WorkflowManifest
 from lfo.execution.handlers import HandlerResult, TaskHandler
-from lfo.services.artifact_layout import ArtifactLayoutError, atomic_copy_verified, managed_path
+from lfo.services.artifact_layout import atomic_copy_verified, managed_path
 
 H3_BACKEND_ID = "comfyui.h3"
 H3_BACKEND_REVISION = "3.0.0"
+H3_PRESENTER_BACKEND_ID = "comfyui.h3-presenter"
+H3_PRESENTER_BACKEND_REVISION = "3.0.0"
 H3_MAX_REFERENCE_IMAGES = 9
+H3_PRESENTER_MAX_REFERENCES = 15
+H3_PRESENTER_MAX_REFERENCE_IMAGES = 9
+H3_PRESENTER_MAX_REFERENCE_VIDEOS = 3
+H3_PRESENTER_MAX_REFERENCE_AUDIO = 3
 
 
 @dataclass(frozen=True)
@@ -39,7 +46,14 @@ class ComfyH3Config:
         "D:/ComfyUI/Comfy-Desktop/ComfyUI/ComfyUI/output"
     )
     poll_interval_seconds: float = 3.0
-    timeout_seconds: float = 1_200.0
+    # H3 768P clips with long reference videos can exceed the generic
+    # twenty-minute provider wait; keep the worker alive while ComfyUI
+    # continues sampling instead of orphaning a valid prompt.
+    timeout_seconds: float = 7_200.0
+    # Match the bundled H3 graph default (BasicScheduler.steps = 20); local
+    # profile keeps the upstream quality setting.  Override per task via
+    # metadata.steps when a faster draft pass is required.
+    steps: int = 20
 
 
 def build_h3_backend_registry(
@@ -52,7 +66,7 @@ def build_h3_backend_registry(
     required_models: set[str] = set()
     h3_workflow_ids: list[str] = []
     for manifest in KNOWN_WORKFLOWS.values():
-        if not manifest.family.startswith("h3_"):
+        if not manifest.family.startswith("h3_") or manifest.workflow_id == "h3_presenter_r2v":
             continue
         h3_workflow_ids.append(manifest.workflow_id)
         workflow = WorkflowLoader.load(root / manifest.source_file)
@@ -74,7 +88,7 @@ def build_h3_backend_registry(
                 "video.image_to_video",
                 "video.reference_to_video",
             ],
-            accepted_media_types=["image"],
+            accepted_media_types=["image", "video"],
             max_references=H3_MAX_REFERENCE_IMAGES,
             duration_constraints={"min_ms": 200, "max_ms": 150_000},
             frame_constraints={"formula": "17k+5", "fps": 24},
@@ -94,10 +108,62 @@ def build_h3_backend_registry(
             required_nodes=[
                 "MiniMaxH3ImageToVideo",
                 "MiniMaxH3ReferenceToVideo",
+                "LoadVideo",
+                "GetVideoComponents",
                 "SaveVideo",
             ],
             output_signature={"media_type": "video", "container": "mp4", "codec": "h264"},
             extensions={"workflow_ids": sorted(h3_workflow_ids)},
+        )
+    )
+    presenter = KNOWN_WORKFLOWS["h3_presenter_r2v"]
+    presenter_workflow = WorkflowLoader.load(root / presenter.source_file)
+    presenter_errors = WorkflowLoader.validate_workflow(presenter_workflow)
+    if presenter_errors:
+        raise ValueError(
+            f"Invalid bundled workflow {presenter.source_file}: {'; '.join(presenter_errors)}"
+        )
+    presenter_models = sorted(
+        dependency.filename
+        for dependency in presenter.model_dependencies
+        if dependency.required
+    )
+    registry.register(
+        CapabilityManifest(
+            backend_id=H3_PRESENTER_BACKEND_ID,
+            revision=H3_PRESENTER_BACKEND_REVISION,
+            workflow_hash=compute_workflow_hash(presenter_workflow),
+            operations=["video.virtual_presenter"],
+            accepted_media_types=["image", "video", "audio"],
+            max_references=H3_PRESENTER_MAX_REFERENCES,
+            duration_constraints={"min_ms": 4_000, "max_ms": 15_000},
+            frame_constraints={"formula": "17k+5", "fps": 24},
+            resolution_constraints={
+                "min_width": 256,
+                "max_width": 4096,
+                "min_height": 256,
+                "max_height": 4096,
+                "width_multiple": 32,
+                "height_multiple": 32,
+            },
+            fps_constraints=[24.0],
+            native_audio_capability="always",
+            seed_capability=True,
+            reproducibility_claim="best_effort",
+            required_models=presenter_models,
+            required_nodes=[
+                "MiniMaxH3ReferenceToVideo",
+                "LoadImage",
+                "LoadVideo",
+                "GetVideoComponents",
+                "LoadAudio",
+                "VAEDecode",
+                "VAEDecodeAudio",
+                "CreateVideo",
+                "SaveVideo",
+            ],
+            output_signature={"media_type": "video", "container": "mp4", "codec": "h264"},
+            extensions={"workflow_ids": [presenter.workflow_id]},
         )
     )
     return registry
@@ -189,13 +255,19 @@ class ComfyH3VideoHandler(TaskHandler):
     @staticmethod
     def _select_workflow(metadata: dict[str, Any]) -> str:
         explicit = metadata.get("workflow_id")
+        operation = metadata.get("operation")
+        if operation == "video.virtual_presenter":
+            if explicit is not None and str(explicit) != "h3_presenter_r2v":
+                raise ValueError(
+                    "video.virtual_presenter is fixed to h3_presenter_r2v"
+                )
+            return "h3_presenter_r2v"
         if explicit is not None:
             manifest = KNOWN_WORKFLOWS.get(str(explicit))
             if manifest is None or not manifest.family.startswith("h3_"):
                 raise ValueError(f"Unknown H3 workflow_id: {explicit}")
             return str(explicit)
 
-        operation = metadata.get("operation")
         if not isinstance(operation, str):
             raise ValueError("video.generate metadata.operation is required")
         suffix_by_operation = {
@@ -224,6 +296,8 @@ class ComfyH3VideoHandler(TaskHandler):
         *,
         output_prefix: str,
     ) -> tuple[dict[str, Any], list[str]]:
+        if workflow_id == "h3_presenter_r2v":
+            return self._prepare_presenter_workflow(metadata, output_prefix=output_prefix)
         manifest = KNOWN_WORKFLOWS[workflow_id]
         workflow = WorkflowLoader.load(self.config.workflow_dir / manifest.source_file)
         bindings = self._resolve_bindings(workflow, manifest)
@@ -238,43 +312,247 @@ class ComfyH3VideoHandler(TaskHandler):
         references = metadata.get("resolved_references", [])
         if not isinstance(references, list):
             raise TypeError("resolved_references must be a list")
-        local_paths = [_reference_path(ref) for ref in references]
-        uploaded = [self._upload_reference(path) for path in local_paths]
+        uploaded: list[str] = []
+        uploaded_images: list[str] = []
+        uploaded_videos: list[str] = []
+        for ref in references:
+            if not isinstance(ref, dict):
+                raise TypeError("Each resolved reference must be an object")
+            media_type = str(ref.get("media_type") or "image")
+            if media_type not in {"image", "video"}:
+                raise ValueError(f"H3 references do not support media type {media_type!r}")
+            uploaded_name = self._upload_reference(_reference_path(ref), media_type)
+            uploaded.append(uploaded_name)
+            if media_type == "video":
+                uploaded_videos.append(uploaded_name)
+            else:
+                uploaded_images.append(uploaded_name)
 
         if manifest.workflow_mode == "i2v":
-            if not uploaded:
+            if not uploaded_images:
                 raise ValueError(f"{workflow_id} requires a first-frame image")
-            values["first_frame"] = uploaded[0]
+            values["first_frame"] = uploaded_images[0]
         elif manifest.workflow_mode == "r2v":
-            if not uploaded:
-                raise ValueError(f"{workflow_id} requires at least one reference image")
+            if not uploaded_images and not uploaded_videos:
+                raise ValueError(f"{workflow_id} requires at least one reference image or video")
             if len(uploaded) > H3_MAX_REFERENCE_IMAGES:
                 raise ValueError(
-                    f"{workflow_id} supports at most {H3_MAX_REFERENCE_IMAGES} reference images"
+                    f"{workflow_id} supports at most {H3_MAX_REFERENCE_IMAGES} total references"
                 )
+            if len(uploaded_videos) > 3:
+                raise ValueError(f"{workflow_id} supports at most 3 reference videos")
             # The bundled graph contains three convenience loaders.  H3 itself
-            # supports a dynamic ref_images group, so bind only the declared
-            # slots here and add loader nodes for reference four through nine.
-            for index, value in enumerate(uploaded[:3]):
+            # supports dynamic ref_images and ref_videos groups. Bind only the
+            # declared image slots here; video loaders are added below.
+            for index, value in enumerate(uploaded_images[:3]):
                 values[f"ref_image_{index}"] = value
 
         resolved_values = [(bindings[key], value) for key, value in values.items() if key in bindings]
         prepared = BindingResolver(workflow).apply_values(cast(Any, resolved_values))
         if manifest.workflow_mode == "r2v":
-            self._configure_r2v_reference_slots(prepared, bindings, uploaded)
+            self._configure_r2v_reference_slots(
+                prepared,
+                bindings,
+                uploaded_images,
+                uploaded_videos,
+            )
             self._apply_reference_image_size(prepared, metadata.get("reference_image_size"))
+        self._apply_megapixels(prepared, metadata.get("megapixels"))
+        self._apply_resolution(
+            prepared,
+            metadata.get("width"),
+            metadata.get("height"),
+        )
+        self._apply_steps(prepared, metadata.get("steps", self.config.steps))
+        self._apply_seed(prepared, metadata.get("seed"))
+        self._apply_fps(prepared, metadata.get("fps"))
+        return prepared, uploaded
+
+    def _prepare_presenter_workflow(
+        self,
+        metadata: dict[str, Any],
+        *,
+        output_prefix: str,
+    ) -> tuple[dict[str, Any], list[str]]:
+        """Prepare Presenter R2V using explicit materialized reference slots.
+
+        Presenter references are not positional.  The materializer supplies a
+        ``ref_image_N``, ``ref_video_N`` or ``ref_audio_N`` slot and the slot
+        determines both the ComfyUI input and the prompt-facing Picture/Video/
+        Audio N+1 identity.
+        """
+        manifest = KNOWN_WORKFLOWS["h3_presenter_r2v"]
+        workflow = WorkflowLoader.load(self.config.workflow_dir / manifest.source_file)
+        bindings = self._resolve_bindings(workflow, manifest)
+        prompt = str(metadata.get("prompt") or "")
+        if not prompt:
+            raise ValueError("video.generate metadata.prompt is required")
+        values: dict[str, str | float] = {
+            "prompt": prompt,
+            "duration": max(0.2, float(metadata.get("duration_ms", 5_000)) / 1_000.0),
+            "filename_prefix": output_prefix.replace("\\", "/"),
+        }
+
+        references = self._validate_presenter_references(metadata.get("resolved_references", []))
+        uploaded: list[str] = []
+        prepared_references: list[tuple[str, str, str]] = []
+        for reference in references:
+            path = _reference_path(reference)
+            media_type = str(reference["media_type"])
+            uploaded_name = self._upload_reference(path, media_type)
+            uploaded.append(uploaded_name)
+            prepared_references.append((str(reference["slot"]), media_type, uploaded_name))
+
+        resolved_values = [
+            (bindings[key], value) for key, value in values.items() if key in bindings
+        ]
+        prepared = BindingResolver(workflow).apply_values(cast(Any, resolved_values))
+        self._configure_presenter_reference_slots(prepared, prepared_references)
+        self._apply_reference_image_size(prepared, metadata.get("reference_image_size"))
+        self._apply_megapixels(prepared, metadata.get("megapixels"))
+        self._apply_resolution(prepared, metadata.get("width"), metadata.get("height"))
+        self._apply_steps(prepared, metadata.get("steps", self.config.steps))
         self._apply_seed(prepared, metadata.get("seed"))
         self._apply_fps(prepared, metadata.get("fps"))
         return prepared, uploaded
 
     @staticmethod
+    def _validate_presenter_references(references: object) -> list[dict[str, Any]]:
+        """Validate Presenter slots without inferring them from array order."""
+        if not isinstance(references, list):
+            raise TypeError("resolved_references must be a list")
+        if len(references) > H3_PRESENTER_MAX_REFERENCES:
+            raise ValueError(
+                f"h3_presenter_r2v supports at most {H3_PRESENTER_MAX_REFERENCES} references"
+            )
+
+        validated: list[dict[str, Any]] = []
+        seen_slots: set[str] = set()
+        max_indices = {
+            "image": H3_PRESENTER_MAX_REFERENCE_IMAGES - 1,
+            "video": H3_PRESENTER_MAX_REFERENCE_VIDEOS - 1,
+            "audio": H3_PRESENTER_MAX_REFERENCE_AUDIO - 1,
+        }
+        slots_by_type: dict[str, list[int]] = {"image": [], "video": [], "audio": []}
+        for reference in references:
+            if not isinstance(reference, dict):
+                raise TypeError("Each resolved reference must be an object")
+            media_type = reference.get("media_type")
+            if media_type not in max_indices:
+                raise ValueError(
+                    f"h3_presenter_r2v does not support reference media type {media_type!r}"
+                )
+            slot = reference.get("slot")
+            if not isinstance(slot, str):
+                raise ValueError("Presenter references require materialized ref.slot")
+            match = re.fullmatch(r"ref_(image|video|audio)_([0-9]+)", slot)
+            if match is None:
+                raise ValueError(
+                    f"Invalid Presenter reference slot {slot!r}; expected ref_image_N, "
+                    "ref_video_N or ref_audio_N"
+                )
+            slot_type, raw_index = match.groups()
+            index = int(raw_index)
+            if slot_type != media_type:
+                raise ValueError(
+                    f"Presenter slot {slot!r} does not match media type {media_type!r}"
+                )
+            if index > max_indices[slot_type]:
+                raise ValueError(f"Presenter reference slot {slot!r} is out of range")
+            if slot in seen_slots:
+                raise ValueError(f"Duplicate Presenter reference slot {slot!r}")
+            seen_slots.add(slot)
+            slots_by_type[slot_type].append(index)
+            validated.append(reference)
+
+        if not validated:
+            raise ValueError("h3_presenter_r2v requires at least one reference")
+        for slot_type, indices in slots_by_type.items():
+            if indices:
+                expected = list(range(max(indices) + 1))
+                if sorted(indices) != expected:
+                    raise ValueError(
+                        f"Presenter {slot_type} reference slots must be contiguous from 0"
+                    )
+        order = {"image": 0, "video": 1, "audio": 2}
+        return sorted(
+            validated,
+            key=lambda reference: (
+                order[str(reference["media_type"])],
+                int(str(reference["slot"]).rsplit("_", 1)[1]),
+            ),
+        )
+
+    @staticmethod
+    def _configure_presenter_reference_slots(
+        workflow: dict[str, Any],
+        references: list[tuple[str, str, str]],
+    ) -> None:
+        """Inject Presenter Load* nodes and wire each declared materialized slot."""
+        generator_nodes = [
+            (node_id, node)
+            for node_id, node in workflow.items()
+            if isinstance(node, dict)
+            and node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+            and isinstance(node.get("_meta"), dict)
+            and node["_meta"].get("title") == "LFO.MainGenerator"
+        ]
+        if len(generator_nodes) != 1:
+            raise ValueError("Presenter workflow requires exactly one titled H3 R2V generator")
+        generator_inputs = generator_nodes[0][1].setdefault("inputs", {})
+        for key in list(generator_inputs):
+            if key.startswith(("ref_images.", "ref_videos.", "ref_video_audios.", "ref_audios.")):
+                del generator_inputs[key]
+
+        numeric_node_ids = [int(node_id) for node_id in workflow if node_id.isdigit()]
+        next_node_id = max(numeric_node_ids, default=0) + 1
+        for slot, media_type, uploaded_name in references:
+            index = int(slot.rsplit("_", 1)[1])
+            node_id = str(next_node_id)
+            next_node_id += 1
+            if media_type == "image":
+                workflow[node_id] = {
+                    "_meta": {"title": f"LFO.PresenterPicture{index + 1}"},
+                    "class_type": "LoadImage",
+                    "inputs": {"image": uploaded_name},
+                }
+                generator_inputs[f"ref_images.ref_image_{index}"] = [node_id, 0]
+            elif media_type == "video":
+                components_node_id = str(next_node_id)
+                next_node_id += 1
+                workflow[node_id] = {
+                    "_meta": {"title": f"LFO.PresenterVideo{index + 1}"},
+                    "class_type": "LoadVideo",
+                    "inputs": {"file": uploaded_name},
+                }
+                workflow[components_node_id] = {
+                    "_meta": {"title": f"LFO.PresenterVideoComponents{index + 1}"},
+                    "class_type": "GetVideoComponents",
+                    "inputs": {"video": [node_id, 0]},
+                }
+                generator_inputs[f"ref_videos.ref_video_{index}"] = [components_node_id, 0]
+                generator_inputs[f"ref_video_audios.ref_video_audio_{index}"] = [
+                    components_node_id,
+                    1,
+                ]
+            else:
+                workflow[node_id] = {
+                    "_meta": {"title": f"LFO.PresenterAudio{index + 1}"},
+                    "class_type": "LoadAudio",
+                    "inputs": {"audio": uploaded_name},
+                }
+                generator_inputs[f"ref_audios.ref_audio_{index}"] = [node_id, 0]
+
+    @staticmethod
     def _configure_r2v_reference_slots(
         workflow: dict[str, Any],
         bindings: dict[str, Binding],
-        uploaded: list[str],
+        uploaded_images: list[str],
+        uploaded_videos: list[str],
     ) -> None:
-        """Bind exactly the requested dynamic H3 reference-image slots."""
-        prefix = "ref_images.ref_image_"
+        """Bind exactly the requested H3 image and video reference slots."""
+        image_prefix = "ref_images.ref_image_"
+        video_prefix = "ref_videos.ref_video_"
         generator_nodes: list[dict[str, Any]] = []
         for node in workflow.values():
             if not isinstance(node, dict):
@@ -282,19 +560,21 @@ class ComfyH3VideoHandler(TaskHandler):
             inputs = node.get("inputs")
             if not isinstance(inputs, dict):
                 continue
-            if any(key.startswith(prefix) for key in inputs):
+            if any(key.startswith(image_prefix) for key in inputs):
                 generator_nodes.append(node)
         if len(generator_nodes) != 1:
             raise ValueError("H3 R2V workflow requires exactly one reference-image generator node")
 
         generator_inputs = generator_nodes[0]["inputs"]
         for key in list(generator_inputs):
-            if key.startswith(prefix):
+            if key.startswith(
+                (image_prefix, video_prefix, "ref_video_audios.ref_video_audio_")
+            ):
                 del generator_inputs[key]
 
         numeric_node_ids = [int(node_id) for node_id in workflow if node_id.isdigit()]
         next_node_id = max(numeric_node_ids, default=0) + 1
-        for index, value in enumerate(uploaded):
+        for index, value in enumerate(uploaded_images):
             if index < 3:
                 binding = bindings[f"ref_image_{index}"]
                 if binding.resolved_node_id is None:
@@ -308,7 +588,28 @@ class ComfyH3VideoHandler(TaskHandler):
                     "class_type": "LoadImage",
                     "inputs": {"image": value},
                 }
-            generator_inputs[f"{prefix}{index}"] = [source_node_id, 0]
+            generator_inputs[f"{image_prefix}{index}"] = [source_node_id, 0]
+
+        for index, value in enumerate(uploaded_videos):
+            load_node_id = str(next_node_id)
+            next_node_id += 1
+            components_node_id = str(next_node_id)
+            next_node_id += 1
+            workflow[load_node_id] = {
+                "_meta": {"title": f"LFO.DynamicReferenceVideo{index + 1}"},
+                "class_type": "LoadVideo",
+                "inputs": {"file": value},
+            }
+            workflow[components_node_id] = {
+                "_meta": {"title": f"LFO.DynamicReferenceVideoComponents{index + 1}"},
+                "class_type": "GetVideoComponents",
+                "inputs": {"video": [load_node_id, 0]},
+            }
+            generator_inputs[f"{video_prefix}{index}"] = [components_node_id, 0]
+            generator_inputs[f"ref_video_audios.ref_video_audio_{index}"] = [
+                components_node_id,
+                1,
+            ]
 
     @staticmethod
     def _resolve_bindings(
@@ -326,11 +627,18 @@ class ComfyH3VideoHandler(TaskHandler):
             result[slot.binding_id] = resolver.resolve_binding(binding, mode="strict")
         return result
 
-    def _upload_reference(self, path: pathlib.Path) -> str:
-        response = self.client.upload_image(path)
+    def _upload_reference(self, path: pathlib.Path, media_type: str = "image") -> str:
+        response: dict[str, Any]
+        if media_type in {"video", "audio"}:
+            upload_file = getattr(self.client, "upload_file", None)
+            if not callable(upload_file):
+                raise LfoComfyError("ComfyUI client does not support generic file upload")
+            response = cast(dict[str, Any], upload_file(path, subfolder="lfo-input"))
+        else:
+            response = self.client.upload_image(path)
         name = response.get("name")
         if not isinstance(name, str) or not name:
-            raise LfoComfyError(f"ComfyUI upload response missing name for {path}")
+            raise LfoComfyError("ComfyUI upload response missing uploaded file name")
         subfolder = response.get("subfolder")
         return f"{subfolder}/{name}" if isinstance(subfolder, str) and subfolder else name
 
@@ -355,6 +663,63 @@ class ComfyH3VideoHandler(TaskHandler):
         if len(nodes) != 1:
             raise ValueError(f"Expected one MiniMaxH3ReferenceToVideo node, found {len(nodes)}")
         nodes[0][1].setdefault("inputs", {})["ref_image_size"] = value
+
+    @staticmethod
+    def _apply_resolution(workflow: dict[str, Any], width: object, height: object) -> None:
+        """Override the bundled resolution selector when the Package requests dimensions."""
+        if width is None and height is None:
+            return
+        if (
+            not isinstance(width, int)
+            or isinstance(width, bool)
+            or not isinstance(height, int)
+            or isinstance(height, bool)
+        ):
+            raise TypeError("H3 width and height must be integers when requested")
+        if width <= 0 or height <= 0 or width % 32 or height % 32:
+            raise ValueError("H3 width and height must be positive multiples of 32")
+        nodes = [
+            (node_id, node)
+            for node_id, node in workflow.items()
+            if isinstance(node, dict)
+            and node.get("class_type")
+            in {"MiniMaxH3ReferenceToVideo", "MiniMaxH3ImageToVideo", "MiniMaxH3TextToVideo"}
+        ]
+        if len(nodes) != 1:
+            raise ValueError(f"Expected one H3 generator node, found {len(nodes)}")
+        inputs = nodes[0][1].setdefault("inputs", {})
+        inputs["width"] = width
+        inputs["height"] = height
+
+    @staticmethod
+    def _apply_megapixels(workflow: dict[str, Any], megapixels: object) -> None:
+        """Override the bundled resolution selector's megapixel target."""
+        if megapixels is None:
+            return
+        if isinstance(megapixels, bool) or not isinstance(megapixels, (int, float, str)):
+            raise TypeError("H3 megapixels must be numeric")
+        try:
+            megapixels_value = float(megapixels)
+        except (TypeError, ValueError):
+            raise TypeError("H3 megapixels must be numeric") from None
+        if megapixels_value <= 0:
+            raise ValueError("H3 megapixels must be positive")
+        nodes = WorkflowLoader.find_nodes_by_class(workflow, "ResolutionSelector")
+        if len(nodes) != 1:
+            raise ValueError(f"Expected one ResolutionSelector node, found {len(nodes)}")
+        nodes[0][1].setdefault("inputs", {})["megapixels"] = megapixels_value
+
+    @staticmethod
+    def _apply_steps(workflow: dict[str, Any], steps: object) -> None:
+        """Set the H3 sampler step count used by the local resource profile."""
+        if not isinstance(steps, int) or isinstance(steps, bool):
+            raise TypeError("H3 steps must be an integer")
+        if steps < 1 or steps > 100:
+            raise ValueError("H3 steps must be between 1 and 100")
+        nodes = WorkflowLoader.find_nodes_by_class(workflow, "BasicScheduler")
+        if len(nodes) != 1:
+            raise ValueError(f"Expected one BasicScheduler node, found {len(nodes)}")
+        nodes[0][1].setdefault("inputs", {})["steps"] = steps
 
     @staticmethod
     def _apply_fps(workflow: dict[str, Any], fps: object) -> None:
@@ -409,7 +774,9 @@ def _reference_path(reference: object) -> pathlib.Path:
         )
     path = pathlib.Path(value).resolve()
     if not path.is_file():
-        raise FileNotFoundError(f"Reference file not found: {path}")
+        raise FileNotFoundError(
+            f"Reference {reference.get('reference_id', '<unknown>')} file is unavailable"
+        )
     return path
 
 

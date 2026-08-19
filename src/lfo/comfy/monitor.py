@@ -8,6 +8,7 @@ from collections.abc import Callable
 from contextlib import suppress
 
 from .client import ComfyApiClient
+from .exceptions import ComfyUnreachableError
 
 
 class ComfyMonitor:
@@ -96,7 +97,18 @@ class ComfyMonitor:
         """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            status = self.poll_status(prompt_id)
+            try:
+                status = self.poll_status(prompt_id)
+            except ComfyUnreachableError as exc:
+                # ComfyUI may temporarily stop servicing HTTP while H3 is
+                # moving large weights between CPU and GPU. Keep the prompt
+                # alive and let the outer provider timeout decide failure.
+                status = {
+                    "prompt_id": prompt_id,
+                    "found": False,
+                    "status": "provider_busy",
+                    "provider_error": str(exc),
+                }
             if on_tick:
                 on_tick(status)
             if (

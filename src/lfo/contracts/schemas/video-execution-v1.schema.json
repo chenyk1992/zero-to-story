@@ -164,6 +164,7 @@
       "additionalProperties": false,
       "properties": {
         "aspect_ratio": { "type": "string" },
+        "megapixels": { "type": ["number", "string"] },
         "width": { "type": "integer", "minimum": 1 },
         "height": { "type": "integer", "minimum": 1 },
         "fps": { "type": "integer", "minimum": 1 },
@@ -280,7 +281,7 @@
         "transitions": { "type": "string" },
         "subtitles_mode": {
           "type": "string",
-          "enum": ["sidecar", "burnin", "both"]
+          "enum": ["none", "sidecar", "burnin", "both"]
         },
         "directory": { "type": "string" }
       }

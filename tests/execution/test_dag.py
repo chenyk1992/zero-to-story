@@ -80,6 +80,14 @@ class TestBuildDag:
         assert types.count(TASK_TIMELINE_ASSEMBLE) == 1
         assert types.count(TASK_EXPORT_FINALIZE) == 1
 
+    def test_generation_task_carries_megapixels(self) -> None:
+        clip = _make_clip()
+        clip.megapixels = 0.3
+        graph = build_dag(_make_run([clip]))
+        generate = graph.task_by_id("run-1.clip-clip-001.video.generate")
+        assert generate is not None
+        assert generate.metadata["megapixels"] == 0.3
+
     def test_two_clips_no_deps(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
         graph = build_dag(_make_run(clips))
@@ -119,7 +127,14 @@ class TestBuildDag:
         graph = build_dag(
             _make_run(
                 [_make_clip()],
-                extensions={"upscale": {"enabled": True, "scale_multiplier": 2, "seed": 7}},
+                extensions={
+                    "upscale": {
+                        "enabled": True,
+                        "scale_multiplier": 2,
+                        "seed": 7,
+                        "segment_seconds": 2,
+                    }
+                },
             )
         )
         upscale = graph.task_by_id("run-1.clip-clip-001.video.upscale")
@@ -132,6 +147,7 @@ class TestBuildDag:
             "enabled": True,
             "scale_multiplier": 2.0,
             "seed": 7,
+            "segment_seconds": 2.0,
         }
         assert str(upscale.metadata["output_path"]).replace("\\", "/").endswith(
             "/clip-001/upscaled.mp4"
