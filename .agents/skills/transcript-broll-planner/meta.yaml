@@ -1,0 +1,17 @@
+display-name-zh: 口播视频B-roll规划器
+version: 1.0.0
+tag-en: "Professional Film"
+tag-cn: "专业影视"
+complete-tags-en:
+  - "Professional Film / Full Production"
+complete-tags-cn:
+  - "专业影视 / 成片制作"
+summary-en: "Turns transcript-led narration into reviewable B-roll plans and approval-gated video shots for knowledge and talking-head edits."
+summary-cn: "把口播逐字稿按语义拆成可审片的 B-roll 镜头方案，并在用户确认后生成已批准的视频素材。"
+desc-en: "This Skill helps creators turn a transcript, voiceover draft, data-rich narration, or talking-head script into a reviewable B-roll plan and approved video assets. The user provides the script plus optional logos, screenshots, documents, charts, product photos, data tables, or references. The workflow segments the transcript by meaning, routes each unit to A-roll retention, evidence handling, existing-material reuse, motion typography, pure visual B-roll, or a continuous one-take beat, then selects a suitable template family and flags missing materials. It delivers a shot or beat plan with on-screen text language, continuity notes, and deterministic-handling warnings before any costly generation. After approval, it generates only the confirmed shots with MiniMax-H3 by default; another explicitly requested model is used after a capability check. It is best for knowledge videos, explainers, market analysis, and transcript-led edits, not pure subtitle export, simple trimming, one-off image prompts, or unrelated long-form editing."
+desc-cn: "本 Skill 面向已有逐字稿、配音稿、数据型讲稿或口播脚本的创作者，将内容转化为可审片的 B-roll 方案和确认后的视频素材。用户需提供完整脚本，也可补充 Logo、截图、文档、图表、产品图、数据表或参考素材；流程会先按语义拆分，再判断各段应保留为 A-roll、证据处理、复用素材、动态文字、纯视觉副镜头，或连续一镜到底中的视觉节拍，随后选择合适模板族并标出缺失素材。生成前交付包含屏幕文字语言、连续性说明和确定性处理提醒的镜头或节拍计划，用户确认后默认使用 MiniMax-H3 生成已批准内容。适合知识视频、讲解视频、市场分析和逐字稿驱动剪辑，不处理纯字幕导出、简单剪切、单次图片提示词或无关长篇剪辑。"
+cover: "https://cdn.hailuoai.com/pre/2026-08-14-21/video/1786713893768400104-1786713893760.mp4"
+cover-en: "https://cdn.hailuoai.com/pre/2026-08-14-21/video/1786713893768400104-1786713893760.mp4"
+author-en: "MiniMax Design"
+author-cn: "MiniMax Design"
+source: official-featured

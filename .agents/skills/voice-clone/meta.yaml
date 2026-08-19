@@ -1,0 +1,16 @@
+display-name-zh: 音色克隆
+version: 0.5.0
+tag-en: "Audio Content / Audio Generation"
+tag-cn: "音频内容 / 音频生成"
+complete-tags-en:
+  - "Sound & Music / Creative Generation"
+complete-tags-cn:
+  - "音频音乐 / 创作生成"
+summary-en: "Clone a voice locally through MiniMax's official upload and voice_clone APIs"
+summary-cn: "通过 MiniMax 官方上传和 voice_clone 接口在本地克隆音色"
+desc-en: "A local MiniMax voice-cloning adapter with mandatory authorization confirmation, ffprobe validation, optional ffmpeg preparation, multipart file upload, /v1/voice_clone execution, optional demo synthesis, and input-safety reporting."
+desc-cn: "本地 MiniMax 音色克隆适配器，包含强制授权确认、ffprobe 音频校验、可选 ffmpeg 预处理、multipart 文件上传、/v1/voice_clone 调用、试听生成和输入风险提示。"
+cover: ""
+author-en: "MiniMax Design"
+author-cn: "MiniMax Design"
+source: official

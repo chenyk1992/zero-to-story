@@ -1,0 +1,4 @@
+interface:
+  display_name: "虚拟实拍口播"
+  short_description: "规划自然表演、连续镜头并通过 LFO 生成虚拟口播视频"
+  default_prompt: "使用 $virtual-presenter 把我的角色、360° 环境、口播文案和声音参考规划成连续口播视频并交付 LFO。"
