@@ -24,7 +24,10 @@ from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
 from lfo.services.artifact_layout import atomic_copy_verified, managed_path
 
 SEEDVR2_UPSCALE_WORKFLOW_ID = "seedvr2_upscale"
-DEFAULT_SEGMENT_SECONDS = 8.0
+# SeedVR2's native temporal chunker is a better first line of defence than
+# extracting and re-encoding short FFmpeg segments.  Callers can still set a
+# positive ``segment_seconds`` when a long source needs resumable segments.
+DEFAULT_SEGMENT_SECONDS: float | None = None
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -114,29 +117,44 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         metadata: dict[str, Any],
         attempt_id: str,
         source_video: pathlib.Path,
+        *,
+        release_memory: bool = True,
     ) -> HandlerResult:
         """Upscale one video file through one ComfyUI prompt."""
         # H3 and SeedVR2 are both large GPU models.  Release H3's cached
-        # weights before loading SeedVR2 on single-GPU workstations.
-        self.client.free_memory()
+        # weights before loading SeedVR2 on single-GPU workstations, but do
+        # not evict SeedVR2 between explicit outer segments.
+        if release_memory:
+            self.client.free_memory()
         upload = self.client.upload_file(source_video, subfolder="lfo-input")
         uploaded_name = self._uploaded_name(upload)
+        output_prefix = (
+            f"lfo/{metadata.get('run_id', 'run')}/{task_id}/{attempt_id}/upscaled"
+        )
         workflow, scale_multiplier = self._prepare_workflow(
             metadata,
             uploaded_name,
-            output_prefix=f"lfo/{metadata.get('run_id', 'run')}/{task_id}/{attempt_id}/upscaled",
+            output_prefix=output_prefix,
         )
-        client_id = f"lfo-{uuid.uuid4().hex}"
-        submitted = self.client.submit_prompt(workflow, client_id=client_id)
-        prompt_id = submitted.get("prompt_id")
-        if not isinstance(prompt_id, str) or not prompt_id:
-            raise LfoComfyError("ComfyUI response did not include prompt_id")
-
-        status = self.monitor.poll_until_done(
-            prompt_id,
-            interval=self.config.poll_interval_seconds,
-            timeout=self.config.timeout_seconds,
-        )
+        prompt_id, status = self._submit_and_wait(workflow)
+        fallback_from_prompt_id: str | None = None
+        if self._is_out_of_memory(status):
+            # The direct workflow matches the native ComfyUI template and is
+            # fastest on the local 16 GB target.  If it does not fit, retry
+            # once with ComfyUI's own VRAM-aware chunk calculation.
+            fallback_from_prompt_id = prompt_id
+            logger.warning(
+                "SeedVR2 prompt %s ran out of memory; retrying with adaptive temporal chunks",
+                prompt_id,
+            )
+            self.client.free_memory()
+            workflow, scale_multiplier = self._prepare_workflow(
+                metadata,
+                uploaded_name,
+                output_prefix=f"{output_prefix}-chunked",
+            )
+            self._enable_temporal_chunking(workflow)
+            prompt_id, status = self._submit_and_wait(workflow)
         if status.get("status") == "timeout":
             return HandlerResult(
                 success=False,
@@ -158,23 +176,65 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         output = self._find_output(prompt_id, status)
         managed = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
         managed_hash, managed_size = atomic_copy_verified(output, managed)
+        artifact_metadata = {
+            "file_path": str(managed.resolve()),
+            "file_hash": managed_hash,
+            "media_type": "video",
+            "provider_job_id": prompt_id,
+            "workflow_id": SEEDVR2_UPSCALE_WORKFLOW_ID,
+            "source_video_path": str(source_video),
+            "uploaded_source": uploaded_name,
+            "scale_multiplier": scale_multiplier,
+            "size": managed_size,
+            "provider_source_path": str(output),
+            "provider_file_hash": _sha256_file(output),
+        }
+        if fallback_from_prompt_id is not None:
+            artifact_metadata["temporal_chunk_fallback_from_prompt_id"] = fallback_from_prompt_id
         return HandlerResult(
             success=True,
             artifact_type="video",
-            artifact_metadata={
-                "file_path": str(managed.resolve()),
-                "file_hash": managed_hash,
-                "media_type": "video",
-                "provider_job_id": prompt_id,
-                "workflow_id": SEEDVR2_UPSCALE_WORKFLOW_ID,
-                "source_video_path": str(source_video),
-                "uploaded_source": uploaded_name,
-                "scale_multiplier": scale_multiplier,
-                "size": managed_size,
-                "provider_source_path": str(output),
-                "provider_file_hash": _sha256_file(output),
-            },
+            artifact_metadata=artifact_metadata,
         )
+
+    def _submit_and_wait(self, workflow: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        client_id = f"lfo-{uuid.uuid4().hex}"
+        submitted = self.client.submit_prompt(workflow, client_id=client_id)
+        prompt_id = submitted.get("prompt_id")
+        if not isinstance(prompt_id, str) or not prompt_id:
+            raise LfoComfyError("ComfyUI response did not include prompt_id")
+        status = self.monitor.poll_until_done(
+            prompt_id,
+            interval=self.config.poll_interval_seconds,
+            timeout=self.config.timeout_seconds,
+        )
+        return prompt_id, status
+
+    @staticmethod
+    def _is_out_of_memory(status: dict[str, Any]) -> bool:
+        """Return whether a ComfyUI terminal status indicates a GPU OOM."""
+        try:
+            detail = json.dumps(status.get("error", ""), ensure_ascii=False, default=str).lower()
+        except (TypeError, ValueError):
+            detail = str(status.get("error", "")).lower()
+        return any(
+            marker in detail
+            for marker in (
+                "out of memory",
+                "cuda oom",
+                "torch.cuda.outofmemoryerror",
+                "cudnn_status_alloc_failed",
+            )
+        )
+
+    @staticmethod
+    def _enable_temporal_chunking(workflow: dict[str, Any]) -> None:
+        """Switch a bundled direct workflow to ComfyUI's adaptive chunk mode."""
+        for node_id in ("11", "15"):
+            workflow[node_id]["inputs"]["switch"] = True
+        chunk_inputs = workflow["8"]["inputs"]
+        chunk_inputs["chunking_mode"] = "auto"
+        chunk_inputs.pop("chunking_mode.frames_per_chunk", None)
 
     def _execute_segmented(
         self,
@@ -185,7 +245,7 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         source_video: pathlib.Path,
         segment_seconds: float,
     ) -> HandlerResult:
-        """Upscale short sequential segments and concatenate them for the clip."""
+        """Upscale explicitly requested sequential segments and concatenate them."""
         final_path = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
         duration_ms = int(probe(source_video)["duration_ms"] or 0)
         ranges = self._segment_ranges(duration_ms, segment_seconds)
@@ -210,6 +270,7 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         provider_jobs: list[str] = []
         segment_reports: list[dict[str, Any]] = []
         scale_multiplier: float | None = None
+        seedvr2_prepared = False
         configured_scale = metadata.get("upscale", {})
         if isinstance(configured_scale, dict):
             configured_multiplier = configured_scale.get("scale_multiplier")
@@ -279,9 +340,11 @@ class ComfyUpscaleVideoHandler(TaskHandler):
                     segment_metadata,
                     f"{attempt_id}-segment-{index:03d}",
                     segment_source,
+                    release_memory=not seedvr2_prepared,
                 )
                 if not result.success:
                     return result
+                seedvr2_prepared = True
                 provider_job = result.artifact_metadata.get("provider_job_id")
                 if isinstance(provider_job, str):
                     provider_jobs.append(provider_job)

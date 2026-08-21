@@ -107,8 +107,7 @@
         0
       ],
       "temporal_overlap": 0,
-      "chunking_mode": "manual",
-      "chunking_mode.frames_per_chunk": 5
+      "chunking_mode": "auto"
     },
     "_meta": {
       "title": "LFO.TemporalChunk"
@@ -136,7 +135,7 @@
   "11": {
     "class_type": "ComfySwitchNode",
     "inputs": {
-      "switch": true,
+      "switch": false,
       "on_false": [
         "7",
         0
@@ -215,7 +214,7 @@
   "15": {
     "class_type": "ComfySwitchNode",
     "inputs": {
-      "switch": true,
+      "switch": false,
       "on_false": [
         "13",
         0

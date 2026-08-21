@@ -644,10 +644,13 @@ H3_VERTICAL_R2V_MANIFEST = WorkflowManifest(
 
 SEEDVR2_UPSCALE_MANIFEST = WorkflowManifest(
     workflow_id="seedvr2_upscale",
-    version="1.0.0",
+    version="1.1.0",
     family="seedvr2",
     workflow_mode="upscale",
-    description="SeedVR2 3B INT8 video restoration and 2x upscale with source audio passthrough.",
+    description=(
+        "SeedVR2 3B INT8 video restoration and 2x upscale with direct-first "
+        "sampling plus adaptive temporal fallback."
+    ),
     source_file="seedvr2_upscale.json",
     workflow_hash="",
     frame_constraints=FrameConstraints(

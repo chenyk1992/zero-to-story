@@ -90,6 +90,19 @@ PromptControlPlan
 
 最低总和满足后，剩余时间按故事板 `时长权重` 分配，结果按 0.1 秒取整并把舍入误差回收到最后一个可延长节拍。每个节拍的时间范围必须从 0 开始、严格递增、在 Panel 时长内且不超过 Panel 总时长。不要默认六段等时。
 
+**节拍时间落到 prompt 主体**（H3 官方格式）：动态时序算出的 `节拍起点（0.0–2.4s）/ 切点秒数` 用 H3 base 格式写在 `integrated_multimodal_description`（base 3 段）或 `detailed_description`（full-reference 6 段）主体内：
+
+```text
+[Shot 1] (no time, opening) <style + initial composition> ...
+[Shot 2] At 02.400, the camera cuts to ...
+[Shot 3] At 05.500, ...
+```
+
+- `[Shot 1]` 不写时间；后续 Shot 写 `At SS.SSS, the camera cuts to ...`（两位小数秒）。
+- Shot 数 = 执行节拍数 = N；cut 数 = N - 1。
+- **不要**在主体内写 `16:9` / `15 秒` / `0.0–2.4s` 区间字面——这些由执行包 `requirements.aspect_ratio` / `duration_ms` 字段传递。
+- 6 个项目内部 Shot ID（S001–S006）的覆盖关系**不进 prompt 主体**，只写入 `source_context.shot_range` 和 `video_prompt_list.md` 的动态时序表。
+
 ## 4. 复杂度评分与三档选择
 
 每个 Panel 计算一次分数：
@@ -109,53 +122,138 @@ PromptControlPlan
 
 | 分数 | 档位 | 目标长度 | 结构 |
 |---:|---|---:|---|
-| 0–2 | 精简 | 350–800 字符 | 单段自然语言，按控制源→创意→时间过程→音频→负向的顺序压缩 |
-| 3–5 | 结构化（默认） | 700–1500 字符 | 控制源、创意、执行节拍、音频、关键负向分段；只写必要时间锚 |
-| 6+ | 精确 | 1200–3000 字符 | 完整展开 3–6 个执行节拍、对白落点、同步和末态 |
+| 0–2 | 精简（base 3 段） | 350–800 字符 | H3 base 3 段：`integrated_multimodal_description` / `overall_soundscape` / `non_diegetic_music` |
+| 3–5 | 结构化（base 3 段，默认） | 700–1500 字符 | H3 base 3 段；只写必要时间锚 |
+| 6+ | 精确（full-reference 6 段） | 1200–3000 字符 | H3 full-reference 6 段：`subject_definitions` / `summary` / `retention_analysis` / `detailed_description` / `overall_soundscape` / `non_diegetic_music` |
+
+**full-reference 强制升级**（与分数无关）：只要命中以下任一条件，**必须**升级到 full-reference 6 段，不再用 base 3 段：
+
+- 引用图 ≥ 4 张（含角色卡 + 分镜板 + 上一镜尾帧）
+- 含上一镜真实末帧（P002 起在 revision 中加入）
+- 含视频或音频参考
+- 含 J/L-cut 跨节拍对白
 
 硬上限始终是 7000 字符。评分不是把无关信息塞进 prompt 的理由；越高只表示需要更明确的时间、同步和连续性控制。
 
 ## 5. 提示词正文结构
 
-最终正文只保留五类信息，按下列顺序组织：
+最终正文按 §4 档位自动落入 **H3 官方 3 段 base** 或 **H3 官方 6 段 full-reference**。**不再保留项目自创的"五段中文标题"**（让 H3 模型直接消费与官方一致的字段名）。原"控制源 / 创作意图 / 时间过程 / 音频 / 关键负向"五类信息被映射到 H3 官方字段：
 
-1. **控制源**：逐一说明 `图片1`、`图片2` 等用途，以及分镜板只参考构图/空间/动作链/节奏，不采用线稿画风。
-2. **创作意图**：主体、地点、事件、Medium Lock、Style Brief、视点和总体运镜意图。
-3. **时间过程**：按 3–6 个执行节拍写可见的动作因果、景别、明确运镜、对白落点和末态；不要粘贴故事板表格或推理过程。
-4. **音频**：对白、环境声、动作声、必要静默；无用户要求时写 `非叙事性音乐：N/A`。
-5. **关键负向**：只写 3–5 条本 Panel 最可能失败的排除项，例如 `不要六宫格/分割线、不要黑白线稿、不要身份漂移、不要道具复制、不要可读文字`。
+| 旧五段 | 新 base 3 段 | 新 full-reference 6 段 |
+|---|---|---|
+| 控制源 | `integrated_multimodal_description` 开头引用说明 | `subject_definitions` + `summary` + `retention_analysis` |
+| 创作意图 | `integrated_multimodal_description` 风格与首句 | `summary` + `detailed_description` 首句 |
+| 时间过程 | `integrated_multimodal_description` 主体 `[Shot N] At SS.SSS` | `detailed_description` 主体 `[Shot N] At SS.SSS` |
+| 音频 | `overall_soundscape` + `non_diegetic_music` | `overall_soundscape` + `non_diegetic_music` |
+| 关键负向 | 写入 `integrated_multimodal_description` 末段（"不要 …"） | 写入 `detailed_description` 末段（"不要 …"） |
 
-精简档把五类压成一段；结构化档按五类分段；精确档为每个执行节拍添加局部时间范围。显式时间范围统一写成 `执行节拍1（0.0–2.1s，覆盖 S001–S002）` 这类标签，避免把合并后的执行节拍误写成单一 Shot。任何档位都不写模型、路径、DB/workflow、最终分辨率或“内部节点如何连接”。
+**主体内禁止出现的字段**：模型名 / 文件路径 / SQLite / workflow 节点 / LFO backend 内部 ID / 最终导出分辨率 / 绝对输出路径 / 提示词推理过程。Clip ID 与 Shot ID（S001–S006）属项目内部标签，**不进 prompt 主体**，只写在 `source_context` 与动态时序表里。
 
-### 5.1 对白与声音
+### 5.1 base 3 段（H3 精简 / 结构化档）
 
-对白只保留已确认台词，每个节拍使用 `台词：角色“……”` 明确落点。跨节拍对白标 `J-cut` 或 `L-cut`，写清“上一节拍已起声/下一节拍继续”，并按 `字符数/4+0.3` 校验时间。
+适用于：参考图 ≤ 3 张、且不含上一镜末帧、且不含视频/音频参考、且无 J/L-cut 跨节拍对白。
 
-声音只写模型能生成或用户确认要保留的环境声、动作声、空间声和静默。`非叙事性音乐：N/A` 与任何积极的 BGM/配乐要求冲突，必须二选一。
+```text
+integrated_multimodal_description: [Shot 1] <style, initial composition, opening action> ...
+[Shot 2] At SS.SSS, the camera cuts to ...
+[Shot 3] At SS.SSS, ...
+（中间 Shot 4–6 按需）
+（关键负向：不要 …；不要 …；不要 …）
+
+overall_soundscape: <1–4 句英语/中文环境声、动作声、非言语人声；无 N/A 例外>
+
+non_diegetic_music: N/A
+```
+
+- `[Shot 1]` 必须是 `integrated_multimodal_description: ` 后第一个 token；后续 Shot 序号从 2 起严格递增。
+- 切点用 `At SS.SSS, the camera cuts to ...`（两位小数秒）。不要在主体内写 `16:9`、`15 秒`、`<X seconds>` 等数值字面——画幅与时长由执行包 `requirements` 字段传递。
+- `non_diegetic_music: N/A` 与任何积极的 BGM/配乐要求互斥，二选一。
+
+### 5.2 full-reference 6 段（H3 精确档，或 full-reference 强制升级）
+
+适用条件见 §4（≥4 引用 / 含末帧 / 含视频或音频 / 跨节拍对白）。6 段顺序固定，不得调换。
+
+```text
+subject_definitions:
+  <Subject 1>: <description>（attribute reference from Picture 1）
+  <Subject 2>: <description>（attribute reference from Picture 2）
+  <Picture 1>: <concrete frame anchored at 0.00s>（仅当用作 first/last frame 时；属性引用用纯 Picture N 内联在 <Subject N> 内，不另立 <Picture N>）
+  ...
+
+summary: [reference generation] <one-sentence core scene, ≤30 words>
+
+retention_analysis:
+  <Subject 1>: fully_preserved
+  <Subject 2>: fully_preserved
+  <Subject 3>: partially_preserved
+  <Picture 1>: fully_preserved (or attribute_transfer if applied to a different identifiable subject)
+  ...
+
+detailed_description: [Shot 1] <style + initial composition> ...
+[Shot 2] At SS.SSS, the camera cuts to ...
+（关键负向：不要 …；不要 …；不要 …）
+
+overall_soundscape: <1–4 句>
+
+non_diegetic_music: N/A
+```
+
+`<Subject N>` 与 `<Picture N>` 用法严格遵守 H3 官方：
+- `<Subject N>` 是可复用主体（人物、道具、场景、风格）。`Picture N` 内联在 `<Subject N>` 定义里表示属性来源；只有当图片用作具体帧（first/last/锁定主体）时才独立写 `<Picture N>: ...`。
+- `<Picture N>` 必须对应实际图片素材；不要凭空虚构 `<Picture 5>` 而不传 `ref_image_4`。
+- 同一主体用 `fully_preserved` 或 `partially_preserved`；属性应用到**不同**主体用 `attribute_transfer`（不能用来表达"同一主体保留"）。
+- `summary` 段开头用 `[reference generation]` / `[reference generation + keyframe completion]` / `[reference generation + video editing]` / `[reference generation + audio reference]` 等 task-type 前缀，组合时用 ` + `。
+
+### 5.3 对白、voiceover、声音
+
+**对白**：每个节拍使用 `台词：角色"……"` 明确落点。中文台词估时用 `字符数 / 4 + 0.3s`（项目自创规则，不与 H3 官方冲突）。
+
+**跨节拍对白（J-cut / L-cut）**：在 `detailed_description` 写明"上一节拍已起声 / 下一节拍继续"，并标 `J-cut` / `L-cut`。H3 官方要求跨切点用 `<scenetrans>` 标记；本项目为可读性沿用 `J-cut` / `L-cut`，二者并存但等效。
+
+**voiceover / 旁白**（高优先级规则）：旁白一律使用 H3 官方格式 + closed-lips 声明：
+
+```text
+<Subject or speaker> (S1) says in an off-screen voiceover: <d>[zh] Exact words.</d>
+The corresponding on-screen character's lips remain completely closed.
+```
+
+`(S1)` / `(S2)` 是 stable speaker ID，跨 shot 保持不变；只发给声的角色分配 ID，不发声的不要给。完整对白只出现在 `<d>` 内，其他段只描述语言/时长/角色，不要复述台词。
+
+**声音**：`overall_soundscape` 只写模型能生成或用户确认要保留的环境声、动作声、空间声和静默。`non_diegetic_music: N/A` 与积极的 BGM/配乐要求互斥。
 
 ## 6. 跨 Clip 连续性与 revision
 
-P002 起提示词只承接最小状态差，不重复整段角色设定。至少写出上一段末态到本段开场的可见关系；不能只写“保持连续”。
+P002 起提示词只承接最小状态差，不重复整段角色设定。至少写出上一段末态到本段开场的可见关系；不能只写"保持连续"。
 
-若加入真实上一镜尾帧：
+**首帧（I2V 模式）**：把当前 Panel 的第 0 秒画面作为 `首帧（绑定 0.00 秒）：<Picture 1> ...`；它置顶为 `ref_image_0`，原有属性参考顺延。
 
-1. 尾帧必须成为 `图片1` / `ref_image_0`；
-2. 原有图片全部顺延并重写提示词编号；
-3. revision 增加 1；
-4. 重新运行 `validate` 和 `plan`；
-5. 重新请求故事板/H3 提示词确认。
+**末帧（L2V 模式 / P002 起承接上一镜）**：把上一 Clip 真实末帧作为 `末帧（绑定 SS.SSS 秒，承接上一 Clip 末态）：<Picture 1> ...`；同样置顶为 `ref_image_0`，其它引用顺延。
+
+**两种情况都触发同样的流程**：
+
+1. 锁定帧必须成为 `ref_image_0`；其它引用全部顺延并重写 `<Subject N>` / `<Picture N>` 编号；
+2. `summary` 段开头 task-type 前缀改为 `[reference generation + keyframe completion]`，明确告知模型"首/末帧在 0.00 秒被严格对齐"；
+3. `detailed_description` 在 `[Shot 1]` 之后立即描述锁定帧继承的可见状态（位置、朝向、双手、道具、未完成动作），不要从零开始；
+4. revision 增加 1；
+5. 重新运行 `validate` 和 `plan`；
+6. 重新请求故事板/H3 提示词确认。
 
 ## 7. 图片编号与执行包映射
 
-唯一规范如下：
+提示词自然语言与执行包 `ref_image_N` 槽位的映射固定，但**语法按引用类型分三种**（H3 官方）：
 
-| 提示词自然语言 | 执行包槽位 | 常见用途 |
-|---|---|---|
-| 图片1 | `ref_image_0` | 新增真实上一镜尾帧，或当前首个锁定引用 |
-| 图片2 | `ref_image_1` | 首个角色卡或 Panel 板，取决于图片1是否存在 |
-| 图片N | `ref_image_(N-1)` | 按固定顺序的后续引用 |
+| 提示词语法 | 执行包槽位 | 引用类型 | 出现条件 |
+|---|---|---|---|
+| `首帧（绑定 0.00 秒）：<Picture 1> ...` | `ref_image_0` | **first-frame 锁定** | I2V 模式，I2V 必为首帧 |
+| `末帧（绑定 SS.SSS 秒，承接上一 Clip 末态）：<Picture 1> ...` | `ref_image_0` | **last-frame 锁定** | L2V 模式，末帧置顶 |
+| `图片 N`（无角括号，内联在 `<Subject N>` 内） | `ref_image_(N-1)` | **属性参考** | 角色卡 / 分镜板只锁身份与构图 |
 
-每条 `generation.references[]` 必须设置 `placement: "fixed"` 和对应 `binding.slot`。图片编号必须连续，从 1 开始；引用的 `asset_key` 必须存在于顶层 `assets[]`；必需引用不能静默省略。
+执行包槽位规则不变（连续、从 `ref_image_0` 起）：
+- 任意**锁定帧**（first-frame / last-frame）必须置顶为 `ref_image_0`，其它引用顺延；触发 `revision++`。
+- 仅有属性参考时，按"角色卡 → 分镜板"顺序连续排列。
+- `summary` 段开头 task-type 前缀与提示词保持一致：含锁定帧用 `[reference generation + keyframe completion]`；仅属性参考用 `[reference generation]`。
+
+每条 `generation.references[]` 必须设置 `placement: "fixed"` 和对应 `binding.slot`。`<Picture N>` 编号必须连续、对应实际存在的图片素材；`asset_key` 必须存在于顶层 `assets[]`；必需引用不能静默省略。`<d>` 内外的台词、`<Audio N>` 引用与 `<Subject N>` 共用同一 speaker ID，不独立编号。
 
 ## 8. video_prompt_list.md 输出格式
 
@@ -165,11 +263,28 @@ P002 起提示词只承接最小状态差，不重复整段角色设定。至少
 
 ## 9. 交付前自检
 
-- [ ] 复杂度分值、档位和长度匹配。
+### 9.1 项目内通用项
+
+- [ ] 复杂度分值、档位和长度匹配；档位落入 base 3 段或 full-reference 6 段。
+- [ ] full-reference 强制升级条件判定：引用 ≥ 4 / 含末帧 / 含视频或音频 / 含 J/L-cut 任一命中时，已切到 6 段。
 - [ ] 3–6 个执行节拍覆盖六个 Shot，且没有违规合并。
 - [ ] 动态时间满足基础最短时长与对白估时，范围 4–15 秒。
 - [ ] 图片编号与 `ref_image_N` 一一对应、连续、必需素材已声明。
-- [ ] P002 起写出最小连续性锚；新增尾帧已触发顺延和 revision 流程。
+- [ ] P002 起写出最小连续性锚；新增首/末帧已触发顺延、revision++、`validate` / `plan` 重跑。
 - [ ] 分镜板的线稿、宫格、漫画和可读文字已在主体中排除。
 - [ ] 音频无 N/A 冲突；关键负向为 3–5 条。
 - [ ] 内容自检完成并经用户确认；执行包组装后运行 `validate` 和 `plan`。
+
+### 9.2 H3 官方对齐项（24 条自检的子集，重点关注）
+
+- [ ] base 3 段：`integrated_multimodal_description: ` 后第一个 token 是 `[Shot 1]`，中间无任何散文。
+- [ ] base 3 段：主体内不出现 `16:9` / `15 秒` / `XX seconds` 等数值字面；画幅与时长由 `requirements` 字段传递。
+- [ ] base 3 段：Shot 数 = N，cut 数 = N-1；切点时间严格递增、单位两位小数秒。
+- [ ] full-reference 6 段：6 段顺序固定（`subject_definitions` / `summary` / `retention_analysis` / `detailed_description` / `overall_soundscape` / `non_diegetic_music`），未调换。
+- [ ] full-reference 6 段：`summary` 开头是合法的 task-type 前缀（`[reference generation]` / `[reference generation + keyframe completion]` 等）。
+- [ ] full-reference 6 段：每个 `<Picture N>` 对应实际图片素材；不凭空写 `<Picture 5>` 而不传 `ref_image_4`。
+- [ ] full-reference 6 段：同一主体用 `fully_preserved` / `partially_preserved`；属性应用到**不同**主体才用 `attribute_transfer`。
+- [ ] voiceover：每个 off-screen 旁白后立即跟 `The corresponding on-screen character's lips remain completely closed.`
+- [ ] 完整对白/歌词只出现在 `<d>` 内，其他段不重复台词字面。
+- [ ] `non_diegetic_music` 用 `N/A` 表示无配乐；与积极的 BGM 要求二选一。
+- [ ] `<Audio N>` 引用与目标主体共享 speaker ID，不独立编号。

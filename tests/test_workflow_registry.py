@@ -184,6 +184,10 @@ class TestBindingResolution:
     def test_seedvr2_workflow_is_api_format_and_binds(self, registry):
         workflow = WorkflowLoader.load(registry.workflow_dir / "seedvr2_upscale.json")
         assert WorkflowLoader.is_api_format(workflow)
+        assert workflow["8"]["inputs"]["chunking_mode"] == "auto"
+        assert "chunking_mode.frames_per_chunk" not in workflow["8"]["inputs"]
+        assert workflow["11"]["inputs"]["switch"] is False
+        assert workflow["15"]["inputs"]["switch"] is False
         report = registry.register("seedvr2_upscale")
         assert report.status == "ok"
         assert not report.unresolved

@@ -27,7 +27,10 @@ class UpscaleOptions:
     enabled: bool = False
     scale_multiplier: float = DEFAULT_SCALE_MULTIPLIER
     seed: int | None = None
-    segment_seconds: float | None = 8.0
+    # SeedVR2 has native temporal chunking for constrained GPUs.  Keep a
+    # normal short clip in one ComfyUI prompt unless the package explicitly
+    # asks for outer FFmpeg segmentation.
+    segment_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -144,8 +147,8 @@ def resolve_upscale_options(
         seed=merged.get("seed"),
         segment_seconds=(
             None
-            if merged.get("segment_seconds", 8.0) is None
-            else float(merged.get("segment_seconds", 8.0))
+            if merged.get("segment_seconds") is None
+            else float(merged["segment_seconds"])
         ),
     )
 

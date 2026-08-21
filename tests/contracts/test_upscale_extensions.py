@@ -64,7 +64,7 @@ def test_upscale_defaults_to_disabled() -> None:
     assert options.enabled is False
     assert options.scale_multiplier == 2.0
     assert options.seed is None
-    assert options.segment_seconds == 8.0
+    assert options.segment_seconds is None
 
 
 def test_invalid_package_upscale_options_report_precise_paths() -> None:

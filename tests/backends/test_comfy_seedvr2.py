@@ -20,9 +20,11 @@ class FakeClient:
         self.uploaded: list[tuple[pathlib.Path, str]] = []
         self.submitted: dict | None = None
         self.freed = False
+        self.free_calls = 0
 
     def free_memory(self) -> None:
         self.freed = True
+        self.free_calls += 1
 
     def upload_file(self, path: pathlib.Path, subfolder: str = "") -> dict:
         self.uploaded.append((path, subfolder))
@@ -121,13 +123,13 @@ def test_segment_ranges_absorb_a_short_tail_into_the_previous_chunk() -> None:
     ]
 
 
-def test_segment_seconds_defaults_to_eight_seconds() -> None:
-    assert DEFAULT_SEGMENT_SECONDS == 8.0
-    assert ComfyUpscaleVideoHandler._segment_seconds({"upscale": {"enabled": True}}) == 8.0
+def test_segment_seconds_defaults_to_single_prompt() -> None:
+    assert DEFAULT_SEGMENT_SECONDS is None
+    assert ComfyUpscaleVideoHandler._segment_seconds({"upscale": {"enabled": True}}) is None
 
 
-def test_segment_ranges_use_the_fixed_eight_second_policy() -> None:
-    assert ComfyUpscaleVideoHandler._segment_ranges(15_083, DEFAULT_SEGMENT_SECONDS) == [
+def test_segment_ranges_support_an_explicit_eight_second_policy() -> None:
+    assert ComfyUpscaleVideoHandler._segment_ranges(15_083, 8.0) == [
         (0, 8_000),
         (8_000, 15_083),
     ]
@@ -166,6 +168,83 @@ def test_execute_copies_upscaled_video_to_managed_artifact(tmp_path: pathlib.Pat
     assert source.read_bytes() == b"generated-video"
     assert result.artifact_metadata["source_video_path"] == str(source.resolve())
     assert result.artifact_metadata["scale_multiplier"] == 1.5
+    assert client.submitted["11"]["inputs"]["switch"] is False
+    assert client.submitted["15"]["inputs"]["switch"] is False
+    assert client.submitted["8"]["inputs"]["chunking_mode"] == "auto"
+    assert "chunking_mode.frames_per_chunk" not in client.submitted["8"]["inputs"]
+
+
+def test_execute_retries_oom_with_adaptive_temporal_chunking(tmp_path: pathlib.Path) -> None:
+    source = tmp_path / "generated.mp4"
+    source.write_bytes(b"generated-video")
+    output_root = tmp_path / "output"
+    provider_dir = output_root / "upscaled"
+    provider_dir.mkdir(parents=True)
+    provider_output = provider_dir / "result.mp4"
+    provider_output.write_bytes(b"upscaled-video")
+
+    class OomThenSuccessClient(FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.submitted_workflows: list[dict] = []
+
+        def submit_prompt(self, workflow: dict, client_id: str) -> dict:
+            self.submitted = workflow
+            self.submitted_workflows.append(workflow)
+            return {"prompt_id": f"prompt-{len(self.submitted_workflows)}"}
+
+    class OomThenSuccessMonitor:
+        def __init__(self, output: pathlib.Path) -> None:
+            self.output = output
+            self.calls = 0
+
+        def poll_until_done(self, prompt_id: str, **kwargs: object) -> dict:
+            self.calls += 1
+            if self.calls == 1:
+                return {
+                    "completed": False,
+                    "status": "error",
+                    "error": "CUDA out of memory",
+                }
+            return {
+                "completed": True,
+                "status": "success",
+                "outputs": {
+                    "19": {
+                        "video": [
+                            {
+                                "filename": self.output.name,
+                                "subfolder": self.output.parent.name,
+                            }
+                        ]
+                    }
+                },
+            }
+
+    client = OomThenSuccessClient()
+    handler = ComfyUpscaleVideoHandler(
+        ComfyUpscaleConfig(output_root=output_root),
+        client=client,
+        monitor=OomThenSuccessMonitor(provider_output),
+    )
+
+    result = handler.execute(
+        "task-1",
+        "video.upscale",
+        "clip-1:video.upscale",
+        _metadata(tmp_path, source),
+        "attempt-1",
+    )
+
+    assert result.success is True
+    assert client.free_calls == 2
+    assert len(client.submitted_workflows) == 2
+    assert client.submitted_workflows[0]["11"]["inputs"]["switch"] is False
+    assert client.submitted_workflows[1]["11"]["inputs"]["switch"] is True
+    assert client.submitted_workflows[1]["15"]["inputs"]["switch"] is True
+    assert client.submitted_workflows[1]["8"]["inputs"]["chunking_mode"] == "auto"
+    assert "chunking_mode.frames_per_chunk" not in client.submitted_workflows[1]["8"]["inputs"]
+    assert result.artifact_metadata["temporal_chunk_fallback_from_prompt_id"] == "prompt-1"
 
 
 def test_execute_rejects_missing_upstream_artifact_before_upload(tmp_path: pathlib.Path) -> None:
@@ -260,7 +339,7 @@ def test_segmented_upscale_reuses_valid_segments_and_reports_progress(
         staticmethod(lambda source, destination, start, duration: destination.write_bytes(b"segment-source")),
     )
 
-    calls: list[str] = []
+    calls: list[tuple[str, bool]] = []
     progress: list[dict] = []
     handler = ComfyUpscaleVideoHandler(
         client=FakeClient(),
@@ -268,8 +347,17 @@ def test_segmented_upscale_reuses_valid_segments_and_reports_progress(
         progress_callback=progress.append,
     )
 
-    def fake_execute_single(self, task_id, logical_key, metadata, attempt_id, source_video):
-        calls.append(task_id)
+    def fake_execute_single(
+        self,
+        task_id,
+        logical_key,
+        metadata,
+        attempt_id,
+        source_video,
+        *,
+        release_memory=True,
+    ):
+        calls.append((task_id, release_memory))
         destination = pathlib.Path(metadata["output_path"])
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"upscaled-video")
@@ -289,6 +377,9 @@ def test_segmented_upscale_reuses_valid_segments_and_reports_progress(
 
     assert first.success is True
     assert second.success is True
-    assert calls == ["task-1.segment-001", "task-1.segment-002"]
+    assert calls == [
+        ("task-1.segment-001", True),
+        ("task-1.segment-002", False),
+    ]
     assert any(event["status"] == "reused" for event in progress)
     assert second.artifact_metadata["segment_count"] == 2
