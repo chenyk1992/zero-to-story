@@ -71,7 +71,7 @@ src layout — all system code lives under `src/lfo/`；user data lives under `w
 - `src/lfo/config/` — 4 层配置合并
 - `src/lfo/environment/` — 环境发现与校验
 - `src/lfo/application/` — `VideoRuntime` Facade 与运行报告
-- `src/lfo/registry/` — 捆绑的工作流 manifest（t2v/i2v/r2v JSON）
+- `src/lfo/registry/` — 捆绑的工作流 JSON（`h3_standard_fl2va` / `h3_standard_r2v` / `h3_presenter_r2v` / `seedvr2_upscale`）
 - `workspace/` — 持久化用户数据；不得随意创建顶层目录，详细规则见上文。
 - `scripts/` — Live E2E 脚本
 - `tests/` — pytest 测试套件（按模块分子目录）
@@ -114,6 +114,7 @@ src layout — all system code lives under `src/lfo/`；user data lives under `w
   的 `runs` 或 `exports` 目录。ComfyUI 输出仅作提供方缓存，必须复制到项目 Run 目录后
   才记录为 LFO artifact。
 - **Video execution**：每个 `clips[]` 是可独立重做的执行单元；创作侧可将 PanelPack 映射为 Clip，但 Runtime 不理解故事板语义
+- **逐镜接力生成**：ComfyUI 是单任务队列，多 Clip 并行只是排队，不会真正并行。因此**默认采用逐镜接力方案**：跑 P001 → ffmpeg 提取末帧 → P002 加入真实末帧为 `ref_image_0`（last-frame lock）→ 跑 P002 → 提取末帧 → ... → P006。每 Clip 生成后用 `ffmpeg -sseof -0.1` 提取末帧 PNG，作为下一 Clip 的 `last-frame lock`（`placement: "fixed"`, `binding.slot: "ref_image_0"`），`revision++`，`summary` 前缀改为 `[reference generation + keyframe completion]`，其他引用顺延。禁止用文字描述"脑补"末态替代真实末帧。脚本见 `workspace/projects/<project_id>/_sequential_gen.py`
 
 ## PR & commit conventions
 

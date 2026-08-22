@@ -28,7 +28,7 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS tasks (
     task_id         TEXT PRIMARY KEY,
     project_id      TEXT NOT NULL,
-    task_type       TEXT NOT NULL,           -- 'keyframe' | 'h3_t2va' | 'h3_i2v' | ...
+    task_type       TEXT NOT NULL,           -- 'video.generate' | 'media.qc' | ...
     status          TEXT NOT NULL DEFAULT 'PLANNED',
     dependencies    TEXT NOT NULL DEFAULT '[]',  -- JSON array of task_ids
     serial_group    TEXT,                    -- group identifier for serial execution

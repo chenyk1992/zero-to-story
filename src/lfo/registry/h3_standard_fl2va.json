@@ -31,8 +31,8 @@
     },
     "class_type": "ResolutionSelector",
     "inputs": {
-      "aspect_ratio": "9:16 (Portrait Widescreen)",
-      "megapixels": 0.33,
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 0.4,
       "multiple": 32
     }
   },
@@ -88,7 +88,7 @@
     "class_type": "BasicGuider",
     "inputs": {
       "model": [
-        "1",
+        "30",
         0
       ],
       "conditioning": [
@@ -107,7 +107,7 @@
     "class_type": "BasicScheduler",
     "inputs": {
       "model": [
-        "1",
+        "30",
         0
       ],
       "scheduler": "simple",
@@ -176,6 +176,7 @@
     "class_type": "CreateVideo",
     "inputs": {
       "fps": 24,
+      "bit_depth": 8,
       "images": [
         "14",
         0
@@ -196,9 +197,20 @@
         "16",
         0
       ],
-      "filename_prefix": "video/test_t2v_vertical",
+      "filename_prefix": "video/test_fl2va",
       "format": "mp4",
       "codec": "h264"
+    }
+  },
+  "30": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 1.0
     }
   }
 }

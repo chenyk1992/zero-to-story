@@ -39,8 +39,7 @@ def minimal_storyboard() -> dict:
                     "prompt": "A hero walking in the rain",
                     "requirements": {
                         "aspect_ratio": "9:16",
-                        "width": 1080,
-                        "height": 1920,
+                        "megapixels": 0.4,
                         "fps": 24,
                     },
                     "references": [
@@ -102,7 +101,10 @@ class TestAdaptMinimal:
         clip = pkg.clips[0]
         assert clip.generation.operation == "video.reference_to_video"
         assert clip.generation.prompt == "A hero walking in the rain"
-        assert clip.generation.requirements.width == 1080
+        assert clip.generation.requirements.aspect_ratio == "9:16"
+        assert clip.generation.requirements.megapixels == 0.4
+        assert clip.generation.requirements.width is None
+        assert clip.generation.requirements.height is None
 
     def test_references_mapped(self, minimal_storyboard: dict) -> None:
         pkg = adapt(minimal_storyboard)
@@ -181,6 +183,12 @@ class TestAdaptPanelFirst:
         ]
         assert package.clips[0].generation.references[-1].binding.placement == "last"
         assert package.approval.approved_by == "user"
+        requirements = package.clips[0].generation.requirements
+        assert requirements.aspect_ratio == "9:16"
+        assert requirements.megapixels == 0.4
+        assert requirements.width is None
+        assert package.output.width == 1080
+        assert package.output.height == 1920
 
     def test_panel_first_does_not_create_placeholder_assets(self) -> None:
         creative = {

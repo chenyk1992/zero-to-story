@@ -95,6 +95,10 @@ class TestBuildPackage:
         assert pkg.output.width == 720
         assert pkg.output.height == 1288
         assert pkg.output.fps == 30
+        requirements = pkg.clips[0].generation.requirements
+        assert requirements.aspect_ratio == "9:16"
+        assert requirements.megapixels == 0.4
+        assert requirements.width is None
 
     def test_with_dialogue_audio(self) -> None:
         pkg = build_package(

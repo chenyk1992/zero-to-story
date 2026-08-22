@@ -52,6 +52,10 @@ def test_build_shot_package_maps_fixed_and_optional_references() -> None:
     assert clip.source_context["skill"] == "virtual-presenter"
     assert clip.source_context["shot"] == "shot-001"
     assert clip.source_context["shot_contract"]["continuity"] == {"gaze": "camera"}
+    assert clip.generation.requirements.aspect_ratio == "9:16"
+    assert clip.generation.requirements.megapixels == 0.4
+    assert clip.generation.requirements.width is None
+    assert package.output.width == 1080
     assert all(not asset.source.uri.startswith(("/", "\\")) for asset in package.assets)
 
 

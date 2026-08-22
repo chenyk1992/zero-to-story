@@ -62,20 +62,29 @@ def test_build_h3_backend_registry_uses_bundled_workflows() -> None:
     manifest = registry.get(H3_BACKEND_ID, "3.0.0")
     assert manifest is not None
     assert "video.reference_to_video" in manifest.operations
-    assert "video.first_last_frame" not in manifest.operations
+    assert "video.first_last_frame" in manifest.operations
+    assert "video.image_to_video" in manifest.operations
+    assert "audio" in manifest.accepted_media_types
     assert len(manifest.workflow_hash) == 64
-    assert manifest.max_references == 9
+    assert manifest.max_references == 15
     assert "seedvr2_3b_int8_convrot.safetensors" not in manifest.required_models
     assert "seedvr2_upscale" not in manifest.extensions["workflow_ids"]
+    assert manifest.extensions["workflow_ids"] == ["h3_standard_fl2va", "h3_standard_r2v"]
 
 
-def test_select_workflow_by_operation_and_orientation() -> None:
+def test_select_workflow_by_operation() -> None:
     assert ComfyH3VideoHandler._select_workflow(
-        {"operation": "video.text_to_video", "width": 864, "height": 480}
-    ) == "h3_standard_t2v"
+        {"operation": "video.text_to_video"}
+    ) == "h3_standard_fl2va"
     assert ComfyH3VideoHandler._select_workflow(
-        {"operation": "video.reference_to_video", "width": 448, "height": 800}
-    ) == "h3_vertical_r2v"
+        {"operation": "video.image_to_video"}
+    ) == "h3_standard_fl2va"
+    assert ComfyH3VideoHandler._select_workflow(
+        {"operation": "video.first_last_frame"}
+    ) == "h3_standard_fl2va"
+    assert ComfyH3VideoHandler._select_workflow(
+        {"operation": "video.reference_to_video"}
+    ) == "h3_standard_r2v"
 
 
 def test_select_workflow_forces_virtual_presenter_workflow() -> None:
@@ -127,7 +136,7 @@ def test_prepare_r2v_uses_only_declared_reference_slots(
     )
 
     workflow, uploaded = handler._prepare_workflow(
-        "h3_vertical_r2v",
+        "h3_standard_r2v",
         {
             "prompt": "A cinematic portrait",
             "duration_ms": 5_000,
@@ -264,7 +273,7 @@ def test_prepare_presenter_uses_materialized_typed_slots(
     assert generator["ref_videos.ref_video_0"][1] == 0
     assert generator["ref_video_audios.ref_video_audio_0"][1] == 1
     assert generator["ref_audios.ref_audio_0"][1] == 0
-    assert workflow["12"]["inputs"]["steps"] == 20
+    assert workflow["12"]["inputs"]["steps"] == 8
     assert workflow["17"]["inputs"]["fps"] == 24
     assert all(str(tmp_path) not in str(node) for node in workflow.values())
 
@@ -316,7 +325,7 @@ def test_prepare_r2v_can_use_max_reference_image_size(tmp_path: pathlib.Path) ->
     )
 
     workflow, _ = handler._prepare_workflow(
-        "h3_vertical_r2v",
+        "h3_standard_r2v",
         {
             "prompt": "A cinematic portrait",
             "duration_ms": 5_000,
@@ -329,7 +338,31 @@ def test_prepare_r2v_can_use_max_reference_image_size(tmp_path: pathlib.Path) ->
     assert workflow["12"]["inputs"]["ref_image_size"] == "max"
 
 
-def test_prepare_h3_applies_requested_resolution(tmp_path: pathlib.Path) -> None:
+def test_prepare_h3_rejects_pixel_dimensions(tmp_path: pathlib.Path) -> None:
+    reference = tmp_path / "reference.png"
+    reference.write_bytes(b"image")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    with pytest.raises(ValueError, match="aspect_ratio and megapixels"):
+        handler._prepare_workflow(
+            "h3_standard_r2v",
+            {
+                "prompt": "A cinematic 768p shot",
+                "duration_ms": 5_000,
+                "width": 1344,
+                "height": 768,
+                "resolved_references": [{"blob_path": str(reference)}],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+
+
+def test_prepare_h3_applies_requested_aspect_ratio(tmp_path: pathlib.Path) -> None:
     reference = tmp_path / "reference.png"
     reference.write_bytes(b"image")
     output_root = tmp_path / "output"
@@ -342,19 +375,19 @@ def test_prepare_h3_applies_requested_resolution(tmp_path: pathlib.Path) -> None
     workflow, _ = handler._prepare_workflow(
         "h3_standard_r2v",
         {
-            "prompt": "A cinematic 768p shot",
+            "prompt": "A cinematic portrait",
             "duration_ms": 5_000,
-            "width": 1344,
-            "height": 768,
+            "aspect_ratio": "9:16",
+            "megapixels": 0.4,
             "resolved_references": [{"blob_path": str(reference)}],
         },
         output_prefix="lfo/run/task/attempt/video",
     )
 
-    generator = workflow["12"]["inputs"]
-    assert generator["width"] == 1344
-    assert generator["height"] == 768
-    assert workflow["14"]["inputs"]["steps"] == 20
+    assert workflow["5"]["inputs"]["aspect_ratio"] == "9:16 (Portrait Widescreen)"
+    assert workflow["5"]["inputs"]["megapixels"] == 0.4
+    assert workflow["12"]["inputs"]["width"] == ["5", 0]
+    assert workflow["12"]["inputs"]["height"] == ["5", 1]
 
 
 def test_prepare_h3_applies_requested_megapixels(tmp_path: pathlib.Path) -> None:
@@ -445,3 +478,101 @@ def test_execute_rejects_missing_reference_without_submission(tmp_path: pathlib.
     assert result.retryable is False
     assert "requires at least one reference" in (result.error or "")
     assert client.submitted is None
+
+
+def test_prepare_fl2va_text_to_video_rejects_images(tmp_path: pathlib.Path) -> None:
+    reference = tmp_path / "reference.png"
+    reference.write_bytes(b"image")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+    with pytest.raises(ValueError, match="does not accept image references"):
+        handler._prepare_workflow(
+            "h3_standard_fl2va",
+            {
+                "operation": "video.text_to_video",
+                "prompt": "A quiet corridor",
+                "resolved_references": [{"blob_path": str(reference)}],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+
+
+def test_prepare_fl2va_wires_first_and_optional_last_frame(tmp_path: pathlib.Path) -> None:
+    first = tmp_path / "first.png"
+    last = tmp_path / "last.png"
+    first.write_bytes(b"first")
+    last.write_bytes(b"last")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_standard_fl2va",
+        {
+            "operation": "video.first_last_frame",
+            "prompt": "Hold the pose then turn",
+            "duration_ms": 5_000,
+            "aspect_ratio": "16:9",
+            "megapixels": 0.6,
+            "resolved_references": [
+                {"blob_path": str(first), "placement": "first"},
+                {"blob_path": str(last), "placement": "last"},
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    generator = workflow["8"]["inputs"]
+    first_node = generator["first_frame"][0]
+    last_node = generator["last_frame"][0]
+    assert workflow[first_node]["class_type"] == "LoadImage"
+    assert workflow[first_node]["inputs"]["image"] == f"lfo-input/{first.name}"
+    assert workflow[last_node]["class_type"] == "LoadImage"
+    assert workflow[last_node]["inputs"]["image"] == f"lfo-input/{last.name}"
+    assert workflow["5"]["inputs"]["aspect_ratio"] == "16:9 (Widescreen)"
+    assert workflow["5"]["inputs"]["megapixels"] == 0.6
+
+
+def test_prepare_r2v_optional_standalone_audio(tmp_path: pathlib.Path) -> None:
+    image = tmp_path / "reference.png"
+    audio = tmp_path / "voice.wav"
+    image.write_bytes(b"image")
+    audio.write_bytes(b"audio")
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    handler = ComfyH3VideoHandler(
+        ComfyH3Config(output_root=output_root), client=client, monitor=FakeMonitor(client.output)
+    )
+
+    workflow, uploaded = handler._prepare_workflow(
+        "h3_standard_r2v",
+        {
+            "prompt": "Picture 1 listens to Audio 1",
+            "duration_ms": 5_000,
+            "resolved_references": [
+                {"reference_id": "identity", "media_type": "image", "blob_path": str(image)},
+                {"reference_id": "voice", "media_type": "audio", "blob_path": str(audio)},
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    assert f"lfo-input/{audio.name}" in uploaded
+    assert client.uploaded_files == [audio.resolve()]
+    load_audio = [
+        (node_id, node)
+        for node_id, node in workflow.items()
+        if node.get("class_type") == "LoadAudio"
+    ]
+    assert len(load_audio) == 1
+    audio_id, audio_node = load_audio[0]
+    assert audio_node["inputs"]["audio"] == f"lfo-input/{audio.name}"
+    assert workflow["12"]["inputs"]["ref_audios.ref_audio_0"] == [audio_id, 0]

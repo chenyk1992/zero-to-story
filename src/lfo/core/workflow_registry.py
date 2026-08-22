@@ -97,7 +97,7 @@ class WorkflowManifest:
     workflow_id: str
     version: str
     family: str              # 'h3_fl2va' | 'h3_ref2va'
-    workflow_mode: str       # 't2va' | 'i2v' | 'first_last' | 'r2v'
+    workflow_mode: str       # 'fl2va' | 'r2v' | 'upscale'
     description: str
     source_file: str         # original workflow file path
     workflow_hash: str       # LFO-WFJ1 hash of the API-format workflow
@@ -199,13 +199,16 @@ class BindingReport:
 # H3 workflow definitions
 # ---------------------------------------------------------------------------
 
-H3_T2V_MANIFEST = WorkflowManifest(
-    workflow_id="h3_standard_t2v",
-    version="3.0.0",
+H3_FL2VA_MANIFEST = WorkflowManifest(
+    workflow_id="h3_standard_fl2va",
+    version="4.0.0",
     family="h3_fl2va",
-    workflow_mode="t2va",
-    description="H3 Text-to-Video-Audio (v3): expanded pipeline with MiniMaxH3ImageToVideo + auto-duration math.",
-    source_file="h3_standard_t2v.json",
+    workflow_mode="fl2va",
+    description=(
+        "H3 First/Last-Frame-to-Video-Audio: one MiniMaxH3ImageToVideo graph; "
+        "optional first_frame and last_frame are wired at submit time."
+    ),
+    source_file="h3_standard_fl2va.json",
     workflow_hash="",  # computed at registration time
     frame_constraints=FrameConstraints(step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24),
     resolution_constraints=ResolutionConstraints(
@@ -248,67 +251,7 @@ H3_T2V_MANIFEST = WorkflowManifest(
     ],
     resource_profile=ResourceProfile(cold_start_sec=360.7, hot_start_sec=360.0, peak_vram_mb=0),
     generates_audio=True,
-    tags=["text-to-video", "audio", "fl2va", "auto-duration"],
-)
-
-H3_I2V_MANIFEST = WorkflowManifest(
-    workflow_id="h3_standard_i2v",
-    version="3.0.0",
-    family="h3_fl2va",
-    workflow_mode="i2v",
-    description="H3 Image-to-Video-Audio (v3): expanded pipeline with MiniMaxH3ImageToVideo + first_frame + auto-duration math.",
-    source_file="h3_standard_i2v.json",
-    workflow_hash="",
-    frame_constraints=FrameConstraints(step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24),
-    resolution_constraints=ResolutionConstraints(
-        min_width=256, max_width=4096, min_height=256, max_height=4096,
-        width_multiple=32, height_multiple=32,
-        default_width=640, default_height=640,
-    ),
-    input_slots=[
-        InputSlot(
-            binding_id="prompt",
-            selector_title="LFO.MainGenerator",
-            selector_class_type="MiniMaxH3ImageToVideo",
-            input_name="prompt",
-            value_type="string",
-            description="Three-layer H3 prompt (scene/soundscape/music)",
-        ),
-        InputSlot(
-            binding_id="first_frame",
-            selector_title="LFO.FirstFrame",
-            selector_class_type="LoadImage",
-            input_name="image",
-            value_type="image",
-            description="Input image to animate (first frame of output video)",
-        ),
-        InputSlot(
-            binding_id="duration",
-            selector_title="LFO.Duration",
-            selector_class_type="PrimitiveFloat",
-            input_name="value",
-            value_type="float",
-            description="Duration in seconds (auto-converted to frames on 17k+5 grid via ComfyMathExpression)",
-        ),
-        InputSlot(
-            binding_id="filename_prefix",
-            selector_title="LFO.SaveVideo",
-            selector_class_type="SaveVideo",
-            input_name="filename_prefix",
-            value_type="string",
-            description="Output filename prefix",
-        ),
-    ],
-    output_spec=OutputSpec(asset_type="video", count=1, format="mp4"),
-    model_dependencies=[
-        ModelDependency(role="unet", filename="minimax_h3_fl2va_pruned_int8_convrot.safetensors"),
-        ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
-        ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
-        ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
-    ],
-    resource_profile=ResourceProfile(cold_start_sec=360.6, hot_start_sec=360.0, peak_vram_mb=0),
-    generates_audio=True,
-    tags=["image-to-video", "audio", "fl2va", "auto-duration"],
+    tags=["text-to-video", "image-to-video", "first-last-frame", "audio", "fl2va", "auto-duration"],
 )
 
 H3_R2V_MANIFEST = WorkflowManifest(
@@ -452,196 +395,6 @@ H3_PRESENTER_R2V_MANIFEST = WorkflowManifest(
     tags=["virtual-presenter", "reference-to-video", "audio", "ref2va", "auto-duration"],
 )
 
-# Vertical (9:16) workflow manifests for H3
-
-H3_VERTICAL_T2V_MANIFEST = WorkflowManifest(
-    workflow_id="h3_vertical_t2v",
-    version="1.0.0",
-    family="h3_vertical_fl2va",
-    workflow_mode="t2va",
-    description="H3 Vertical Text-to-Video-Audio (9:16, ~756p): optimized for RTX 5080 16GB with int8 models.",
-    source_file="h3_vertical_t2v.json",
-    workflow_hash="",
-    frame_constraints=FrameConstraints(step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24),
-    resolution_constraints=ResolutionConstraints(
-        min_width=256, max_width=4096, min_height=256, max_height=4096,
-        width_multiple=32, height_multiple=32,
-        default_width=448, default_height=800,
-    ),
-    input_slots=[
-        InputSlot(
-            binding_id="prompt",
-            selector_title="LFO.MainGenerator",
-            selector_class_type="MiniMaxH3ImageToVideo",
-            input_name="prompt",
-            value_type="string",
-            description="Three-layer H3 prompt (scene/soundscape/music)",
-        ),
-        InputSlot(
-            binding_id="duration",
-            selector_title="LFO.Duration",
-            selector_class_type="PrimitiveFloat",
-            input_name="value",
-            value_type="float",
-            description="Duration in seconds",
-        ),
-        InputSlot(
-            binding_id="filename_prefix",
-            selector_title="LFO.SaveVideo",
-            selector_class_type="SaveVideo",
-            input_name="filename_prefix",
-            value_type="string",
-            description="Output filename prefix",
-        ),
-    ],
-    output_spec=OutputSpec(asset_type="video", count=1, format="mp4"),
-    model_dependencies=[
-        ModelDependency(role="unet", filename="minimax_h3_fl2va_pruned_int8_convrot.safetensors"),
-        ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
-        ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
-        ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
-    ],
-    resource_profile=ResourceProfile(cold_start_sec=360.0, hot_start_sec=360.0, peak_vram_mb=0),
-    generates_audio=True,
-    tags=["text-to-video", "audio", "fl2va", "vertical", "9:16"],
-)
-
-H3_VERTICAL_I2V_MANIFEST = WorkflowManifest(
-    workflow_id="h3_vertical_i2v",
-    version="1.0.0",
-    family="h3_vertical_fl2va",
-    workflow_mode="i2v",
-    description="H3 Vertical Image-to-Video-Audio (9:16, ~800P): optimized for RTX 5080 16GB.",
-    source_file="h3_vertical_i2v.json",
-    workflow_hash="",
-    frame_constraints=FrameConstraints(step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24),
-    resolution_constraints=ResolutionConstraints(
-        min_width=256, max_width=4096, min_height=256, max_height=4096,
-        width_multiple=32, height_multiple=32,
-        default_width=448, default_height=800,
-    ),
-    input_slots=[
-        InputSlot(
-            binding_id="prompt",
-            selector_title="LFO.MainGenerator",
-            selector_class_type="MiniMaxH3ImageToVideo",
-            input_name="prompt",
-            value_type="string",
-            description="Three-layer H3 prompt",
-        ),
-        InputSlot(
-            binding_id="first_frame",
-            selector_title="LFO.FirstFrame",
-            selector_class_type="LoadImage",
-            input_name="image",
-            value_type="image",
-            description="Input image to animate",
-        ),
-        InputSlot(
-            binding_id="duration",
-            selector_title="LFO.Duration",
-            selector_class_type="PrimitiveFloat",
-            input_name="value",
-            value_type="float",
-            description="Duration in seconds",
-        ),
-        InputSlot(
-            binding_id="filename_prefix",
-            selector_title="LFO.SaveVideo",
-            selector_class_type="SaveVideo",
-            input_name="filename_prefix",
-            value_type="string",
-            description="Output filename prefix",
-        ),
-    ],
-    output_spec=OutputSpec(asset_type="video", count=1, format="mp4"),
-    model_dependencies=[
-        ModelDependency(role="unet", filename="minimax_h3_fl2va_pruned_int8_convrot.safetensors"),
-        ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
-        ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
-        ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
-    ],
-    resource_profile=ResourceProfile(cold_start_sec=360.0, hot_start_sec=360.0, peak_vram_mb=0),
-    generates_audio=True,
-    tags=["image-to-video", "audio", "fl2va", "vertical", "9:16"],
-)
-
-H3_VERTICAL_R2V_MANIFEST = WorkflowManifest(
-    workflow_id="h3_vertical_r2v",
-    version="1.0.0",
-    family="h3_vertical_ref2va",
-    workflow_mode="r2v",
-    description="H3 Vertical Reference-to-Video (9:16, ~800P): optimized for RTX 5080 16GB.",
-    source_file="h3_vertical_r2v.json",
-    workflow_hash="",
-    frame_constraints=FrameConstraints(step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24),
-    resolution_constraints=ResolutionConstraints(
-        min_width=256, max_width=4096, min_height=256, max_height=4096,
-        width_multiple=32, height_multiple=32,
-        default_width=448, default_height=800,
-    ),
-    input_slots=[
-        InputSlot(
-            binding_id="prompt",
-            selector_title="LFO.Prompt",
-            selector_class_type="PrimitiveStringMultiline",
-            input_name="value",
-            value_type="string",
-            description="Three-layer H3 prompt with <Picture N> references",
-        ),
-        InputSlot(
-            binding_id="ref_image_0",
-            selector_title="LFO.Reference01",
-            selector_class_type="LoadImage",
-            input_name="image",
-            value_type="image",
-            description="Reference image 1",
-        ),
-        InputSlot(
-            binding_id="ref_image_1",
-            selector_title="LFO.Reference02",
-            selector_class_type="LoadImage",
-            input_name="image",
-            value_type="image",
-            description="Reference image 2",
-        ),
-        InputSlot(
-            binding_id="ref_image_2",
-            selector_title="LFO.Reference03",
-            selector_class_type="LoadImage",
-            input_name="image",
-            value_type="image",
-            description="Reference image 3",
-        ),
-        InputSlot(
-            binding_id="duration",
-            selector_title="LFO.Duration",
-            selector_class_type="PrimitiveFloat",
-            input_name="value",
-            value_type="float",
-            description="Duration in seconds",
-        ),
-        InputSlot(
-            binding_id="filename_prefix",
-            selector_title="LFO.SaveVideo",
-            selector_class_type="SaveVideo",
-            input_name="filename_prefix",
-            value_type="string",
-            description="Output filename prefix",
-        ),
-    ],
-    output_spec=OutputSpec(asset_type="video", count=1, format="mp4"),
-    model_dependencies=[
-        ModelDependency(role="unet", filename="minimax_h3_ref2va_pruned_int8_convrot.safetensors"),
-        ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
-        ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
-        ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
-    ],
-    resource_profile=ResourceProfile(cold_start_sec=370.0, hot_start_sec=370.0, peak_vram_mb=0),
-    generates_audio=True,
-    tags=["reference-to-video", "audio", "ref2va", "vertical", "9:16"],
-)
-
 SEEDVR2_UPSCALE_MANIFEST = WorkflowManifest(
     workflow_id="seedvr2_upscale",
     version="1.1.0",
@@ -716,13 +469,9 @@ SEEDVR2_UPSCALE_MANIFEST = WorkflowManifest(
 
 # Registry of all known workflow manifests
 KNOWN_WORKFLOWS = {
-    "h3_standard_t2v": H3_T2V_MANIFEST,
-    "h3_standard_i2v": H3_I2V_MANIFEST,
+    "h3_standard_fl2va": H3_FL2VA_MANIFEST,
     "h3_standard_r2v": H3_R2V_MANIFEST,
     "h3_presenter_r2v": H3_PRESENTER_R2V_MANIFEST,
-    "h3_vertical_t2v": H3_VERTICAL_T2V_MANIFEST,
-    "h3_vertical_i2v": H3_VERTICAL_I2V_MANIFEST,
-    "h3_vertical_r2v": H3_VERTICAL_R2V_MANIFEST,
     "seedvr2_upscale": SEEDVR2_UPSCALE_MANIFEST,
 }
 
@@ -735,37 +484,19 @@ def make_capability(manifest: WorkflowManifest) -> WorkflowCapability:
     """Derive capability from manifest family and explicit workflow_mode."""
     mode = manifest.workflow_mode
 
-    if mode == "t2va":
+    if mode == "fl2va":
         return WorkflowCapability(
             workflow_id=manifest.workflow_id,
-            modes=["t2va"],
-            accepts_prompt=True,
-            accepts_image=False,
-            produces_video=True,
-            produces_audio=True,
-            limitations=["No image identity control"],
-        )
-    elif mode == "i2v":
-        return WorkflowCapability(
-            workflow_id=manifest.workflow_id,
-            modes=["i2v", "first_last"],  # Same workflow supports both modes
+            modes=["t2va", "i2v", "first_last"],
             accepts_prompt=True,
             accepts_image=True,
             accepts_first_frame=True,
+            accepts_last_frame=True,
             produces_video=True,
             produces_audio=True,
-            limitations=[],
-        )
-    elif mode == "first_last":
-        return WorkflowCapability(
-            workflow_id=manifest.workflow_id,
-            modes=["i2v", "first_last"],
-            accepts_prompt=True,
-            accepts_image=True,
-            accepts_first_frame=True,
-            produces_video=True,
-            produces_audio=True,
-            limitations=[],
+            limitations=[
+                "first_frame and last_frame are optional edges wired at submit time"
+            ],
         )
     elif mode == "r2v":
         limitations = (
@@ -774,7 +505,9 @@ def make_capability(manifest: WorkflowManifest) -> WorkflowCapability:
                 "ref_video_0..2 and ref_audio_0..2"
             ]
             if manifest.workflow_id == "h3_presenter_r2v"
-            else ["Fixed 3 reference slots"]
+            else [
+                "Up to 9 image, 3 video and 3 optional standalone audio references"
+            ]
         )
         return WorkflowCapability(
             workflow_id=manifest.workflow_id,
@@ -1072,13 +805,14 @@ class WorkflowRegistry:
             if isinstance(node, dict)
             and isinstance((class_type := node.get("class_type")), str)
         }
-        if manifest.workflow_id == "h3_presenter_r2v":
-            # These upload/decomposition nodes are injected per declared
-            # reference slot, so they are runtime requirements even though
-            # the static template deliberately contains no placeholder media.
+        if manifest.workflow_mode == "r2v":
+            # Upload/decomposition nodes are injected per declared reference.
             graph_classes.update(
                 {"LoadImage", "LoadVideo", "GetVideoComponents", "LoadAudio"}
             )
+        elif manifest.workflow_mode == "fl2va":
+            # first_frame / last_frame LoadImage nodes are wired at submit time.
+            graph_classes.add("LoadImage")
         for class_type in sorted(graph_classes):
             checks.append({
                 "name": f"node_class_{class_type}",

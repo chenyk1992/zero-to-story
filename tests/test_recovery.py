@@ -34,7 +34,7 @@ def db():
 class TestCrashRecovery:
     def test_recover_running_task(self, db):
         """A RUNNING task with fingerprints should be reset to READY on recovery."""
-        tid = create_task(db, "proj1", "h3_t2va")
+        tid = create_task(db, "proj1", "video.generate")
         update_task_hashes(
             db, tid,
             content_hash="ch_1", dependency_hash="dh_1",
@@ -53,7 +53,7 @@ class TestCrashRecovery:
 
     def test_recover_queued_task(self, db):
         """A QUEUED task with fingerprints should be reset to READY on recovery."""
-        tid = create_task(db, "proj1", "h3_t2va")
+        tid = create_task(db, "proj1", "video.generate")
         update_task_hashes(
             db, tid,
             content_hash="ch_1", dependency_hash="dh_1",
@@ -70,8 +70,8 @@ class TestCrashRecovery:
     def test_recover_multiple_tasks(self, db):
         """Multiple running tasks with fingerprints should all be reset."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_t2va")
-        t3 = create_task(db, "proj1", "h3_i2v")
+        t2 = create_task(db, "proj1", "video.generate")
+        t3 = create_task(db, "proj1", "media.qc")
         update_task_hashes(db, t1, content_hash="ch_1", dependency_hash="dh_1",
                           params_hash="ph_1", idempotency_key="idem_1")
         update_task_hashes(db, t2, content_hash="ch_2", dependency_hash="dh_2",
@@ -104,7 +104,7 @@ class TestCrashRecovery:
 
     def test_recover_with_uncertain_journal(self, db):
         """Tasks with uncertain journal entries should be detected."""
-        tid = create_task(db, "proj1", "h3_t2va")
+        tid = create_task(db, "proj1", "video.generate")
         update_task_hashes(
             db, tid,
             content_hash="ch_1", dependency_hash="dh_1",
@@ -136,7 +136,7 @@ class TestCrashRecovery:
 
     def test_recovery_resets_to_planned_without_fingerprints(self, db):
         """A RUNNING task without fingerprints resets to PLANNED, not READY."""
-        tid = create_task(db, "proj1", "h3_t2va")
+        tid = create_task(db, "proj1", "video.generate")
         # No hashes set — task was never properly prepared
         update_task_status(db, tid, TaskStatus.RUNNING)
 
@@ -151,7 +151,7 @@ class TestCrashRecovery:
 class TestUncertainJournal:
     def test_resolve_job_exists(self, db):
         """If provider still has the job, continue monitoring."""
-        tid = create_task(db, "proj1", "h3_t2va")
+        tid = create_task(db, "proj1", "video.generate")
         aid = create_attempt(
             db, tid,
             idempotency_key="idem_1",
@@ -169,7 +169,7 @@ class TestUncertainJournal:
 
     def test_resolve_job_lost(self, db):
         """If provider doesn't have the job, mark as FAILED."""
-        tid = create_task(db, "proj1", "h3_t2va")
+        tid = create_task(db, "proj1", "video.generate")
         aid = create_attempt(
             db, tid,
             idempotency_key="idem_1",
@@ -195,7 +195,7 @@ class TestInvalidation:
     def test_invalidate_downstream(self, db):
         """Changing upstream should mark downstream tasks STALE."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
         t3 = create_task(db, "proj1", "h3_first_last", dependencies=[t1])
 
         invalidated = invalidate_upstream(db, t1)
@@ -207,7 +207,7 @@ class TestInvalidation:
     def test_no_invalidation_without_dep(self, db):
         """Tasks without dependency on source should not be invalidated."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_t2va")  # no dependency
+        t2 = create_task(db, "proj1", "video.generate")  # no dependency
 
         invalidated = invalidate_upstream(db, t1)
         assert invalidated == []
@@ -216,7 +216,7 @@ class TestInvalidation:
     def test_invalidation_records(self, db):
         """Invalidation should create records in invalidations table."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
 
         invalidate_upstream(db, t1, reason="test_change", scope={"field": "prompt"})
 
@@ -229,7 +229,7 @@ class TestInvalidation:
     def test_resolve_invalidation(self, db):
         """Resolving invalidation should update the records."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
 
         invalidate_upstream(db, t1)
         count = resolve_invalidation(db, t2)
@@ -246,7 +246,7 @@ class TestInvalidation:
     def test_cascading_invalidation(self, db):
         """A -> B -> C chain: changing A should invalidate B and C (transitively)."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
         # Note: t2 depends on t1, but t3 depends on t2 (one level at a time)
         t3 = create_task(db, "proj1", "assembly", dependencies=[t2])
 

@@ -33,6 +33,7 @@ def build_package(
     locale: str = "en-US",
     project_id: str | None = None,
     aspect_ratio: str = "9:16",
+    megapixels: float = 0.4,
     width: int = 1080,
     height: int = 1920,
     fps: int = 24,
@@ -46,9 +47,10 @@ def build_package(
         scripts: List of {"clip_id": ..., "prompt": ..., "duration_ms": ...}.
         dialogue_audio: Optional list of {"asset_key": ..., "uri": ...}.
         locale: Project locale.
-        aspect_ratio: Target aspect ratio.
-        width: Target width.
-        height: Target height.
+        aspect_ratio: H3 generation canvas ratio, e.g. ``9:16`` or ``16:9``.
+        megapixels: H3 ResolutionSelector megapixel target.
+        width: Delivery width for OutputPolicy, not H3 generation.
+        height: Delivery height for OutputPolicy, not H3 generation.
         fps: Target fps.
 
     Returns:
@@ -152,8 +154,7 @@ def build_package(
                 prompt=script.get("prompt", ""),
                 requirements=GenerationRequirements(
                     aspect_ratio=aspect_ratio,
-                    width=width,
-                    height=height,
+                    megapixels=megapixels,
                     fps=fps,
                     native_audio="allowed",
                 ),

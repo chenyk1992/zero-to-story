@@ -234,7 +234,7 @@ MOCK_OBJECT_INFO = {
         "description": "Save video with audio",
         "category": "video",
     },
-    # --- I2V-specific nodes ---
+    # --- Dynamic media loaders ---
     "LoadImage": {
         "input": {
             "required": {
@@ -248,37 +248,24 @@ MOCK_OBJECT_INFO = {
         "description": "Load an image",
         "category": "image",
     },
-    "ImageScaleToTotalPixels": {
-        "input": {
-            "required": {
-                "image": ["IMAGE", {}],
-                "upscale_method": ["STRING", {"default": "nearest-exact"}],
-                "megapixels": ["FLOAT", {"default": 1.0, "min": 0.01}],
-            },
-        },
-        "output": ["IMAGE"],
-        "output_name": ["IMAGE"],
-        "name": "Image Scale To Total Pixels",
-        "display_name": "Image Scale To Total Pixels",
-        "description": "Scale image to target megapixels",
-        "category": "image",
-    },
-    "GetImageSize": {
-        "input": {
-            "required": {
-                "image": ["IMAGE", {}],
-            },
-        },
-        "output": ["INT", "INT"],
-        "output_name": ["width", "height"],
-        "name": "Get Image Size",
-        "display_name": "Get Image Size",
-        "description": "Get image dimensions",
-        "category": "image",
-    },
     "LoadVideo": {},
     "GetVideoComponents": {},
     "LoadAudio": {},
+    "LoraLoaderModelOnly": {
+        "input": {
+            "required": {
+                "model": ["MODEL", {}],
+                "lora_name": ["STRING", {}],
+                "strength_model": ["FLOAT", {"default": 1.0}],
+            },
+        },
+        "output": ["MODEL"],
+        "output_name": ["MODEL"],
+        "name": "Load LoRA Model Only",
+        "display_name": "Load LoRA Model Only",
+        "description": "Load a LoRA onto a model",
+        "category": "loaders",
+    },
     # --- R2V-specific nodes ---
     "ResolutionSelector": {
         "input": {
@@ -382,19 +369,10 @@ def registry(workflow_dir):
 # ---------------------------------------------------------------------------
 
 class TestRuntimeCompatibilityHappy:
-    def test_t2v_runtime_compatible(self, registry):
-        registry.register("h3_standard_t2v")
+    def test_fl2va_runtime_compatible(self, registry):
+        registry.register("h3_standard_fl2va")
         result = registry.check_runtime_compatibility(
-            "h3_standard_t2v",
-            comfy_client=MockComfyClient(),
-        )
-        assert result["compatible"] is True
-        assert result["level"] == "RUNTIME_COMPATIBLE"
-
-    def test_i2v_runtime_compatible(self, registry):
-        registry.register("h3_standard_i2v")
-        result = registry.check_runtime_compatibility(
-            "h3_standard_i2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
         )
         assert result["compatible"] is True
@@ -419,9 +397,9 @@ class TestRuntimeCompatibilityHappy:
         assert result["level"] == "RUNTIME_COMPATIBLE"
 
     def test_check_names_included(self, registry):
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         result = registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
         )
         check_names = {c["name"] for c in result["checks"]}
@@ -437,11 +415,11 @@ class TestRuntimeCompatibilityHappy:
 class TestRuntimeCompatibilityFailures:
     def test_missing_node_class(self, registry):
         """When a node class doesn't exist in ComfyUI."""
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         # Object info without MiniMaxH3ImageToVideo
         partial_info = {"SaveVideo": MOCK_OBJECT_INFO["SaveVideo"]}
         result = registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(object_info=partial_info),
         )
         assert result["compatible"] is False
@@ -463,12 +441,12 @@ class TestRuntimeCompatibilityFailures:
 
     def test_missing_input_name(self, registry):
         """When a bound input doesn't exist on the node."""
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         # Remove 'prompt' from MiniMaxH3ImageToVideo required inputs
         bad_info = json.loads(json.dumps(MOCK_OBJECT_INFO))
         del bad_info["MiniMaxH3ImageToVideo"]["input"]["required"]["prompt"]
         result = registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(object_info=bad_info),
         )
         assert result["compatible"] is False
@@ -478,9 +456,9 @@ class TestRuntimeCompatibilityFailures:
         assert prompt_check["status"] == "fail"
 
     def test_comfyui_unreachable(self, registry):
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         result = registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(fail_connect=True),
         )
         assert result["compatible"] is False
@@ -494,39 +472,39 @@ class TestRuntimeCompatibilityFailures:
 class TestValidationLevels:
     def test_static_valid_after_register(self, registry):
         """After static validation, level is STATIC_VALID."""
-        registry.register("h3_standard_t2v")
-        result = registry.validate_workflow("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
+        result = registry.validate_workflow("h3_standard_fl2va")
         assert result["valid"] is True
         assert result["level"] == "STATIC_VALID"
 
     def test_runtime_compatible_after_check(self, registry):
         """After runtime check, level upgrades to RUNTIME_COMPATIBLE."""
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
         )
-        result = registry.validate_workflow("h3_standard_t2v")
+        result = registry.validate_workflow("h3_standard_fl2va")
         assert result["level"] == "RUNTIME_COMPATIBLE"
 
     def test_smoke_tested_highest(self, registry):
         """Smoke tested is the highest level."""
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
         )
-        registry.mark_smoke_tested("h3_standard_t2v")
-        result = registry.validate_workflow("h3_standard_t2v")
+        registry.mark_smoke_tested("h3_standard_fl2va")
+        result = registry.validate_workflow("h3_standard_fl2va")
         assert result["level"] == "SMOKE_TESTED"
 
     def test_manifest_fields_updated(self, registry):
-        registry.register("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
         registry.check_runtime_compatibility(
-            "h3_standard_t2v",
+            "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
         )
-        m = registry.get_manifest("h3_standard_t2v")
+        m = registry.get_manifest("h3_standard_fl2va")
         assert m.static_valid is True
         assert m.runtime_compatible is True
         assert m.smoke_tested is False
@@ -538,13 +516,13 @@ class TestValidationLevels:
 
 class TestProductionReady:
     def test_production_ready_after_register(self, registry):
-        registry.register("h3_standard_t2v")
-        m = registry.get_manifest("h3_standard_t2v")
+        registry.register("h3_standard_fl2va")
+        m = registry.get_manifest("h3_standard_fl2va")
         # Should be production_ready after successful registration
         assert m.production_ready is True
         assert m.binding_policy == "strict_title_and_class"
 
     def test_not_ready_when_unregistered(self, registry):
-        result = registry.validate_workflow("h3_standard_t2v")
+        result = registry.validate_workflow("h3_standard_fl2va")
         assert result["valid"] is False
         assert result["level"] == "UNREGISTERED"

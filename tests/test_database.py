@@ -80,7 +80,7 @@ class TestTaskMaterializationsTable:
         db.execute(
             "INSERT INTO tasks (task_id, project_id, task_type, status, updated_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            ("task1", "proj1", "h3_i2v", "WAITING_ASSETS", "2026-01-01T00:00:00Z"),
+            ("task1", "proj1", "video.generate", "WAITING_ASSETS", "2026-01-01T00:00:00Z"),
         )
         db.execute(
             """INSERT INTO task_materializations
@@ -88,7 +88,7 @@ class TestTaskMaterializationsTable:
                 params_hash, idempotency_key, environment_snapshot_id,
                 environment_execution_hash, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("mat1", "task1", "proj1", "h3_standard_i2v",
+            ("mat1", "task1", "proj1", "h3_standard_fl2va",
              "phash123", "idem456", "snap789", "ehash012",
              "2026-01-01T00:00:00Z"),
         )
@@ -161,7 +161,7 @@ class TestSelectedClipsTable:
         db.execute(
             "INSERT INTO tasks (task_id, project_id, task_type, status, updated_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            ("task1", "proj1", "h3_i2v", "SUCCEEDED", "2026-01-01T00:00:00Z"),
+            ("task1", "proj1", "video.generate", "SUCCEEDED", "2026-01-01T00:00:00Z"),
         )
         db.execute(
             "INSERT INTO assets (asset_id, task_id, asset_type, file_path, updated_at) "
@@ -205,7 +205,7 @@ class TestSelectedClipsTable:
         db.execute(
             "INSERT INTO tasks (task_id, project_id, task_type, status, updated_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            ("task1", "proj1", "h3_i2v", "SUCCEEDED", "2026-01-01T00:00:00Z"),
+            ("task1", "proj1", "video.generate", "SUCCEEDED", "2026-01-01T00:00:00Z"),
         )
         db.execute(
             "INSERT INTO assets (asset_id, task_id, asset_type, file_path, updated_at) "

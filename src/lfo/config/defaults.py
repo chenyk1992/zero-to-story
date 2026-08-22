@@ -11,7 +11,7 @@ DEFAULT_MIN_FREE_VRAM_MIB = 2048  # 2GB
 DEFAULT_MIN_FREE_RAM_MIB = 4096  # 4GB
 DEFAULT_MIN_FREE_DISK_MIB = 5120  # 5GB
 
-SUPPORTED_WORKFLOW_FAMILIES = ["h3_fl2va", "h3_ref2va", "h3_vertical_fl2va", "h3_vertical_ref2va"]
+SUPPORTED_WORKFLOW_FAMILIES = ["h3_fl2va", "h3_ref2va", "h3_presenter_r2v"]
 SUPPORTED_TASK_TYPES = ["video.h3", "visual.generate", "visual.edit", "audio.tts"]
 SUPPORTED_ASSET_TYPES = ["image", "video", "audio", "subtitle", "document"]
 

@@ -79,7 +79,7 @@ description: |
 
 - **参考路由**：0 个视觉参考走 T2V（`video.text_to_video`）；1 个图片参考走 I2V（`video.image_to_video`）；多个视觉参考，或单个视频参考，走 R2V（`video.reference_to_video`）。素材都以文件和引用元数据进入执行包。
 - **连续性**：默认生成一个连续 Clip，不拆多段、不生成静态分镜再合成；只有用户明确要求多条成片时才创建多个独立执行包。
-- **像素比**：用户说的 `pixel_ratio` 映射为 `GenerationRequirements.megapixels`，例如 `0.4 -> 0.4`。设置 `megapixels` 时不要同时设置 generation width/height；`OutputPolicy` 仍可保持 `1080x1920` 等交付尺寸。
+- **像素比**：用户说的 `pixel_ratio` 映射为 `GenerationRequirements.megapixels`；未指定时默认 `0.4`。H3 生成画布只写 `aspect_ratio` + `megapixels`（例如 `9:16` / `0.4`、`16:9` / `0.6`），不要写 generation width/height。`OutputPolicy` 仍可保持 `1080x1920` 等交付尺寸。
 - **口播音频**：有外部口播音频时，把音频作为普通素材/音轨绑定到 Clip，并让输出以外部音频为准；没有外部音频时才允许 H3 原生音频。两条路径都要在 H3 提示词和执行包中写明。
 - **字幕**：普通字幕默认 `subtitles_mode="none"`。MG 画面中的关键词、按钮、标题和动态字形是设计元素，不等于字幕；只有用户明确要字幕时才改变输出策略并提供字幕内容。
 - **素材治理**：每个产品图、参考图和外部音频都要有 `review`、`provenance`，并通过参考位或音轨绑定到 Clip；Skill 生成的产品图也按普通素材文件处理，不绕过执行包边界。

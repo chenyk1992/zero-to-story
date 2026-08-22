@@ -34,7 +34,7 @@
 确认后调用 `lfo.skill_adapter.mg_voiceover.build_package`：
 
 - 默认一个连续 Clip，Clip 时长覆盖整条 MG 动画；不要把时间线段落误建成多个 Clip。
-- `pixel_ratio` 只写到 `GenerationRequirements.megapixels`。例如 `0.4` 写成 `megapixels: 0.4`；同时需要 `1080x1920` 时把它放在 `OutputPolicy`，不要再向 generation requirements 写 width/height。
+- `pixel_ratio` 只写到 `GenerationRequirements.megapixels`，未指定时默认 `0.4`。例如 `0.4` 写成 `megapixels: 0.4`；同时需要 `1080x1920` 时把它放在 `OutputPolicy`，不要再向 generation requirements 写 width/height。
 - 有外部口播音频时绑定音频 asset/track，并让输出使用外部音频；无外部口播时允许 H3 原生音频。音频来源必须在提示词和包中一致。
 - 普通字幕默认 `subtitles_mode: "none"`。MG 动态字、UI 标签、标题和数据标签不是字幕。
 - 记录用户确认信息；确认前不调用 adapter，不把未批准包交给运行时。

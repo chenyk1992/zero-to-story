@@ -37,7 +37,7 @@ def db():
 def project(db):
     """Create a project with a task. Returns (project_id, task_id)."""
     pid = "proj_test_001"
-    tid = create_task(db, pid, "h3_t2va")
+    tid = create_task(db, pid, "video.generate")
     return pid, tid
 
 
@@ -54,7 +54,7 @@ class TestTaskOperations:
 
     def test_create_task_with_deps(self, db):
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
         task = get_task(db, t2)
         assert task["dependencies"] == [t1]
 
@@ -63,7 +63,7 @@ class TestTaskOperations:
 
     def test_get_tasks_by_project(self, db):
         create_task(db, "proj1", "keyframe")
-        create_task(db, "proj1", "h3_t2va")
+        create_task(db, "proj1", "video.generate")
         create_task(db, "proj2", "keyframe")
         tasks = get_tasks_by_project(db, "proj1")
         assert len(tasks) == 2
@@ -142,7 +142,7 @@ class TestTaskOperations:
     def test_promote_to_ready_checks_dependencies(self, db):
         """Cannot promote if dependencies are not in terminal states."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
 
         # t1 is still PLANNED, not terminal
         with pytest.raises(ValueError, match="Dependency.*not a terminal state"):
@@ -157,7 +157,7 @@ class TestTaskOperations:
     def test_promote_to_ready_after_deps_complete(self, db):
         """Can promote once all dependencies are terminal."""
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_i2v", dependencies=[t1])
+        t2 = create_task(db, "proj1", "media.qc", dependencies=[t1])
 
         # Complete t1
         update_task_status(db, t1, TaskStatus.APPROVED)
@@ -219,12 +219,12 @@ class TestAttemptOperations:
             content_hash="ch_1",
             dependency_hash="dh_1",
             params_hash="ph_1",
-            workflow_id="h3_standard_t2v",
+            workflow_id="h3_standard_fl2va",
         )
         assert aid.startswith("att_")
         attempt = get_attempt(db, aid)
         assert attempt["task_id"] == tid
-        assert attempt["workflow_id"] == "h3_standard_t2v"
+        assert attempt["workflow_id"] == "h3_standard_fl2va"
         assert attempt["status"] == SubmissionState.PREPARED
 
     def test_attempt_links_to_task(self, db, project):
@@ -423,8 +423,8 @@ class TestProjectState:
 
     def test_project_tasks_summary(self, db):
         t1 = create_task(db, "proj1", "keyframe")
-        t2 = create_task(db, "proj1", "h3_t2va")
-        t3 = create_task(db, "proj1", "h3_i2v")
+        t2 = create_task(db, "proj1", "video.generate")
+        t3 = create_task(db, "proj1", "media.qc")
         update_task_status(db, t1, TaskStatus.APPROVED)
         update_task_status(db, t2, TaskStatus.RUNNING)
         update_task_status(db, t3, TaskStatus.PLANNED)

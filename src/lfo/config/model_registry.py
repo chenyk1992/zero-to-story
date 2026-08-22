@@ -29,7 +29,7 @@ KNOWN_MODELS: dict[str, ModelDeclaration] = {
         ],
         expected_size_min=19_000_000_000,  # ~19GB
         expected_size_max=21_000_000_000,  # ~21GB
-        required_by=["h3_standard_t2v", "h3_standard_i2v"],
+        required_by=["h3_standard_fl2va"],
     ),
     "minimax_h3_ref2va_int8": ModelDeclaration(
         model_id="minimax_h3_ref2va_int8",
@@ -39,7 +39,7 @@ KNOWN_MODELS: dict[str, ModelDeclaration] = {
         ],
         expected_size_min=19_000_000_000,
         expected_size_max=21_000_000_000,
-        required_by=["h3_standard_r2v"],
+        required_by=["h3_standard_r2v", "h3_presenter_r2v"],
     ),
     "minimax_h3_video_vae_fp16": ModelDeclaration(
         model_id="minimax_h3_video_vae_fp16",
@@ -49,7 +49,7 @@ KNOWN_MODELS: dict[str, ModelDeclaration] = {
         ],
         expected_size_min=4_500_000_000,  # ~4.5GB
         expected_size_max=5_500_000_000,  # ~5.5GB
-        required_by=["h3_standard_t2v", "h3_standard_i2v", "h3_standard_r2v"],
+        required_by=["h3_standard_fl2va", "h3_standard_r2v", "h3_presenter_r2v"],
     ),
     "minimax_h3_audio_vae_fp32": ModelDeclaration(
         model_id="minimax_h3_audio_vae_fp32",
@@ -59,7 +59,7 @@ KNOWN_MODELS: dict[str, ModelDeclaration] = {
         ],
         expected_size_min=500_000_000,  # ~500MB
         expected_size_max=700_000_000,  # ~700MB
-        required_by=["h3_standard_t2v", "h3_standard_i2v", "h3_standard_r2v"],
+        required_by=["h3_standard_fl2va", "h3_standard_r2v", "h3_presenter_r2v"],
     ),
     "qwen3vl_32b_minimax_h3_nvfp4_awq": ModelDeclaration(
         model_id="qwen3vl_32b_minimax_h3_nvfp4_awq",
@@ -69,7 +69,7 @@ KNOWN_MODELS: dict[str, ModelDeclaration] = {
         ],
         expected_size_min=14_000_000_000,  # ~14GB
         expected_size_max=16_000_000_000,  # ~16GB
-        required_by=["h3_standard_t2v", "h3_standard_i2v", "h3_standard_r2v"],
+        required_by=["h3_standard_fl2va", "h3_standard_r2v", "h3_presenter_r2v"],
     ),
 }
 

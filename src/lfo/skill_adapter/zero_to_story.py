@@ -7,6 +7,7 @@ the legacy ``shots`` shape; the LFO execution contract never does.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from lfo.contracts.assets import AssetSource, AssetSpec, ProvenanceSpec, ReviewDeclaration
@@ -22,6 +23,30 @@ from lfo.contracts.clips import (
 )
 from lfo.contracts.package import ApprovalDeclaration, VideoExecutionPackage
 from lfo.contracts.timeline import OutputPolicy
+
+_DEFAULT_MEGAPIXELS = 0.4
+
+
+def _aspect_from_pixels(width: object, height: object) -> str | None:
+    if not isinstance(width, int) or isinstance(width, bool) or width <= 0:
+        return None
+    if not isinstance(height, int) or isinstance(height, bool) or height <= 0:
+        return None
+    divisor = math.gcd(width, height)
+    return f"{width // divisor}:{height // divisor}"
+
+
+def _canvas_requirements(data: dict[str, Any], path: str) -> GenerationRequirements:
+    """H3 generation uses aspect_ratio + megapixels, never pixel width/height."""
+    payload = dict(data)
+    width = payload.pop("width", None)
+    height = payload.pop("height", None)
+    aspect = payload.get("aspect_ratio")
+    if not isinstance(aspect, str) or not aspect.strip():
+        payload["aspect_ratio"] = _aspect_from_pixels(width, height) or "16:9"
+    if payload.get("megapixels") is None:
+        payload["megapixels"] = _DEFAULT_MEGAPIXELS
+    return GenerationRequirements.from_dict(payload, path)
 
 
 def _asset_spec(data: dict[str, Any]) -> AssetSpec:
@@ -127,7 +152,7 @@ def _panel_to_clip(
     requirement_data = generation_data.get("requirements", {})
     if not isinstance(requirement_data, dict):
         raise ValueError(f"panel {panel_id!r}.generation.requirements must be an object")
-    resolved_requirements = GenerationRequirements.from_dict(
+    resolved_requirements = _canvas_requirements(
         requirements.to_dict() | requirement_data,
         f"$.panels[{sequence - 1}].generation.requirements",
     )
@@ -174,6 +199,8 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
     for asset in raw_assets:
         builder.add_asset(_asset_spec(asset))
     custom = creative.get("user_constraints", creative.get("style", {}).get("custom", {}))
+    if not isinstance(custom, dict):
+        custom = {}
     resolution = custom.get("delivery_resolution")
     resolution_width: int | None = None
     resolution_height: int | None = None
@@ -191,12 +218,15 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
         output.width = resolution_width
     if output.height is None:
         output.height = resolution_height
-    requirements = GenerationRequirements(
-        aspect_ratio=custom.get("aspect_ratio"),
-        width=output.width,
-        height=output.height,
-        fps=output.fps,
-        native_audio="allowed",
+    requirements = _canvas_requirements(
+        {
+            "aspect_ratio": custom.get("aspect_ratio")
+            or _aspect_from_pixels(output.width, output.height),
+            "megapixels": custom.get("megapixels", custom.get("pixel_ratio")),
+            "fps": output.fps,
+            "native_audio": "allowed",
+        },
+        "$.generation.requirements",
     )
     asset_keys = _asset_id_index(raw_assets)
     panels = creative.get("panels", [])
@@ -238,7 +268,13 @@ def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackag
     for sequence, shot in enumerate(shots, start=1):
         generation = shot.get("generation", {})
         refs = _panel_references({"references": generation.get("references", [])}, asset_keys)
-        requirements = GenerationRequirements(**generation.get("requirements", {}))
+        raw_requirements = generation.get("requirements", {})
+        if not isinstance(raw_requirements, dict):
+            raise TypeError("shot generation.requirements must be an object")
+        requirements = _canvas_requirements(
+            raw_requirements,
+            "$.shots[].generation.requirements",
+        )
         builder.add_clip(ClipSpec(
             clip_id=shot.get("clip_id", f"clip-{sequence:03d}"),
             sequence=sequence,

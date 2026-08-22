@@ -35,11 +35,11 @@ class TestPreflightContext:
         ctx = PreflightContext(
             project_id="p1",
             machine_id="m1",
-            required_workflow_ids={"h3_standard_t2v"},
+            required_workflow_ids={"h3_standard_fl2va"},
             required_model_ids={"minimax_h3_fl2va_int8"},
             required_tools={"ffmpeg", "python"},
         )
-        assert "h3_standard_t2v" in ctx.required_workflow_ids
+        assert "h3_standard_fl2va" in ctx.required_workflow_ids
         assert "ffmpeg" in ctx.required_tools
 
 
