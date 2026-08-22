@@ -17,6 +17,8 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 
 `project.project_id` 是 LFO 的稳定项目目录键，只能是一个安全路径组件。LFO 将中间产物写入 `workspace/projects/<project_id>/outputs/<run_id>/`，最终文件写入 `workspace/projects/<project_id>/final/<output.directory>/`；`output.directory` 只是发布目录名。
 
+H3 生成画布只写 `generation.requirements.aspect_ratio` 和 `megapixels`（默认竖屏 `9:16` / `0.4`，也可写 `16:9` / `0.6` 或 `16:9` / `1`）。`output.width/height` 是交付分辨率（例如 `1080x1920`），不要再写进 generation。
+
 ## 最小示例
 
 以下示例表示：图片1为角色卡，图片2为 P001 的 2×3 六镜板。注意：最终提示词正文包含关键负向；不使用 `generation.negative_prompt`。
@@ -51,7 +53,7 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
       "generation": {
         "operation": "video.reference_to_video",
         "prompt": "图片1仅锁定主角身份、服装与手中钥匙；图片2仅控制 P001 六格的构图、空间、动作顺序和节奏，不采用黑白线稿，不输出宫格、分割线或漫画页面。写实低饱和夜巷中，主角从画面左侧中景快步走到门前，短暂停顿后用右手举起钥匙，镜头由 wide shot 平稳 dolly in 到手部 close-up，结尾保持人物面向门、钥匙停在锁孔前。音频：近处脚步、衣料摩擦、远处风声；非叙事性音乐：N/A。关键负向：不要六宫格或分割线、不要黑白线稿或漫画页面、不要身份漂移、不要道具复制、不要可读文字。",
-        "requirements": {"aspect_ratio": "9:16", "width": 1080, "height": 1920, "fps": 24, "native_audio": "allowed"},
+        "requirements": {"aspect_ratio": "9:16", "megapixels": 0.4, "fps": 24, "native_audio": "allowed"},
         "references": [
           {
             "reference_id": "picture-01-hero",

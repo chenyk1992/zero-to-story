@@ -21,7 +21,7 @@ class WorkflowLoader:
             raise WorkflowFormatError(f"Not a file: {file_path}")
 
         try:
-            data = json.loads(file_path.read_text(encoding="utf-8"))
+            data = json.loads(file_path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError as exc:
             raise WorkflowFormatError(
                 f"Invalid JSON in workflow file {file_path}: {exc}"

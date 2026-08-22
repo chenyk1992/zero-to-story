@@ -108,8 +108,8 @@ class TestWFJ1ArrayOrder:
 
 
 class TestWFJ1RealWorkflowFragments:
-    def test_h3_t2v_style_fragment(self):
-        """Realistic H3 T2V fragment with shift_video and megapixels."""
+    def test_h3_fl2va_style_fragment(self):
+        """Realistic H3 FL2VA fragment with shift_video and megapixels."""
         wf = {
             "6": {
                 "class_type": "MiniMaxH3ImageToVideo",

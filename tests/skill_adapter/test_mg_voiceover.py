@@ -83,14 +83,17 @@ def test_pixel_ratio_maps_without_generation_dimensions() -> None:
     assert package.output.fps == 24
 
 
-def test_dimensions_are_generation_requirements_without_pixel_ratio() -> None:
+def test_output_dimensions_stay_on_output_policy() -> None:
     package = _build(width=720, height=1280, fps=30)
     requirements = package.clips[0].generation.requirements
 
-    assert requirements.megapixels is None
-    assert requirements.width == 720
-    assert requirements.height == 1280
+    assert requirements.megapixels == 0.4
+    assert requirements.width is None
+    assert requirements.height is None
     assert requirements.fps == 30
+    assert package.output.width == 720
+    assert package.output.height == 1280
+    assert package.output.fps == 30
 
 
 def test_default_project_id_is_non_empty_package_id() -> None:

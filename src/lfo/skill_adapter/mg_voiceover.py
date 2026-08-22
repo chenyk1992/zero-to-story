@@ -213,15 +213,13 @@ def build_package(
     if reference_assets is not None and not isinstance(reference_assets, list):
         raise TypeError("reference_assets must be an array")
     visual_assets, references, operation = _visual_references(reference_assets or [])
-    megapixels = _megapixels(pixel_ratio)
+    megapixels = _megapixels(pixel_ratio) if pixel_ratio is not None else 0.4
     effective_project_id = (
         package_id if project_id is None else _required_string(project_id, "project_id")
     )
     requirements = GenerationRequirements(
         aspect_ratio=aspect_ratio,
         megapixels=megapixels,
-        width=None if megapixels is not None else width,
-        height=None if megapixels is not None else height,
         fps=fps,
         native_audio="none" if voiceover_audio is not None else "allowed",
         reference_image_size="match" if visual_assets else None,

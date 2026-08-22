@@ -35,8 +35,11 @@ Each clip contains:
 
 - stable `clip_id`, integer `sequence`, and positive `duration_ms`;
 - `generation.operation` and a complete provider-ready `prompt`;
-- optional seed, negative prompt and requirements (`width`, `height`, `megapixels`, `fps`,
-  aspect ratio, native audio); `megapixels` and explicit dimensions are mutually exclusive;
+- optional seed, negative prompt and requirements (`aspect_ratio`, `megapixels`, `fps`,
+  native audio, optional `width`/`height` for non-H3 backends); `megapixels` and explicit
+  dimensions are mutually exclusive. MiniMax H3 generation must use `aspect_ratio` plus
+  `megapixels` (for example `9:16` / `0.4`, `16:9` / `0.6`, `16:9` / `1`). Delivery pixels
+  such as `1080x1920` belong on `output`, not on clip generation.
 - explicitly ordered references with required/optional policy, priority, placement and
   unsupported behavior;
 - native/external audio policy, subtitle cues, and other clip dependencies.

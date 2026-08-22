@@ -36,7 +36,7 @@ class TestCmdDoctor:
     def test_with_workflow_id(self, monkeypatch, tmp_path):
         """When profile doesn't exist, should fail gracefully."""
         monkeypatch.setenv("APPDATA", str(tmp_path))
-        result = cmd_doctor(machine_id="no-profile", workflow_id="h3_standard_t2v")
+        result = cmd_doctor(machine_id="no-profile", workflow_id="h3_standard_fl2va")
         assert result["success"] is False
 
 
@@ -103,7 +103,7 @@ class TestCmdWorkflowFork:
         assert result["success"] is False
 
     def test_no_new_id(self):
-        result = cmd_workflow_fork(source_id="h3_standard_t2v", new_id="")
+        result = cmd_workflow_fork(source_id="h3_standard_fl2va", new_id="")
         assert result["success"] is False
 
     def test_unknown_source(self):
@@ -113,17 +113,17 @@ class TestCmdWorkflowFork:
 
     def test_already_exists(self):
         result = cmd_workflow_fork(
-            source_id="h3_standard_t2v",
-            new_id="h3_standard_i2v",  # already exists
+            source_id="h3_standard_fl2va",
+            new_id="h3_standard_r2v",  # already exists
         )
         assert result["success"] is False
         assert "exists" in result["error"].lower()
 
     def test_success(self):
         result = cmd_workflow_fork(
-            source_id="h3_standard_t2v",
-            new_id="h3_custom_t2v_v2",
+            source_id="h3_standard_fl2va",
+            new_id="h3_custom_fl2va_v2",
         )
         assert result["success"] is True
-        assert result["new_id"] == "h3_custom_t2v_v2"
+        assert result["new_id"] == "h3_custom_fl2va_v2"
         assert "manifest" in result

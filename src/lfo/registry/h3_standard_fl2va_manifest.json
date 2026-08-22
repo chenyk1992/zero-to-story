@@ -1,10 +1,10 @@
 {
-  "workflow_id": "h3_standard_t2v",
-  "version": "3.0.0",
+  "workflow_id": "h3_standard_fl2va",
+  "version": "4.0.0",
   "family": "h3_fl2va",
-  "description": "H3 Text-to-Video-Audio (v3): expanded pipeline with MiniMaxH3ImageToVideo + auto-duration math.",
-  "source_file": "h3_standard_t2v.json",
-  "workflow_hash": "cb6bc1b35eb22c07bf26a1d4a62453c6eb57fe62fc3fed1c862d86920a6c3d41",
+  "description": "H3 First/Last-Frame-to-Video-Audio: one MiniMaxH3ImageToVideo graph; optional first_frame and last_frame are wired at submit time.",
+  "source_file": "h3_standard_fl2va.json",
+  "workflow_hash": "",
   "workflow_hash_algorithm": "lfo-wfj1-sha256-v1",
   "binding_policy": "strict",
   "production_ready": true,
@@ -92,6 +92,8 @@
   "generates_audio": true,
   "tags": [
     "text-to-video",
+    "image-to-video",
+    "first-last-frame",
     "audio",
     "fl2va",
     "auto-duration"

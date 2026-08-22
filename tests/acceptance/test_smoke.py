@@ -75,8 +75,7 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
                     "prompt": "Hero standing in the rain",
                     "requirements": {
                         "aspect_ratio": "9:16",
-                        "width": 1080,
-                        "height": 1920,
+                        "megapixels": 0.4,
                         "fps": 24,
                         "native_audio": "allowed",
                     },
@@ -104,8 +103,7 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
                     "prompt": "Close-up of a letter",
                     "requirements": {
                         "aspect_ratio": "9:16",
-                        "width": 1080,
-                        "height": 1920,
+                        "megapixels": 0.4,
                         "fps": 24,
                     },
                 },

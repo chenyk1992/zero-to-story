@@ -149,6 +149,7 @@
     "inputs": {
       "images": ["18", 0],
       "fps": 24,
+      "bit_depth": 8,
       "audio": ["19", 0]
     }
   },

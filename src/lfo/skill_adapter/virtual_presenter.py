@@ -6,6 +6,7 @@ no file I/O and never exposes LFO-internal asset or database identifiers.
 """
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -214,10 +215,19 @@ def _reference(
     )
 
 
+def _aspect_from_pixels(width: object, height: object) -> str | None:
+    if not isinstance(width, int) or isinstance(width, bool) or width <= 0:
+        return None
+    if not isinstance(height, int) or isinstance(height, bool) or height <= 0:
+        return None
+    divisor = math.gcd(width, height)
+    return f"{width // divisor}:{height // divisor}"
+
+
 def _requirements(output: OutputPolicy) -> GenerationRequirements:
     return GenerationRequirements(
-        width=output.width,
-        height=output.height,
+        aspect_ratio=_aspect_from_pixels(output.width, output.height) or "16:9",
+        megapixels=0.4,
         fps=output.fps,
         native_audio="allowed",
     )

@@ -109,18 +109,34 @@ P002 起只携带最小状态差：位置、朝向、双手、道具、未完成
 
 执行包边界只交付 `lfo.video-execution.v1` 与已确认的素材语义；不要写数据库、ComfyUI 节点、模型路径、内部 ID 或绝对输出路径。LFO 统一写入 `workspace/projects/<project_id>/outputs/<run_id>/` 和 `workspace/projects/<project_id>/final/<output.directory>/`。
 
-先运行：
+### 逐镜接力执行（强制）
 
+ComfyUI 是单任务队列，多 Clip 并行只是排队，不会真正并行。因此**必须采用逐镜接力方案**，禁止一次性并行执行所有 Clip：
+
+1. 先创建只含 P001 的执行包，运行：
 ```powershell
-python -m lfo.cli.main validate execution-package.json
-python -m lfo.cli.main plan execution-package.json
+python -m lfo.cli.main validate execution-package-p001.json
+python -m lfo.cli.main plan execution-package-p001.json
+python -m lfo.cli.main execute execution-package-p001.json --approve
 ```
 
-逐 Clip 核对 `resolved_references` 与提示词“图片 N”一一对应、Clip/Panel/板数量、时长、素材、后端、字幕本地时间和输出规格。任何顺序、引用、提示词或时长变化都提升 revision，并重新验证与计划。只有用户确认计划摘要后才执行：
-
+2. P001 生成后，用 ffmpeg 提取末帧：
 ```powershell
-python -m lfo.cli.main execute execution-package.json --approve
+ffmpeg -y -sseof -0.1 -i outputs/<run_id>/clips/panel-001/generated.mp4 -frames:v 1 -q:v 2 lastframes/panel-001.png
 ```
+
+3. 创建 P002 执行包，加入 P001 末帧为 `ref_image_0`（last-frame lock），`revision++`，`summary` 前缀改为 `[reference generation + keyframe completion]`，其他引用顺延：
+```powershell
+python -m lfo.cli.main validate execution-package-p002.json
+python -m lfo.cli.main plan execution-package-p002.json
+python -m lfo.cli.main execute execution-package-p002.json --approve
+```
+
+4. 重复步骤 2-3，直到 P006 完成。
+
+每 Clip 的末帧必须作为下一 Clip 的真实 `last-frame lock`（`placement: "fixed"`, `binding.slot: "ref_image_0"`），禁止用文字描述"脑补"末态替代真实末帧。接力脚本模板见 `workspace/projects/<project_id>/_sequential_gen.py`。
+
+逐 Clip 核对 `resolved_references` 与提示词"图片 N"一一对应、Clip/Panel/板数量、时长、素材、后端、字幕本地时间和输出规格。任何顺序、引用、提示词或时长变化都提升 revision，并重新验证与计划。
 
 ## 失败即停规则
 
@@ -130,6 +146,7 @@ python -m lfo.cli.main execute execution-package.json --approve
 - 提示词图片编号与 `ref_image_N` 不一致，必需引用未声明，P002 起缺少连续性，或分镜板负向排除不完整：不得交付 LFO。
 - 提示词含模型名、文件路径、数据库、工作流或最终导出分辨率，或把 `negative_prompt` 当成有效控制字段：人工检查并修正。
 - `validate`、`plan` 任一失败，或用户未确认计划摘要：不得执行。
+- **一次性并行执行所有 Clip**：必须逐镜接力，每 Clip 生成后提取真实末帧作为下一 Clip 的 last-frame lock。禁止用文字描述替代真实末帧。
 
 ## 资源导航
 

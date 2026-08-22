@@ -50,8 +50,8 @@ class TestGetModelDeclaration:
 
 
 class TestListModelsRequiredBy:
-    def test_h3_t2v(self):
-        models = list_models_required_by("h3_standard_t2v")
+    def test_h3_fl2va(self):
+        models = list_models_required_by("h3_standard_fl2va")
         assert len(models) >= 4  # fl2va + vae + audio_vae + llm
 
     def test_h3_r2v(self):
