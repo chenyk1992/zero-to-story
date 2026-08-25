@@ -86,7 +86,7 @@ it is never an absolute path. New runs use this layout:
 
 ```text
 workspace/projects/<project_id>/
-├── outputs/<run_id>/clips/<clip_id>/   # provider copy, normalized, mixed, subtitles
+├── outputs/<run_id>/clips/<clip_id>/   # provider copy, mixed, subtitles
 ├── outputs/<run_id>/global/             # timeline and global subtitles
 └── final/<output.directory>/            # final video, sidecar and manifest
 ```

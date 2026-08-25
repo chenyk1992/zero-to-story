@@ -422,7 +422,6 @@ python -m ruff check src/lfo/backends tests/backends
 **标准 Task 类型：**
 
 - `video.generate`
-- `media.normalize`
 - `media.qc`
 - `audio.mix`
 - `subtitle.render`
