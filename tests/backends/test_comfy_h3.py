@@ -164,6 +164,7 @@ def test_prepare_r2v_uses_only_declared_reference_slots(
         node_id = generator_inputs[f"ref_images.ref_image_{index}"][0]
         assert workflow[node_id]["class_type"] == "LoadImage"
         assert workflow[node_id]["inputs"]["image"] == expected_uploaded[index]
+    assert workflow["14"]["inputs"]["steps"] == 20
     assert workflow["15"]["inputs"]["noise_seed"] == 42
 
 
@@ -273,7 +274,7 @@ def test_prepare_presenter_uses_materialized_typed_slots(
     assert generator["ref_videos.ref_video_0"][1] == 0
     assert generator["ref_video_audios.ref_video_audio_0"][1] == 1
     assert generator["ref_audios.ref_audio_0"][1] == 0
-    assert workflow["12"]["inputs"]["steps"] == 8
+    assert workflow["12"]["inputs"]["steps"] == 20
     assert workflow["17"]["inputs"]["fps"] == 24
     assert all(str(tmp_path) not in str(node) for node in workflow.values())
 
@@ -538,6 +539,7 @@ def test_prepare_fl2va_wires_first_and_optional_last_frame(tmp_path: pathlib.Pat
     assert workflow[last_node]["inputs"]["image"] == f"lfo-input/{last.name}"
     assert workflow["5"]["inputs"]["aspect_ratio"] == "16:9 (Widescreen)"
     assert workflow["5"]["inputs"]["megapixels"] == 0.6
+    assert workflow["11"]["inputs"]["steps"] == 8
 
 
 def test_prepare_r2v_optional_standalone_audio(tmp_path: pathlib.Path) -> None:
