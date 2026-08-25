@@ -203,7 +203,7 @@ class Runtime:
             return False
         task.status = TaskState.READY.value
         # Populate input_artifacts from dependencies so downstream handlers
-        # (audio.mix, media.normalize, media.qc) receive their upstream file_path.
+        # (media.qc, audio.mix) receive their upstream file_path.
         task.metadata["input_artifacts"] = {
             dep_id: dict(self.artifacts_by_task.get(dep_id, {}))
             for dep_id in task.dependencies

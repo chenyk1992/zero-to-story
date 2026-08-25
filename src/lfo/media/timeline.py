@@ -44,7 +44,7 @@ class TimelineResult:
 
 
 class TimelineAssembler:
-    """Assemble normalized clips. Transitions are deliberately not implicit."""
+    """Assemble source clips. Transitions are deliberately not implicit."""
 
     def assemble(self, spec: TimelineSpec, *, timeout_s: float = 600.0) -> TimelineResult:
         if not spec.segments:

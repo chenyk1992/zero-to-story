@@ -44,7 +44,7 @@ pauses automation.
 
 Accepted clips are converted with
 `lfo.skill_adapter.virtual_presenter.build_assembly_package`. Every clip uses
-`video.passthrough`, then follows the standard normalize, technical QC, audio, subtitle,
+`video.passthrough`, then follows technical QC, audio, subtitle,
 timeline and export DAG.
 
 Real H3 generation is intentionally serial on one local ComfyUI/GPU. Static validation and

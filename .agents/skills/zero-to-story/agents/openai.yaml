@@ -1,4 +1,4 @@
 interface:
   display_name: "从零故事分镜"
-  short_description: "逐阶段生成六镜分镜、三档 H3 提示词与 LFO 执行包"
-  default_prompt: "使用 $zero-to-story 把我的故事整理成经确认的 2×3 六镜分镜，按动态时序生成 H3 提示词并交付执行包。"
+  short_description: "逐阶段完成故事、角色、六镜分镜与 LFO 创作交接"
+  default_prompt: "使用 $zero-to-story 把我的故事整理成经确认的角色资产和 2×3 六镜分镜；视频提示词阶段交给 $h3-prompt-writing。"

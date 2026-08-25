@@ -47,7 +47,7 @@ description: |
 
 - **本 skill 只写剧 + 可选 handoff 桥接包**，不修改 `src/lfo/**`，不直接生成可执行的 `storyboard.json`。
 - `episodes/epNNN.md` 是编剧主产物；`handoff/` 是给下游用的伴生包。
-- `storyboard_brief.md` → 交给 **zero-to-story**（设定图 / 黑白分镜 / 视频提示词）。
+- `storyboard_brief.md` → 交给 **zero-to-story**（设定图 / 黑白分镜）；单 Panel 的 H3 视频提示词再交给 **h3-prompt-writing**。
 - `intake.json` → 交给 **LFO**（decompose / `lfo run` 的上游输入）。
 - 默认由人/agent 将桥接产物复制到 `workspace/{drama_title}/chapter_{NN}/`。若项目状态显式设置 `workspaceSync.enabled = true`，视为用户已授权：每次 `/桥接` 完成后自动同步 `workspaceSync.artifacts` 到正式工作区；正式根目录只能是仓库根的 `workspace/`，不得写入 `src/lfo/workspace/`。
 

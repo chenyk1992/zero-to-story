@@ -40,7 +40,7 @@ LFO — Local Film Orchestrator. 本地视频实施运行时。上游 Creative S
 - `workspace/db/runtime-v1.sqlite3`：运行状态与审计日志。
 - 已有的 `workspace/spikes/` 仅用于明确要求的实验，不是通用临时目录；不要为普通任务新建类似 scratch 目录。
 
-- 新的执行包、Run 中间产物和最终产物必须写入对应的 `workspace/projects/<project_id>/`；Run 产物必须使用 `RunArtifactLayout`。
+- 新的执行包、Run 中间产物和最终产物必须写入对应的 `workspace/{故事名称}/<project_id>/`；Run 产物必须使用 `RunArtifactLayout`。
 - 不得创建或重新接入 `workspace/runs/`、`workspace/exports/`，也不得把生成媒体、日志、下载文件或临时文件直接放在 `workspace/` 根部。
 - 素材导入必须使用 LFO 的素材导入/CAS 机制，不要手工复制、改名或删除 `assets/sha256/` 下的内容。
 - 数据库和 CAS 文件是相互关联的持久化数据。除非任务明确是数据维护或迁移，不要直接编辑、移动或删除 `workspace/db/`、`workspace/assets/` 中的文件。

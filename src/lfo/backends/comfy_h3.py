@@ -72,10 +72,12 @@ class ComfyH3Config:
     # twenty-minute provider wait; keep the worker alive while ComfyUI
     # continues sampling instead of orphaning a valid prompt.
     timeout_seconds: float = 7_200.0
-    # Match the H3 turbo 8-step distillation lora (minimax_h3_fl2v_turbo_8step_v1.0).
-    # 20 steps defeats the purpose of the lora and adds unnecessary forward overhead.
-    # Override per task via metadata.steps when a higher-quality pass is required.
+    # Match the H3 FL2VA turbo 8-step distillation lora
+    # (minimax_h3_fl2v_turbo_8step_v1.0).
     steps: int = 8
+    # Ref2VA has no matching turbo lora, so preserve its production-quality
+    # 20-step sampling baseline. Override either mode via metadata.steps.
+    r2v_steps: int = 20
 
 
 def build_h3_backend_registry(
@@ -399,7 +401,12 @@ class ComfyH3VideoHandler(TaskHandler):
             self._apply_reference_image_size(prepared, metadata.get("reference_image_size"))
         self._apply_aspect_ratio(prepared, metadata.get("aspect_ratio"))
         self._apply_megapixels(prepared, metadata.get("megapixels"))
-        self._apply_steps(prepared, metadata.get("steps", self.config.steps))
+        default_steps = (
+            self.config.steps
+            if manifest.workflow_mode == "fl2va"
+            else self.config.r2v_steps
+        )
+        self._apply_steps(prepared, metadata.get("steps", default_steps))
         self._apply_seed(prepared, metadata.get("seed"))
         self._apply_fps(prepared, metadata.get("fps"))
         return prepared, uploaded
@@ -448,7 +455,7 @@ class ComfyH3VideoHandler(TaskHandler):
         self._apply_reference_image_size(prepared, metadata.get("reference_image_size"))
         self._apply_aspect_ratio(prepared, metadata.get("aspect_ratio"))
         self._apply_megapixels(prepared, metadata.get("megapixels"))
-        self._apply_steps(prepared, metadata.get("steps", self.config.steps))
+        self._apply_steps(prepared, metadata.get("steps", self.config.r2v_steps))
         self._apply_seed(prepared, metadata.get("seed"))
         self._apply_fps(prepared, metadata.get("fps"))
         return prepared, uploaded
