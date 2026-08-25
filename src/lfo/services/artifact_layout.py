@@ -172,10 +172,6 @@ class RunArtifactLayout:
             if clip_id is None:
                 raise ArtifactLayoutError("video.upscale requires clip_id")
             return self.clip_path(clip_id, "upscaled", ".mp4")
-        if task_type == "media.normalize":
-            if clip_id is None:
-                raise ArtifactLayoutError("media.normalize requires clip_id")
-            return self.clip_path(clip_id, "normalized")
         if task_type == "audio.mix":
             if clip_id is None:
                 raise ArtifactLayoutError("audio.mix requires clip_id")

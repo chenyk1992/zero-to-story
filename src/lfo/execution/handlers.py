@@ -110,8 +110,8 @@ class FakeVideoHandler(TaskHandler):
             )
 
 
-class FakeMediaHandler(TaskHandler):
-    """Fake handler for media.normalize and media.qc tasks."""
+class FakeQCHandler(TaskHandler):
+    """Fake handler for media.qc tasks."""
 
     def execute(
         self,
@@ -131,8 +131,8 @@ class FakeMediaHandler(TaskHandler):
                 qc_passed=False,
             )
         if result_type == "success":
-            return HandlerResult(success=True, artifact_type="normalized_video")
-        return HandlerResult(success=False, error="normalization failed", retryable=True)
+            return HandlerResult(success=True, artifact_type="qc_video")
+        return HandlerResult(success=False, error="QC failed", retryable=True)
 
 
 class FakeAudioHandler(TaskHandler):
@@ -212,8 +212,7 @@ def default_fake_registry() -> HandlerRegistry:
     reg = HandlerRegistry()
     reg.register("video.generate", FakeVideoHandler())
     reg.register("video.upscale", FakeVideoHandler())
-    reg.register("media.normalize", FakeMediaHandler())
-    reg.register("media.qc", FakeMediaHandler())
+    reg.register("media.qc", FakeQCHandler())
     reg.register("audio.mix", FakeAudioHandler())
     reg.register("subtitle.render", FakeSubtitleHandler())
     reg.register("timeline.assemble", FakeTimelineHandler())

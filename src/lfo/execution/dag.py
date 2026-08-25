@@ -3,7 +3,6 @@
 Standard task types:
 - video.generate
 - video.upscale (optional)
-- media.normalize
 - media.qc
 - audio.mix
 - subtitle.render
@@ -23,7 +22,6 @@ from lfo.services.artifact_layout import safe_component
 # Standard task types
 TASK_VIDEO_GENERATE = "video.generate"
 TASK_VIDEO_UPSCALE = "video.upscale"
-TASK_MEDIA_NORMALIZE = "media.normalize"
 TASK_MEDIA_QC = "media.qc"
 TASK_AUDIO_MIX = "audio.mix"
 TASK_SUBTITLE_RENDER = "subtitle.render"
@@ -132,8 +130,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     Structure per clip:
     - video.generate (depends on clip dependencies' generate tasks)
     - video.upscale (optional; depends on generate)
-    - media.normalize (depends on generate or upscale)
-    - media.qc (depends on normalize)
+    - media.qc (depends on generate or upscale)
     - audio.mix (depends on qc)
     - subtitle.render (depends on qc)
 
@@ -238,12 +235,12 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             )
             upstream_video_id = upscale_id
 
-        # 2. media.normalize
-        norm_id = f"{base}.media.normalize"
-        norm_task = TaskNode(
-            task_id=norm_id,
-            task_type=TASK_MEDIA_NORMALIZE,
-            logical_key=f"{clip_id}:media.normalize",
+        # 2. media.qc
+        qc_id = f"{base}.media.qc"
+        qc_task = TaskNode(
+            task_id=qc_id,
+            task_type=TASK_MEDIA_QC,
+            logical_key=f"{clip_id}:media.qc",
             dependencies=[upstream_video_id],
             clip_id=clip_id,
             metadata={
@@ -252,32 +249,12 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "duration_ms": clip.duration_ms,
                 "input_task_ids": [upstream_video_id],
                 "output_policy": dict(materialized_run.output_policy),
-                "output_path": _task_output_path(layout, "media.normalize", clip.clip_id),
-                "artifact_layout": dict(layout),
-            },
-        )
-        tasks.append(norm_task)
-
-        # 3. media.qc
-        qc_id = f"{base}.media.qc"
-        qc_task = TaskNode(
-            task_id=qc_id,
-            task_type=TASK_MEDIA_QC,
-            logical_key=f"{clip_id}:media.qc",
-            dependencies=[norm_id],
-            clip_id=clip_id,
-            metadata={
-                "run_id": materialized_run.run_id,
-                "clip_id": clip_id,
-                "duration_ms": clip.duration_ms,
-                "input_task_ids": [norm_id],
-                "output_policy": dict(materialized_run.output_policy),
                 "artifact_layout": dict(layout),
             },
         )
         tasks.append(qc_task)
 
-        # 4. audio.mix
+        # 3. audio.mix
         mix_id = f"{base}.audio.mix"
         mix_task = TaskNode(
             task_id=mix_id,
@@ -298,7 +275,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
         )
         tasks.append(mix_task)
 
-        # 5. subtitle.render
+        # 4. subtitle.render
         sub_id = f"{base}.subtitle.render"
         sub_task = TaskNode(
             task_id=sub_id,
@@ -324,7 +301,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     all_mix_ids = [t.task_id for t in tasks if t.task_type == TASK_AUDIO_MIX]
     all_sub_ids = [t.task_id for t in tasks if t.task_type == TASK_SUBTITLE_RENDER]
 
-    # 6. timeline.assemble
+    # 5. timeline.assemble
     timeline_id = f"{task_prefix}timeline.assemble"
     timeline_task = TaskNode(
         task_id=timeline_id,
@@ -350,7 +327,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     )
     tasks.append(timeline_task)
 
-    # 7. export.finalize
+    # 6. export.finalize
     export_id = f"{task_prefix}export.finalize"
     export_deps = [timeline_id] + all_sub_ids
     export_task = TaskNode(
@@ -396,10 +373,6 @@ def _task_output_path(
         if clip_id is None:
             raise ValueError("video.upscale requires clip_id")
         return str(clips_root / safe_component(clip_id, field="clip_id") / "upscaled.mp4")
-    if task_type == "media.normalize":
-        if clip_id is None:
-            raise ValueError("media.normalize requires clip_id")
-        return str(clips_root / safe_component(clip_id, field="clip_id") / f"normalized.{container}")
     if task_type == "audio.mix":
         if clip_id is None:
             raise ValueError("audio.mix requires clip_id")

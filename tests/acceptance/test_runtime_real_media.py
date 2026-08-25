@@ -11,6 +11,7 @@ from lfo.application.video_runtime import VideoRuntime
 from lfo.backends.capabilities import CapabilityManifest
 from lfo.backends.registry import BackendRegistry
 from lfo.execution.handlers import HandlerResult, TaskHandler
+from lfo.media._ffmpeg import probe
 from lfo.media.handlers import build_media_handler_registry
 
 
@@ -23,7 +24,7 @@ class SourceVideoHandler(TaskHandler):
         subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-f", "lavfi", "-i", "testsrc=size=96x64:rate=12:duration=0.4",
+                "-f", "lavfi", "-i", "testsrc=size=96x64:rate=24:duration=0.4",
                 "-f", "lavfi", "-i", "sine=frequency=440:duration=0.4",
                 "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", str(self.output),
@@ -77,8 +78,6 @@ def test_persistent_runtime_executes_real_media_pipeline(tmp_path: pathlib.Path)
             }
         ],
         "output": {
-            "width": 64,
-            "height": 64,
             "fps": 24,
             "subtitles_mode": "sidecar",
             "directory": "real-media-smoke",
@@ -101,3 +100,6 @@ def test_persistent_runtime_executes_real_media_pipeline(tmp_path: pathlib.Path)
     assert final_path.is_file()
     assert pathlib.Path(f"{final_path}.manifest.json").is_file()
     assert final_path.with_suffix(".srt").is_file()
+    final_metadata = probe(final_path)
+    assert final_metadata["width"] == 96
+    assert final_metadata["height"] == 64

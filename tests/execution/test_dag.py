@@ -4,7 +4,6 @@ from __future__ import annotations
 from lfo.execution.dag import (
     TASK_AUDIO_MIX,
     TASK_EXPORT_FINALIZE,
-    TASK_MEDIA_NORMALIZE,
     TASK_MEDIA_QC,
     TASK_SUBTITLE_RENDER,
     TASK_TIMELINE_ASSEMBLE,
@@ -68,12 +67,10 @@ class TestBuildDag:
     def test_single_clip(self) -> None:
         run = _make_run([_make_clip()])
         graph = build_dag(run)
-        # Should have 6 tasks: generate, normalize, qc, mix, subtitle, timeline, export
-        # Actually: 5 per clip + timeline + export = 7
-        assert len(graph.tasks) == 7
+        # Four clip tasks plus timeline and export.
+        assert len(graph.tasks) == 6
         types = [t.task_type for t in graph.tasks]
         assert types.count(TASK_VIDEO_GENERATE) == 1
-        assert types.count(TASK_MEDIA_NORMALIZE) == 1
         assert types.count(TASK_MEDIA_QC) == 1
         assert types.count(TASK_AUDIO_MIX) == 1
         assert types.count(TASK_SUBTITLE_RENDER) == 1
@@ -91,7 +88,7 @@ class TestBuildDag:
     def test_two_clips_no_deps(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
         graph = build_dag(_make_run(clips))
-        assert len(graph.tasks) == 12  # 5 per clip + timeline + export
+        assert len(graph.tasks) == 10  # 4 per clip + timeline + export
 
     def test_timeline_depends_on_all_mix_tasks(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
@@ -115,15 +112,14 @@ class TestBuildDag:
     def test_chain_dependencies_within_clip(self) -> None:
         graph = build_dag(_make_run([_make_clip()]))
         gen = graph.task_by_id("run-1.clip-clip-001.video.generate")
-        norm = graph.task_by_id("run-1.clip-clip-001.media.normalize")
         qc = graph.task_by_id("run-1.clip-clip-001.media.qc")
         mix = graph.task_by_id("run-1.clip-clip-001.audio.mix")
-        assert gen is not None and norm is not None and qc is not None and mix is not None
-        assert gen.task_id in norm.dependencies
-        assert norm.task_id in qc.dependencies
+        assert gen is not None and qc is not None and mix is not None
+        assert gen.task_id in qc.dependencies
         assert qc.task_id in mix.dependencies
+        assert not graph.tasks_by_type("media.normalize")
 
-    def test_enabled_upscale_is_inserted_before_normalize(self) -> None:
+    def test_enabled_upscale_is_inserted_before_qc(self) -> None:
         graph = build_dag(
             _make_run(
                 [_make_clip()],
@@ -138,11 +134,11 @@ class TestBuildDag:
             )
         )
         upscale = graph.task_by_id("run-1.clip-clip-001.video.upscale")
-        normalize = graph.task_by_id("run-1.clip-clip-001.media.normalize")
-        assert upscale is not None and normalize is not None
+        qc = graph.task_by_id("run-1.clip-clip-001.media.qc")
+        assert upscale is not None and qc is not None
         assert upscale.task_type == TASK_VIDEO_UPSCALE
         assert upscale.dependencies == ["run-1.clip-clip-001.video.generate"]
-        assert normalize.dependencies == [upscale.task_id]
+        assert qc.dependencies == [upscale.task_id]
         assert upscale.metadata["upscale"] == {
             "enabled": True,
             "scale_multiplier": 2.0,

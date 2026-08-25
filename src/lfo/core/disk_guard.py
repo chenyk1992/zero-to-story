@@ -1,7 +1,7 @@
 """Disk-space preflight for batch pipeline runs.
 
-The pipeline writes a lot of large files (raw ComfyUI output, normalized
-MP4s, end-frame PNGs, SRT, final assembly). On a single-machine setup
+The pipeline writes a lot of large files (raw ComfyUI output, end-frame PNGs,
+SRT, final assembly). On a single-machine setup
 the user can easily run out of disk without warning. This module gives
 the pipeline a place to ask "is there enough room before we start?" and
 decide between OK / warn-only / hard-block.

@@ -46,7 +46,7 @@ def _make_run(clip_ids: list[str]) -> MaterializedRun:
 
 class TestRuntime:
     def test_single_clip_full_execution(self) -> None:
-        """Single clip: generate → normalize → qc → mix → subtitle → timeline → export."""
+        """Single clip: generate → qc → mix → subtitle → timeline → export."""
         run = _make_run(["clip-001"])
         graph = build_dag(run)
         rt = Runtime(default_fake_registry())
@@ -209,8 +209,8 @@ class TestRuntime:
         runtime.load_graph(build_dag(_make_run(["clip-001"])))
         runtime.tick()
         assert store.get_task("run-1.clip-clip-001.video.generate")["status"] == "SUCCEEDED"
-        normalize_row = store.get_task("run-1.clip-clip-001.media.normalize")
-        assert "run-1.clip-clip-001.video.generate" in normalize_row["metadata"]
+        qc_row = store.get_task("run-1.clip-clip-001.media.qc")
+        assert "run-1.clip-clip-001.video.generate" in qc_row["metadata"]
         restored = PersistentRuntime(store, default_fake_registry(), "run-1")
         restored.restore()
         assert restored.tasks["run-1.clip-clip-001.video.generate"].status == TaskState.SUCCEEDED.value

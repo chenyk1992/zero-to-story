@@ -10,7 +10,6 @@ from lfo.execution.handlers import HandlerRegistry, HandlerResult, TaskHandler
 from lfo.media._ffmpeg import probe
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
 from lfo.media.export import Exporter, ExportSpec
-from lfo.media.normalize import Normalizer, NormalizeTarget
 from lfo.media.qc import QCContract, TechnicalQC
 from lfo.media.subtitles import SubtitleCue, SubtitleRenderer
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
@@ -22,42 +21,12 @@ def build_media_handler_registry(workspace_root: pathlib.Path | str) -> HandlerR
 
     root = pathlib.Path(workspace_root).resolve()
     registry = HandlerRegistry()
-    registry.register("media.normalize", NormalizeHandler(root))
     registry.register("media.qc", QCHandler())
     registry.register("audio.mix", AudioHandler(root))
     registry.register("subtitle.render", SubtitleHandler(root))
     registry.register("timeline.assemble", TimelineHandler(root))
     registry.register("export.finalize", ExportHandler(root))
     return registry
-
-
-class NormalizeHandler(TaskHandler):
-    def __init__(self, root: pathlib.Path) -> None:
-        self.root = root
-
-    def execute(self, task_id: str, task_type: str, logical_key: str,
-                metadata: dict[str, Any], attempt_id: str) -> HandlerResult:
-        source = _single_input_path(metadata)
-        if source is None:
-            return _terminal("Normalization input artifact has no file_path")
-        policy = _policy(metadata)
-        output = _managed_output(self.root, metadata)
-        result = Normalizer().normalize(
-            source,
-            output,
-            NormalizeTarget(
-                width=_optional_int(policy.get("width")),
-                height=_optional_int(policy.get("height")),
-                fps=_optional_float(policy.get("fps")),
-                sample_rate=_optional_int(policy.get("sample_rate")),
-                loudness_db=_optional_float(policy.get("loudness_db")),
-                codec=_ffmpeg_video_encoder(policy.get("video_encoder")),
-                container=str(policy.get("container", "mp4")),
-            ),
-        )
-        if not result.success or not result.output_path:
-            return HandlerResult(False, error=result.error or "Normalization failed", retryable=True)
-        return _file_result("normalized_video", pathlib.Path(result.output_path), result.output_metadata)
 
 
 class QCHandler(TaskHandler):
@@ -75,8 +44,10 @@ class QCHandler(TaskHandler):
         contract = QCContract(
             min_duration_ms=max(1, duration - 1_000) if duration else None,
             max_duration_ms=duration + 2_000 if duration else None,
-            expected_width=_optional_int(policy.get("width")),
-            expected_height=_optional_int(policy.get("height")),
+            # Resolution is owned by the provider/source clip. LFO no longer
+            # performs an implicit resize before QC.
+            expected_width=None,
+            expected_height=None,
             expected_fps=_optional_float(policy.get("fps")),
             expected_codec="h264" if policy.get("video_encoder", "h264") == "h264" else None,
         )

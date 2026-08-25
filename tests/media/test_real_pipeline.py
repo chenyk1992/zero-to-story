@@ -11,13 +11,12 @@ import pytest
 from lfo.media._ffmpeg import probe
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
 from lfo.media.export import Exporter, ExportSpec
-from lfo.media.normalize import Normalizer, NormalizeTarget
 from lfo.media.subtitles import SubtitleCue, SubtitleRenderer
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is required")
-def test_normalize_timeline_export_with_unicode_space_paths(tmp_path: Path) -> None:
+def test_timeline_export_preserves_source_resolution_with_unicode_space_paths(tmp_path: Path) -> None:
     media_dir = tmp_path / "媒体 文件"
     media_dir.mkdir()
     source = media_dir / "原始 片段.mp4"
@@ -45,16 +44,10 @@ def test_normalize_timeline_export_with_unicode_space_paths(tmp_path: Path) -> N
         check=True,
         capture_output=True,
     )
-    normalized = media_dir / "标准 片段.mp4"
-    normalize_result = Normalizer().normalize(
-        source, normalized, NormalizeTarget(width=64, height=64, fps=24)
-    )
-    assert normalize_result.success, normalize_result.error
-    assert probe(normalized)["width"] == 64
     timeline_path = media_dir / "时间线.mp4"
     timeline = TimelineAssembler().assemble(
         TimelineSpec(
-            segments=[ClipSegment("clip", str(normalized), 400)], output_path=str(timeline_path)
+            segments=[ClipSegment("clip", str(source), 400)], output_path=str(timeline_path)
         )
     )
     assert timeline.success, timeline.error
@@ -63,7 +56,10 @@ def test_normalize_timeline_export_with_unicode_space_paths(tmp_path: Path) -> N
         ExportSpec("run", "package", "ph", "mh", str(final_path)), str(timeline_path)
     )
     assert exported.success, exported.error
-    assert probe(final_path)["duration_ms"] > 0
+    final_metadata = probe(final_path)
+    assert final_metadata["duration_ms"] > 0
+    assert final_metadata["width"] == 96
+    assert final_metadata["height"] == 64
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is required")
