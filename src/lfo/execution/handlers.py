@@ -163,6 +163,24 @@ class FakeSubtitleHandler(TaskHandler):
         return HandlerResult(success=True, artifact_type="subtitle_srt")
 
 
+class FakeBoundaryEvidenceHandler(TaskHandler):
+    """Fake handler for objective adjacent-clip evidence tasks."""
+
+    def execute(
+        self,
+        task_id: str,
+        task_type: str,
+        logical_key: str,
+        metadata: dict[str, Any],
+        attempt_id: str,
+    ) -> HandlerResult:
+        return HandlerResult(
+            success=True,
+            artifact_type="boundary_evidence",
+            artifact_metadata={"boundary_id": metadata.get("boundary_id")},
+        )
+
+
 class FakeTimelineHandler(TaskHandler):
     """Fake handler for timeline.assemble tasks."""
 
@@ -215,6 +233,7 @@ def default_fake_registry() -> HandlerRegistry:
     reg.register("media.qc", FakeQCHandler())
     reg.register("audio.mix", FakeAudioHandler())
     reg.register("subtitle.render", FakeSubtitleHandler())
+    reg.register("media.boundary_evidence", FakeBoundaryEvidenceHandler())
     reg.register("timeline.assemble", FakeTimelineHandler())
     reg.register("export.finalize", FakeExportHandler())
     return reg

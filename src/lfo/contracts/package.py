@@ -7,7 +7,8 @@ from typing import Any
 from .assets import AssetSpec
 from .clips import ClipSpec
 from .errors import ValidationResult
-from .timeline import ApprovalDeclaration, OutputPolicy
+from .operations import validate_operation_references
+from .timeline import ApprovalDeclaration, OutputPolicy, TimelineSpec
 from .upscale import UPSCALE_EXTENSION_KEY, validate_upscale_options
 
 SCHEMA_ID = "lfo.video-execution.v1"
@@ -55,7 +56,7 @@ class VideoExecutionPackage:
     clips: list[ClipSpec] = field(default_factory=list)
     output: OutputPolicy = field(default_factory=OutputPolicy)
     approval: ApprovalDeclaration = field(default_factory=ApprovalDeclaration)
-    timeline: dict[str, Any] = field(default_factory=dict)
+    timeline: TimelineSpec = field(default_factory=TimelineSpec)
     extensions: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -91,13 +92,33 @@ class VideoExecutionPackage:
         clips = [
             ClipSpec.from_dict(c, f"$.clips[{i}]") for i, c in enumerate(clips_data)
         ]
+        asset_media_types = {asset.asset_key: asset.media_type for asset in assets}
+        for index, clip in enumerate(clips):
+            try:
+                validate_operation_references(
+                    clip.generation.operation,
+                    clip.generation.references,
+                    asset_media_types=asset_media_types,
+                )
+            except (TypeError, ValueError) as exc:
+                raise type(exc)(
+                    f"$.clips[{index}].generation: {exc}"
+                ) from exc
         output = OutputPolicy.from_dict(data.get("output", {}), "$.output")
         approval = ApprovalDeclaration.from_dict(
             data.get("approval", {}), "$.approval"
         )
-        timeline = data.get("timeline", {})
-        if not isinstance(timeline, dict):
-            raise TypeError("$.timeline: expected object")
+        timeline_data = data.get("timeline")
+        if timeline_data is None:
+            timeline = TimelineSpec.for_clips(clips)
+        else:
+            if not isinstance(timeline_data, dict):
+                raise TypeError("$.timeline: expected object")
+            timeline = TimelineSpec.from_dict(
+                timeline_data,
+                "$.timeline",
+                clip_durations={clip.clip_id: clip.duration_ms for clip in clips},
+            )
         extensions = data.get("extensions", {})
         if not isinstance(extensions, dict):
             raise TypeError("$.extensions: expected object")
@@ -126,8 +147,10 @@ class VideoExecutionPackage:
         approval_dict = self.approval.to_dict()
         if approval_dict:
             d["approval"] = approval_dict
-        if self.timeline:
-            d["timeline"] = dict(self.timeline)
+        timeline = self.timeline
+        if not timeline.segments:
+            timeline = TimelineSpec.for_clips(self.clips)
+        d["timeline"] = timeline.to_dict()
         if self.extensions:
             d["extensions"] = dict(self.extensions)
         return d

@@ -25,6 +25,7 @@ from .clips import (
     SubtitleSpec,
 )
 from .errors import ValidationError, ValidationResult
+from .operations import validate_operation_references
 from .package import (
     SCHEMA_ID,
     ApprovalDeclaration,
@@ -32,7 +33,7 @@ from .package import (
     VideoExecutionPackage,
     validate_package,
 )
-from .timeline import OutputPolicy
+from .timeline import OutputPolicy, TimelineSegment, TimelineSpec
 from .validation import package_content_hash
 
 __all__ = [
@@ -47,6 +48,8 @@ __all__ = [
     "GenerationRequirements",
     "GenerationSpec",
     "OutputPolicy",
+    "TimelineSegment",
+    "TimelineSpec",
     "ProjectInfo",
     "ProvenanceSpec",
     "ReferenceSpec",
@@ -58,5 +61,6 @@ __all__ = [
     "VideoExecutionPackage",
     "VideoPackageBuilder",
     "package_content_hash",
+    "validate_operation_references",
     "validate_package",
 ]

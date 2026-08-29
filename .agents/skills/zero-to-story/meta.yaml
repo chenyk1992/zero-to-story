@@ -8,8 +8,8 @@ complete-tags-en:
 complete-tags-cn:
   - "短剧漫剧 / 计划制定"
   - "动画 / 计划制定"
-desc-en: "Guides creators from an idea, novel, screenplay, or short-drama handoff through an approved storyboard brief, character sheets, directly generated 2x3 six-shot boards, and an LFO execution handoff. It does not write or optimize H3 video prompts: each approved Panel is handed to the dedicated h3-prompt-writing skill, and only that skill's user-approved output may be passed through to an execution package."
-desc-cn: "适用于从灵感、小说、剧本或短剧 handoff 构建视频的创作者。流程依次完成故事板概要、角色设定图、一次直出的 2×3 六镜黑白分镜板和 LFO 创作交接；本 Skill 不撰写或优化 H3 视频提示词，每个已确认 Panel 必须交给 h3-prompt-writing，执行包只能逐字透传该 Skill 经用户确认的输出。"
+desc-en: "Guides creators from an idea, novel, screenplay, or short-drama handoff through an approved storyboard brief, character sheets, Camera Setup planning, directly generated 2x3 six-beat boards, and an LFO execution handoff. It does not write or optimize H3 video prompts: each approved Panel is handed to the dedicated h3-prompt-writing skill, and only that skill's user-approved output may be passed through to an execution package."
+desc-cn: "适用于从灵感、小说、剧本或短剧 handoff 构建视频的创作者。流程依次完成故事板概要、角色设定图、Camera Setup、一次直出的 2×3 六格 Beat 黑白分镜板和 LFO 创作交接；本 Skill 不撰写或优化 H3 视频提示词，每个已确认 Panel 必须交给 h3-prompt-writing，执行包只能逐字透传该 Skill 经用户确认的输出。"
 cover: ""
 author-en: "MiniMax Hub"
 author-cn: "MiniMax Hub"

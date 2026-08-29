@@ -45,3 +45,34 @@ class TestAudioMixer:
         track = AudioTrack(asset_key="bgm.mp3", role="music", duck_group="background")
         assert mixer.compute_duck(track, foreground_present=True) == -12.0
         assert mixer.compute_duck(track, foreground_present=False) == 0.0
+
+    def test_loudness_master_keeps_requested_rate_and_peak_headroom(self) -> None:
+        command = AudioMixer().build_command(
+            AudioMixRequest(
+                native_audio_present=True,
+                target_loudness_db=-16.0,
+                target_sample_rate=48000,
+            ),
+            "input.mp4",
+            "output.mp4",
+        )
+        filter_complex = command[command.index("-filter_complex") + 1]
+        assert "loudnorm=I=-16.0:TP=-1.5:LRA=11" in filter_complex
+        assert "alimiter=limit=0.841395:level=false" in filter_complex
+        assert filter_complex.endswith(",aresample=48000[outa]")
+
+    def test_declared_duration_pads_short_tracks_and_removes_shortest(self) -> None:
+        command = AudioMixer().build_command(
+            AudioMixRequest(
+                native_audio_present=False,
+                tracks=[AudioTrack(asset_key="short.wav", role="music")],
+                clip_duration_ms=5_000,
+            ),
+            "input.mp4",
+            "output.mp4",
+        )
+        filter_complex = command[command.index("-filter_complex") + 1]
+        assert "atrim=duration=5.000" in filter_complex
+        assert "apad=whole_dur=5.000" in filter_complex
+        assert "-shortest" not in command
+        assert command[command.index("-t") + 1] == "5.000"

@@ -1,13 +1,144 @@
 """Timeline, OutputPolicy and ApprovalDeclaration for VideoExecutionPackage."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 SUBTITLE_MODES = frozenset({"none", "sidecar", "burnin", "both"})
 CONTAINER_FORMATS = frozenset({"mp4", "mov", "mkv", "webm"})
 VIDEO_ENCODERS = frozenset({"h264", "h265", "av1", "vp9"})
 AUDIO_ENCODERS = frozenset({"aac", "mp3", "opus", "flac", "pcm"})
+TRANSITIONS = frozenset({"cut"})
+
+
+@dataclass
+class TimelineSegment:
+    """One source clip occurrence on the assembled edit timeline.
+
+    ``source_in_ms`` and ``source_out_ms`` are expressed in the source clip's
+    local time.  ``source_out_ms`` is exclusive and may be omitted to use the
+    clip's declared duration.
+    """
+
+    clip_id: str
+    source_in_ms: int = 0
+    source_out_ms: int | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], path: str) -> TimelineSegment:
+        if not isinstance(data, dict):
+            raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        unknown = set(data) - {"clip_id", "source_in_ms", "source_out_ms"}
+        if unknown:
+            raise ValueError(f"{path}: unknown fields: {sorted(unknown)}")
+        clip_id = data.get("clip_id")
+        if not isinstance(clip_id, str) or not clip_id:
+            raise ValueError(f"{path}.clip_id: required string")
+        source_in_ms = data.get("source_in_ms", 0)
+        if not isinstance(source_in_ms, int) or isinstance(source_in_ms, bool):
+            raise TypeError(f"{path}.source_in_ms: expected integer")
+        if source_in_ms < 0:
+            raise ValueError(f"{path}.source_in_ms: must be >= 0")
+        source_out_ms = data.get("source_out_ms")
+        if source_out_ms is not None:
+            if not isinstance(source_out_ms, int) or isinstance(source_out_ms, bool):
+                raise TypeError(f"{path}.source_out_ms: expected integer or null")
+            if source_out_ms <= source_in_ms:
+                raise ValueError(f"{path}.source_out_ms: must be greater than source_in_ms")
+        return cls(clip_id, source_in_ms, source_out_ms)
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"clip_id": self.clip_id}
+        if self.source_in_ms:
+            result["source_in_ms"] = self.source_in_ms
+        if self.source_out_ms is not None:
+            result["source_out_ms"] = self.source_out_ms
+        return result
+
+    def duration_ms(self, clip_duration_ms: int) -> int:
+        """Return this segment's edited duration against a source duration."""
+        if not isinstance(clip_duration_ms, int) or clip_duration_ms <= 0:
+            raise ValueError(f"{self.clip_id}: source clip duration must be positive")
+        if self.source_in_ms >= clip_duration_ms:
+            raise ValueError(f"{self.clip_id}: source_in_ms exceeds clip duration")
+        source_out_ms = (
+            self.source_out_ms
+            if self.source_out_ms is not None
+            else clip_duration_ms
+        )
+        if source_out_ms > clip_duration_ms:
+            raise ValueError(f"{self.clip_id}: source_out_ms exceeds clip duration")
+        if source_out_ms <= self.source_in_ms:
+            raise ValueError(f"{self.clip_id}: source_out_ms must be greater than source_in_ms")
+        return source_out_ms - self.source_in_ms
+
+
+@dataclass
+class TimelineSpec:
+    """Explicit ordered edit list for a VideoExecutionPackage."""
+
+    segments: list[TimelineSegment] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        path: str = "$.timeline",
+        *,
+        clip_durations: dict[str, int] | None = None,
+    ) -> TimelineSpec:
+        if not isinstance(data, dict):
+            raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        unknown = set(data) - {"segments"}
+        if unknown:
+            raise ValueError(f"{path}: unknown fields: {sorted(unknown)}")
+        segments_data = data.get("segments")
+        if not isinstance(segments_data, list):
+            raise TypeError(f"{path}.segments: required array")
+        segments = [
+            TimelineSegment.from_dict(item, f"{path}.segments[{index}]")
+            for index, item in enumerate(segments_data)
+        ]
+        if clip_durations is not None and not segments:
+            raise ValueError(f"{path}.segments: must not be empty when clips exist")
+        cls._validate_segments(segments, path, clip_durations)
+        return cls(segments)
+
+    @classmethod
+    def for_clips(cls, clips: list[Any]) -> TimelineSpec:
+        """Create the default sequence-ordered edit list for clip objects."""
+        ordered = sorted(clips, key=lambda clip: clip.sequence)
+        return cls([TimelineSegment(clip.clip_id) for clip in ordered])
+
+    def validate(self, clip_durations: dict[str, int], path: str = "$.timeline") -> None:
+        self._validate_segments(self.segments, path, clip_durations)
+
+    @staticmethod
+    def _validate_segments(
+        segments: list[TimelineSegment],
+        path: str,
+        clip_durations: dict[str, int] | None,
+    ) -> None:
+        seen: set[str] = set()
+        for index, segment in enumerate(segments):
+            segment_path = f"{path}.segments[{index}]"
+            if segment.clip_id in seen:
+                raise ValueError(f"{segment_path}.clip_id: duplicate clip_id {segment.clip_id!r}")
+            seen.add(segment.clip_id)
+            if clip_durations is None:
+                continue
+            if segment.clip_id not in clip_durations:
+                raise ValueError(f"{segment_path}.clip_id: unknown clip {segment.clip_id!r}")
+            segment.duration_ms(clip_durations[segment.clip_id])
+        if clip_durations is not None:
+            missing = set(clip_durations) - seen
+            if missing:
+                raise ValueError(
+                    f"{path}.segments: missing clips {sorted(missing)!r}"
+                )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"segments": [segment.to_dict() for segment in self.segments]}
 
 
 @dataclass
@@ -79,6 +210,8 @@ class OutputPolicy:
         transitions = data.get("transitions", "cut")
         if not isinstance(transitions, str):
             raise TypeError(f"{path}.transitions: expected string")
+        if transitions not in TRANSITIONS:
+            raise ValueError(f"{path}.transitions: only 'cut' is supported")
         subtitles_mode = data.get("subtitles_mode", "sidecar")
         if subtitles_mode not in SUBTITLE_MODES:
             raise ValueError(

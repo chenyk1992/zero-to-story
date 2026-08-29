@@ -18,6 +18,7 @@ from lfo.contracts.clips import (
     ReferenceSpec,
 )
 from lfo.contracts.package import ProjectInfo, VideoExecutionPackage
+from lfo.contracts.timeline import TimelineSegment, TimelineSpec
 from lfo.execution.materializer import MaterializationError, materialize
 
 
@@ -300,3 +301,18 @@ class TestMaterialize:
         result = materialize("r", pkg, "hash", _h3_registry())
         assert result.output_policy["container"] == "mkv"
         assert result.output_policy["video_encoder"] == "h265"
+
+    def test_timeline_is_materialized_and_changes_snapshot_hash(self) -> None:
+        clip_a = _make_clip("a")
+        clip_b = _make_clip("b")
+        package_a = _make_package([clip_a, clip_b])
+        package_a.timeline = TimelineSpec([TimelineSegment("a"), TimelineSegment("b")])
+        package_b = _make_package([_make_clip("a"), _make_clip("b")])
+        package_b.timeline = TimelineSpec([
+            TimelineSegment("a", source_in_ms=100),
+            TimelineSegment("b"),
+        ])
+        result_a = materialize("run", package_a, "hash", _h3_registry())
+        result_b = materialize("run", package_b, "hash", _h3_registry())
+        assert result_a.timeline == package_a.timeline
+        assert result_a.materialization_hash != result_b.materialization_hash

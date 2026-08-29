@@ -13,6 +13,7 @@ from typing import Any
 from lfo.backends.registry import BackendRegistry
 from lfo.backends.selector import SelectionFailure, select_backend
 from lfo.contracts.package import VideoExecutionPackage
+from lfo.contracts.timeline import TimelineSpec
 
 
 @dataclass
@@ -61,6 +62,7 @@ class MaterializedRun:
     package_hash: str
     materialization_hash: str
     clips: list[MaterializedClip] = field(default_factory=list)
+    timeline: TimelineSpec = field(default_factory=TimelineSpec)
     # Asset key -> asset revision id mapping
     asset_resolutions: dict[str, Any] = field(default_factory=dict)
     output_policy: dict[str, Any] = field(default_factory=dict)
@@ -231,6 +233,11 @@ def materialize(
         MaterializationError if any clip cannot be satisfied.
     """
     asset_resolutions = asset_resolutions or {}
+    clip_durations = {clip.clip_id: clip.duration_ms for clip in package.clips}
+    timeline = package.timeline
+    if not timeline.segments:
+        timeline = TimelineSpec.for_clips(package.clips)
+    timeline.validate(clip_durations)
     clips_materialized: list[MaterializedClip] = []
     all_warnings: list[str] = []
     all_rejections: list[str] = []
@@ -393,6 +400,7 @@ def materialize(
         "package_revision": package.revision,
         "package_hash": package_hash,
         "clips": [_clip_to_dict(c) for c in clips_materialized],
+        "timeline": timeline.to_dict(),
         "asset_resolutions": dict(asset_resolutions),
         "output_policy": package.output.to_dict(),
         "artifact_layout": _layout_hash_payload(artifact_layout or {}),
@@ -406,6 +414,7 @@ def materialize(
         package_hash=package_hash,
         materialization_hash=mat_hash,
         clips=clips_materialized,
+        timeline=timeline,
         asset_resolutions=dict(asset_resolutions),
         output_policy=package.output.to_dict(),
         artifact_layout=dict(artifact_layout or {}),

@@ -7,6 +7,9 @@ from lfo.media.subtitles import (
     clip_local_to_global_cues,
     cues_to_srt,
     cues_to_vtt,
+    parse_srt,
+    parse_vtt,
+    trim_cues,
     validate_srt,
 )
 
@@ -62,6 +65,10 @@ class TestValidateSrt:
         errors = validate_srt(srt)
         assert len(errors) == 1
 
+    def test_parse_external_subtitles(self) -> None:
+        assert parse_srt("1\n00:00:01,000 --> 00:00:02,000\nHi") == [SubtitleCue(1000, 2000, "Hi")]
+        assert parse_vtt("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi") == [SubtitleCue(1000, 2000, "Hi")]
+
 
 class TestClipLocalToGlobal:
     def test_offset_applied(self) -> None:
@@ -69,3 +76,22 @@ class TestClipLocalToGlobal:
         global_cues = clip_local_to_global_cues(cues, 5000)
         assert global_cues[0].start_ms == 6000
         assert global_cues[0].end_ms == 7000
+
+    def test_trim_cues_intersects_and_rebases_to_edit_time(self) -> None:
+        cues = [
+            SubtitleCue(0, 1100, "before"),
+            SubtitleCue(1200, 3200, "crosses head"),
+            SubtitleCue(4000, 5000, "outside"),
+        ]
+        assert trim_cues(cues, 1000, 3500) == [
+            SubtitleCue(0, 100, "before"),
+            SubtitleCue(200, 2200, "crosses head"),
+        ]
+
+    def test_clip_local_to_global_supports_source_trim(self) -> None:
+        cues = clip_local_to_global_cues(
+            [SubtitleCue(1000, 3000, "line")],
+            5000,
+            source_in_ms=1500,
+        )
+        assert cues == [SubtitleCue(5000, 6500, "line")]

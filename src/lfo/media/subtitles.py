@@ -87,7 +87,7 @@ def _time_ms(match: re.Match[str]) -> tuple[int, int]:
     return start, end
 
 
-def validate_srt(srt_text: str, duration_ms: int | None = None) -> list[str]:
+def _parse_srt_cues(srt_text: str) -> tuple[list[SubtitleCue], list[str]]:
     errors: list[str] = []
     cues: list[SubtitleCue] = []
     for index, block in enumerate(re.split(r"\r?\n\r?\n", srt_text.strip()), 1):
@@ -101,13 +101,27 @@ def validate_srt(srt_text: str, duration_ms: int | None = None) -> list[str]:
             continue
         start, end = _time_ms(match)
         cues.append(SubtitleCue(start, end, "\n".join(lines[2:])))
+    return cues, errors
+
+
+def parse_srt(srt_text: str) -> list[SubtitleCue]:
+    """Parse and validate SRT text into clip-local cues."""
+    cues, errors = _parse_srt_cues(srt_text)
+    errors.extend(_validate_cues(cues))
+    if errors:
+        raise ValueError("; ".join(errors))
+    return cues
+
+
+def validate_srt(srt_text: str, duration_ms: int | None = None) -> list[str]:
+    cues, errors = _parse_srt_cues(srt_text)
     return errors + _validate_cues(cues, duration_ms)
 
 
-def validate_vtt(vtt_text: str, duration_ms: int | None = None) -> list[str]:
+def _parse_vtt_cues(vtt_text: str) -> tuple[list[SubtitleCue], list[str]]:
     lines = vtt_text.replace("\r\n", "\n").split("\n")
     if not lines or lines[0].strip() != "WEBVTT":
-        return ["Missing WEBVTT header"]
+        return [], ["Missing WEBVTT header"]
     errors: list[str] = []
     cues: list[SubtitleCue] = []
     for index, block in enumerate("\n".join(lines[1:]).strip().split("\n\n"), 1):
@@ -121,11 +135,53 @@ def validate_vtt(vtt_text: str, duration_ms: int | None = None) -> list[str]:
             continue
         start, end = _time_ms(match)
         cues.append(SubtitleCue(start, end, "\n".join(row[1:])))
+    return cues, errors
+
+
+def parse_vtt(vtt_text: str) -> list[SubtitleCue]:
+    """Parse and validate WebVTT text into clip-local cues."""
+    cues, errors = _parse_vtt_cues(vtt_text)
+    errors.extend(_validate_cues(cues))
+    if errors:
+        raise ValueError("; ".join(errors))
+    return cues
+
+
+def validate_vtt(vtt_text: str, duration_ms: int | None = None) -> list[str]:
+    cues, errors = _parse_vtt_cues(vtt_text)
     return errors + _validate_cues(cues, duration_ms)
 
 
-def clip_local_to_global_cues(cues: list[SubtitleCue], clip_start_ms: int) -> list[SubtitleCue]:
-    return [SubtitleCue(c.start_ms + clip_start_ms, c.end_ms + clip_start_ms, c.text) for c in cues]
+def trim_cues(
+    cues: list[SubtitleCue],
+    source_in_ms: int = 0,
+    source_out_ms: int | None = None,
+) -> list[SubtitleCue]:
+    """Intersect clip-local cues with an edited source range."""
+    if source_in_ms < 0 or (source_out_ms is not None and source_out_ms <= source_in_ms):
+        raise ValueError("Invalid subtitle source range")
+    result: list[SubtitleCue] = []
+    for cue in cues:
+        start = max(cue.start_ms, source_in_ms)
+        end = min(cue.end_ms, source_out_ms) if source_out_ms is not None else cue.end_ms
+        if end <= start:
+            continue
+        result.append(SubtitleCue(start - source_in_ms, end - source_in_ms, cue.text))
+    return result
+
+
+def clip_local_to_global_cues(
+    cues: list[SubtitleCue],
+    clip_start_ms: int,
+    *,
+    source_in_ms: int = 0,
+    source_out_ms: int | None = None,
+) -> list[SubtitleCue]:
+    """Trim clip-local cues and place them on the global edit timeline."""
+    return [
+        SubtitleCue(cue.start_ms + clip_start_ms, cue.end_ms + clip_start_ms, cue.text)
+        for cue in trim_cues(cues, source_in_ms, source_out_ms)
+    ]
 
 
 class SubtitleRenderer:

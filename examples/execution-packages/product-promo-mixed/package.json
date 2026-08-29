@@ -190,7 +190,7 @@
       "sequence": 3,
       "duration_ms": 3000,
       "generation": {
-        "operation": "video.image_to_video",
+        "operation": "video.reference_to_video",
         "prompt": "咖啡机45度角特写，Logo清晰可见，镜头缓慢平移，高端质感，16:9横屏",
         "requirements": {
           "aspect_ratio": "16:9",
@@ -208,7 +208,8 @@
             "binding": {
               "required": true,
               "priority": 100,
-              "placement": "first",
+              "placement": "fixed",
+              "slot": "ref_image_0",
               "on_unsupported": "fail"
             }
           },
@@ -221,7 +222,7 @@
               "required": false,
               "priority": 10,
               "placement": "fixed",
-              "slot": "overlay_brand",
+              "slot": "ref_image_1",
               "on_unsupported": "drop"
             }
           }

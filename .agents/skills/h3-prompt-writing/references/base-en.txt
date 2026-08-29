@@ -51,7 +51,7 @@ non_diegetic_music: ...
 
 ### 3.1 I2VA: Begin from the Image and Develop Forward
 
-`<Picture 1>` is the actual first frame of the video at 0.00 seconds and belongs to `[Shot 1]`. The description should first establish the style, subjects, composition, and scene anchors in the image, then describe the next action. Character identity, clothing, colors, key objects, and spatial relationships should remain consistent.
+`<Picture 1>` is the actual first frame of the video at 0.00 seconds and belongs to `[Shot 1]`. The description should first establish the style, subjects, composition, and scene anchors in the image, then describe the next action. Character identity, clothing, colors, key objects, and spatial relationships should remain consistent. If the project provides text anchors, use them only to name stable traits not clearly resolved by the frame; do not introduce a conflicting appearance or layout.
 
 Recommended structure: **first-frame anchor → action onset → continuous development → result or reaction**.
 
@@ -77,6 +77,8 @@ Recommended structure: **plausible preceding state → explicit action and trans
 
 At the beginning of `[Shot 1]`, state the overall style and initial composition. Common styles include `Cinematic`, `live-action`, `2D-animated`, `3D CG`, `claymation`, `watercolor`, and `vintage film`. For keyframe tasks, derive the style from the reference image; for T2VA, select it from the user's text.
 
+When no visual reference is supplied, reuse the approved character and scene text anchors for the subjects and environment that are actually visible in the shot. Keep the anchor wording stable across Panels; add only shot-specific pose, state, lighting, and action. Do not use a text anchor to claim an exact first frame—use I2VA or FL2VA when an exact frame is required.
+
 ```text
 [Shot 1] Live-action, cinematic, a medium-wide shot frames...
 ```
@@ -90,6 +92,10 @@ Do not add a timestamp to the first shot. Use sequential shot numbers for later 
 ```
 
 For ordinary cuts, use `the camera cuts to`, `the shot cuts to`, `the shot transitions to`, `the shot changes to`, or `the shot switches to`. When explicitly requested by the user, cross-dissolve, fade, or wipe may also be used. A cut should introduce new information about the subject, space, state, viewpoint, or time. If only the distance or a slight angle needs to change, prefer camera motion.
+
+The shot count and cut times come from the approved Camera Setup plan, not from the number of storyboard cells. Several consecutive Beat/visible moments may belong to one continuous `[Shot N]`; describe their development inside that shot. Do not add a cut merely because the black-and-white board advances to another cell, and do not distribute cut times evenly unless the director plan explicitly calls for a rhythmic montage.
+
+For spatially dependent shots, state the camera's position and viewing direction, the axis side, each subject's facing direction, the gaze target, and the screen-space movement direction whenever those facts affect the story. Preserve these relationships across shots; do not infer a reverse-facing subject from an action verb such as "chases" or "follows".
 
 ### 4.3 Camera Motion: Motion Type + Amplitude + Speed
 

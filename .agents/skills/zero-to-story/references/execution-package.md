@@ -19,7 +19,11 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 
 生成画布只写 `generation.requirements.aspect_ratio` 和 `megapixels`。`output.width/height` 是交付分辨率，不要再写进 generation。
 
+写入 `megapixels` 前必须取得用户明确选择。若用户尚未指定，向用户一次列出四项：`0.4 MP`（推荐，优先保证本地生成稳定性）、`0.6 MP`、`1.0 MP`、自定义（大于 0 的具体 MP 数值）。推荐项不是默认授权；用户未选择时不得创建执行包。不得从交付宽高、图片素材的 `2K` 标记、外部视频 API 的 `768P` / `2K` 档位或 agent 自己的质量判断推导该值。把精确值和确认依据记录到 `storyboard_brief.md` 的“LFO 执行计划”确认摘要；选择结果可沿用到当前项目后续 Panel 和 revision。用户更改选择或运行条件发生实质变化时重新询问。
+
 ## 外部提示词边界
+
+`generation.operation` 必须与故事板中已确认的 Panel 生成策略一致；执行包阶段不根据参考数量临时改模式，也不补写或重排 H3 镜头。
 
 `zero-to-story` 不生成视频提示词。执行包中的 `generation.prompt` 是一个不透明的外部输入，只能逐字复制由 `$h3-prompt-writing` 生成、已经展示给用户且明确获批的最终输出。
 
@@ -31,7 +35,7 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 
 ## 最小示例
 
-以下示例只展示透传边界。`generation.prompt` 的占位内容在真实 Package 中必须替换为 `$h3-prompt-writing` 的完整已确认输出。
+以下示例只展示透传边界，其中 `megapixels: 0.4` 代表用户已经选择 `0.4 MP`，不是可以静默套用的默认值。`generation.prompt` 的占位内容在真实 Package 中必须替换为 `$h3-prompt-writing` 的完整已确认输出。
 
 ```json
 {
@@ -86,7 +90,8 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
         "prompt_skill": "h3-prompt-writing",
         "creative_unit": "panel",
         "panel": "P001",
-        "shot_range": [1, 6]
+        "beat_range": [1, 6],
+        "setup_range": [1, 3]
       }
     }
   ],
@@ -97,19 +102,23 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 
 ## Panel 与 Clip
 
-- `1 Panel = 1 张 2×3 分镜板 = 6 个有序 Shot = 1 Clip`。
-- P001 的 `shot_range` 为 `[1, 6]`；P002 为 `[6, 11]`；重叠 Shot 是连续性承接。
+- `1 Panel = 1 张 2×3 分镜板 = 6 个有序 Beat = 1 Clip`；实际 H3 `[Shot N]` 数量由 Camera Setup 决定。
+- P001 的 `beat_range` 为 `[1, 6]`；P002 起左上 Beat 是上一段的零时长边界锚点，其余五个 Beat 是当前 Panel 的新内容；`setup_range` 只用于创作溯源，不改变 Clip 数量。
 - 默认 `duration_ms: 10000`。自定义单段时长保持 4–15 秒，Clip 时长之和等于用户确认总时长。
+- P001 六个有效 Beat 所属 Setup 的独占时长合计 `duration_ms`；P002 起左上边界锚点为 0 秒，其余有效 Beat 所属 Setup 的独占时长合计 `duration_ms`。同一 Setup 的相邻 Beat 不产生额外切镜，也不要为共享锚点额外增加 Clip 时长。
+- 每个边界必须声明唯一的 `transition ownership`；共享动作只能归前一个或后一个 Panel，后一段从锚点直接推进新动作，禁止回卷、重置或重演。
+- 当前 LFO 最终组装只支持 `cut`；`match-cut` 是创作/剪辑关系，仍以一次 `cut` 落地。不要在 `output.transitions` 中写 `dissolve`、`fade` 或音频桥接；需要淡化、黑场或声音桥接时，必须由单个 Clip 完整持有，或先制作并确认派生素材。
 - `dependencies` 只表达执行顺序，不会自动把上一 Clip 末帧传给下一 Clip；真实末帧必须作为新 revision 的明确素材引用。
 - 每个 Clip 是可独立重做的最小执行单位。修改已批准的故事、素材、时长、引用或外部提示词时提升 revision，保留旧产物。
 - 字幕 cue 的 `start_ms` / `end_ms` 是当前 Clip 本地时间，从 0 开始，`end_ms <= duration_ms` 且 `end_ms > start_ms`。
 
 ## 参考素材与槽位
 
-- 每个引用使用 `placement: "fixed"` 和明确 `binding.slot`，不要依赖隐式数组顺序。
+- 每个引用使用 `placement: "fixed"` 和明确 `binding.slot`，不要依赖隐式数组顺序。R2V 使用 `ref_image_N`、`ref_video_N` 或 `ref_audio_N` typed slot；I2VA/FL2VA 只使用明确的 `first_frame` / `last_frame` 绑定。
 - Package 中图片、视频和音频的实际顺序、语义用途，必须与交给 `$h3-prompt-writing` 的输入顺序以及最终输出中的引用标签完全一致。
 - 只传当前 Panel 真正需要的已确认素材，不静默丢弃必需引用，也不加入未交给 `$h3-prompt-writing` 的额外素材。
 - 新增上一 Clip 的真实末帧后，重新确定全部素材顺序，把完整新输入再次交给 `$h3-prompt-writing`，提升 revision；禁止只修改 Package 槽位而沿用旧提示词。
+- 同场连续接力优先使用 `video.image_to_video`（I2VA），上一 Clip 的真实尾帧作为唯一精确首帧；同时硬锁首尾才使用 `video.first_last_frame`（FL2VA）；多参考或明确硬切才使用 `video.reference_to_video`（R2V）。R2V 只接受 typed fixed slots，参考图不能声称精确锁定视频首帧。
 - 以 `lfo plan` 的 `resolved_references` 为最终执行核对依据。
 
 ## 验证与执行闸门
@@ -123,11 +132,21 @@ python -m lfo.cli.main plan execution-package.json
 
 逐 Clip 核对：
 
-- Clip 数 = Panel 数 = 2×3 分镜板数；每个 Panel 六个 Shot ID 仍可追溯。
+- Clip 数 = Panel 数 = 2×3 分镜板数；每个 Panel 六个 Beat 和其 Camera Setup 映射仍可追溯。
 - 每个 `source.uri` 指向实际存在且已获用户确认的文件。
 - `generation.prompt` 与 `$h3-prompt-writing` 的已确认输出逐字一致。
+- `generation.requirements.megapixels` 来自用户明确选择；没有从交付尺寸、图片分辨率或外部 API 档位推导。
 - 素材顺序、槽位、asset key、语义用途、H3 引用标签和 `resolved_references` 一致。
+- R2V 的每个引用均为 `placement: "fixed"`，并使用与提示词标签一致的 typed slot；没有把普通参考图描述成精确首帧锁。
 - 时长满足 4–15 秒，字幕 cue 未越界，后端与引用能力无警告。
 - 不存在非空 `generation.negative_prompt`，也没有本 Skill 添加的提示词字段或元数据。
+
+### 边界证据与最终组装闸门
+
+LFO 的 `media.boundary_evidence` 只生成客观审计素材：上一段尾帧、下一段首帧、尾 2 秒 + 头 3 秒预览、接触表和技术 metrics。它不替代创作侧的语义判定，也不会自动证明边界连续。
+
+创建或执行最终 assembly package 前，Creative Skill 必须逐条审查这些证据，并在边界记录中写入 `PASS` 或完成确定性修复并复核后的 `PASS_WITH_REPAIR`。任一边界缺少记录或为 `FAIL`，只能修复/重生成对应后一 Panel，不得进入最终组装。
+
+最终 assembly package 的 `output.transitions` 只写 `cut`。`match-cut` 仅记录在故事板的剪辑关系中；`dissolve`、`fade`、`fade_black` 和音频桥接不属于当前 LFO final assembly 的输出能力。
 
 任何执行包结构、素材顺序、时长或外部提示词变化都先提升 revision，并重新运行 `validate`、`plan`。只有两者通过且用户确认计划摘要后，才能执行。

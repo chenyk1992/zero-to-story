@@ -301,6 +301,23 @@ class TestGenerationSpec:
         with pytest.raises(ValueError, match="prompt"):
             GenerationSpec.from_dict({"operation": "x"}, "$")
 
+    def test_package_rejects_presenter_exact_first_frame_claim(self):
+        reference = {
+            "reference_id": "r1",
+            "asset_key": "test.img",
+            "semantic_usage": "exact_previous_last_frame",
+            "binding": {"placement": "fixed", "slot": "ref_image_0"},
+        }
+        clip = _make_clip(
+            generation={
+                "operation": "video.virtual_presenter",
+                "prompt": "Presenter",
+                "references": [reference],
+            }
+        )
+        with pytest.raises(ValueError, match="exact/hard first-frame continuity"):
+            VideoExecutionPackage.from_dict(_make_package(clips=[clip]))
+
 
 # ---------------------------------------------------------------------------
 # AudioPolicy & AudioTrackSpec

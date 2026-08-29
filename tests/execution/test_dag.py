@@ -1,8 +1,10 @@
 """Tests for DAG builder."""
 from __future__ import annotations
 
+from lfo.contracts.timeline import TimelineSegment, TimelineSpec
 from lfo.execution.dag import (
     TASK_AUDIO_MIX,
+    TASK_BOUNDARY_EVIDENCE,
     TASK_EXPORT_FINALIZE,
     TASK_MEDIA_QC,
     TASK_SUBTITLE_RENDER,
@@ -42,6 +44,7 @@ def _make_clip(
 def _make_run(
     clips: list[MaterializedClip],
     extensions: dict | None = None,
+    timeline: TimelineSpec | None = None,
 ) -> MaterializedRun:
     return MaterializedRun(
         run_id="run-1",
@@ -50,6 +53,7 @@ def _make_run(
         package_hash="pkghash",
         materialization_hash="mathash",
         clips=clips,
+        timeline=timeline or TimelineSpec(),
         artifact_layout={
             "project_id": "test-project",
             "run_id": "run-1",
@@ -88,7 +92,22 @@ class TestBuildDag:
     def test_two_clips_no_deps(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
         graph = build_dag(_make_run(clips))
-        assert len(graph.tasks) == 10  # 4 per clip + timeline + export
+        assert len(graph.tasks) == 11  # 4 per clip + boundary evidence + timeline + export
+
+    def test_adjacent_timeline_clips_get_boundary_evidence(self) -> None:
+        clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
+        graph = build_dag(_make_run(clips))
+        evidence = graph.tasks_by_type(TASK_BOUNDARY_EVIDENCE)
+        assert len(evidence) == 1
+        assert evidence[0].metadata["boundary_id"] == "clip-001__clip-002"
+        assert evidence[0].metadata["next_source_in_ms"] == 0
+        assert evidence[0].dependencies == [
+            "run-1.clip-clip-001.audio.mix",
+            "run-1.clip-clip-002.audio.mix",
+        ]
+        timeline = graph.task_by_id("run-1.timeline.assemble")
+        assert timeline is not None
+        assert evidence[0].task_id in timeline.dependencies
 
     def test_timeline_depends_on_all_mix_tasks(self) -> None:
         clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
@@ -219,6 +238,26 @@ class TestBuildDag:
         g1 = build_dag(run)
         g2 = build_dag(run)
         assert g1.task_ids == g2.task_ids
+
+    def test_timeline_metadata_uses_explicit_order_and_trim(self) -> None:
+        clips = [_make_clip("a", sequence=1), _make_clip("b", sequence=2)]
+        graph = build_dag(
+            _make_run(
+                clips,
+                timeline=TimelineSpec([
+                    TimelineSegment("b", source_in_ms=1_000, source_out_ms=4_000),
+                    TimelineSegment("a"),
+                ]),
+            )
+        )
+        timeline = graph.task_by_id("run-1.timeline.assemble")
+        assert timeline is not None
+        assert [item["clip_id"] for item in timeline.metadata["segments"]] == ["b", "a"]
+        assert timeline.metadata["segments"][0]["edited_duration_ms"] == 3_000
+        assert timeline.metadata["segments"][0]["source_in_ms"] == 1_000
+        evidence = graph.tasks_by_type(TASK_BOUNDARY_EVIDENCE)
+        assert evidence[0].metadata["previous_source_in_ms"] == 1_000
+        assert evidence[0].metadata["next_source_in_ms"] == 0
 
 
 class TestTaskGraph:

@@ -21,6 +21,7 @@ from lfo.contracts.clips import (
     ReferenceSpec,
     SubtitleSpec,
 )
+from lfo.contracts.operations import validate_operation_references
 from lfo.contracts.package import ApprovalDeclaration, VideoExecutionPackage
 from lfo.contracts.timeline import OutputPolicy
 
@@ -99,7 +100,12 @@ def _panel_references(
 ) -> list[ReferenceSpec]:
     raw_refs = panel.get("references")
     if not isinstance(raw_refs, list):
-        raw_refs = panel.get("pack", {}).get("refs", [])
+        pack = panel.get("pack", {})
+        if not isinstance(pack, dict):
+            raise ValueError("panel.pack must be an object")
+        raw_refs = pack.get("refs", [])
+    if not isinstance(raw_refs, list):
+        raise ValueError("panel references must be a list")
     refs: list[ReferenceSpec] = []
     for index, raw in enumerate(raw_refs):
         if not isinstance(raw, dict):
@@ -109,36 +115,56 @@ def _panel_references(
         if not isinstance(asset_key, str) or not asset_key:
             raise ValueError(f"panel reference {index + 1} has no resolvable asset_key")
         binding_data = raw.get("binding", {})
-        role = raw.get("role")
-        placement = binding_data.get(
-            "placement",
-            "last" if role == "composition" else "any",
-        )
+        if not isinstance(binding_data, dict):
+            raise ValueError(f"panel references[{index}].binding must be an object")
+        reference_id = raw.get("reference_id", f"ref-{index + 1:03d}")
+        if not isinstance(reference_id, str) or not reference_id:
+            raise ValueError(f"panel references[{index}].reference_id must be a non-empty string")
+        semantic_usage = raw.get("semantic_usage", _semantic_usage(raw.get("role")))
+        if not isinstance(semantic_usage, str) or not semantic_usage:
+            raise ValueError(f"panel references[{index}].semantic_usage must be a non-empty string")
         refs.append(ReferenceSpec(
-            reference_id=raw.get("reference_id", f"ref-{index + 1:03d}"),
+            reference_id=reference_id,
             asset_key=asset_key,
-            semantic_usage=raw.get("semantic_usage", _semantic_usage(role)),
+            semantic_usage=semantic_usage,
             instruction=raw.get("instruction", raw.get("purpose")),
-            binding=BindingPolicy(
-                required=binding_data.get("required", True),
-                priority=binding_data.get("priority", 100 - index),
-                placement=placement,
-                on_unsupported=binding_data.get("on_unsupported", "fail"),
-                slot=binding_data.get("slot"),
+            binding=BindingPolicy.from_dict(
+                binding_data,
+                f"$.references[{index}].binding",
             ),
         ))
     return refs
+
+
+def _validate_operation_references(
+    operation: str,
+    references: list[ReferenceSpec],
+    asset_media_types: dict[str, str],
+) -> None:
+    """Validate creator references with explicit typed R2V slots."""
+    validate_operation_references(
+        operation,
+        references,
+        asset_media_types=asset_media_types,
+        require_typed_r2v_slots=True,
+    )
 
 
 def _panel_to_clip(
     panel: dict[str, Any],
     sequence: int,
     asset_keys: dict[str, str],
+    asset_media_types: dict[str, str],
     requirements: GenerationRequirements,
 ) -> ClipSpec:
     panel_id = panel.get("panel_id", f"panel-{sequence:03d}")
     prompt = panel.get("prompt", panel.get("prompt_text", ""))
     generation_data = panel.get("generation", {})
+    if not isinstance(generation_data, dict):
+        raise ValueError(f"panel {panel_id!r}.generation must be an object")
+    operation = generation_data.get("operation")
+    if not isinstance(operation, str) or not operation:
+        raise ValueError(f"panel {panel_id!r}.generation.operation is required")
     if generation_data:
         prompt = generation_data.get("prompt", prompt)
     if not isinstance(prompt, str) or not prompt:
@@ -156,17 +182,19 @@ def _panel_to_clip(
         requirements.to_dict() | requirement_data,
         f"$.panels[{sequence - 1}].generation.requirements",
     )
+    references = _panel_references(panel, asset_keys)
+    _validate_operation_references(operation, references, asset_media_types)
     return ClipSpec(
         clip_id=panel.get("clip_id", panel_id),
         sequence=panel.get("sequence", sequence),
         duration_ms=panel.get("duration_ms", panel.get("desired_duration_ms", 15_000)),
         generation=GenerationSpec(
-            operation=generation_data.get("operation", "video.reference_to_video"),
+            operation=operation,
             prompt=prompt,
             negative_prompt=generation_data.get("negative_prompt"),
             seed=generation_data.get("seed"),
             requirements=resolved_requirements,
-            references=_panel_references(panel, asset_keys),
+            references=references,
         ),
         audio=AudioPolicy.from_dict(audio_policy, f"$.panels[{sequence - 1}].audio"),
         subtitles=SubtitleSpec.from_dict(subtitle_data, f"$.panels[{sequence - 1}].subtitles"),
@@ -174,6 +202,7 @@ def _panel_to_clip(
         source_context={
             "creative_unit": "panel",
             "beat_range": list(panel.get("beat_range", [])),
+            "setup_range": list(panel.get("setup_range", [])),
         },
     )
 
@@ -229,11 +258,22 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
         "$.generation.requirements",
     )
     asset_keys = _asset_id_index(raw_assets)
+    asset_media_types = {
+        asset_key: str(asset.get("media_type") or "image")
+        for asset in raw_assets
+        if isinstance(asset, dict)
+        for asset_key in [asset.get("asset_key")]
+        if isinstance(asset_key, str) and asset_key
+    }
     panels = creative.get("panels", [])
     if not isinstance(panels, list) or not panels:
         raise ValueError("Panel-first input requires at least one panel")
     for sequence, panel in enumerate(panels, start=1):
-        builder.add_clip(_panel_to_clip(panel, sequence, asset_keys, requirements))
+        if not isinstance(panel, dict):
+            raise ValueError(f"panels[{sequence - 1}] must be an object")
+        builder.add_clip(
+            _panel_to_clip(panel, sequence, asset_keys, asset_media_types, requirements)
+        )
     review = creative.get("review", {})
     approval = ApprovalDeclaration(
         approved_by=review.get("reviewer") if review.get("status") == "approved" else None,
@@ -257,17 +297,34 @@ def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackag
         project_id=project_id,
     )
     assets = storyboard.get("assets", [])
+    if not isinstance(assets, list):
+        raise ValueError("assets must be a list")
     for raw_asset in assets:
         builder.add_asset(_asset_spec(raw_asset))
     asset_keys = _asset_id_index(assets)
+    asset_media_types = {
+        asset_key: str(asset.get("media_type") or "image")
+        for asset in assets
+        if isinstance(asset, dict)
+        for asset_key in [asset.get("asset_key")]
+        if isinstance(asset_key, str) and asset_key
+    }
     shots = storyboard.get("shots", [])
     shot_id_to_clip_id = {
         shot.get("shot_id", f"shot-{sequence:03d}"): shot.get("clip_id", f"clip-{sequence:03d}")
         for sequence, shot in enumerate(shots, start=1)
     }
     for sequence, shot in enumerate(shots, start=1):
+        if not isinstance(shot, dict):
+            raise ValueError(f"shots[{sequence - 1}] must be an object")
         generation = shot.get("generation", {})
+        if not isinstance(generation, dict):
+            raise ValueError(f"shots[{sequence - 1}].generation must be an object")
+        operation = generation.get("operation")
+        if not isinstance(operation, str) or not operation:
+            raise ValueError(f"shots[{sequence - 1}].generation.operation is required")
         refs = _panel_references({"references": generation.get("references", [])}, asset_keys)
+        _validate_operation_references(operation, refs, asset_media_types)
         raw_requirements = generation.get("requirements", {})
         if not isinstance(raw_requirements, dict):
             raise TypeError("shot generation.requirements must be an object")
@@ -280,7 +337,7 @@ def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackag
             sequence=sequence,
             duration_ms=shot.get("duration_ms", 5_000),
             generation=GenerationSpec(
-                operation=generation.get("operation", "video.text_to_video"),
+                operation=operation,
                 prompt=generation.get("prompt", ""),
                 negative_prompt=generation.get("negative_prompt"),
                 seed=generation.get("seed"),

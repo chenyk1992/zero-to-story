@@ -7,6 +7,7 @@ into a durable local video artifact.
 from __future__ import annotations
 
 import hashlib
+import math
 import pathlib
 import re
 import uuid
@@ -20,6 +21,7 @@ from lfo.comfy.client import ComfyApiClient
 from lfo.comfy.exceptions import ComfyUnreachableError, LfoComfyError
 from lfo.comfy.monitor import ComfyMonitor
 from lfo.comfy.workflow import WorkflowLoader
+from lfo.contracts.operations import validate_operation_references
 from lfo.core.hashing import compute_workflow_hash
 from lfo.core.workflow_registry import KNOWN_WORKFLOWS, WorkflowManifest
 from lfo.execution.handlers import HandlerResult, TaskHandler
@@ -37,6 +39,7 @@ H3_MAX_REFERENCE_AUDIO = 3
 H3_MAX_REFERENCES = (
     H3_MAX_REFERENCE_IMAGES + H3_MAX_REFERENCE_VIDEOS + H3_MAX_REFERENCE_AUDIO
 )
+H3_MAX_DURATION_MS = 15_000
 H3_PRESENTER_MAX_REFERENCES = 15
 H3_PRESENTER_MAX_REFERENCE_IMAGES = 9
 H3_PRESENTER_MAX_REFERENCE_VIDEOS = 3
@@ -115,7 +118,7 @@ def build_h3_backend_registry(
             ],
             accepted_media_types=["image", "video", "audio"],
             max_references=H3_MAX_REFERENCES,
-            duration_constraints={"min_ms": 200, "max_ms": 150_000},
+            duration_constraints={"min_ms": 200, "max_ms": H3_MAX_DURATION_MS},
             frame_constraints={"formula": "17k+5", "fps": 24},
             resolution_constraints={
                 "min_width": 256,
@@ -294,15 +297,19 @@ class ComfyH3VideoHandler(TaskHandler):
             manifest = KNOWN_WORKFLOWS.get(requested)
             if manifest is None or not manifest.family.startswith("h3_"):
                 raise ValueError(f"Unknown H3 workflow_id: {explicit}")
+            if not isinstance(operation, str) or not operation:
+                raise ValueError("video.generate metadata.operation is required")
+            expected = _workflow_for_operation(operation)
+            if requested != expected:
+                raise ValueError(
+                    f"H3 workflow {requested!r} does not implement operation {operation!r}; "
+                    f"use {expected!r}"
+                )
             return requested
 
         if not isinstance(operation, str):
             raise ValueError("video.generate metadata.operation is required")
-        if operation in H3_FL2VA_OPERATIONS:
-            return H3_FL2VA_WORKFLOW_ID
-        if operation == "video.reference_to_video":
-            return H3_R2V_WORKFLOW_ID
-        raise ValueError(f"Unsupported H3 operation: {operation!r}")
+        return _workflow_for_operation(operation)
 
     def _prepare_workflow(
         self,
@@ -315,11 +322,19 @@ class ComfyH3VideoHandler(TaskHandler):
             return self._prepare_presenter_workflow(metadata, output_prefix=output_prefix)
         _reject_pixel_dimensions(metadata)
         manifest = KNOWN_WORKFLOWS[workflow_id]
+        operation = metadata.get("operation")
+        if not isinstance(operation, str) or not operation:
+            raise ValueError("video.generate metadata.operation is required")
+        if _workflow_for_operation(operation) != workflow_id:
+            raise ValueError(
+                f"H3 workflow {workflow_id!r} does not implement operation {operation!r}"
+            )
+        duration_ms = _validate_h3_duration(metadata.get("duration_ms", 5_000))
         workflow = WorkflowLoader.load(self.config.workflow_dir / manifest.source_file)
         bindings = self._resolve_bindings(workflow, manifest)
         values: dict[str, str | float] = {
             "prompt": str(metadata.get("prompt") or ""),
-            "duration": max(0.2, float(metadata.get("duration_ms", 5_000)) / 1_000.0),
+            "duration": duration_ms / 1_000.0,
             "filename_prefix": output_prefix.replace("\\", "/"),
         }
         if not values["prompt"]:
@@ -328,11 +343,14 @@ class ComfyH3VideoHandler(TaskHandler):
         references = metadata.get("resolved_references", [])
         if not isinstance(references, list):
             raise TypeError("resolved_references must be a list")
+        _validate_h3_references(operation, references)
         uploaded: list[str] = []
         uploaded_images: list[str] = []
         uploaded_videos: list[str] = []
         uploaded_audios: list[str] = []
         image_refs: list[dict[str, Any]] = []
+        video_refs: list[dict[str, Any]] = []
+        audio_refs: list[dict[str, Any]] = []
         allowed_media = (
             {"image", "video", "audio"}
             if manifest.workflow_mode == "r2v"
@@ -348,15 +366,17 @@ class ComfyH3VideoHandler(TaskHandler):
             uploaded.append(uploaded_name)
             if media_type == "video":
                 uploaded_videos.append(uploaded_name)
+                video_refs.append(ref)
             elif media_type == "audio":
                 uploaded_audios.append(uploaded_name)
+                audio_refs.append(ref)
             else:
                 uploaded_images.append(uploaded_name)
                 image_refs.append(ref)
 
         if manifest.workflow_mode == "fl2va":
             self._require_fl2va_frames(
-                str(metadata.get("operation") or ""),
+                operation,
                 workflow_id,
                 image_refs,
                 uploaded_images,
@@ -378,15 +398,13 @@ class ComfyH3VideoHandler(TaskHandler):
                 raise ValueError(
                     f"{workflow_id} supports at most {H3_MAX_REFERENCE_AUDIO} standalone audio references"
                 )
-            for index, value in enumerate(uploaded_images[:3]):
-                values[f"ref_image_{index}"] = value
 
         resolved_values = [(bindings[key], value) for key, value in values.items() if key in bindings]
         prepared = BindingResolver(workflow).apply_values(cast(Any, resolved_values))
         if manifest.workflow_mode == "fl2va":
             self._configure_fl2va_frames(
                 prepared,
-                str(metadata.get("operation") or ""),
+                operation,
                 image_refs,
                 uploaded_images,
             )
@@ -394,9 +412,9 @@ class ComfyH3VideoHandler(TaskHandler):
             self._configure_r2v_reference_slots(
                 prepared,
                 bindings,
-                uploaded_images,
-                uploaded_videos,
-                uploaded_audios,
+                list(zip(image_refs, uploaded_images, strict=True)),
+                list(zip(video_refs, uploaded_videos, strict=True)),
+                list(zip(audio_refs, uploaded_audios, strict=True)),
             )
             self._apply_reference_image_size(prepared, metadata.get("reference_image_size"))
         self._apply_aspect_ratio(prepared, metadata.get("aspect_ratio"))
@@ -431,9 +449,13 @@ class ComfyH3VideoHandler(TaskHandler):
         prompt = str(metadata.get("prompt") or "")
         if not prompt:
             raise ValueError("video.generate metadata.prompt is required")
+        duration_ms = _validate_h3_duration(
+            metadata.get("duration_ms", 5_000),
+            minimum_ms=4_000,
+        )
         values: dict[str, str | float] = {
             "prompt": prompt,
-            "duration": max(0.2, float(metadata.get("duration_ms", 5_000)) / 1_000.0),
+            "duration": duration_ms / 1_000.0,
             "filename_prefix": output_prefix.replace("\\", "/"),
         }
 
@@ -481,6 +503,10 @@ class ComfyH3VideoHandler(TaskHandler):
         for reference in references:
             if not isinstance(reference, dict):
                 raise TypeError("Each resolved reference must be an object")
+            try:
+                validate_operation_references("video.virtual_presenter", [reference])
+            except ValueError as exc:
+                raise ValueError(f"Invalid h3_presenter_r2v reference: {exc}") from exc
             media_type = reference.get("media_type")
             if media_type not in max_indices:
                 raise ValueError(
@@ -591,11 +617,11 @@ class ComfyH3VideoHandler(TaskHandler):
     def _configure_r2v_reference_slots(
         workflow: dict[str, Any],
         bindings: dict[str, Binding],
-        uploaded_images: list[str],
-        uploaded_videos: list[str],
-        uploaded_audios: list[str] | None = None,
+        image_references: list[tuple[dict[str, Any], str]],
+        video_references: list[tuple[dict[str, Any], str]],
+        audio_references: list[tuple[dict[str, Any], str]] | None = None,
     ) -> None:
-        """Bind exactly the requested H3 image and video reference slots."""
+        """Bind exactly the requested H3 references without reassigning fixed slots."""
         image_prefix = "ref_images.ref_image_"
         video_prefix = "ref_videos.ref_video_"
         generator_nodes: list[dict[str, Any]] = []
@@ -624,12 +650,20 @@ class ComfyH3VideoHandler(TaskHandler):
 
         numeric_node_ids = [int(node_id) for node_id in workflow if node_id.isdigit()]
         next_node_id = max(numeric_node_ids, default=0) + 1
-        for index, value in enumerate(uploaded_images):
+        image_slots = _r2v_reference_slots(image_references, "image")
+        video_slots = _r2v_reference_slots(video_references, "video")
+        audio_slots = _r2v_reference_slots(audio_references or [], "audio")
+
+        for index, value in image_slots:
             if index < 3:
                 binding = bindings[f"ref_image_{index}"]
                 if binding.resolved_node_id is None:
                     raise ValueError(f"H3 R2V reference binding {index} was not resolved")
                 source_node_id = binding.resolved_node_id
+                source_node = workflow.get(source_node_id)
+                if not isinstance(source_node, dict):
+                    raise ValueError(f"H3 R2V reference node {source_node_id} was not found")
+                source_node.setdefault("inputs", {})["image"] = value
             else:
                 source_node_id = str(next_node_id)
                 next_node_id += 1
@@ -640,7 +674,7 @@ class ComfyH3VideoHandler(TaskHandler):
                 }
             generator_inputs[f"{image_prefix}{index}"] = [source_node_id, 0]
 
-        for index, value in enumerate(uploaded_videos):
+        for index, value in video_slots:
             load_node_id = str(next_node_id)
             next_node_id += 1
             components_node_id = str(next_node_id)
@@ -661,7 +695,7 @@ class ComfyH3VideoHandler(TaskHandler):
                 1,
             ]
 
-        for index, value in enumerate(uploaded_audios or []):
+        for index, value in audio_slots:
             node_id = str(next_node_id)
             next_node_id += 1
             workflow[node_id] = {
@@ -873,6 +907,95 @@ def _reject_pixel_dimensions(metadata: dict[str, Any]) -> None:
         )
 
 
+def _workflow_for_operation(operation: str) -> str:
+    if operation in H3_FL2VA_OPERATIONS:
+        return H3_FL2VA_WORKFLOW_ID
+    if operation == "video.reference_to_video":
+        return H3_R2V_WORKFLOW_ID
+    if operation == "video.virtual_presenter":
+        return "h3_presenter_r2v"
+    raise ValueError(f"Unsupported H3 operation: {operation!r}")
+
+
+def _validate_h3_duration(value: object, *, minimum_ms: int = 200) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError("H3 duration_ms must be numeric")
+    duration_ms = float(value)
+    if not math.isfinite(duration_ms) or not minimum_ms <= duration_ms <= H3_MAX_DURATION_MS:
+        raise ValueError(
+            f"H3 duration_ms must be between {minimum_ms} and {H3_MAX_DURATION_MS}"
+        )
+    return duration_ms
+
+
+def _validate_h3_references(operation: str, references: object) -> None:
+    """Apply shared operation rules, then H3-specific R2V slot limits."""
+    validate_operation_references(operation, references)
+    if operation != "video.reference_to_video" or not isinstance(references, list):
+        return
+    for reference in references:
+        if not isinstance(reference, dict):
+            raise TypeError("Each resolved reference must be an object")
+        placement = str(reference.get("placement") or "any")
+        slot = str(reference.get("slot") or "")
+        if placement not in {"any", "fixed"}:
+            raise ValueError(
+                f"video.reference_to_video does not support reference placement {placement!r}"
+            )
+        if placement == "fixed" and not slot:
+            raise ValueError("video.reference_to_video fixed references require a slot")
+        typed_slot = re.fullmatch(r"ref_(image|video|audio)_(\d+)", slot)
+        if typed_slot and placement != "fixed":
+            raise ValueError(
+                "video.reference_to_video typed slots require placement='fixed'"
+            )
+        if typed_slot and typed_slot.group(1) != str(reference.get("media_type") or "image"):
+            raise ValueError(
+                f"video.reference_to_video slot {slot!r} does not match reference media type"
+            )
+        if typed_slot:
+            max_index = {
+                "image": H3_MAX_REFERENCE_IMAGES,
+                "video": H3_MAX_REFERENCE_VIDEOS,
+                "audio": H3_MAX_REFERENCE_AUDIO,
+            }[typed_slot.group(1)]
+            if int(typed_slot.group(2)) >= max_index:
+                raise ValueError(f"video.reference_to_video slot {slot!r} is out of range")
+
+
+
+def _r2v_reference_slots(
+    references: list[tuple[dict[str, Any], str]],
+    media_type: str,
+) -> list[tuple[int, str]]:
+    """Resolve fixed typed slots while assigning unbound refs to free slots."""
+    assigned: dict[int, str] = {}
+    unbound: list[str] = []
+    for reference, uploaded_name in references:
+        placement = str(reference.get("placement") or "any")
+        slot = str(reference.get("slot") or "")
+        if placement == "fixed":
+            match = re.fullmatch(rf"ref_{media_type}_(\d+)", slot)
+            if match is None:
+                raise ValueError(
+                    f"video.reference_to_video fixed {media_type} references require "
+                    f"slots ref_{media_type}_N"
+                )
+            index = int(match.group(1))
+            if index in assigned:
+                raise ValueError(f"Duplicate video.reference_to_video slot ref_{media_type}_{index}")
+            assigned[index] = uploaded_name
+        else:
+            unbound.append(uploaded_name)
+    next_index = 0
+    for uploaded_name in unbound:
+        while next_index in assigned:
+            next_index += 1
+        assigned[next_index] = uploaded_name
+        next_index += 1
+    return sorted(assigned.items())
+
+
 def _resolution_selector_aspect(aspect_ratio: str) -> str:
     trimmed = aspect_ratio.strip()
     if trimmed in H3_RESOLUTION_ASPECTS.values():
@@ -902,10 +1025,6 @@ def _fl2va_frame_uploads(
             first = uploaded
         elif placement == "last" or slot in {"last_frame", "ref_image_last"}:
             last = uploaded
-    if first is None:
-        first = uploaded_images[0]
-    if last is None and operation == "video.first_last_frame" and len(uploaded_images) >= 2:
-        last = uploaded_images[1]
     return first, last
 
 

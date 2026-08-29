@@ -41,7 +41,7 @@
       "$ref": "#/definitions/ApprovalDeclaration"
     },
     "timeline": {
-      "type": "object"
+      "$ref": "#/definitions/TimelineSpec"
     },
     "extensions": {
       "type": "object"
@@ -278,7 +278,7 @@
         "fps": { "type": "integer", "minimum": 1 },
         "sample_rate": { "type": "integer", "minimum": 1 },
         "loudness_db": { "type": "string" },
-        "transitions": { "type": "string" },
+        "transitions": { "type": "string", "enum": ["cut"] },
         "subtitles_mode": {
           "type": "string",
           "enum": ["none", "sidecar", "burnin", "both"]
@@ -293,6 +293,29 @@
         "approved_by": { "type": "string" },
         "approved_at": { "type": "string" },
         "notes": { "type": "string" }
+      }
+    },
+    "TimelineSpec": {
+      "type": "object",
+      "required": ["segments"],
+      "additionalProperties": false,
+      "properties": {
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TimelineSegment"
+          }
+        }
+      }
+    },
+    "TimelineSegment": {
+      "type": "object",
+      "required": ["clip_id"],
+      "additionalProperties": false,
+      "properties": {
+        "clip_id": { "type": "string", "minLength": 1 },
+        "source_in_ms": { "type": "integer", "minimum": 0 },
+        "source_out_ms": { "type": ["integer", "null"], "minimum": 1 }
       }
     }
   }

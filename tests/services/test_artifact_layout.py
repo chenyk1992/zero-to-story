@@ -44,6 +44,11 @@ def test_layout_is_project_scoped_and_versioned(tmp_path: Path) -> None:
     assert layout.task_output_path("video.upscale", "clip-1").as_posix().endswith(
         "/outputs/run-1/clips/clip-1/upscaled.mp4"
     )
+    assert layout.task_output_path(
+        "media.boundary_evidence", "clip-1__clip-2"
+    ).as_posix().endswith(
+        "/outputs/run-1/global/boundaries/clip-1__clip-2"
+    )
     assert layout.final_path.parent.is_dir()
     assert layout.run_root.is_dir()
     assert layout.to_dict()["layout_version"] == "project-v1"

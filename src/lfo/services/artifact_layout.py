@@ -102,7 +102,7 @@ class RunArtifactLayout:
         workspace_root: pathlib.Path,
         run_id: str,
         package: VideoExecutionPackage,
-    ) -> "RunArtifactLayout":
+    ) -> RunArtifactLayout:
         project_id = package.project.project_id
         if project_id is None:
             raise ArtifactLayoutError(
@@ -180,6 +180,11 @@ class RunArtifactLayout:
             if clip_id is None:
                 raise ArtifactLayoutError("subtitle.render requires clip_id")
             return self.clip_path(clip_id, "subtitles", ".srt")
+        if task_type == "media.boundary_evidence":
+            if clip_id is None:
+                raise ArtifactLayoutError("media.boundary_evidence requires boundary_id")
+            boundary_id = safe_component(clip_id, field="boundary_id")
+            return self.global_root / "boundaries" / boundary_id
         if task_type == "timeline.assemble":
             return self.global_path("timeline")
         if task_type == "export.finalize":

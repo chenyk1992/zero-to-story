@@ -6,15 +6,18 @@ Standard task types:
 - media.qc
 - audio.mix
 - subtitle.render
+- media.boundary_evidence
 - timeline.assemble
 - export.finalize
 """
 from __future__ import annotations
 
+import itertools
 import pathlib
 from dataclasses import dataclass, field
 from typing import Any
 
+from lfo.contracts.timeline import TimelineSegment
 from lfo.contracts.upscale import resolve_upscale_options
 from lfo.execution.materializer import MaterializedRun
 from lfo.services.artifact_layout import safe_component
@@ -25,6 +28,7 @@ TASK_VIDEO_UPSCALE = "video.upscale"
 TASK_MEDIA_QC = "media.qc"
 TASK_AUDIO_MIX = "audio.mix"
 TASK_SUBTITLE_RENDER = "subtitle.render"
+TASK_BOUNDARY_EVIDENCE = "media.boundary_evidence"
 TASK_TIMELINE_ASSEMBLE = "timeline.assemble"
 TASK_EXPORT_FINALIZE = "export.finalize"
 
@@ -135,7 +139,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     - subtitle.render (depends on qc)
 
     Global tasks:
-    - timeline.assemble (depends on all clips' audio.mix)
+    - media.boundary_evidence (one per adjacent timeline pair)
+    - timeline.assemble (depends on all clips' audio.mix and boundary evidence)
     - export.finalize (depends on timeline.assemble + all subtitle.render)
 
     Args:
@@ -301,25 +306,80 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     all_mix_ids = [t.task_id for t in tasks if t.task_type == TASK_AUDIO_MIX]
     all_sub_ids = [t.task_id for t in tasks if t.task_type == TASK_SUBTITLE_RENDER]
 
-    # 5. timeline.assemble
+    # 5. Boundary evidence + 6. timeline.assemble.  The explicit edit list owns both
+    # assembly order and the source range used from each generated clip.
+    clips_by_id = {clip.clip_id: clip for clip in materialized_run.clips}
+    timeline_segments = materialized_run.timeline.segments
+    if not timeline_segments:
+        timeline_segments = [
+            TimelineSegment(clip.clip_id)
+            for clip in sorted(materialized_run.clips, key=lambda item: item.sequence)
+        ]
+    segment_metadata: list[dict[str, Any]] = []
+    for index, segment in enumerate(timeline_segments):
+        clip = clips_by_id.get(segment.clip_id)
+        if clip is None:
+            raise ValueError(f"Timeline references unknown clip {segment.clip_id!r}")
+        edited_duration_ms = segment.duration_ms(clip.duration_ms)
+        segment_metadata.append(
+            {
+                "clip_id": clip.clip_id,
+                "sequence": clip.sequence,
+                "timeline_index": index,
+                "duration_ms": clip.duration_ms,
+                "edited_duration_ms": edited_duration_ms,
+                "source_in_ms": segment.source_in_ms,
+                "source_out_ms": segment.source_out_ms,
+                "input_task_id": f"{task_prefix}clip-{clip.clip_id}.audio.mix",
+            }
+        )
+    boundary_task_ids: list[str] = []
+    for index, (previous, following) in enumerate(
+        itertools.pairwise(timeline_segments),
+        1,
+    ):
+        previous_mix = f"{task_prefix}clip-{previous.clip_id}.audio.mix"
+        next_mix = f"{task_prefix}clip-{following.clip_id}.audio.mix"
+        boundary_id = f"{previous.clip_id}__{following.clip_id}"
+        task_id = f"{task_prefix}boundary-{index:03d}.media.boundary_evidence"
+        tasks.append(
+            TaskNode(
+                task_id=task_id,
+                task_type=TASK_BOUNDARY_EVIDENCE,
+                logical_key=f"{boundary_id}:media.boundary_evidence",
+                dependencies=[previous_mix, next_mix],
+                metadata={
+                    "run_id": materialized_run.run_id,
+                    "boundary_id": boundary_id,
+                    "previous_input_task_id": previous_mix,
+                    "next_input_task_id": next_mix,
+                    "previous_source_in_ms": previous.source_in_ms,
+                    "previous_source_out_ms": previous.source_out_ms,
+                    "next_source_in_ms": following.source_in_ms,
+                    "next_source_out_ms": following.source_out_ms,
+                    "input_task_ids": [previous_mix, next_mix],
+                    "output_path": _task_output_path(
+                        layout,
+                        "media.boundary_evidence",
+                        boundary_id,
+                    ),
+                    "artifact_layout": dict(layout),
+                },
+            )
+        )
+        boundary_task_ids.append(task_id)
+
     timeline_id = f"{task_prefix}timeline.assemble"
+    timeline_dependencies = [*all_mix_ids, *boundary_task_ids]
     timeline_task = TaskNode(
         task_id=timeline_id,
         task_type=TASK_TIMELINE_ASSEMBLE,
         logical_key="timeline.assemble",
-        dependencies=all_mix_ids,
+        dependencies=timeline_dependencies,
         metadata={
             "run_id": materialized_run.run_id,
-            "segments": [
-                {
-                    "clip_id": clip.clip_id,
-                    "sequence": clip.sequence,
-                    "duration_ms": clip.duration_ms,
-                    "input_task_id": f"{task_prefix}clip-{clip.clip_id}.audio.mix",
-                }
-                for clip in sorted(materialized_run.clips, key=lambda item: item.sequence)
-            ],
-            "input_task_ids": list(all_mix_ids),
+            "segments": segment_metadata,
+            "input_task_ids": timeline_dependencies,
             "output_policy": dict(materialized_run.output_policy),
             "output_path": _task_output_path(layout, "timeline.assemble"),
             "artifact_layout": dict(layout),
@@ -327,7 +387,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     )
     tasks.append(timeline_task)
 
-    # 6. export.finalize
+    # 7. export.finalize
     export_id = f"{task_prefix}export.finalize"
     export_deps = [timeline_id] + all_sub_ids
     export_task = TaskNode(
@@ -381,6 +441,11 @@ def _task_output_path(
         if clip_id is None:
             raise ValueError("subtitle.render requires clip_id")
         return str(clips_root / safe_component(clip_id, field="clip_id") / "subtitles.srt")
+    if task_type == "media.boundary_evidence":
+        if clip_id is None:
+            raise ValueError("media.boundary_evidence requires boundary_id")
+        boundary_id = safe_component(clip_id, field="boundary_id")
+        return str(global_root / "boundaries" / boundary_id)
     if task_type == "timeline.assemble":
         return str(global_root / f"timeline.{container}")
     if task_type == "export.finalize":

@@ -3,15 +3,21 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
-import shutil
 from typing import Any
 
 from lfo.execution.handlers import HandlerRegistry, HandlerResult, TaskHandler
-from lfo.media._ffmpeg import probe
+from lfo.media._ffmpeg import MediaCommandError, probe
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
+from lfo.media.boundary import BoundaryEvidenceBuilder, BoundaryEvidenceSpec, evidence_to_dict
 from lfo.media.export import Exporter, ExportSpec
 from lfo.media.qc import QCContract, TechnicalQC
-from lfo.media.subtitles import SubtitleCue, SubtitleRenderer
+from lfo.media.subtitles import (
+    SubtitleCue,
+    SubtitleRenderer,
+    parse_srt,
+    parse_vtt,
+    trim_cues,
+)
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
 from lfo.services.artifact_layout import ArtifactLayoutError, managed_path
 
@@ -24,6 +30,7 @@ def build_media_handler_registry(workspace_root: pathlib.Path | str) -> HandlerR
     registry.register("media.qc", QCHandler())
     registry.register("audio.mix", AudioHandler(root))
     registry.register("subtitle.render", SubtitleHandler(root))
+    registry.register("media.boundary_evidence", BoundaryEvidenceHandler(root))
     registry.register("timeline.assemble", TimelineHandler(root))
     registry.register("export.finalize", ExportHandler(root))
     return registry
@@ -99,10 +106,14 @@ class AudioHandler(TaskHandler):
                 )
             )
         output = _managed_output(self.root, metadata)
-        try:
-            source_metadata = probe(source)
-        except Exception as exc:
-            return _terminal(f"Audio source probe failed: {exc}")
+        # Reuse probe metadata threaded from upstream media.qc when available;
+        # otherwise probe the source file directly.
+        source_metadata = _input_probe(metadata)
+        if source_metadata is None:
+            try:
+                source_metadata = probe(source)
+            except Exception as exc:
+                return _terminal(f"Audio source probe failed: {exc}")
         output_policy = _policy(metadata)
         result = AudioMixer().mix(
             AudioMixRequest(
@@ -143,8 +154,9 @@ class SubtitleHandler(TaskHandler):
                 if not source.is_file():
                     return _terminal(f"Subtitle file does not exist: {source}")
                 output = _managed_output(self.root, metadata)
-                output.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, output)
+                content = source.read_text(encoding="utf-8-sig")
+                cues = parse_vtt(content) if source.suffix.lower() == ".vtt" else parse_srt(content)
+                SubtitleRenderer().render_srt(cues, output, duration_ms=duration)
             elif cues:
                 output = _managed_output(self.root, metadata)
                 SubtitleRenderer().render_srt(cues, output, duration_ms=duration)
@@ -169,6 +181,65 @@ class SubtitleHandler(TaskHandler):
         )
 
 
+class BoundaryEvidenceHandler(TaskHandler):
+    """Materialize objective evidence for one adjacent timeline boundary."""
+
+    def __init__(self, root: pathlib.Path) -> None:
+        self.root = root
+
+    def execute(
+        self,
+        task_id: str,
+        task_type: str,
+        logical_key: str,
+        metadata: dict[str, Any],
+        attempt_id: str,
+    ) -> HandlerResult:
+        artifacts = _input_artifacts(metadata)
+        previous_task_id = str(metadata.get("previous_input_task_id", ""))
+        next_task_id = str(metadata.get("next_input_task_id", ""))
+        previous_path = _artifact_path(artifacts.get(previous_task_id))
+        next_path = _artifact_path(artifacts.get(next_task_id))
+        if previous_path is None or next_path is None:
+            return _terminal("Boundary evidence requires both adjacent clip artifacts")
+        try:
+            evidence = BoundaryEvidenceBuilder().build(
+                BoundaryEvidenceSpec(
+                    boundary_id=str(metadata.get("boundary_id", "")),
+                    previous_path=str(previous_path),
+                    next_path=str(next_path),
+                    output_directory=str(_managed_output(self.root, metadata)),
+                    previous_source_in_ms=_optional_int(
+                        metadata.get("previous_source_in_ms")
+                    )
+                    or 0,
+                    previous_source_out_ms=_optional_int(
+                        metadata.get("previous_source_out_ms")
+                    ),
+                    next_source_in_ms=_optional_int(metadata.get("next_source_in_ms")) or 0,
+                    next_source_out_ms=_optional_int(metadata.get("next_source_out_ms")),
+                )
+            )
+            details = evidence_to_dict(evidence)
+            preview = pathlib.Path(evidence.preview)
+            details.update(
+                {
+                    "file_path": evidence.preview,
+                    "file_hash": _sha256(preview),
+                    "file_size": preview.stat().st_size,
+                    "media_type": "video",
+                    "review_required": True,
+                }
+            )
+        except (ArtifactLayoutError, MediaCommandError, OSError, TypeError, ValueError) as exc:
+            return _terminal(f"Boundary evidence failed: {exc}")
+        return HandlerResult(
+            True,
+            artifact_type="boundary_evidence",
+            artifact_metadata=details,
+        )
+
+
 class TimelineHandler(TaskHandler):
     def __init__(self, root: pathlib.Path) -> None:
         self.root = root
@@ -179,49 +250,72 @@ class TimelineHandler(TaskHandler):
         segments_data = metadata.get("segments", [])
         if not isinstance(segments_data, list):
             return _terminal("timeline segments must be a list")
-        segments: list[ClipSegment] = []
-        for item in segments_data:
-            if not isinstance(item, dict):
-                return _terminal("timeline segment must be an object")
-            artifact = artifacts.get(str(item.get("input_task_id")), {})
-            path = artifact.get("file_path") if isinstance(artifact, dict) else None
-            if not isinstance(path, str):
-                return _terminal(f"Timeline input missing for clip {item.get('clip_id')}")
-            segments.append(
-                ClipSegment(
-                    clip_id=str(item.get("clip_id")),
-                    file_path=path,
-                    duration_ms=int(item.get("duration_ms", 0)),
+        try:
+            segments: list[ClipSegment] = []
+            for item in segments_data:
+                if not isinstance(item, dict):
+                    raise TypeError("timeline segment must be an object")
+                artifact = artifacts.get(str(item.get("input_task_id")), {})
+                path = artifact.get("file_path") if isinstance(artifact, dict) else None
+                if not isinstance(path, str):
+                    raise ValueError(f"Timeline input missing for clip {item.get('clip_id')}")
+                segments.append(
+                    ClipSegment(
+                        clip_id=str(item.get("clip_id")),
+                        file_path=path,
+                        duration_ms=int(item.get("duration_ms", 0)),
+                        source_in_ms=int(item.get("source_in_ms", 0)),
+                        source_out_ms=(
+                            int(item["source_out_ms"])
+                            if item.get("source_out_ms") is not None
+                            else None
+                        ),
+                    )
+                )
+            policy = _policy(metadata)
+            output = _managed_output(self.root, metadata)
+            result = TimelineAssembler().assemble(
+                TimelineSpec(
+                    segments=segments,
+                    transitions=str(policy.get("transitions", "cut")),
+                    output_width=_optional_int(policy.get("width")) or 0,
+                    output_height=_optional_int(policy.get("height")) or 0,
+                    output_fps=_optional_float(policy.get("fps")) or 24.0,
+                    output_codec=_ffmpeg_video_encoder(policy.get("video_encoder")) or "libx264",
+                    audio_codec=str(policy.get("audio_encoder", "aac")),
+                    output_container=str(policy.get("container", "mp4")),
+                    output_path=str(output),
                 )
             )
-        policy = _policy(metadata)
-        output = _managed_output(self.root, metadata)
-        result = TimelineAssembler().assemble(
-            TimelineSpec(
-                segments=segments,
-                transitions=str(policy.get("transitions", "cut")),
-                output_width=_optional_int(policy.get("width")) or 0,
-                output_height=_optional_int(policy.get("height")) or 0,
-                output_fps=_optional_float(policy.get("fps")) or 24.0,
-                output_codec=_ffmpeg_video_encoder(policy.get("video_encoder")) or "libx264",
-                audio_codec=str(policy.get("audio_encoder", "aac")),
-                output_container=str(policy.get("container", "mp4")),
-                output_path=str(output),
+            if not result.success or not result.output_path:
+                return HandlerResult(
+                    False,
+                    error=result.error or "Timeline assembly failed",
+                    retryable=True,
+                )
+            return _file_result(
+                "timeline_video",
+                pathlib.Path(result.output_path),
+                {
+                    "duration_ms": result.total_duration_ms,
+                    "segments": [
+                        {
+                            "clip_id": item.clip_id,
+                            "start_ms": item.start_ms,
+                            "duration_ms": item.edited_duration_ms(),
+                            "source_in_ms": item.source_in_ms,
+                            "source_out_ms": item.source_out_ms,
+                        }
+                        for item in segments
+                    ],
+                },
             )
-        )
-        if not result.success or not result.output_path:
-            return HandlerResult(False, error=result.error or "Timeline assembly failed", retryable=True)
-        return _file_result(
-            "timeline_video",
-            pathlib.Path(result.output_path),
-            {
-                "duration_ms": result.total_duration_ms,
-                "segments": [
-                    {"clip_id": item.clip_id, "start_ms": item.start_ms, "duration_ms": item.duration_ms}
-                    for item in segments
-                ],
-            },
-        )
+        except (MediaCommandError, OSError, TypeError, ValueError, KeyError) as exc:
+            return HandlerResult(
+                False,
+                error=f"Timeline assembly failed: {exc}",
+                retryable=True,
+            )
 
 
 class ExportHandler(TaskHandler):
@@ -246,7 +340,7 @@ class ExportHandler(TaskHandler):
                 self.root,
                 metadata,
                 "timeline-subtitled",
-                f".{str(policy.get('container', 'mp4'))}",
+                f".{policy.get('container', 'mp4')!s}",
             )
             try:
                 SubtitleRenderer().burn_in(source_path, subtitle_path, burned)
@@ -302,29 +396,30 @@ class ExportHandler(TaskHandler):
         ]
         if not subtitle_artifacts:
             return None
-        offsets = {
-            str(item.get("clip_id")): sum(
-                int(previous.get("duration_ms", 0))
-                for previous in metadata.get("segments", [])
-                if isinstance(previous, dict)
-                and int(previous.get("sequence", 0)) < int(item.get("sequence", 0))
-            )
-            for item in metadata.get("segments", [])
-            if isinstance(item, dict)
-        }
+        segments = [item for item in metadata.get("segments", []) if isinstance(item, dict)]
+        offsets: dict[str, int] = {}
+        current = 0
+        for item in segments:
+            clip_id = str(item.get("clip_id", ""))
+            offsets[clip_id] = current
+            current += int(item.get("edited_duration_ms", item.get("duration_ms", 0)))
         cues: list[SubtitleCue] = []
         for artifact in subtitle_artifacts:
             clip_id = str(artifact.get("clip_id", ""))
-            offset = offsets.get(clip_id, 0)
-            for cue in artifact.get("cues", []):
-                if isinstance(cue, dict):
-                    cues.append(
-                        SubtitleCue(
-                            int(cue["start_ms"]) + offset,
-                            int(cue["end_ms"]) + offset,
-                            str(cue["text"]),
-                        )
-                    )
+            if clip_id not in offsets:
+                continue
+            offset = offsets[clip_id]
+            segment = next((item for item in segments if str(item.get("clip_id")) == clip_id), {})
+            source_in_ms = int(segment.get("source_in_ms", 0))
+            source_out_value = segment.get("source_out_ms")
+            source_out_ms = int(source_out_value) if source_out_value is not None else None
+            local_cues = [
+                SubtitleCue(int(cue["start_ms"]), int(cue["end_ms"]), str(cue["text"]))
+                for cue in artifact.get("cues", [])
+                if isinstance(cue, dict)
+            ]
+            for cue in trim_cues(local_cues, source_in_ms, source_out_ms):
+                cues.append(SubtitleCue(cue.start_ms + offset, cue.end_ms + offset, cue.text))
         if not cues:
             # External sidecars are already valid; use the first one when no
             # structured cues were available for global retiming.
@@ -338,6 +433,27 @@ class ExportHandler(TaskHandler):
 def _input_artifacts(metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
     value = metadata.get("input_artifacts", {})
     return value if isinstance(value, dict) else {}
+
+
+def _artifact_path(artifact: object) -> pathlib.Path | None:
+    if isinstance(artifact, dict) and isinstance(artifact.get("file_path"), str):
+        return pathlib.Path(artifact["file_path"])
+    return None
+
+
+def _input_probe(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    """Return probe metadata from the immediate upstream artifact, if present.
+
+    Used by downstream handlers (media.qc → audio.mix → timeline.assemble) to
+    avoid re-probing the same file.  Returns None when no usable probe data is
+    available, in which case the caller should probe the file directly.
+    """
+    for artifact in _input_artifacts(metadata).values():
+        if not isinstance(artifact, dict):
+            continue
+        if "has_audio" in artifact and "codec" in artifact:
+            return artifact
+    return None
 
 
 def _single_input_path(metadata: dict[str, Any]) -> pathlib.Path | None:

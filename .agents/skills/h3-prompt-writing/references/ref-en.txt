@@ -220,6 +220,8 @@ The basic format follows the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L
 - Give vocal sources stable `(S1)`, `(S2)`, and subsequent IDs. Write dialogue and lyrics as `<d>[Language] ...</d>`.
 - Use `<scenetrans>`, `<cutoff>`, and the corresponding continuity descriptions for dialogue crossing a cut, speech truncated by the video ending, and continuous audio across shots.
 
+The `[Shot N]` sequence follows the approved Camera Setup plan, not the six cells of a storyboard board. Consecutive Beat moments assigned to one Setup remain inside one shot; introduce a new timestamp only when the camera setup or edit viewpoint changes.
+
 For complete rules and examples covering camera vocabulary, group speech, voice-over, dialogue across cuts, and visible text, see the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA).
 
 ### 5.2 Full-Reference Mode Differences
@@ -243,7 +245,7 @@ For generation tasks, `detailed_description` is normally 350-500 English words. 
 
 ### 5.3 Using Reference Labels in Shots
 
-At the first clear appearance of an important `<Subject N>`, describe its referenced characteristics, position in the frame, and current action within what is actually visible in the shot. Continue using the same label in later shots without redefining what the label represents.
+At the first clear appearance of an important `<Subject N>`, describe its referenced characteristics, position in the frame, and current action within what is actually visible in the shot. For spatially dependent shots, also state the camera position/viewing direction, axis side, subject facing, gaze target, and screen-space movement when those facts are part of the approved Camera Setup. Continue using the same label in later shots without redefining what the label represents.
 
 Use natural phrasing for concrete frame anchors:
 

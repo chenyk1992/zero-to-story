@@ -104,11 +104,22 @@ class AudioMixer:
             "mix",
         }
         if not has_native and not request.tracks:
-            return command + ["-map", "0:v:0", "-c:v", "copy", "-an", str(output)]
+            command += ["-map", "0:v:0", "-c:v", "copy", "-an"]
+            if request.clip_duration_ms > 0:
+                command += ["-t", f"{request.clip_duration_ms / 1000:.3f}"]
+            return command + [str(output)]
         filters: list[str] = []
         labels: list[str] = []
+        target_duration = (
+            f"{request.clip_duration_ms / 1000:.3f}" if request.clip_duration_ms > 0 else None
+        )
         if has_native:
-            filters.append("[0:a]aresample=48000,asetpts=PTS-STARTPTS[native]")
+            native_chain = ["aresample=48000", "asetpts=PTS-STARTPTS"]
+            if target_duration is not None:
+                native_chain.extend(
+                    [f"atrim=duration={target_duration}", f"apad=whole_dur={target_duration}"]
+                )
+            filters.append(f"[0:a]{','.join(native_chain)}[native]")
             labels.append("[native]")
         foreground = any(track.duck_group != "background" for track in request.tracks)
         for index, track in enumerate(request.tracks, start=1):
@@ -123,6 +134,12 @@ class AudioMixer:
             if track.fade_out_ms and track.duration_ms:
                 start = max(0, track.duration_ms - track.fade_out_ms) / 1000
                 chain.append(f"afade=t=out:st={start:.3f}:d={track.fade_out_ms / 1000:.3f}")
+            if target_duration is not None:
+                # Delay/gain/fades must be applied before the bounded pad so a
+                # short or offset track cannot terminate the output stream.
+                chain.extend(
+                    [f"atrim=duration={target_duration}", f"apad=whole_dur={target_duration}"]
+                )
             label = f"track{index}"
             filters.append(f"[{index}:a]{','.join(chain)}[{label}]")
             labels.append(f"[{label}]")
@@ -130,8 +147,17 @@ class AudioMixer:
             "".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0"
         )
         mix_chain += f",aformat=sample_rates={request.target_sample_rate}:channel_layouts={'mono' if request.output_channels == 1 else 'stereo'}"
+        if target_duration is not None:
+            mix_chain += f",atrim=duration={target_duration}"
         if request.target_loudness_db is not None:
-            mix_chain += f",loudnorm=I={request.target_loudness_db}:TP=-1.5:LRA=11"
+            # loudnorm may promote the working sample rate and can leave a
+            # small AAC true-peak overshoot. Re-apply the requested rate and
+            # a conservative -1.5 dBTP-equivalent ceiling before encoding.
+            mix_chain += (
+                f",loudnorm=I={request.target_loudness_db}:TP=-1.5:LRA=11"
+                ",alimiter=limit=0.841395:level=false"
+                f",aresample={request.target_sample_rate}"
+            )
         filters.append(f"{mix_chain}[outa]")
         command += [
             "-filter_complex",
@@ -144,12 +170,14 @@ class AudioMixer:
             "copy",
             "-c:a",
             "aac",
-            "-shortest",
             "-movflags",
             "+faststart",
-            str(output),
         ]
-        return command
+        if target_duration is not None:
+            command += ["-t", target_duration]
+        else:
+            command.append("-shortest")
+        return command + [str(output)]
 
     def compute_duck(self, track: AudioTrack, foreground_present: bool) -> float:
         return -12.0 if track.duck_group == "background" and foreground_present else 0.0

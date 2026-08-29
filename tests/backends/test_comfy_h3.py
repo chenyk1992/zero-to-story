@@ -6,6 +6,7 @@ import pytest
 
 from lfo.backends.comfy_h3 import (
     H3_BACKEND_ID,
+    H3_MAX_DURATION_MS,
     H3_PRESENTER_BACKEND_ID,
     ComfyH3Config,
     ComfyH3VideoHandler,
@@ -67,6 +68,7 @@ def test_build_h3_backend_registry_uses_bundled_workflows() -> None:
     assert "audio" in manifest.accepted_media_types
     assert len(manifest.workflow_hash) == 64
     assert manifest.max_references == 15
+    assert manifest.duration_constraints["max_ms"] == H3_MAX_DURATION_MS == 15_000
     assert "seedvr2_3b_int8_convrot.safetensors" not in manifest.required_models
     assert "seedvr2_upscale" not in manifest.extensions["workflow_ids"]
     assert manifest.extensions["workflow_ids"] == ["h3_standard_fl2va", "h3_standard_r2v"]
@@ -138,6 +140,7 @@ def test_prepare_r2v_uses_only_declared_reference_slots(
     workflow, uploaded = handler._prepare_workflow(
         "h3_standard_r2v",
         {
+            "operation": "video.reference_to_video",
             "prompt": "A cinematic portrait",
             "duration_ms": 5_000,
             "seed": 42,
@@ -185,6 +188,7 @@ def test_prepare_r2v_mixes_video_and_image_references(
     workflow, uploaded = handler._prepare_workflow(
         "h3_standard_r2v",
         {
+            "operation": "video.reference_to_video",
             "prompt": "A cinematic reference-to-video shot",
             "duration_ms": 5_000,
             "resolved_references": [
@@ -328,6 +332,7 @@ def test_prepare_r2v_can_use_max_reference_image_size(tmp_path: pathlib.Path) ->
     workflow, _ = handler._prepare_workflow(
         "h3_standard_r2v",
         {
+            "operation": "video.reference_to_video",
             "prompt": "A cinematic portrait",
             "duration_ms": 5_000,
             "reference_image_size": "max",
@@ -353,6 +358,7 @@ def test_prepare_h3_rejects_pixel_dimensions(tmp_path: pathlib.Path) -> None:
         handler._prepare_workflow(
             "h3_standard_r2v",
             {
+                "operation": "video.reference_to_video",
                 "prompt": "A cinematic 768p shot",
                 "duration_ms": 5_000,
                 "width": 1344,
@@ -376,6 +382,7 @@ def test_prepare_h3_applies_requested_aspect_ratio(tmp_path: pathlib.Path) -> No
     workflow, _ = handler._prepare_workflow(
         "h3_standard_r2v",
         {
+            "operation": "video.reference_to_video",
             "prompt": "A cinematic portrait",
             "duration_ms": 5_000,
             "aspect_ratio": "9:16",
@@ -404,6 +411,7 @@ def test_prepare_h3_applies_requested_megapixels(tmp_path: pathlib.Path) -> None
     workflow, _ = handler._prepare_workflow(
         "h3_standard_r2v",
         {
+            "operation": "video.reference_to_video",
             "prompt": "A cinematic low-resolution shot",
             "duration_ms": 5_000,
             "aspect_ratio": "16:9",
@@ -557,6 +565,7 @@ def test_prepare_r2v_optional_standalone_audio(tmp_path: pathlib.Path) -> None:
     workflow, uploaded = handler._prepare_workflow(
         "h3_standard_r2v",
         {
+            "operation": "video.reference_to_video",
             "prompt": "Picture 1 listens to Audio 1",
             "duration_ms": 5_000,
             "resolved_references": [
@@ -578,3 +587,275 @@ def test_prepare_r2v_optional_standalone_audio(tmp_path: pathlib.Path) -> None:
     audio_id, audio_node = load_audio[0]
     assert audio_node["inputs"]["audio"] == f"lfo-input/{audio.name}"
     assert workflow["12"]["inputs"]["ref_audios.ref_audio_0"] == [audio_id, 0]
+
+
+def _h3_test_handler(tmp_path: pathlib.Path) -> tuple[ComfyH3VideoHandler, FakeClient]:
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    client = FakeClient(output_root / "unused.mp4")
+    return (
+        ComfyH3VideoHandler(
+            ComfyH3Config(output_root=output_root),
+            client=client,
+            monitor=FakeMonitor(client.output),
+        ),
+        client,
+    )
+
+
+def test_prepare_i2va_requires_and_wires_one_explicit_first_frame(
+    tmp_path: pathlib.Path,
+) -> None:
+    first = tmp_path / "first.png"
+    first.write_bytes(b"first")
+    handler, _ = _h3_test_handler(tmp_path)
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_standard_fl2va",
+        {
+            "operation": "video.image_to_video",
+            "prompt": "The scholar begins to turn",
+            "resolved_references": [
+                {"blob_path": str(first), "placement": "first", "media_type": "image"}
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    generator = workflow["8"]["inputs"]
+    first_node = generator["first_frame"][0]
+    assert workflow[first_node]["inputs"]["image"] == "lfo-input/first.png"
+    assert "last_frame" not in generator
+
+
+@pytest.mark.parametrize(
+    "references",
+    [
+        [{"blob_path": "missing.png", "media_type": "image"}],
+        [
+            {"blob_path": "missing-first.png", "media_type": "image", "placement": "first"},
+            {"blob_path": "missing-extra.png", "media_type": "image", "placement": "any"},
+        ],
+    ],
+)
+def test_prepare_i2va_rejects_missing_or_unconsumable_frame_binding(
+    tmp_path: pathlib.Path,
+    references: list[dict[str, str]],
+) -> None:
+    for reference in references:
+        reference["blob_path"] = str(tmp_path / pathlib.Path(reference["blob_path"]).name)
+        pathlib.Path(reference["blob_path"]).write_bytes(b"image")
+    handler, client = _h3_test_handler(tmp_path)
+    with pytest.raises(ValueError, match=r"explicitly bound|exactly (?:one|1)"):
+        handler._prepare_workflow(
+            "h3_standard_fl2va",
+            {
+                "operation": "video.image_to_video",
+                "prompt": "No ambiguous start",
+                "resolved_references": [
+                    {**reference, "blob_path": str(pathlib.Path(reference["blob_path"]).resolve())}
+                    for reference in references
+                ],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+    assert client.uploaded == []
+
+
+def test_select_workflow_rejects_operation_workflow_mismatch() -> None:
+    with pytest.raises(ValueError, match="does not implement operation"):
+        ComfyH3VideoHandler._select_workflow(
+            {
+                "operation": "video.reference_to_video",
+                "workflow_id": "h3_standard_fl2va",
+            }
+        )
+
+
+def test_prepare_fl2va_rejects_ordinary_required_reference_in_first_last_mode(
+    tmp_path: pathlib.Path,
+) -> None:
+    first = tmp_path / "first.png"
+    last = tmp_path / "last.png"
+    extra = tmp_path / "identity.png"
+    for image in (first, last, extra):
+        image.write_bytes(b"image")
+    handler, client = _h3_test_handler(tmp_path)
+    with pytest.raises(ValueError, match="exactly 2|ordinary references"):
+        handler._prepare_workflow(
+            "h3_standard_fl2va",
+            {
+                "operation": "video.first_last_frame",
+                "prompt": "A bounded motion",
+                "resolved_references": [
+                    {"blob_path": str(first), "placement": "first"},
+                    {"blob_path": str(last), "placement": "last"},
+                    {"blob_path": str(extra), "placement": "any"},
+                ],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+    assert client.uploaded == []
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {"placement": "first", "semantic_usage": "continuity.prev_tail"},
+        {"placement": "any", "semantic_usage": "continuity.exact_first_frame"},
+        {
+            "placement": "fixed",
+            "slot": "ref_image_0",
+            "semantic_usage": "continuity.exact_previous_last_frame",
+        },
+        {"placement": "any", "instruction": "hard first frame continuity"},
+        {"placement": "any", "semantic_usage": "exact_previous_last_frame"},
+        {"placement": "any", "instruction": "hard previous last frame"},
+    ],
+)
+def test_prepare_r2v_rejects_fake_first_frame_guarantee(
+    tmp_path: pathlib.Path,
+    reference: dict[str, str],
+) -> None:
+    image = tmp_path / "reference.png"
+    image.write_bytes(b"image")
+    handler, client = _h3_test_handler(tmp_path)
+    with pytest.raises(ValueError, match="exact/hard|first/last-frame"):
+        handler._prepare_workflow(
+            "h3_standard_r2v",
+            {
+                "operation": "video.reference_to_video",
+                "prompt": "A continuous shot",
+                "resolved_references": [{"blob_path": str(image), **reference}],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+    assert client.uploaded == []
+
+
+def test_prepare_r2v_preserves_fixed_typed_reference_slot(tmp_path: pathlib.Path) -> None:
+    first = tmp_path / "first.png"
+    second = tmp_path / "second.png"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    handler, _ = _h3_test_handler(tmp_path)
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_standard_r2v",
+        {
+            "operation": "video.reference_to_video",
+            "prompt": "A composed reference shot",
+            "resolved_references": [
+                {
+                    "blob_path": str(second),
+                    "media_type": "image",
+                    "placement": "fixed",
+                    "slot": "ref_image_1",
+                },
+                {
+                    "blob_path": str(first),
+                    "media_type": "image",
+                    "placement": "fixed",
+                    "slot": "ref_image_0",
+                },
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    generator = workflow["12"]["inputs"]
+    first_node = generator["ref_images.ref_image_0"][0]
+    second_node = generator["ref_images.ref_image_1"][0]
+    assert workflow[first_node]["inputs"]["image"] == "lfo-input/first.png"
+    assert workflow[second_node]["inputs"]["image"] == "lfo-input/second.png"
+
+
+def test_prepare_r2v_assigns_any_after_fixed_typed_reference_slot(
+    tmp_path: pathlib.Path,
+) -> None:
+    any_image = tmp_path / "any.png"
+    fixed_image = tmp_path / "fixed.png"
+    any_image.write_bytes(b"any")
+    fixed_image.write_bytes(b"fixed")
+    handler, _ = _h3_test_handler(tmp_path)
+
+    workflow, _ = handler._prepare_workflow(
+        "h3_standard_r2v",
+        {
+            "operation": "video.reference_to_video",
+            "prompt": "A composed reference shot",
+            "resolved_references": [
+                {
+                    "blob_path": str(any_image),
+                    "media_type": "image",
+                    "placement": "any",
+                },
+                {
+                    "blob_path": str(fixed_image),
+                    "media_type": "image",
+                    "placement": "fixed",
+                    "slot": "ref_image_0",
+                },
+            ],
+        },
+        output_prefix="lfo/run/task/attempt/video",
+    )
+
+    generator = workflow["12"]["inputs"]
+    fixed_node = generator["ref_images.ref_image_0"][0]
+    any_node = generator["ref_images.ref_image_1"][0]
+    assert workflow[fixed_node]["inputs"]["image"] == f"lfo-input/{fixed_image.name}"
+    assert workflow[any_node]["inputs"]["image"] == f"lfo-input/{any_image.name}"
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        {"semantic_usage": "exact_previous_last_frame"},
+        {"instruction": "hard previous last frame"},
+    ],
+)
+def test_prepare_presenter_rejects_fake_first_frame_guarantee(
+    tmp_path: pathlib.Path,
+    claim: dict[str, str],
+) -> None:
+    image = tmp_path / "reference.png"
+    image.write_bytes(b"image")
+    handler, client = _h3_test_handler(tmp_path)
+    with pytest.raises(ValueError, match="exact/hard first-frame continuity"):
+        handler._prepare_workflow(
+            "h3_presenter_r2v",
+            {
+                "prompt": "Presenter",
+                "resolved_references": [
+                    {
+                        "reference_id": "tail",
+                        "slot": "ref_image_0",
+                        "media_type": "image",
+                        "blob_path": str(image),
+                        **claim,
+                    }
+                ],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+    assert client.uploaded == []
+    assert client.uploaded_files == []
+
+
+def test_prepare_h3_rejects_duration_over_local_limit(tmp_path: pathlib.Path) -> None:
+    image = tmp_path / "reference.png"
+    image.write_bytes(b"image")
+    handler, client = _h3_test_handler(tmp_path)
+    with pytest.raises(ValueError, match="15000"):
+        handler._prepare_workflow(
+            "h3_standard_r2v",
+            {
+                "operation": "video.reference_to_video",
+                "prompt": "Too long",
+                "duration_ms": H3_MAX_DURATION_MS + 1,
+                "resolved_references": [{"blob_path": str(image)}],
+            },
+            output_prefix="lfo/run/task/attempt/video",
+        )
+    assert client.uploaded == []

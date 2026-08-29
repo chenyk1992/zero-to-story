@@ -13,7 +13,7 @@ from typing import Any
 from .assets import AssetSource, AssetSpec, ProvenanceSpec, ReviewDeclaration
 from .clips import ClipSpec
 from .package import ProjectInfo, VideoExecutionPackage, validate_package
-from .timeline import ApprovalDeclaration, OutputPolicy
+from .timeline import ApprovalDeclaration, OutputPolicy, TimelineSpec
 
 
 class VideoPackageBuilder:
@@ -42,7 +42,7 @@ class VideoPackageBuilder:
         self._clips: list[ClipSpec] = []
         self._output = OutputPolicy()
         self._approval = ApprovalDeclaration()
-        self._timeline: dict[str, Any] = {}
+        self._timeline = TimelineSpec()
         self._extensions: dict[str, Any] = {}
 
     def project(
@@ -198,9 +198,20 @@ class VideoPackageBuilder:
             self._approval = ApprovalDeclaration.from_dict(values, "$.approval")
         return self
 
-    def timeline(self, **values: Any) -> VideoPackageBuilder:
-        """Attach optional timeline metadata without defining new core fields."""
-        self._timeline = dict(values)
+    def timeline(
+        self,
+        spec: TimelineSpec | None = None,
+        **values: Any,
+    ) -> VideoPackageBuilder:
+        """Set the explicit ordered edit list for the package."""
+        if spec is not None and values:
+            raise ValueError("provide either a TimelineSpec or timeline fields, not both")
+        if spec is not None:
+            if not isinstance(spec, TimelineSpec):
+                raise TypeError("spec must be a TimelineSpec")
+            self._timeline = spec
+        else:
+            self._timeline = TimelineSpec.from_dict(values, "$.timeline")
         return self
 
     def extensions(self, **values: Any) -> VideoPackageBuilder:
@@ -218,7 +229,7 @@ class VideoPackageBuilder:
             clips=list(self._clips),
             output=self._output,
             approval=self._approval,
-            timeline=dict(self._timeline),
+            timeline=self._timeline,
             extensions=dict(self._extensions),
         )
         result = validate_package(package.to_dict())
