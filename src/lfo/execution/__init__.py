@@ -539,6 +539,22 @@ class ExecutionStore:
             )
             return cursor.rowcount == 1
 
+    def update_task_retry_count(self, task_id: str, retry_count: int) -> bool:
+        """Persist the attempt budget consumed by one task.
+
+        Retry count is kept outside the opaque metadata column because it is
+        part of scheduler state and must survive a process restart.
+        """
+        if not isinstance(retry_count, int) or isinstance(retry_count, bool) or retry_count < 0:
+            raise ValueError("retry_count must be an integer >= 0")
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """UPDATE tasks SET retry_count=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   WHERE task_id=?""",
+                (retry_count, task_id),
+            )
+            return cursor.rowcount == 1
+
     def list_tasks(self, run_id: str) -> list[dict[str, object]]:
         rows = self.connect().execute(
             "SELECT * FROM tasks WHERE run_id = ? ORDER BY created_at, task_id", (run_id,)

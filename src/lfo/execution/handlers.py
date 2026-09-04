@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+RECOVERY_ACTIONS = frozenset({"retry_same", "rewrite_prompt", "block_for_user"})
+
 
 @dataclass
 class HandlerResult:
@@ -22,6 +24,12 @@ class HandlerResult:
     retryable: bool = True  # False means terminal failure
     # Whether the output passed QC (for QC tasks)
     qc_passed: bool | None = None
+    # Structured recovery hints.  ``failure_class`` is deliberately generic
+    # so LFO can route execution failures without understanding story meaning.
+    # ``recovery_action`` may be ``retry_same``, ``rewrite_prompt`` or
+    # ``block_for_user``; the creative skill owns any prompt rewrite.
+    failure_class: str | None = None
+    recovery_action: str | None = None
 
 
 class TaskHandler:
@@ -55,7 +63,7 @@ class FakeVideoHandler(TaskHandler):
 
     Behavior is controlled via metadata["fake_result"]:
     - "success": produces a successful result
-    - "qc_fail": produces a successful generation but QC fails
+    - "qc_fail": produces a successful generation but the generation gate fails
     - "transient_fail": produces a retryable failure
     - "terminal_fail": produces a terminal failure
     """
@@ -73,22 +81,16 @@ class FakeVideoHandler(TaskHandler):
             return HandlerResult(
                 success=True,
                 artifact_type="video",
-                artifact_metadata={
-                    "duration_ms": metadata.get("duration_ms", 5000),
-                    "width": metadata.get("width", 864),
-                    "height": metadata.get("height", 480),
-                    "fps": 24.0,
-                    "codec": "h264",
-                },
+                artifact_metadata={"generation_output": True},
                 qc_passed=True,
             )
         elif result_type == "qc_fail":
             return HandlerResult(
                 success=True,
                 artifact_type="video",
-                artifact_metadata={"duration_ms": 100, "width": 100, "height": 100},
+                artifact_metadata={"generation_output": True},
                 qc_passed=False,
-                error="QC failed: duration too short",
+                error="Generation quality gate failed",
             )
         elif result_type == "transient_fail":
             return HandlerResult(
@@ -111,7 +113,7 @@ class FakeVideoHandler(TaskHandler):
 
 
 class FakeQCHandler(TaskHandler):
-    """Fake handler for media.qc tasks."""
+    """Fake handler for the compatibility media.qc generation gate."""
 
     def execute(
         self,
@@ -126,13 +128,26 @@ class FakeQCHandler(TaskHandler):
             return HandlerResult(
                 success=True,
                 artifact_type="qc_report",
-                artifact_metadata={"passed": False},
-                error="QC failed",
+                artifact_metadata={
+                    "qc_passed": False,
+                    "qc_scope": ["generation_quality"],
+                    "qc_results": [],
+                },
+                error="Generation quality gate failed",
                 qc_passed=False,
             )
         if result_type == "success":
-            return HandlerResult(success=True, artifact_type="qc_video")
-        return HandlerResult(success=False, error="QC failed", retryable=True)
+            return HandlerResult(
+                success=True,
+                artifact_type="qc_video",
+                artifact_metadata={
+                    "qc_passed": True,
+                    "qc_scope": ["generation_quality"],
+                    "qc_results": [],
+                },
+                qc_passed=True,
+            )
+        return HandlerResult(success=False, error="Generation quality gate failed", retryable=True)
 
 
 class FakeAudioHandler(TaskHandler):

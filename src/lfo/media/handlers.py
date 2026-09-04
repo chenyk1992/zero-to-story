@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+from dataclasses import asdict, replace
 from typing import Any
 
 from lfo.execution.handlers import HandlerRegistry, HandlerResult, TaskHandler
 from lfo.media._ffmpeg import MediaCommandError, probe
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
+from lfo.media.audio_qc import AudioAcceptanceContract, AudioQualityQC
 from lfo.media.boundary import BoundaryEvidenceBuilder, BoundaryEvidenceSpec, evidence_to_dict
 from lfo.media.export import Exporter, ExportSpec
-from lfo.media.qc import QCContract, TechnicalQC
+from lfo.media.qc import GenerationQualityQC
 from lfo.media.subtitles import (
     SubtitleCue,
     SubtitleRenderer,
@@ -37,43 +39,50 @@ def build_media_handler_registry(workspace_root: pathlib.Path | str) -> HandlerR
 
 
 class QCHandler(TaskHandler):
+    """Run the generation-output gate kept for runtime compatibility.
+
+    The task id remains ``media.qc`` so existing execution packages and
+    persisted runs keep their lineage.  Its scope is now only generation
+    quality (a non-empty artifact); technical media specs and semantic review
+    are intentionally not evaluated here.
+    """
+
     def execute(self, task_id: str, task_type: str, logical_key: str,
                 metadata: dict[str, Any], attempt_id: str) -> HandlerResult:
         source = _single_input_path(metadata)
         if source is None:
-            return _terminal("QC input artifact has no file_path", qc_passed=False)
-        try:
-            actual = probe(source)
-        except Exception as exc:
-            return _terminal(f"Media probe failed: {exc}", qc_passed=False)
-        policy = _policy(metadata)
-        duration = _optional_int(metadata.get("duration_ms"))
-        contract = QCContract(
-            min_duration_ms=max(1, duration - 1_000) if duration else None,
-            max_duration_ms=duration + 2_000 if duration else None,
-            # Resolution is owned by the provider/source clip. LFO no longer
-            # performs an implicit resize before QC.
-            expected_width=None,
-            expected_height=None,
-            expected_fps=_optional_float(policy.get("fps")),
-            expected_codec="h264" if policy.get("video_encoder", "h264") == "h264" else None,
-        )
-        report = TechnicalQC().check(actual, contract)
+            return HandlerResult(
+                False,
+                error="Generation output has no file_path",
+                retryable=True,
+                qc_passed=False,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
+        report = GenerationQualityQC().check(source)
         failures = [item.message or item.rule for item in report.failures]
+        if not report.passed:
+            return HandlerResult(
+                success=False,
+                error="; ".join(failures),
+                retryable=True,
+                qc_passed=False,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
         return HandlerResult(
-            success=report.passed,
-            artifact_type="qc_video" if report.passed else None,
+            success=True,
+            artifact_type="qc_video",
             artifact_metadata={
-                "file_path": str(source),
+                "file_path": str(source.resolve()),
                 "file_hash": _sha256(source),
                 "media_type": "video",
-                "qc_passed": report.passed,
+                "file_size": source.stat().st_size,
+                "qc_passed": True,
+                "qc_scope": ["generation_quality"],
                 "qc_results": [item.__dict__ for item in report.results],
-                **actual,
             },
-            error="; ".join(failures) if failures else None,
-            retryable=False,
-            qc_passed=report.passed,
+            qc_passed=True,
         )
 
 
@@ -85,51 +94,133 @@ class AudioHandler(TaskHandler):
                 metadata: dict[str, Any], attempt_id: str) -> HandlerResult:
         source = _single_input_path(metadata)
         if source is None:
-            return _terminal("Audio input artifact has no file_path")
+            return HandlerResult(
+                False,
+                error="Audio input artifact has no file_path",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
         policy = metadata.get("audio_policy", {})
         if not isinstance(policy, dict):
             return _terminal("audio_policy must be an object")
         tracks: list[AudioTrack] = []
-        for item in policy.get("tracks", []):
-            if not isinstance(item, dict) or not item.get("file_path"):
-                return _terminal("External audio track has no imported file_path")
-            tracks.append(
-                AudioTrack(
-                    asset_key=str(item["file_path"]),
-                    role=str(item.get("role", "effect")),
-                    offset_ms=int(item.get("offset_ms", 0)),
-                    gain_db=float(item.get("gain_db", 0)),
-                    fade_in_ms=int(item.get("fade_in_ms", 0)),
-                    fade_out_ms=int(item.get("fade_out_ms", 0)),
-                    duck_group=item.get("duck_group") if isinstance(item.get("duck_group"), str) else None,
-                    duration_ms=_optional_int(item.get("duration_ms")),
+        try:
+            for item in policy.get("tracks", []):
+                if not isinstance(item, dict) or not item.get("file_path"):
+                    return _terminal("External audio track has no imported file_path")
+                tracks.append(
+                    AudioTrack(
+                        asset_key=str(item["file_path"]),
+                        role=str(item.get("role", "effect")),
+                        offset_ms=int(item.get("offset_ms", 0)),
+                        gain_db=float(item.get("gain_db", 0)),
+                        fade_in_ms=int(item.get("fade_in_ms", 0)),
+                        fade_out_ms=int(item.get("fade_out_ms", 0)),
+                        duck_group=item.get("duck_group") if isinstance(item.get("duck_group"), str) else None,
+                        duration_ms=_optional_int(item.get("duration_ms")),
+                    )
                 )
-            )
+        except (TypeError, ValueError, OverflowError) as exc:
+            return _terminal(f"Audio policy contains an invalid track: {exc}")
         output = _managed_output(self.root, metadata)
-        # Reuse probe metadata threaded from upstream media.qc when available;
-        # otherwise probe the source file directly.
+        # Reuse audio metadata when an upstream stage supplied it; otherwise
+        # probe the source for audio mixing.  This is an input to audio
+        # processing, not a media.qc verdict.
         source_metadata = _input_probe(metadata)
         if source_metadata is None:
             try:
                 source_metadata = probe(source)
             except Exception as exc:
-                return _terminal(f"Audio source probe failed: {exc}")
+                return HandlerResult(
+                    False,
+                    error=f"Audio source probe failed: {exc}",
+                    retryable=True,
+                    failure_class="execution_transient",
+                    recovery_action="retry_same",
+                )
         output_policy = _policy(metadata)
-        result = AudioMixer().mix(
-            AudioMixRequest(
-                native_audio_present=bool(source_metadata.get("has_audio")),
-                native_audio_strategy=str(policy.get("native_audio", "preserve")),
-                tracks=tracks,
-                target_loudness_db=_optional_float(output_policy.get("loudness_db")),
-                target_sample_rate=_optional_int(output_policy.get("sample_rate")) or 48_000,
-                clip_duration_ms=_optional_int(metadata.get("duration_ms")) or 0,
-                source_video_path=str(source),
-                output_path=str(output),
+        try:
+            result = AudioMixer().mix(
+                AudioMixRequest(
+                    native_audio_present=bool(source_metadata.get("has_audio")),
+                    native_audio_strategy=str(policy.get("native_audio", "preserve")),
+                    tracks=tracks,
+                    target_loudness_db=_optional_float(output_policy.get("loudness_db")),
+                    target_sample_rate=_optional_int(output_policy.get("sample_rate")) or 48_000,
+                    clip_duration_ms=_optional_int(metadata.get("duration_ms")) or 0,
+                    source_video_path=str(source),
+                    output_path=str(output),
+                )
             )
-        )
+        except (MediaCommandError, OSError, TypeError, ValueError, OverflowError) as exc:
+            return HandlerResult(
+                False,
+                error=f"Audio mix failed: {exc}",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
         if not result.success or not result.output_path:
-            return HandlerResult(False, error=result.error or "Audio mix failed", retryable=True)
-        return _file_result("mixed_video", pathlib.Path(result.output_path), {"has_audio": result.has_audio})
+            return HandlerResult(
+                False,
+                error=result.error or "Audio mix failed",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
+        native_strategy = str(policy.get("native_audio", "preserve"))
+        expected_audio = (
+            bool(source_metadata.get("has_audio"))
+            and native_strategy in {"preserve", "mix"}
+        ) or bool(tracks)
+        declared_contract = AudioAcceptanceContract.from_dict(
+            metadata.get("audio_acceptance")
+        )
+        contract = declared_contract or AudioAcceptanceContract()
+        if contract.require_audio is None:
+            contract = replace(contract, require_audio=expected_audio)
+        try:
+            audio_report = AudioQualityQC().check(
+                result.output_path,
+                contract,
+                analysis=(
+                    metadata.get("audio_analysis")
+                    if isinstance(metadata.get("audio_analysis"), dict)
+                    else None
+                ),
+            )
+        except Exception as exc:
+            return HandlerResult(
+                False,
+                error=f"Audio quality check failed: {exc}",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
+        audio_qc = {
+            "passed": audio_report.passed,
+            "inconclusive": audio_report.inconclusive,
+            "expected_audio": expected_audio,
+            "actual_audio": bool(result.has_audio),
+            "results": [asdict(item) for item in audio_report.results],
+            "scope": ["audio_presence", "speech_evidence"] if declared_contract else ["audio_presence"],
+        }
+        if not audio_report.passed:
+            return HandlerResult(
+                False,
+                error="; ".join(item.message or item.rule for item in audio_report.failures),
+                retryable=False,
+                artifact_metadata={"audio_quality_qc": audio_qc},
+                qc_passed=False,
+                failure_class="audio_quality",
+                recovery_action="rewrite_prompt",
+            )
+        return _file_result(
+            "mixed_video",
+            pathlib.Path(result.output_path),
+            {"has_audio": result.has_audio, "audio_quality_qc": audio_qc},
+        )
 
 
 class SubtitleHandler(TaskHandler):
@@ -201,7 +292,13 @@ class BoundaryEvidenceHandler(TaskHandler):
         previous_path = _artifact_path(artifacts.get(previous_task_id))
         next_path = _artifact_path(artifacts.get(next_task_id))
         if previous_path is None or next_path is None:
-            return _terminal("Boundary evidence requires both adjacent clip artifacts")
+            return HandlerResult(
+                False,
+                error="Boundary evidence requires both adjacent clip artifacts",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
         try:
             evidence = BoundaryEvidenceBuilder().build(
                 BoundaryEvidenceSpec(
@@ -232,7 +329,13 @@ class BoundaryEvidenceHandler(TaskHandler):
                 }
             )
         except (ArtifactLayoutError, MediaCommandError, OSError, TypeError, ValueError) as exc:
-            return _terminal(f"Boundary evidence failed: {exc}")
+            return HandlerResult(
+                False,
+                error=f"Boundary evidence failed: {exc}",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
         return HandlerResult(
             True,
             artifact_type="boundary_evidence",
@@ -292,6 +395,8 @@ class TimelineHandler(TaskHandler):
                     False,
                     error=result.error or "Timeline assembly failed",
                     retryable=True,
+                    failure_class="execution_transient",
+                    recovery_action="retry_same",
                 )
             return _file_result(
                 "timeline_video",
@@ -315,6 +420,8 @@ class TimelineHandler(TaskHandler):
                 False,
                 error=f"Timeline assembly failed: {exc}",
                 retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
             )
 
 
@@ -358,6 +465,7 @@ class ExportHandler(TaskHandler):
                 package_hash=str(metadata.get("package_hash", "")),
                 materialization_hash=str(metadata.get("materialization_hash", "")),
                 output_path=str(output),
+                duration_ms=_optional_int(timeline.get("duration_ms")),
                 container=container,
                 video_encoder=str(policy.get("video_encoder", "h264")),
                 audio_encoder=str(policy.get("audio_encoder", "aac")),
@@ -444,14 +552,14 @@ def _artifact_path(artifact: object) -> pathlib.Path | None:
 def _input_probe(metadata: dict[str, Any]) -> dict[str, Any] | None:
     """Return probe metadata from the immediate upstream artifact, if present.
 
-    Used by downstream handlers (media.qc → audio.mix → timeline.assemble) to
-    avoid re-probing the same file.  Returns None when no usable probe data is
-    available, in which case the caller should probe the file directly.
+    Audio metadata can be passed between media stages when available.  The
+    generation-quality gate intentionally does not create probe metadata, so
+    the audio handler normally probes its source directly.
     """
     for artifact in _input_artifacts(metadata).values():
         if not isinstance(artifact, dict):
             continue
-        if "has_audio" in artifact and "codec" in artifact:
+        if "has_audio" in artifact:
             return artifact
     return None
 
@@ -505,8 +613,21 @@ def _global_output(
     return path
 
 
-def _terminal(error: str, *, qc_passed: bool | None = None) -> HandlerResult:
-    return HandlerResult(False, error=error, retryable=False, qc_passed=qc_passed)
+def _terminal(
+    error: str,
+    *,
+    qc_passed: bool | None = None,
+    failure_class: str | None = None,
+    recovery_action: str | None = None,
+) -> HandlerResult:
+    return HandlerResult(
+        False,
+        error=error,
+        retryable=False,
+        qc_passed=qc_passed,
+        failure_class=failure_class or "user_attention",
+        recovery_action=recovery_action or "block_for_user",
+    )
 
 
 def _file_result(
@@ -517,14 +638,23 @@ def _file_result(
     media_type: str = "video",
 ) -> HandlerResult:
     details = dict(metadata or {})
-    details.update(
-        {
-            "file_path": str(path.resolve()),
-            "file_hash": _sha256(path),
-            "media_type": media_type,
-            "file_size": path.stat().st_size,
-        }
-    )
+    try:
+        details.update(
+            {
+                "file_path": str(path.resolve()),
+                "file_hash": _sha256(path),
+                "media_type": media_type,
+                "file_size": path.stat().st_size,
+            }
+        )
+    except OSError as exc:
+        return HandlerResult(
+            False,
+            error=f"Output artifact became unavailable: {exc}",
+            retryable=True,
+            failure_class="execution_transient",
+            recovery_action="retry_same",
+        )
     return HandlerResult(True, artifact_type=artifact_type, artifact_metadata=details)
 
 
@@ -539,7 +669,7 @@ def _sha256(path: pathlib.Path) -> str:
 def _optional_int(value: object) -> int | None:
     if value is None:
         return None
-    if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+    if not isinstance(value, str | int | float) or isinstance(value, bool):
         raise TypeError(f"Expected integer-compatible value, got {type(value).__name__}")
     return int(value)
 
@@ -547,7 +677,7 @@ def _optional_int(value: object) -> int | None:
 def _optional_float(value: object) -> float | None:
     if value is None:
         return None
-    if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+    if not isinstance(value, str | int | float) or isinstance(value, bool):
         raise TypeError(f"Expected numeric value, got {type(value).__name__}")
     return float(value)
 

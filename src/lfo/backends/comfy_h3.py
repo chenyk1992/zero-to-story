@@ -222,7 +222,13 @@ class ComfyH3VideoHandler(TaskHandler):
         attempt_id: str,
     ) -> HandlerResult:
         if task_type != "video.generate":
-            return HandlerResult(success=False, error=f"Unsupported task type: {task_type}", retryable=False)
+            return HandlerResult(
+                success=False,
+                error=f"Unsupported task type: {task_type}",
+                retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
+            )
 
         try:
             workflow_id = self._select_workflow(metadata)
@@ -248,6 +254,8 @@ class ComfyH3VideoHandler(TaskHandler):
                     error=f"ComfyUI prompt {prompt_id} timed out",
                     retryable=True,
                     artifact_metadata={"provider_job_id": prompt_id},
+                    failure_class="execution_transient",
+                    recovery_action="retry_same",
                 )
             if not status.get("completed"):
                 return HandlerResult(
@@ -255,6 +263,8 @@ class ComfyH3VideoHandler(TaskHandler):
                     error=f"ComfyUI prompt {prompt_id} failed: {status.get('error') or status.get('status')}",
                     retryable=False,
                     artifact_metadata={"provider_job_id": prompt_id},
+                    failure_class="provider_rejection",
+                    recovery_action="block_for_user",
                 )
 
             output = self._find_output(prompt_id, status)
@@ -276,11 +286,29 @@ class ComfyH3VideoHandler(TaskHandler):
                 },
             )
         except (FileNotFoundError, ValueError, KeyError, TypeError) as exc:
-            return HandlerResult(success=False, error=str(exc), retryable=False)
+            return HandlerResult(
+                success=False,
+                error=str(exc),
+                retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
+            )
         except ComfyUnreachableError as exc:
-            return HandlerResult(success=False, error=str(exc), retryable=True)
+            return HandlerResult(
+                success=False,
+                error=str(exc),
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
         except Exception as exc:  # provider extensions may raise their own exception types
-            return HandlerResult(success=False, error=f"ComfyUI execution error: {exc}", retryable=True)
+            return HandlerResult(
+                success=False,
+                error=f"ComfyUI execution error: {exc}",
+                retryable=True,
+                failure_class="execution_transient",
+                recovery_action="retry_same",
+            )
 
     @staticmethod
     def _select_workflow(metadata: dict[str, Any]) -> str:

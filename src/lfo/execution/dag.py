@@ -3,7 +3,7 @@
 Standard task types:
 - video.generate
 - video.upscale (optional)
-- media.qc
+- media.qc (generation-output gate; legacy task id)
 - audio.mix
 - subtitle.render
 - media.boundary_evidence
@@ -17,6 +17,7 @@ import pathlib
 from dataclasses import dataclass, field
 from typing import Any
 
+from lfo.contracts.production_lock import AUDIO_ACCEPTANCE_EXTENSION, PRODUCTION_LOCK_EXTENSION
 from lfo.contracts.timeline import TimelineSegment
 from lfo.contracts.upscale import resolve_upscale_options
 from lfo.execution.materializer import MaterializedRun
@@ -134,7 +135,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     Structure per clip:
     - video.generate (depends on clip dependencies' generate tasks)
     - video.upscale (optional; depends on generate)
-    - media.qc (depends on generate or upscale)
+    - media.qc (generation-output gate; depends on generate or upscale)
     - audio.mix (depends on qc)
     - subtitle.render (depends on qc)
 
@@ -168,11 +169,26 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     generate_tasks = {
         clip_id: f"{task_prefix}clip-{clip_id}.video.generate" for clip_id in clip_ids
     }
+    lock = materialized_run.extensions.get(PRODUCTION_LOCK_EXTENSION)
+    locked_plan_hash = lock.get("plan_hash") if isinstance(lock, dict) else None
+    locked_package_plan_hash = lock.get("package_plan_hash") if isinstance(lock, dict) else None
+    max_prompt_revisions = lock.get("max_prompt_revisions", 0) if isinstance(lock, dict) else 0
+    locked_clip_entries = lock.get("clips", {}) if isinstance(lock, dict) else {}
 
     # Build clip-level tasks
     for clip in materialized_run.clips:
         clip_id = clip.clip_id
         base = f"{task_prefix}clip-{clip_id}"
+        clip_lock_entry = (
+            locked_clip_entries.get(clip_id)
+            if isinstance(locked_clip_entries, dict)
+            else None
+        )
+        clip_plan_hash = (
+            clip_lock_entry.get("plan_hash")
+            if isinstance(clip_lock_entry, dict)
+            else None
+        )
 
         # Determine dependencies from Package-level clip dependencies
         clip_deps: list[str] = []
@@ -193,6 +209,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             clip_id=clip_id,
             metadata={
                 "run_id": materialized_run.run_id,
+                "clip_id": clip_id,
+                "generation_task_id": gen_id,
                 "backend_id": clip.backend_id,
                 "backend_revision": clip.backend_revision,
                 "workflow_hash": clip.workflow_hash,
@@ -209,6 +227,15 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "native_audio": clip.native_audio,
                 "reference_image_size": clip.reference_image_size,
                 "resolved_references": list(clip.resolved_references),
+                "production_lock": materialized_run.extensions.get(PRODUCTION_LOCK_EXTENSION),
+                # ``plan_hash`` is the exact Clip hash used by the prompt
+                # revision endpoint; the aggregate lock remains available for
+                # audit and callers that want to display the whole run hash.
+                "plan_hash": clip_plan_hash,
+                "aggregate_plan_hash": locked_plan_hash,
+                "package_plan_hash": locked_package_plan_hash,
+                "max_prompt_revisions": max_prompt_revisions,
+                "prompt_revision": _prompt_revision(clip.extensions),
                 "output_policy": dict(materialized_run.output_policy),
                 "output_path": _task_output_path(layout, "video.generate", clip.clip_id),
                 "artifact_layout": dict(layout),
@@ -230,6 +257,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                     metadata={
                         "run_id": materialized_run.run_id,
                         "clip_id": clip_id,
+                        "generation_task_id": gen_id,
                         "input_task_ids": [gen_id],
                         "upscale": upscale.to_dict(),
                         "output_policy": dict(materialized_run.output_policy),
@@ -240,7 +268,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             )
             upstream_video_id = upscale_id
 
-        # 2. media.qc
+        # 2. generation-quality gate (legacy task id: media.qc)
         qc_id = f"{base}.media.qc"
         qc_task = TaskNode(
             task_id=qc_id,
@@ -251,8 +279,9 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             metadata={
                 "run_id": materialized_run.run_id,
                 "clip_id": clip_id,
-                "duration_ms": clip.duration_ms,
+                "generation_task_id": gen_id,
                 "input_task_ids": [upstream_video_id],
+                "qc_scope": ["generation_quality"],
                 "output_policy": dict(materialized_run.output_policy),
                 "artifact_layout": dict(layout),
             },
@@ -270,8 +299,11 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             metadata={
                 "run_id": materialized_run.run_id,
                 "clip_id": clip_id,
+                "generation_task_id": gen_id,
                 "duration_ms": clip.duration_ms,
                 "audio_policy": dict(clip.audio_policy),
+                "audio_acceptance": clip.extensions.get(AUDIO_ACCEPTANCE_EXTENSION),
+                "clip_extensions": dict(clip.extensions),
                 "input_task_ids": [qc_id],
                 "output_policy": dict(materialized_run.output_policy),
                 "output_path": _task_output_path(layout, "audio.mix", clip.clip_id),
@@ -451,3 +483,14 @@ def _task_output_path(
     if task_type == "export.finalize":
         return str(layout["final_path"])
     raise ValueError(f"Unknown task type for output path: {task_type}")
+
+
+def _prompt_revision(extensions: dict[str, Any]) -> int:
+    """Read the prompt revision without making the DAG creative-aware."""
+
+    value = extensions.get("lfo.prompt_revision.v1")
+    if isinstance(value, dict):
+        revision = value.get("revision", 0)
+        if isinstance(revision, int) and not isinstance(revision, bool) and revision >= 0:
+            return revision
+    return 0

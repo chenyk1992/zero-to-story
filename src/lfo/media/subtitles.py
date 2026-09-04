@@ -238,13 +238,23 @@ class SubtitleRenderer:
             .replace(":", "\\:")
             .replace("'", "\\'")
         )
+        # Keep captions as a single, calm line in the lower safe area.  Long
+        # captions are split into separate timed cues by the creative runner;
+        # WrapStyle=2 prevents libass from re-wrapping those cues into a dense
+        # multi-line block at render time.
+        force_style = (
+            "PlayResX=1080,PlayResY=1920,FontName=Microsoft YaHei,FontSize=48,"
+            "PrimaryColour=&H00FFFFFF,OutlineColour=&H90000000,"
+            "BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginL=60,"
+            "MarginR=60,MarginV=120,WrapStyle=2"
+        )
         return [
             "ffmpeg",
             "-y",
             "-i",
             str(video_path),
             "-vf",
-            f"subtitles='{escaped}'",
+            f"subtitles='{escaped}':force_style='{force_style}'",
             "-c:a",
             "copy",
             str(output_path),

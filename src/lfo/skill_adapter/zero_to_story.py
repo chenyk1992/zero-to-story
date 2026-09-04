@@ -175,6 +175,12 @@ def _panel_to_clip(
     subtitle_data = panel.get("subtitles", {})
     if not isinstance(subtitle_data, dict):
         raise ValueError(f"panel {panel_id!r}.subtitles must be an object")
+    extension_data = panel.get("extensions", {})
+    if not isinstance(extension_data, dict):
+        raise ValueError(f"panel {panel_id!r}.extensions must be an object")
+    source_context_data = panel.get("source_context", {})
+    if not isinstance(source_context_data, dict):
+        raise ValueError(f"panel {panel_id!r}.source_context must be an object")
     requirement_data = generation_data.get("requirements", {})
     if not isinstance(requirement_data, dict):
         raise ValueError(f"panel {panel_id!r}.generation.requirements must be an object")
@@ -203,7 +209,9 @@ def _panel_to_clip(
             "creative_unit": "panel",
             "beat_range": list(panel.get("beat_range", [])),
             "setup_range": list(panel.get("setup_range", [])),
+            **source_context_data,
         },
+        extensions=dict(extension_data),
     )
 
 
@@ -274,13 +282,16 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
         builder.add_clip(
             _panel_to_clip(panel, sequence, asset_keys, asset_media_types, requirements)
         )
+    package_extensions = creative.get("extensions", {})
+    if not isinstance(package_extensions, dict):
+        raise ValueError("extensions must be an object")
     review = creative.get("review", {})
     approval = ApprovalDeclaration(
         approved_by=review.get("reviewer") if review.get("status") == "approved" else None,
         approved_at=review.get("approved_at") if review.get("status") == "approved" else None,
         notes=review.get("notes"),
     )
-    return builder.output(output).approval(approval).build()
+    return builder.output(output).approval(approval).extensions(**package_extensions).build()
 
 
 def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackage:
@@ -325,6 +336,9 @@ def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackag
             raise ValueError(f"shots[{sequence - 1}].generation.operation is required")
         refs = _panel_references({"references": generation.get("references", [])}, asset_keys)
         _validate_operation_references(operation, refs, asset_media_types)
+        shot_extensions = shot.get("extensions", {})
+        if not isinstance(shot_extensions, dict):
+            raise ValueError(f"shots[{sequence - 1}].extensions must be an object")
         raw_requirements = generation.get("requirements", {})
         if not isinstance(raw_requirements, dict):
             raise TypeError("shot generation.requirements must be an object")
@@ -351,11 +365,16 @@ def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackag
                 for dependency in shot.get("dependencies", [])
             ],
             source_context={"creative_unit": "legacy_shot"},
+            extensions=dict(shot_extensions),
         ))
+    package_extensions = storyboard.get("extensions", {})
+    if not isinstance(package_extensions, dict):
+        raise ValueError("extensions must be an object")
     return (
         builder
         .output(OutputPolicy.from_dict(storyboard.get("output", {}), "$.output"))
         .approval(ApprovalDeclaration.from_dict(storyboard.get("approval", {}), "$.approval"))
+        .extensions(**package_extensions)
         .build()
     )
 

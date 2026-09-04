@@ -4,6 +4,7 @@
 
 - [公共边界](#公共边界)
 - [外部提示词边界](#外部提示词边界)
+- [生产锁与提示词清单](#生产锁与提示词清单)
 - [最小示例](#最小示例)
 - [Panel 与 Clip](#panel-与-clip)
 - [参考素材与槽位](#参考素材与槽位)
@@ -32,6 +33,30 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 - 不在 `source_context` 伪造提示词分析结果。
 - 不写 `generation.negative_prompt`。若确需改变视频提示词，带更新后的 Panel 输入重新调用 `$h3-prompt-writing`，再提升 package revision。
 - H3 模式、正式字段、引用标签、镜头时间和对白语法均以 `$h3-prompt-writing` 的输出为准；本文档不维护第二份规则。
+
+## 生产锁与提示词清单
+
+在执行包进入 LFO 前，创作侧应把已通过的蓝图 v2、H3 prompt manifest 和 Clip 计划封装成 `extensions.lfo.production_lock.v1`。锁对象至少包含：
+
+```json
+{
+  "schema": "lfo.production-lock.v1",
+  "status": "LOCKED",
+  "plan_hash": "<所有 Clip 计划的聚合 SHA-256>",
+  "package_plan_hash": "<完整 package 执行计划的 SHA-256>",
+  "max_prompt_revisions": 1,
+  "mutable_fields": ["negative_prompt", "prompt", "seed"],
+  "clips": {
+    "P001": {"plan_hash": "<该 Clip 的 SHA-256>", "prompt_revision": 0}
+  }
+}
+```
+
+Clip 计划哈希覆盖 `clip_id`、顺序、时长、operation、requirements、references、audio、subtitles、dependencies、`source_context` 和 Clip 扩展；不覆盖提示词文字本身。若 Clip 扩展包含 `lfo.prompt_manifest.v1`，其中的 `prompt`、`prompt_path`、`prompt_hash` 和回填用 `plan_hash` 也属于提示词证据的可变字段，其 Setup/对白/参考记录仍保持锁定。`package_plan_hash` 进一步覆盖项目、素材、timeline、output 和除锁自身外的顶层扩展。这样一次提示词重写不会变成故事板重排，但任何执行结构变化都必须生成新的执行包 revision 并重新走创作确认。LFO 严格模式可用 `VideoRuntime(require_production_lock=True)` 或 CLI 的 `--require-production-lock` 启用。
+
+实现侧可用 `lfo.contracts.with_production_lock(package_dict)` 生成上述扩展（或先调用 `build_production_lock` 再写入 `extensions`）；生成后务必重新运行 `validate` 和 `plan`，并把同一个 Clip `plan_hash` 写入对应 prompt manifest。
+
+每个 Clip 可在 `extensions.lfo.audio_acceptance.v1` 声明前置对白清单（`speaker_id`、逐字文本、起止时窗、允许重叠与容差）。它只供 `audio.mix` 做音频存在/证据核对，不让 LFO 重新规划台词。
 
 ## 最小示例
 
@@ -102,13 +127,13 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 
 ## Panel 与 Clip
 
-- `1 Panel = 1 张 2×3 分镜板 = 6 个有序 Beat = 1 Clip`；实际 H3 `[Shot N]` 数量由 Camera Setup 决定。
+- `1 Panel = 6 个有序语义 Beat = 1 Clip`；实际 H3 `[Shot N]` 数量由 Camera Setup 决定，2×3 分镜板只在该 Panel 的 `visual_asset_policy` 为 `board` 时存在。
 - P001 的 `beat_range` 为 `[1, 6]`；P002 起左上 Beat 是上一段的零时长边界锚点，其余五个 Beat 是当前 Panel 的新内容；`setup_range` 只用于创作溯源，不改变 Clip 数量。
 - 默认 `duration_ms: 10000`。自定义单段时长保持 4–15 秒，Clip 时长之和等于用户确认总时长。
 - P001 六个有效 Beat 所属 Setup 的独占时长合计 `duration_ms`；P002 起左上边界锚点为 0 秒，其余有效 Beat 所属 Setup 的独占时长合计 `duration_ms`。同一 Setup 的相邻 Beat 不产生额外切镜，也不要为共享锚点额外增加 Clip 时长。
 - 每个边界必须声明唯一的 `transition ownership`；共享动作只能归前一个或后一个 Panel，后一段从锚点直接推进新动作，禁止回卷、重置或重演。
 - 当前 LFO 最终组装只支持 `cut`；`match-cut` 是创作/剪辑关系，仍以一次 `cut` 落地。不要在 `output.transitions` 中写 `dissolve`、`fade` 或音频桥接；需要淡化、黑场或声音桥接时，必须由单个 Clip 完整持有，或先制作并确认派生素材。
-- `dependencies` 只表达执行顺序，不会自动把上一 Clip 末帧传给下一 Clip；真实末帧必须作为新 revision 的明确素材引用。
+- `dependencies` 只表达执行顺序，不会自动把上一 Clip 末帧传给下一 Clip；真实末帧在下一 Panel 的 I2V/FL2V 计划将其声明为 `first_frame_source` 时，才作为新 revision 的明确素材引用。
 - 每个 Clip 是可独立重做的最小执行单位。修改已批准的故事、素材、时长、引用或外部提示词时提升 revision，保留旧产物。
 - 字幕 cue 的 `start_ms` / `end_ms` 是当前 Clip 本地时间，从 0 开始，`end_ms <= duration_ms` 且 `end_ms > start_ms`。
 
@@ -116,7 +141,7 @@ Skill 交付给 LFO 的唯一执行文件是 `execution-package.json`，契约�
 
 - 每个引用使用 `placement: "fixed"` 和明确 `binding.slot`，不要依赖隐式数组顺序。R2V 使用 `ref_image_N`、`ref_video_N` 或 `ref_audio_N` typed slot；I2VA/FL2VA 只使用明确的 `first_frame` / `last_frame` 绑定。
 - Package 中图片、视频和音频的实际顺序、语义用途，必须与交给 `$h3-prompt-writing` 的输入顺序以及最终输出中的引用标签完全一致。
-- 只传当前 Panel 真正需要的已确认素材，不静默丢弃必需引用，也不加入未交给 `$h3-prompt-writing` 的额外素材。
+- 只传当前 Panel `runtime_input_keys` 列出的已确认素材，不静默丢弃必需引用，也不加入未交给 `$h3-prompt-writing` 的额外素材。`planning_only_asset_keys` 禁止出现在 Package 引用中。
 - 新增上一 Clip 的真实末帧后，重新确定全部素材顺序，把完整新输入再次交给 `$h3-prompt-writing`，提升 revision；禁止只修改 Package 槽位而沿用旧提示词。
 - 同场连续接力优先使用 `video.image_to_video`（I2VA），上一 Clip 的真实尾帧作为唯一精确首帧；同时硬锁首尾才使用 `video.first_last_frame`（FL2VA）；多参考或明确硬切才使用 `video.reference_to_video`（R2V）。R2V 只接受 typed fixed slots，参考图不能声称精确锁定视频首帧。
 - 以 `lfo plan` 的 `resolved_references` 为最终执行核对依据。
@@ -132,7 +157,7 @@ python -m lfo.cli.main plan execution-package.json
 
 逐 Clip 核对：
 
-- Clip 数 = Panel 数 = 2×3 分镜板数；每个 Panel 六个 Beat 和其 Camera Setup 映射仍可追溯。
+- Clip 数 = Panel 数；每个 Panel 六个语义 Beat 和其 Camera Setup 映射仍可追溯，分镜板/关键帧数与已批准资产计划一致。
 - 每个 `source.uri` 指向实际存在且已获用户确认的文件。
 - `generation.prompt` 与 `$h3-prompt-writing` 的已确认输出逐字一致。
 - `generation.requirements.megapixels` 来自用户明确选择；没有从交付尺寸、图片分辨率或外部 API 档位推导。

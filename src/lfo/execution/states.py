@@ -19,6 +19,7 @@ class RunState(StrEnum):
     PLANNING = "PLANNING"
     READY = "READY"
     RUNNING = "RUNNING"
+    WAITING_PROMPT_REVISION = "WAITING_PROMPT_REVISION"
     WAITING_REVIEW = "WAITING_REVIEW"
     EXPORTING = "EXPORTING"
     COMPLETED = "COMPLETED"
@@ -32,7 +33,14 @@ RUN_TRANSITIONS: dict[RunState, set[RunState]] = {
     RunState.IMPORTING: {RunState.PLANNING, RunState.FAILED, RunState.CANCELLED},
     RunState.PLANNING: {RunState.READY, RunState.FAILED, RunState.CANCELLED},
     RunState.READY: {RunState.RUNNING, RunState.CANCELLED, RunState.SUPERSEDED},
-    RunState.RUNNING: {RunState.WAITING_REVIEW, RunState.FAILED, RunState.COMPLETED, RunState.CANCELLED},
+    RunState.RUNNING: {
+        RunState.WAITING_REVIEW,
+        RunState.WAITING_PROMPT_REVISION,
+        RunState.FAILED,
+        RunState.COMPLETED,
+        RunState.CANCELLED,
+    },
+    RunState.WAITING_PROMPT_REVISION: {RunState.RUNNING, RunState.FAILED, RunState.CANCELLED},
     RunState.WAITING_REVIEW: {RunState.RUNNING, RunState.EXPORTING, RunState.FAILED, RunState.CANCELLED},
     RunState.EXPORTING: {RunState.COMPLETED, RunState.FAILED, RunState.CANCELLED},
     RunState.COMPLETED: set(),  # terminal
@@ -54,6 +62,7 @@ class TaskState(StrEnum):
     BLOCKED = "BLOCKED"
     READY = "READY"
     RUNNING = "RUNNING"
+    WAITING_PROMPT_REVISION = "WAITING_PROMPT_REVISION"
     SUCCEEDED = "SUCCEEDED"
     FAILED_RETRYABLE = "FAILED_RETRYABLE"
     FAILED_TERMINAL = "FAILED_TERMINAL"
@@ -65,11 +74,22 @@ TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
     TaskState.BLOCKED: {TaskState.READY, TaskState.CANCELLED},
     TaskState.READY: {TaskState.RUNNING, TaskState.CANCELLED, TaskState.STALE},
     TaskState.RUNNING: {
+        TaskState.WAITING_PROMPT_REVISION,
         TaskState.SUCCEEDED, TaskState.FAILED_RETRYABLE,
-        TaskState.FAILED_TERMINAL, TaskState.CANCELLED,
+        TaskState.FAILED_TERMINAL, TaskState.CANCELLED, TaskState.BLOCKED,
     },
-    TaskState.SUCCEEDED: {TaskState.STALE},  # Can become stale if upstream re-runs
-    TaskState.FAILED_RETRYABLE: {TaskState.READY, TaskState.FAILED_TERMINAL, TaskState.CANCELLED},
+    TaskState.WAITING_PROMPT_REVISION: {
+        TaskState.READY, TaskState.FAILED_TERMINAL, TaskState.CANCELLED,
+        TaskState.BLOCKED,
+    },
+    # A prompt-only revision invalidates artifacts that were already
+    # published for this Clip.  They return to BLOCKED so the dependency walk
+    # can recompute them after the revised generation succeeds.
+    TaskState.SUCCEEDED: {TaskState.STALE, TaskState.WAITING_PROMPT_REVISION, TaskState.BLOCKED},
+    TaskState.FAILED_RETRYABLE: {
+        TaskState.READY, TaskState.FAILED_TERMINAL, TaskState.CANCELLED,
+        TaskState.BLOCKED,
+    },
     TaskState.FAILED_TERMINAL: set(),  # terminal
     TaskState.STALE: {TaskState.READY, TaskState.CANCELLED},
     TaskState.CANCELLED: set(),  # terminal

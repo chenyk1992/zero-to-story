@@ -403,6 +403,10 @@ def materialize(
         "timeline": timeline.to_dict(),
         "asset_resolutions": dict(asset_resolutions),
         "output_policy": package.output.to_dict(),
+        # The lock and audio/prompt contracts are part of the immutable
+        # execution snapshot. Prompt revisions are task-level audit events;
+        # they do not mutate this snapshot or require storyboard re-layout.
+        "extensions": dict(package.extensions),
         "artifact_layout": _layout_hash_payload(artifact_layout or {}),
     }
     mat_hash = _compute_hash(snapshot_data)

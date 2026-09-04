@@ -122,6 +122,15 @@ class TestAdaptMinimal:
         asset_keys = {a.asset_key for a in pkg.assets}
         assert "hero.identity.front" in asset_keys
 
+    def test_clip_and_package_extensions_are_preserved(self, minimal_storyboard: dict) -> None:
+        minimal_storyboard["extensions"] = {"creative.contract.v1": {"approved": True}}
+        minimal_storyboard["shots"][0]["extensions"] = {
+            "lfo.audio_acceptance.v1": {"require_audio": True}
+        }
+        pkg = adapt(minimal_storyboard)
+        assert pkg.extensions["creative.contract.v1"]["approved"] is True
+        assert pkg.clips[0].extensions["lfo.audio_acceptance.v1"]["require_audio"] is True
+
 
 class TestAdaptPanelFirst:
     def test_panel_requires_explicit_generation_operation(self) -> None:
@@ -234,6 +243,24 @@ class TestAdaptPanelFirst:
         assert requirements.width is None
         assert package.output.width == 1080
         assert package.output.height == 1920
+
+    def test_panel_source_context_and_extensions_are_preserved(self) -> None:
+        creative = {
+            "project": {"project_id": "panel-extension-001"},
+            "assets": [],
+            "extensions": {"creative.plan.v1": {"version": 2}},
+            "panels": [{
+                "panel_id": "panel-001",
+                "prompt_text": "A quiet room.",
+                "generation": {"operation": "video.text_to_video"},
+                "source_context": {"panel_hash": "abc"},
+                "extensions": {"lfo.prompt_manifest.v1": {"clip_id": "panel-001"}},
+            }],
+        }
+        package = adapt(creative)
+        assert package.extensions["creative.plan.v1"]["version"] == 2
+        assert package.clips[0].source_context["panel_hash"] == "abc"
+        assert "lfo.prompt_manifest.v1" in package.clips[0].extensions
 
     def test_panel_preserves_explicit_frame_bindings(self) -> None:
         creative = {

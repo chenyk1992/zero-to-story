@@ -21,6 +21,7 @@ def _make_runtime(
     *,
     db_path: str | None = None,
     workspace_root: str | None = None,
+    require_production_lock: bool = False,
     runtime_factory: RuntimeFactory = VideoRuntime,
 ) -> VideoRuntime:
     """Construct the public facade without choosing a backend or handler."""
@@ -29,6 +30,8 @@ def _make_runtime(
         kwargs["db_path"] = Path(db_path)
     if workspace_root:
         kwargs["workspace_root"] = Path(workspace_root)
+    if require_production_lock:
+        kwargs["require_production_lock"] = True
     return runtime_factory(**kwargs)
 
 
@@ -37,6 +40,7 @@ def cmd_validate(
     *,
     db_path: str | None = None,
     workspace_root: str | None = None,
+    require_production_lock: bool = False,
     runtime_factory: RuntimeFactory = VideoRuntime,
 ) -> dict[str, Any]:
     """Validate a VideoExecutionPackage file."""
@@ -45,6 +49,7 @@ def cmd_validate(
     result = _make_runtime(
         db_path=db_path,
         workspace_root=workspace_root,
+        require_production_lock=require_production_lock,
         runtime_factory=runtime_factory,
     ).validate(package_path)
     return {
@@ -60,6 +65,7 @@ def cmd_plan(
     *,
     db_path: str | None = None,
     workspace_root: str | None = None,
+    require_production_lock: bool = False,
     runtime_factory: RuntimeFactory = VideoRuntime,
 ) -> dict[str, Any]:
     """Generate a materialization plan without running."""
@@ -68,6 +74,7 @@ def cmd_plan(
     result = _make_runtime(
         db_path=db_path,
         workspace_root=workspace_root,
+        require_production_lock=require_production_lock,
         runtime_factory=runtime_factory,
     ).plan(package_path)
     return {
@@ -87,6 +94,7 @@ def cmd_execute(
     *,
     db_path: str | None = None,
     workspace_root: str | None = None,
+    require_production_lock: bool = False,
     runtime_factory: RuntimeFactory = VideoRuntime,
 ) -> dict[str, Any]:
     """Execute a previously reviewed VideoExecutionPackage."""
@@ -95,6 +103,7 @@ def cmd_execute(
     result = _make_runtime(
         db_path=db_path,
         workspace_root=workspace_root,
+        require_production_lock=require_production_lock,
         runtime_factory=runtime_factory,
     ).execute(package_path, approval=approve)
     return {
@@ -153,6 +162,43 @@ def cmd_retry(
         "success": result.status == "COMPLETED",
         "run_id": result.run_id,
         "status": result.status,
+        "output_layout": result.output_layout,
+        "error": result.error,
+    }
+
+
+def cmd_prompt_revision(
+    run_id: str = "",
+    prompt: str = "",
+    clip_id: str = "",
+    *,
+    plan_hash: str | None = None,
+    negative_prompt: str | None = None,
+    seed: int | None = None,
+    db_path: str | None = None,
+    workspace_root: str | None = None,
+    runtime_factory: RuntimeFactory = VideoRuntime,
+) -> dict[str, Any]:
+    """Submit one creative prompt-only revision for a waiting Clip."""
+    if not run_id or not prompt:
+        return {"success": False, "error": "run_id and prompt are required"}
+    result = _make_runtime(
+        db_path=db_path,
+        workspace_root=workspace_root,
+        runtime_factory=runtime_factory,
+    ).submit_prompt_revision(
+        run_id,
+        prompt,
+        scope=clip_id or None,
+        plan_hash=plan_hash,
+        negative_prompt=negative_prompt,
+        seed=seed,
+    )
+    return {
+        "success": result.status != "FAILED" and result.error is None,
+        "run_id": result.run_id,
+        "status": result.status,
+        "clip_count": result.clip_count,
         "output_layout": result.output_layout,
         "error": result.error,
     }
@@ -231,6 +277,11 @@ def _configure_runtime_context(parser) -> None:
         default=None,
         help="LFO workspace root (defaults to the runtime configuration)",
     )
+    parser.add_argument(
+        "--require-production-lock",
+        action="store_true",
+        help="Require the creative production lock before validating/planning/executing",
+    )
 
 
 def _command_result(command: str, data: dict[str, Any]) -> CommandResult:
@@ -257,6 +308,7 @@ class ValidateCommand:
     def execute(context, args) -> CommandResult:
         return _command_result("validate", cmd_validate(
             args.package_path, db_path=args.db, workspace_root=args.workspace_root,
+            require_production_lock=args.require_production_lock,
         ))
 
 
@@ -273,6 +325,7 @@ class PlanCommand:
     def execute(context, args) -> CommandResult:
         return _command_result("plan", cmd_plan(
             args.package_path, db_path=args.db, workspace_root=args.workspace_root,
+            require_production_lock=args.require_production_lock,
         ))
 
 
@@ -291,6 +344,7 @@ class ExecuteCommand:
         return _command_result("execute", cmd_execute(
             args.package_path, approve=args.approve, db_path=args.db,
             workspace_root=args.workspace_root,
+            require_production_lock=args.require_production_lock,
         ))
 
 
@@ -324,6 +378,42 @@ class RetryCommand:
     def execute(context, args) -> CommandResult:
         return _command_result("retry", cmd_retry(
             args.run_id, args.clip_id, db_path=args.db, workspace_root=args.workspace_root,
+        ))
+
+
+@CommandRegistry.register
+class PromptRevisionCommand:
+    name = "prompt-revision"
+
+    @staticmethod
+    def configure_parser(parser) -> None:
+        parser.add_argument("run_id", help="Run waiting for a prompt-only revision")
+        parser.add_argument("--clip-id", default="", help="Clip ID to revise (required when several Clips wait)")
+        prompt_group = parser.add_mutually_exclusive_group(required=True)
+        prompt_group.add_argument("--prompt", help="Complete revised H3 prompt")
+        prompt_group.add_argument("--prompt-file", help="UTF-8 file containing the complete revised H3 prompt")
+        parser.add_argument("--plan-hash", default=None, help="Locked Clip plan hash")
+        parser.add_argument("--negative-prompt", default=None, help="Optional backend negative prompt")
+        parser.add_argument("--seed", type=int, default=None, help="Optional deterministic retry seed")
+        _configure_runtime_context(parser)
+
+    @staticmethod
+    def execute(context, args) -> CommandResult:
+        prompt = args.prompt
+        if args.prompt_file:
+            try:
+                prompt = Path(args.prompt_file).read_text(encoding="utf-8")
+            except OSError as exc:
+                return _command_result("prompt-revision", {"success": False, "error": str(exc)})
+        return _command_result("prompt-revision", cmd_prompt_revision(
+            args.run_id,
+            prompt or "",
+            args.clip_id,
+            plan_hash=args.plan_hash,
+            negative_prompt=args.negative_prompt,
+            seed=args.seed,
+            db_path=args.db,
+            workspace_root=args.workspace_root,
         ))
 
 

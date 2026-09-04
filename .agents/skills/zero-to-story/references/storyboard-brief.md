@@ -15,10 +15,11 @@
 
 `storyboard_brief.md` 是故事、视觉设计和连续性的唯一信息中枢。保持：
 
-- `1 Panel = 1 张 2×3 六格板 = 1 条 Clip`。
-- 每个 Panel 的六格按左上、上中、右上、左下、下中、右下阅读，记录六个有序 Beat/可见时刻；六格数量不等于剪辑镜头数量。
+- `1 Panel = 1 条 Clip`。每个 Panel 都在文档中保留六个有序 Beat/可见时刻，但只有明确选择 `visual_asset_policy: "board"` 时才生成一张 2×3 六格图像。
+- 六个 Beat 按左上、上中、右上、左下、下中、右下的语义顺序记录；即使不生成分镜板，该映射也必须完整。Beat 数量不等于剪辑镜头数量。
 - P001 六格都是有效 Beat；P002 起左上格复用上一 Panel 最后一个 Beat 的已完成状态，只作为零时长边界锚点，另五格是当前 Panel 的新 Beat。
-- Camera Setup 才是实际摄影镜头和 H3 `[Shot N]` 的来源。相邻 Beat 可以属于同一个 Setup；只有 Setup 改变才产生 cut。Panel、分镜板和 Clip 数仍相等，但不再使用跨 Panel 的唯一镜头公式。
+- Camera Setup 才是实际摄影镜头和 H3 `[Shot N]` 的来源。相邻 Beat 可以属于同一个 Setup；只有 Setup 改变才产生 cut。Panel 和 Clip 数相等，分镜板/关键帧数由逐 Panel 资产计划决定。
+- 先根据精确首尾帧和参考控制需求锁定 operation，再决定 STEP 3 资产。分镜板的存在不是 R2V 的选择依据，也不能传入 I2V 或 FL2V。
 - Beat 记录创作意图；Setup 记录实际机位和剪辑边界；两者都不在本文档内预写 H3 字段或引用标签。
 
 ### 跨 Panel 边界契约
@@ -45,7 +46,7 @@
 python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creative_blueprint.json
 ```
 
-预检失败只退回 STEP 1 修正文档和蓝图；预检通过后沿用现有角色卡、六格分镜板和单 Panel 交接流程。不要把脚本扩展成对最终画面逐帧打分，也不要因为轻微视觉偏差触发重复生成。
+预检失败只退回 STEP 1 修正文档和蓝图；预检通过后沿用现有角色卡、已确认视觉资产和单 Panel 交接流程。v2 必须在 `generation.panel_plans` 中为每个 Panel 锁定 operation、资产策略、首尾帧来源、运行时引用与仅规划资产。不要把脚本扩展成对最终画面逐帧打分，也不要因为轻微视觉偏差触发重复生成。
 
 ## 节奏图与 Camera Setup
 
@@ -73,13 +74,20 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 对白列必须记录说话人、语言、逐字原文、原始标点，以及是否画外音。不要只写对白大意，不要翻译或顺手润色。Setup 建议时长由表演和信息量决定；P002 起左上边界锚点仍为 0 秒，其余有效 Setup 的独占时间合计为 Panel 时长。
 
-### Panel 生成策略
+### Panel 生成与视觉资产计划
 
-每个 Panel 写一行生成控制意图，由导演 AI 在完成节奏和 Camera Setup 后确定：
+每个 Panel 写一行生成控制意图，由导演 AI 在完成节奏和 Camera Setup 后确定。决策顺序固定为：先判断是否需要精确首帧/尾帧或多参考，再选 operation，最后选择性物化视觉资产。
 
-| Panel | 推荐模式 | 精确首帧 | 精确尾帧 | 必需视觉参考 | 连续/硬切 | 选择理由 |
-|---|---|---|---|---|---|---|
-| P001 | T2V/I2V/FL2V/R2V | [是/否及来源] | [是/否及来源] | [人物/场景/无] | [同镜/切镜] | [一句话] |
+| Panel | Operation | STEP 3 资产策略 | 精确首帧来源 | 精确尾帧来源 | Runtime inputs | Planning only | 连续/硬切 | 选择理由 |
+|---|---|---|---|---|---|---|---|---|
+| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | `none` / `board` / `scene_keyframe` / `last_frame` | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key] | [仅用于审阅、不传入的 key] | [连续/硬切] | [一句话] |
+
+`visual_asset_policy` 只描述 STEP 3 需要补齐的资产：
+
+- `none`：不调用图片模型；可直接使用上一 Clip 通过版真实尾帧、已有角色卡或其他已批准资产。
+- `board`：只在多参考 R2V 确实需要六 Beat 构图/动作路线控制时，生成一张 2×3 黑白分镜板。
+- `scene_keyframe`：生成或复用一张彩色场景/首帧关键帧，用于新场景 I2V 或必要的 R2V 构图参考。
+- `last_frame`：为 FL2V 生成一张精确目标尾帧；首帧通常来自上一 Clip 的通过版真实尾帧。
 
 模式只按控制需求选择，不按题材标签选择：
 
@@ -88,11 +96,11 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - `FL2V`：首尾状态都必须准确，且主体是单条连续运动路径。
 - `R2V`：多个关键参考不可替代，或明确进入新机位的硬切；普通参考不能声称是精确首帧。
 
-若模式与素材能力冲突，退回故事板修正，不让提示词阶段静默换模式或丢弃参考。
+蓝图中 `runtime_input_keys` 必须等于该 Panel 所有 Setup `reference_keys` 的有序并集，且与 `planning_only_asset_keys` 不重叠。I2V 只能有唯一 `first_frame_source`；FL2V 只能依次有 `first_frame_source` 和 `last_frame_source`；T2V 不带视觉引用；只有 R2V 可把 `board.*` 放入运行时引用。若模式与素材能力冲突，退回故事板修正，不让提示词阶段静默换模式或丢弃参考。
 
 ## Panel 映射
 
-每个 Panel 恰好映射六个有序 Beat，并为每格标注所属 Camera Setup。映射表记录每格的功能、初态来源、末态去向、Setup ID 和转场/承接说明；接收 Panel 左上格明确标注“零时长边界锚点”，不为任何视频模型预先编写字段、引用标签或执行语法。
+每个 Panel 恰好映射六个有序 Beat，并为每个语义格位标注所属 Camera Setup。这是文档内的导演映射，不代表必须生成六格图像。映射表记录每格的功能、初态来源、末态去向、Setup ID 和转场/承接说明；接收 Panel 左上格明确标注“零时长边界锚点”，不为任何视频模型预先编写字段、引用标签或执行语法。
 
 发生人物、道具或动作交接时，确保上一格锁定末态可以成为下一格初态。场景改变、说话人改变且需要看口型、视点或轴线改变、明确硬切、匹配切或声音跨切，都应在“转场 / 承接说明”中直接写明。
 
@@ -110,7 +118,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 ## 连续性与确认检查
 
-- [ ] Panel = 分镜板 = Clip；每 Panel 恰好六格，六格到 Camera Setup 的映射完整。
+- [ ] Panel = Clip；每 Panel 恰好六个语义 Beat，Beat 到 Camera Setup 的映射完整；分镜板、场景关键帧和目标尾帧数量与资产计划相等。
 - [ ] 每个 Beat 有可见时刻、空间、动作、逐字对白、声音、所属 Setup 和末态；每个 Setup 有机位、轴线侧、人物朝向、目标/视线、屏幕运动、运镜和前镜关系。
 - [ ] P002 起左上边界锚点为 0 秒，其余有效 Setup 的独占时间合计等于 Panel 时长；所有 Panel 时长合计等于目标总时长。
 - [ ] 每次 cut 都有新的信息、空间、视点、时间或反应理由；没有因六格换格而机械增加切镜或平均分配时长。
@@ -123,8 +131,9 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - [ ] 原文冲突已解决；所有 `must_show` / `must_explain` 事件均有唯一镜头落点、原文出处、可见证据和前后状态。
 - [ ] 每场的入场/转折/离场/下一场义务已写明；同场状态逐镜交接，换场有因果、时间、空间或声音桥接。
 - [ ] `creative_blueprint.json` 已由最新故事板同步编译并通过低成本静态预检；没有把超载动作、对白或参考图留给 H3 猜测。
+- [ ] `generation.panel_plans` 与 Panel 一一对应且顺序相同；operation 先于资产选择，I2V/FL2V 不引用分镜板，`planning_only_asset_keys` 不进入模型。
 - [ ] 每个 Panel 的硬失败条件数量克制、可判断；背景和可后期问题已归入可修复/可接受偏差。
-- [ ] 所有可读文字、号码、地址、聊天内容和复杂 UI 已登记为确定性后期资产。
+- [ ] 若 `production.profile.postproduction` 为 `none`，所有需要出现的可读文字、号码、地址、聊天内容和复杂 UI 都已登记为 H3 提示词中的逐字内容；只有明确启用确定性后期时才登记后期资产。
 - [ ] Medium Lock、Style Brief、角色锚点和场景锚点无冲突。
 
 向用户展示故事板时指出为适配目标时长所做的删减、节奏或旁白取舍。只有用户明确确认，才将“故事板概要”状态改为 `已确认`。

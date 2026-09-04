@@ -1,4 +1,4 @@
 interface:
   display_name: "从零故事分镜"
-  short_description: "逐阶段完成故事、角色、六格分镜与 LFO 创作交接"
-  default_prompt: "使用 $zero-to-story 把我的故事整理成经确认的角色资产、Camera Setup 与 2×3 六格 Beat 分镜；视频提示词阶段交给 $h3-prompt-writing。"
+  short_description: "逐阶段完成故事、角色、选择性视觉资产与 LFO 创作交接"
+  default_prompt: "使用 $zero-to-story 把我的故事整理成经确认的 Camera Setup、六 Beat 语义映射、角色资产和逐 Panel 视觉资产路由；只生成必要的六格板或关键帧，视频提示词阶段交给 $h3-prompt-writing。"

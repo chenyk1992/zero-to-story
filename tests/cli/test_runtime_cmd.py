@@ -21,6 +21,7 @@ from lfo.cli.runtime_cmd import (
     cmd_execute,
     cmd_export,
     cmd_plan,
+    cmd_prompt_revision,
     cmd_retry,
     cmd_review,
     cmd_runtime_status,
@@ -85,6 +86,10 @@ class StubRuntime:
         self.calls.append(("export", run_id))
         return ExportResult2(export_id="export-1", status="READY", file_path="out.mp4")
 
+    def submit_prompt_revision(self, run_id, prompt, *, scope=None, plan_hash=None, negative_prompt=None, seed=None):
+        self.calls.append(("prompt-revision", run_id, prompt, scope, plan_hash, negative_prompt, seed))
+        return RunResult(run_id=run_id, status="WAITING_PROMPT_REVISION", clip_count=1)
+
 
 def _factory_with(stub: StubRuntime):
     return lambda: stub
@@ -92,7 +97,7 @@ def _factory_with(stub: StubRuntime):
 
 def test_runtime_commands_are_registered() -> None:
     commands = CommandRegistry.all_commands()
-    assert {"validate", "plan", "execute", "status", "retry", "cancel", "review", "export"} <= set(commands)
+    assert {"validate", "plan", "execute", "status", "retry", "prompt-revision", "cancel", "review", "export"} <= set(commands)
 
 
 def test_direct_commands_delegate_to_injected_runtime(tmp_path: pathlib.Path) -> None:
@@ -108,9 +113,16 @@ def test_direct_commands_delegate_to_injected_runtime(tmp_path: pathlib.Path) ->
     assert cmd_cancel("run-1", runtime_factory=factory)["success"]
     assert cmd_review("run-1", "clip-001", "approved", runtime_factory=factory)["success"]
     assert cmd_export("run-1", runtime_factory=factory)["file_path"] == "out.mp4"
+    assert cmd_prompt_revision(
+        "run-1",
+        "rewritten prompt",
+        "clip-001",
+        plan_hash="clip-hash",
+        runtime_factory=factory,
+    )["status"] == "WAITING_PROMPT_REVISION"
 
     assert [call[0] for call in stub.calls] == [
-        "validate", "plan", "execute", "status", "retry", "cancel", "review", "export",
+        "validate", "plan", "execute", "status", "retry", "cancel", "review", "export", "prompt-revision",
     ]
     assert stub.calls[2][-1] is True
     assert stub.calls[4][-1] == "clip-001"
@@ -156,7 +168,7 @@ def test_cli_subprocess_dispatch_and_help(tmp_path: pathlib.Path) -> None:
         check=False,
     )
     assert help_result.returncode == 0
-    for command in ("validate", "plan", "execute", "status", "retry", "cancel", "review", "export"):
+    for command in ("validate", "plan", "execute", "status", "retry", "prompt-revision", "cancel", "review", "export"):
         assert command in help_result.stdout
 
     result = subprocess.run(

@@ -53,7 +53,11 @@ def test_report_contains_revision_backend_hash_and_qc(tmp_path) -> None:
         task_id="run.qc",
         artifact_type="qc_video",
         file_hash="video-hash",
-        metadata={"qc_passed": True, "qc_results": []},
+        metadata={
+            "qc_passed": True,
+            "qc_scope": ["generation_quality"],
+            "qc_results": [],
+        },
     )
 
     report = ExecutionReportService(store).build("run").data
@@ -61,5 +65,6 @@ def test_report_contains_revision_backend_hash_and_qc(tmp_path) -> None:
     assert report["materialization_hash"] == "materialization-hash"
     assert report["clips"][0]["backend_selection"]["backend_id"] == "comfyui.h3"
     assert report["clips"][0]["qc"]["passed"] is True
+    assert report["clips"][0]["qc"]["scope"] == ["generation_quality"]
     assert report["hash_lineage"][0]["file_hash"] == "video-hash"
     json.dumps(report)

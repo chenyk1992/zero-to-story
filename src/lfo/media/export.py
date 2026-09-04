@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from lfo.media._ffmpeg import MediaCommandError, probe
+from lfo.media._ffmpeg import MediaCommandError
 
 
 @dataclass
@@ -32,6 +32,9 @@ class ExportSpec:
     backend_ids: list[str] = field(default_factory=list)
     workflow_hashes: list[str] = field(default_factory=list)
     model_versions: list[str] = field(default_factory=list)
+    # Supplied by the assembled timeline artifact when available.  It is
+    # descriptive metadata, not a duration QC constraint.
+    duration_ms: int | None = None
 
 
 @dataclass
@@ -64,7 +67,7 @@ class ExportManifest:
 
 
 class Exporter:
-    """Publish an already assembled timeline only after a QC gate passes."""
+    """Publish an already assembled timeline after upstream gates pass."""
 
     def export(
         self, spec: ExportSpec, source_timeline_path: str, qc_passed: bool = True
@@ -86,10 +89,6 @@ class Exporter:
             shutil.copy2(source, temp)
             if not temp.is_file() or temp.stat().st_size == 0:
                 raise MediaCommandError("Export copy produced no file")
-            # Decode/probe before publishing to ensure callers never receive a dead path.
-            metadata = probe(temp)
-            if metadata["width"] is None:
-                raise MediaCommandError("Timeline output has no video stream")
             temp.replace(output)
             subtitle_path = self._publish_sidecars(spec, output)
             manifest = self.build_manifest(spec)
@@ -102,7 +101,7 @@ class Exporter:
                     "path": str(output),
                     "sha256": self._sha256(output),
                     "size": output.stat().st_size,
-                    **metadata,
+                    "duration_ms": spec.duration_ms,
                 }
             )
             manifest_path = Path(f"{output}.manifest.json")
@@ -114,7 +113,7 @@ class Exporter:
                 output.stat().st_size,
                 str(manifest_path),
                 subtitle_path,
-                metadata["duration_ms"],
+                spec.duration_ms,
             )
         except (OSError, MediaCommandError) as exc:
             temp.unlink(missing_ok=True)

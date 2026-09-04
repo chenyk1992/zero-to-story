@@ -3,7 +3,7 @@
 
 The creative blueprint is a machine-readable index compiled from the human
 readable ``storyboard_brief.md``.  It catches omissions and continuity breaks
-before character images, storyboard boards, or videos are generated.
+before character images, visual control assets, or videos are generated.
 """
 
 from __future__ import annotations
@@ -20,10 +20,19 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "zero-to-story.creative-blueprint.v1"
+READINESS_SCHEMA = "zero-to-story.creative-blueprint.v2"
+SUPPORTED_SCHEMAS = {SCHEMA, READINESS_SCHEMA}
 MANDATORY_PRIORITIES = {"must_show", "must_explain"}
 VALID_PRIORITIES = MANDATORY_PRIORITIES | {"optional"}
-VALID_TEXT_STRATEGIES = {"none", "post"}
+VALID_TEXT_STRATEGIES = {"none", "prompt", "post"}
 VALID_TRANSITION_OWNERS = {"previous", "next"}
+VALID_VIDEO_OPERATIONS = {
+    "video.text_to_video",
+    "video.image_to_video",
+    "video.first_last_frame",
+    "video.reference_to_video",
+}
+VALID_VISUAL_ASSET_POLICIES = {"none", "board", "scene_keyframe", "last_frame"}
 PLACEHOLDER_MARKERS = ("[填写", "[项目", "[原文", "TODO", "TBD", "待填写")
 
 JsonObject = dict[str, Any]
@@ -59,11 +68,15 @@ def _is_placeholder(value: str) -> bool:
 
 
 def _is_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 def _is_positive_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _is_nonnegative_number(value: object) -> bool:
+    return _is_number(value) and value >= 0
 
 
 def _state(value: object) -> bool:
@@ -411,11 +424,11 @@ def _validate_generation(
 
         text_strategy = _require_text(shot, "text_strategy", path, issues)
         if text_strategy is not None and text_strategy not in VALID_TEXT_STRATEGIES:
-            issues.append(Issue(f"{path}.text_strategy", "must be 'none' or 'post'"))
+            issues.append(Issue(f"{path}.text_strategy", "must be 'none', 'prompt' or 'post'"))
         if text_strategy == "post":
             _require_text(shot, "post_asset", path, issues)
-        elif text_strategy == "none" and shot.get("post_asset") not in (None, ""):
-            issues.append(Issue(f"{path}.post_asset", "must be null when text_strategy is 'none'"))
+        elif text_strategy in {"none", "prompt"} and shot.get("post_asset") not in (None, ""):
+            issues.append(Issue(f"{path}.post_asset", f"must be null when text_strategy is {text_strategy!r}"))
 
         reference_limit = limits.get("reference_slots")
         if isinstance(reference_limit, int) and len(reference_keys) > reference_limit:
@@ -458,6 +471,268 @@ def _validate_generation(
                 )
             )
     return by_id, ordered, limits
+
+
+def _validate_panel_plans(
+    generation: Mapping[str, Any] | None,
+    *,
+    panels: Sequence[Mapping[str, Any]],
+    shots: Sequence[Mapping[str, Any]],
+    reference_limit: object,
+    issues: list[Issue],
+) -> None:
+    """Validate the v2 per-Panel operation and selective STEP 3 asset plan."""
+
+    if generation is None:
+        return
+
+    values = generation.get("panel_plans")
+    if not isinstance(values, list) or not values:
+        issues.append(Issue("generation.panel_plans", "must be a non-empty array for schema v2"))
+        return
+
+    plans: list[Mapping[str, Any]] = []
+    for index, value in enumerate(values):
+        if not _is_mapping(value):
+            issues.append(Issue(f"generation.panel_plans[{index}]", "must be an object"))
+            continue
+        plans.append(value)
+
+    expected_panel_ids: list[str] = []
+    for panel in panels:
+        panel_id = panel.get("id")
+        if _is_nonempty_text(panel_id):
+            expected_panel_ids.append(panel_id)
+    actual_panel_ids: list[str] = []
+    seen_panel_ids: set[str] = set()
+    shots_by_panel: defaultdict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for shot in shots:
+        panel_id = shot.get("panel_id")
+        if _is_nonempty_text(panel_id):
+            shots_by_panel[panel_id].append(shot)
+
+    for index, plan in enumerate(plans):
+        path = f"generation.panel_plans[{index}]"
+        panel_id = _require_text(plan, "panel_id", path, issues)
+        if panel_id is not None:
+            actual_panel_ids.append(panel_id)
+            if panel_id not in expected_panel_ids:
+                issues.append(Issue(f"{path}.panel_id", f"unknown panel {panel_id!r}"))
+            if panel_id in seen_panel_ids:
+                issues.append(Issue(f"{path}.panel_id", f"duplicates {panel_id!r}"))
+            seen_panel_ids.add(panel_id)
+
+        operation = _require_text(plan, "operation", path, issues)
+        if operation is not None and operation not in VALID_VIDEO_OPERATIONS:
+            issues.append(
+                Issue(
+                    f"{path}.operation",
+                    "must be one of " + ", ".join(sorted(VALID_VIDEO_OPERATIONS)),
+                )
+            )
+
+        policy = _require_text(plan, "visual_asset_policy", path, issues)
+        if policy is not None and policy not in VALID_VISUAL_ASSET_POLICIES:
+            issues.append(
+                Issue(
+                    f"{path}.visual_asset_policy",
+                    "must be one of " + ", ".join(sorted(VALID_VISUAL_ASSET_POLICIES)),
+                )
+            )
+
+        first_frame_source = plan.get("first_frame_source")
+        if first_frame_source is not None and not _is_nonempty_text(first_frame_source):
+            issues.append(Issue(f"{path}.first_frame_source", "must be non-empty text or null"))
+            first_frame_source = None
+        last_frame_source = plan.get("last_frame_source")
+        if last_frame_source is not None and not _is_nonempty_text(last_frame_source):
+            issues.append(Issue(f"{path}.last_frame_source", "must be non-empty text or null"))
+            last_frame_source = None
+
+        runtime_values = _require_list(plan, "runtime_input_keys", path, issues, allow_empty=True)
+        runtime_input_keys = _unique_texts(
+            runtime_values,
+            path=f"{path}.runtime_input_keys",
+            issues=issues,
+        )
+        planning_values = _require_list(
+            plan,
+            "planning_only_asset_keys",
+            path,
+            issues,
+            allow_empty=True,
+        )
+        planning_only_asset_keys = _unique_texts(
+            planning_values,
+            path=f"{path}.planning_only_asset_keys",
+            issues=issues,
+        )
+        _require_text(plan, "reason", path, issues)
+
+        overlap = sorted(set(runtime_input_keys) & set(planning_only_asset_keys))
+        if overlap:
+            issues.append(
+                Issue(
+                    f"{path}.planning_only_asset_keys",
+                    "must not duplicate runtime inputs: " + ", ".join(overlap),
+                )
+            )
+
+        shot_reference_keys: list[str] = []
+        if panel_id is not None:
+            for shot in shots_by_panel.get(panel_id, []):
+                references = shot.get("reference_keys")
+                if not isinstance(references, list):
+                    continue
+                for reference in references:
+                    if _is_nonempty_text(reference) and reference not in shot_reference_keys:
+                        shot_reference_keys.append(reference)
+        if runtime_input_keys != shot_reference_keys:
+            issues.append(
+                Issue(
+                    f"{path}.runtime_input_keys",
+                    "must exactly match the Panel's ordered Setup reference union: "
+                    + (", ".join(shot_reference_keys) or "(none)"),
+                )
+            )
+        planning_setup_overlap = sorted(
+            set(planning_only_asset_keys) & set(shot_reference_keys)
+        )
+        if planning_setup_overlap:
+            issues.append(
+                Issue(
+                    f"{path}.planning_only_asset_keys",
+                    "planning-only assets must not appear in Setup references: "
+                    + ", ".join(planning_setup_overlap),
+                )
+            )
+
+        if (
+            isinstance(reference_limit, int)
+            and not isinstance(reference_limit, bool)
+            and len(runtime_input_keys) > reference_limit
+        ):
+            issues.append(
+                Issue(
+                    f"{path}.runtime_input_keys",
+                    f"has {len(runtime_input_keys)} Clip references but the budget is {reference_limit}",
+                )
+            )
+
+        board_keys = [key for key in runtime_input_keys if key.startswith("board.")]
+        if board_keys and operation != "video.reference_to_video":
+            issues.append(
+                Issue(
+                    f"{path}.runtime_input_keys",
+                    "storyboard boards are planning assets unless operation is video.reference_to_video",
+                )
+            )
+
+        expected_board_key = f"board.{panel_id}" if panel_id is not None else None
+        if policy == "board":
+            if operation != "video.reference_to_video":
+                issues.append(
+                    Issue(
+                        f"{path}.visual_asset_policy",
+                        "'board' is only compatible with video.reference_to_video",
+                    )
+                )
+            if expected_board_key not in runtime_input_keys:
+                issues.append(
+                    Issue(
+                        f"{path}.runtime_input_keys",
+                        f"must include {expected_board_key!r} when visual_asset_policy is 'board'",
+                    )
+                )
+            if board_keys != [expected_board_key]:
+                issues.append(
+                    Issue(
+                        f"{path}.runtime_input_keys",
+                        f"may contain only {expected_board_key!r} as its storyboard board",
+                    )
+                )
+        elif board_keys:
+            issues.append(
+                Issue(
+                    f"{path}.visual_asset_policy",
+                    "must be 'board' when any storyboard board is a runtime input",
+                )
+            )
+
+        if operation == "video.text_to_video":
+            if first_frame_source is not None or last_frame_source is not None:
+                issues.append(Issue(path, "text-to-video cannot declare first or last frame sources"))
+            if runtime_input_keys:
+                issues.append(Issue(f"{path}.runtime_input_keys", "must be empty for text-to-video"))
+            if policy != "none":
+                issues.append(Issue(f"{path}.visual_asset_policy", "must be 'none' for text-to-video"))
+        elif operation == "video.image_to_video":
+            if not _is_nonempty_text(first_frame_source):
+                issues.append(Issue(f"{path}.first_frame_source", "is required for image-to-video"))
+            if last_frame_source is not None:
+                issues.append(Issue(f"{path}.last_frame_source", "must be null for image-to-video"))
+            expected = [first_frame_source] if _is_nonempty_text(first_frame_source) else []
+            if runtime_input_keys != expected:
+                issues.append(
+                    Issue(
+                        f"{path}.runtime_input_keys",
+                        "image-to-video accepts only its first_frame_source",
+                    )
+                )
+            if policy not in {"none", "scene_keyframe"}:
+                issues.append(
+                    Issue(
+                        f"{path}.visual_asset_policy",
+                        "must be 'none' or 'scene_keyframe' for image-to-video",
+                    )
+                )
+        elif operation == "video.first_last_frame":
+            if not _is_nonempty_text(first_frame_source):
+                issues.append(Issue(f"{path}.first_frame_source", "is required for first/last-frame video"))
+            if not _is_nonempty_text(last_frame_source):
+                issues.append(Issue(f"{path}.last_frame_source", "is required for first/last-frame video"))
+            expected = [
+                source
+                for source in (first_frame_source, last_frame_source)
+                if _is_nonempty_text(source)
+            ]
+            if runtime_input_keys != expected:
+                issues.append(
+                    Issue(
+                        f"{path}.runtime_input_keys",
+                        "first/last-frame video accepts only first_frame_source then last_frame_source",
+                    )
+                )
+            if policy != "last_frame":
+                issues.append(
+                    Issue(
+                        f"{path}.visual_asset_policy",
+                        "must be 'last_frame' for first/last-frame video",
+                    )
+                )
+        elif operation == "video.reference_to_video":
+            if first_frame_source is not None or last_frame_source is not None:
+                issues.append(Issue(path, "reference-to-video cannot declare exact frame sources"))
+            if not runtime_input_keys:
+                issues.append(
+                    Issue(f"{path}.runtime_input_keys", "must contain at least one fixed reference")
+                )
+            if policy == "last_frame":
+                issues.append(
+                    Issue(
+                        f"{path}.visual_asset_policy",
+                        "'last_frame' is only compatible with video.first_last_frame",
+                    )
+                )
+
+    if actual_panel_ids != expected_panel_ids:
+        issues.append(
+            Issue(
+                "generation.panel_plans",
+                "must contain exactly one plan per Panel in Panel order: "
+                + (", ".join(expected_panel_ids) or "(none)"),
+            )
+        )
 
 
 def _validate_dialogue(
@@ -509,6 +784,376 @@ def _validate_dialogue(
     for shot_id, orders in dialogue_by_shot.items():
         if orders != sorted(orders):
             issues.append(Issue(f"dialogue[{shot_id}]", "dialogue order regresses inside a shot"))
+
+
+def _speech_units(text: str, locale: str) -> int:
+    """Return a language-neutral speaking-unit estimate.
+
+    CJK text is counted by Han/digit clusters; alphabetic languages use words.
+    Punctuation is intentionally handled separately so project profiles can
+    tune pause length without changing the canonical dialogue text.
+    """
+
+    del locale  # reserved for profile-specific analyzers in future versions
+    han = sum(1 for char in text if "\u3400" <= char <= "\u9fff")
+    if han:
+        return han + sum(1 for char in text if char.isdigit())
+    words = [part for part in text.replace("\n", " ").split() if part]
+    return max(1, len(words))
+
+
+def _estimate_speech_ms(
+    text: str,
+    profile: Mapping[str, Any],
+) -> float | None:
+    rate = profile.get("speech_units_per_second")
+    if not _is_number(rate) or rate <= 0:
+        return None
+    pause_ms = profile.get("punctuation_pause_ms", 120)
+    if not _is_nonnegative_number(pause_ms):
+        pause_ms = 120
+    punctuation_chars = "\uff0c\u3002\uff01\uff1f\u3001\uff1b\uff1a,.!?;:\u2026\u2014\u2013"
+    punctuation = sum(1 for char in text if char in punctuation_chars)
+    return _speech_units(text, str(profile.get("locale", ""))) / rate * 1000 + punctuation * pause_ms
+
+
+def _validate_production_readiness(
+    root: Mapping[str, Any],
+    *,
+    panels: Sequence[Mapping[str, Any]],
+    shots: Sequence[Mapping[str, Any]],
+    dialogue: Sequence[Mapping[str, Any]],
+    issues: list[Issue],
+) -> None:
+    """Validate v2's pre-LFO timing, voice and execution-readiness contract."""
+
+    production = _mapping(root.get("production"))
+    if production is None:
+        issues.append(Issue("production", "required for creative-blueprint.v2"))
+        return
+    profile = _mapping(production.get("profile"))
+    if profile is None:
+        issues.append(Issue("production.profile", "must be an object"))
+        profile = {}
+    _require_text(profile, "locale", "production.profile", issues)
+    postproduction = _require_text(profile, "postproduction", "production.profile", issues)
+    if postproduction is not None and postproduction not in {"none", "deterministic"}:
+        issues.append(Issue("production.profile.postproduction", "must be 'none' or 'deterministic'"))
+    exactness = _require_text(profile, "dialogue_exactness", "production.profile", issues)
+    if exactness is not None and exactness not in {"verbatim", "flexible"}:
+        issues.append(Issue("production.profile.dialogue_exactness", "must be 'verbatim' or 'flexible'"))
+    for field in (
+        "speech_units_per_second",
+        "punctuation_pause_ms",
+        "head_guard_ms",
+        "tail_guard_ms",
+        "turn_gap_ms",
+        "safety_margin_ratio",
+    ):
+        value = profile.get(field)
+        if not _is_nonnegative_number(value) or (field == "speech_units_per_second" and value <= 0):
+            issues.append(Issue(f"production.profile.{field}", "must be a non-negative number (speech rate must be > 0)"))
+    margin = profile.get("safety_margin_ratio")
+    if _is_number(margin) and margin >= 1:
+        issues.append(Issue("production.profile.safety_margin_ratio", "must be less than 1"))
+
+    if postproduction == "none":
+        for index, shot in enumerate(shots):
+            if shot.get("text_strategy") == "post":
+                issues.append(
+                    Issue(
+                        f"generation.shots[{index}].text_strategy",
+                        "postproduction is 'none'; visible text must be authored in the H3 prompt or removed",
+                    )
+                )
+
+    speakers_value = production.get("speakers")
+    speakers = speakers_value if isinstance(speakers_value, list) else []
+    if not isinstance(speakers_value, list):
+        issues.append(Issue("production.speakers", "must be an array"))
+    speakers_by_id: dict[str, Mapping[str, Any]] = {}
+    for index, speaker in enumerate(speakers):
+        path = f"production.speakers[{index}]"
+        speaker_map = _mapping(speaker)
+        if speaker_map is None:
+            issues.append(Issue(path, "must be an object"))
+            continue
+        speaker_id = _require_text(speaker_map, "id", path, issues)
+        _require_text(speaker_map, "character_id", path, issues)
+        _require_text(speaker_map, "gender", path, issues)
+        _require_text(speaker_map, "age", path, issues)
+        if speaker_id is not None:
+            if speaker_id in speakers_by_id:
+                issues.append(Issue(f"{path}.id", "must be unique"))
+            speakers_by_id[speaker_id] = speaker_map
+
+    dialogue_by_id = {
+        str(item.get("id")): item
+        for item in dialogue
+        if isinstance(item.get("id"), str)
+    }
+    for index, line in enumerate(dialogue):
+        path = f"dialogue[{index}]"
+        speaker_id = _require_text(line, "speaker_id", path, issues)
+        if speaker_id is not None and speaker_id not in speakers_by_id:
+            issues.append(Issue(f"{path}.speaker_id", f"unknown production speaker {speaker_id!r}"))
+        duration = line.get("measured_duration_ms")
+        if duration is None:
+            duration = _estimate_speech_ms(str(line.get("text", "")), profile)
+            if duration is None:
+                issues.append(Issue(f"{path}.measured_duration_ms", "required when speech rate is unavailable"))
+        elif not _is_nonnegative_number(duration) or duration <= 0:
+            issues.append(Issue(f"{path}.measured_duration_ms", "must be a positive number"))
+        for field in ("planned_start_ms", "planned_end_ms"):
+            value = line.get(field)
+            if not _is_nonnegative_number(value):
+                issues.append(Issue(f"{path}.{field}", "required and must be non-negative"))
+        start = line.get("planned_start_ms")
+        end = line.get("planned_end_ms")
+        if _is_number(start) and _is_number(end) and end <= start:
+            issues.append(Issue(f"{path}.planned_end_ms", "must be greater than planned_start_ms"))
+        if not isinstance(line.get("allow_overlap", False), bool):
+            issues.append(Issue(f"{path}.allow_overlap", "must be boolean"))
+
+    panel_by_id = {
+        str(panel.get("id")): panel
+        for panel in panels
+        if isinstance(panel.get("id"), str)
+    }
+    dialogue_by_shot: defaultdict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for line in dialogue:
+        shot_id = line.get("shot_id")
+        if isinstance(shot_id, str):
+            dialogue_by_shot[shot_id].append(line)
+
+    # A dialogue record is executable only when the owning Setup lists it.
+    # Checking both directions prevents a line from silently disappearing
+    # between the story ledger and the H3 prompt, or being emitted twice by
+    # two Setups.
+    dialogue_by_id = {
+        str(line.get("id")): line
+        for line in dialogue
+        if isinstance(line.get("id"), str)
+    }
+    assigned_shots: defaultdict[str, list[str]] = defaultdict(list)
+    for shot in shots:
+        shot_id = shot.get("id")
+        values = shot.get("dialogue_ids", [])
+        if not isinstance(shot_id, str) or not isinstance(values, list):
+            continue
+        for dialogue_id in values:
+            if isinstance(dialogue_id, str):
+                assigned_shots[dialogue_id].append(shot_id)
+    for line in dialogue:
+        line_id = line.get("id")
+        if not isinstance(line_id, str):
+            continue
+        owners = assigned_shots.get(line_id, [])
+        if not owners:
+            issues.append(Issue(f"dialogue[{line_id}].shot_id", "dialogue is not assigned to any generation Setup"))
+        elif len(owners) > 1:
+            issues.append(Issue(f"dialogue[{line_id}].shot_id", "dialogue is assigned to multiple generation Setups"))
+        declared_shot = line.get("shot_id")
+        if len(owners) == 1 and declared_shot not in (None, owners[0]):
+            issues.append(
+                Issue(
+                    f"dialogue[{line_id}].shot_id",
+                    f"must match its Setup assignment {owners[0]!r}",
+                )
+            )
+    for dialogue_id, _owners in assigned_shots.items():
+        if dialogue_id not in dialogue_by_id:
+            issues.append(
+                Issue(
+                    "generation.shots",
+                    f"dialogue id {dialogue_id!r} is listed but has no dialogue record",
+                )
+            )
+
+    # Setup windows are the single timing spine consumed by the prompt
+    # manifest.  Require a contiguous cover for each Panel so no unplanned
+    # gap or overlap is left for H3 to improvise.
+    shots_by_panel: defaultdict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for shot in shots:
+        panel_id = shot.get("panel_id")
+        if isinstance(panel_id, str):
+            shots_by_panel[panel_id].append(shot)
+    for panel in panels:
+        panel_id = panel.get("id")
+        if isinstance(panel_id, str) and not shots_by_panel.get(panel_id):
+            issues.append(
+                Issue(
+                    f"panels[{panel_id}].shot_ids",
+                    "must map to at least one production Setup",
+                )
+            )
+    for panel_id, panel_shots in shots_by_panel.items():
+        ordered_panel_shots = sorted(
+            panel_shots,
+            key=lambda item: (
+                float(item.get("start_ms"))
+                if _is_number(item.get("start_ms"))
+                else float("inf"),
+                str(item.get("id", "")),
+            ),
+        )
+        panel = panel_by_id.get(panel_id)
+        panel_duration_ms = (
+            float(panel.get("duration_s")) * 1000
+            if panel is not None and _is_number(panel.get("duration_s"))
+            else None
+        )
+        previous_end: float | None = None
+        for index, shot in enumerate(ordered_panel_shots):
+            start = shot.get("start_ms")
+            end = shot.get("end_ms")
+            if not _is_number(start) or not _is_number(end) or end <= start:
+                continue
+            if index == 0 and float(start) != 0:
+                issues.append(Issue(f"generation.shots[{shot.get('id')}].start_ms", "first Setup of a Panel must start at 0ms"))
+            if previous_end is not None:
+                if float(start) < previous_end:
+                    issues.append(Issue(f"generation.shots[{shot.get('id')}].start_ms", "Setup windows overlap inside a Panel"))
+                elif float(start) > previous_end:
+                    issues.append(Issue(f"generation.shots[{shot.get('id')}].start_ms", "Setup gap is not declared; account for it before locking"))
+            previous_end = float(end)
+        if panel_duration_ms is not None and previous_end is not None and abs(previous_end - panel_duration_ms) > 0.01:
+            issues.append(
+                Issue(
+                    f"panels[{panel_id}].duration_s",
+                    "last Setup must end at the Panel duration",
+                )
+            )
+
+    head = profile.get("head_guard_ms", 0)
+    tail = profile.get("tail_guard_ms", 0)
+    turn_gap = profile.get("turn_gap_ms", 0)
+    margin = profile.get("safety_margin_ratio", 0)
+    for index, shot in enumerate(shots):
+        path = f"generation.shots[{index}]"
+        start = shot.get("start_ms")
+        end = shot.get("end_ms")
+        if not _is_nonnegative_number(start) or not _is_nonnegative_number(end) or end <= start:
+            issues.append(Issue(path, "start_ms/end_ms must define a positive window"))
+            continue
+        panel_id = shot.get("panel_id")
+        panel = panel_by_id.get(str(panel_id))
+        if panel is not None and _is_number(panel.get("duration_s")) and end > panel["duration_s"] * 1000 + 0.01:
+            issues.append(Issue(f"{path}.end_ms", "shot window exceeds its Panel duration"))
+
+        action_schedule = shot.get("action_schedule")
+        if not isinstance(action_schedule, list):
+            issues.append(Issue(f"{path}.action_schedule", "required for production readiness"))
+            action_schedule = []
+        serial_action_ms = 0.0
+        parallel_action_ms = 0.0
+        for action_index, action in enumerate(action_schedule):
+            action_map = _mapping(action)
+            action_path = f"{path}.action_schedule[{action_index}]"
+            if action_map is None:
+                issues.append(Issue(action_path, "must be an object"))
+                continue
+            duration = action_map.get("duration_ms")
+            if not _is_number(duration) or duration <= 0:
+                issues.append(Issue(f"{action_path}.duration_ms", "must be a positive number"))
+                continue
+            serial = action_map.get("serial_with_dialogue", True)
+            if not isinstance(serial, bool):
+                issues.append(Issue(f"{action_path}.serial_with_dialogue", "must be boolean"))
+                serial = True
+            if serial:
+                serial_action_ms += duration
+            else:
+                parallel_action_ms = max(parallel_action_ms, duration)
+
+        shot_dialogue_ids = shot.get("dialogue_ids", [])
+        if not isinstance(shot_dialogue_ids, list):
+            shot_dialogue_ids = []
+        lines = [
+            dialogue_by_id[item]
+            for item in shot_dialogue_ids
+            if isinstance(item, str) and item in dialogue_by_id
+        ]
+        speech_ms = 0.0
+        for line in lines:
+            measured = line.get("measured_duration_ms")
+            if _is_number(measured) and measured > 0:
+                speech_ms += measured
+            else:
+                estimate = _estimate_speech_ms(str(line.get("text", "")), profile)
+                if estimate is not None:
+                    speech_ms += estimate
+        gaps = max(0, len(lines) - 1) * (turn_gap if _is_number(turn_gap) else 0)
+        critical_ms = speech_ms + gaps + serial_action_ms + parallel_action_ms
+        required_ms = critical_ms * (1 + (margin if _is_number(margin) else 0))
+        required_ms += (head if _is_number(head) else 0) + (tail if _is_number(tail) else 0)
+        available_ms = end - start
+        if required_ms > available_ms + 0.01:
+            issues.append(
+                Issue(
+                    path,
+                    f"production window is overfull: required {required_ms:.0f}ms, available {available_ms:.0f}ms; redistribute before boards/LFO",
+                )
+            )
+        if len({str(line.get("speaker_id")) for line in lines}) > 2:
+            issues.append(Issue(path, "more than two active speakers in one Setup; split before production lock"))
+
+        # The schedule is a production contract, not a suggestion for H3.
+        # Every declared dialogue event must be assigned to this shot and its
+        # allocated window must be long enough for the measured/estimated line.
+        declared_ids = {
+            item for item in shot_dialogue_ids if isinstance(item, str)
+        }
+        for line in lines:
+            line_id = line.get("id")
+            if isinstance(line_id, str):
+                declared_ids.discard(line_id)
+            line_start = line.get("planned_start_ms")
+            line_end = line.get("planned_end_ms")
+            measured = line.get("measured_duration_ms")
+            if not _is_number(measured) or measured <= 0:
+                measured = _estimate_speech_ms(str(line.get("text", "")), profile)
+            if (
+                _is_number(line_start)
+                and _is_number(line_end)
+                and _is_number(measured)
+                and line_end - line_start + 0.01 < measured
+            ):
+                issues.append(
+                    Issue(
+                        f"dialogue[{line.get('id')}].planned_*",
+                        f"allocated speech window is shorter than the measured/estimated duration ({measured:.0f}ms)",
+                    )
+                )
+            if line.get("shot_id") not in (None, shot.get("id")):
+                issues.append(
+                    Issue(
+                        f"dialogue[{line.get('id')}].shot_id",
+                        f"must match its declared generation shot {shot.get('id')!r}",
+                    )
+                )
+        if declared_ids:
+            issues.append(
+                Issue(
+                    f"{path}.dialogue_ids",
+                    "contains unknown dialogue ids: " + ", ".join(sorted(declared_ids)),
+                )
+            )
+
+        previous_end: float | None = None
+        previous_line: Mapping[str, Any] | None = None
+        for line in lines:
+            line_start = line.get("planned_start_ms")
+            line_end = line.get("planned_end_ms")
+            if not _is_number(line_start) or not _is_number(line_end):
+                continue
+            if line_start < start + (head if _is_number(head) else 0) or line_end > end - (tail if _is_number(tail) else 0):
+                issues.append(Issue(f"dialogue[{line.get('id')}].planned_*", "speech window touches the Setup boundary"))
+            if previous_end is not None and line_start < previous_end + (turn_gap if _is_number(turn_gap) else 0):
+                if not bool(line.get("allow_overlap", False)) and not bool(previous_line and previous_line.get("allow_overlap", False)):
+                    issues.append(Issue(f"dialogue[{line.get('id')}].planned_start_ms", "speaker turn gap is shorter than the production profile"))
+            previous_end = line_end
+            previous_line = line
 
 
 def _validate_links_and_continuity(
@@ -715,8 +1360,13 @@ def validate_blueprint(document: object) -> list[Issue]:
         return [Issue("$", "blueprint root must be an object")]
 
     schema = _require_text(root, "schema", "$", issues)
-    if schema is not None and schema != SCHEMA:
-        issues.append(Issue("$.schema", f"must be {SCHEMA!r}"))
+    if schema is not None and schema not in SUPPORTED_SCHEMAS:
+        issues.append(
+            Issue(
+                "$.schema",
+                "must be one of " + ", ".join(sorted(SUPPORTED_SCHEMAS)),
+            )
+        )
 
     project = _mapping(root.get("project"))
     if project is None:
@@ -752,6 +1402,14 @@ def validate_blueprint(document: object) -> list[Issue]:
         coverage_by_id=coverage_by_id,
         issues=issues,
     )
+    if schema == READINESS_SCHEMA:
+        _validate_panel_plans(
+            generation,
+            panels=ordered_panels,
+            shots=ordered_shots,
+            reference_limit=limits.get("reference_slots"),
+            issues=issues,
+        )
     dialogue_values = root.get("dialogue")
     if not isinstance(dialogue_values, list):
         issues.append(Issue("dialogue", "must be an array"))
@@ -769,6 +1427,15 @@ def validate_blueprint(document: object) -> list[Issue]:
         shot_by_id=shot_by_id,
         issues=issues,
     )
+
+    if schema == READINESS_SCHEMA:
+        _validate_production_readiness(
+            root,
+            panels=ordered_panels,
+            shots=ordered_shots,
+            dialogue=[item for item in dialogue_records if _is_mapping(item)],
+            issues=issues,
+        )
 
     _validate_links_and_continuity(
         scenes=ordered_scenes,

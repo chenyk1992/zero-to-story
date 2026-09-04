@@ -87,6 +87,7 @@ class VideoRuntime:
         db_path: str | pathlib.Path | None = None,
         workspace_root: str | pathlib.Path | None = None,
         handler_registry: HandlerRegistry | None = None,
+        require_production_lock: bool = False,
     ) -> None:
         self.workspace_root = (
             pathlib.Path(workspace_root).resolve()
@@ -100,6 +101,10 @@ class VideoRuntime:
         self.registry = registry or build_video_backend_registry()
         self.handlers = handler_registry or self._production_handlers()
         self.cas = ContentAddressedStore(self.workspace_root / "assets")
+        # Keep v1 package compatibility by default.  New production callers
+        # should set this flag so an unlocked creative plan cannot consume
+        # assets or generation quota.
+        self.require_production_lock = require_production_lock
 
     def _production_handlers(self) -> HandlerRegistry:
         handlers = build_media_handler_registry(self.workspace_root)
@@ -128,7 +133,10 @@ class VideoRuntime:
             data = self._read_json(package_path)
         except Exception as exc:
             return ValidationResult2(False, [_error(str(path), str(exc), "parse_error")])
-        result = validate_package(data)
+        result = validate_package(
+            data,
+            require_production_lock=self.require_production_lock,
+        )
         errors = [error.to_dict() for error in result.errors()]
         warnings: list[str] = []
         if result.ok:
@@ -280,6 +288,86 @@ class VideoRuntime:
         layout = json.loads(str(run.get("layout_json") or "{}"))
         return self._drive_runtime(runtime, clip_count, layout)
 
+    def submit_prompt_revision(
+        self,
+        run_id: str,
+        prompt: str,
+        *,
+        scope: str | None = None,
+        plan_hash: str | None = None,
+        negative_prompt: str | None = None,
+        seed: int | None = None,
+    ) -> RunResult:
+        """Resume a blocked Clip with one prompt-only H3 revision.
+
+        The caller (normally ``h3-prompt-writing``) supplies the revised
+        prompt.  Runtime checks the immutable production-plan hash and never
+        edits storyboard, timing, operation or reference fields.
+        """
+
+        run = self.store.get_run(run_id)
+        if run is None:
+            return RunResult(run_id, "FAILED", error="Run not found")
+        runtime = PersistentRuntime(self.store, self.handlers, run_id)
+        runtime.restore()
+        targets = [
+            task
+            for task in runtime.tasks.values()
+            if task.status == TaskState.WAITING_PROMPT_REVISION.value
+            and (
+                scope is None
+                or task.logical_key.startswith(f"{scope}:")
+                or task.task_id == scope
+            )
+        ]
+        if len(targets) != 1:
+            return RunResult(
+                run_id,
+                str(run["status"]),
+                error="Expected exactly one waiting Clip for prompt revision",
+            )
+        target = targets[0]
+        if not runtime.provide_prompt_revision(
+            target.task_id,
+            prompt,
+            plan_hash=plan_hash,
+            negative_prompt=negative_prompt,
+            seed=seed,
+        ):
+            # A rejected hash/state leaves the run untouched.  Exhausting the
+            # locked revision budget, however, transitions the waiting task
+            # to terminal ``block_for_user``; keep the durable Run state in
+            # sync instead of leaving it indefinitely WAITING.
+            if runtime.has_failures():
+                current = str(run["status"])
+                if current != "FAILED":
+                    self.store.transition_run(
+                        run_id,
+                        current,
+                        "FAILED",
+                        "prompt revision budget exhausted",
+                    )
+                return RunResult(
+                    run_id,
+                    "FAILED",
+                    error="Prompt revision budget exhausted",
+                )
+            return RunResult(
+                run_id,
+                str(run["status"]),
+                error="Prompt revision rejected: plan hash, state or revision budget is invalid",
+            )
+        current = str(run["status"])
+        if current != "RUNNING":
+            self.store.transition_run(run_id, current, "RUNNING", "prompt-only revision accepted")
+        layout = json.loads(str(run.get("layout_json") or "{}"))
+        clip_count = len({
+            str(task["logical_key"]).split(":", 1)[0]
+            for task in self.store.list_tasks(run_id)
+            if ":" in str(task["logical_key"])
+        })
+        return self._drive_runtime(runtime, clip_count, layout)
+
     def cancel(self, run_id: str) -> None:
         run = self.store.get_run(run_id)
         if run is None:
@@ -357,6 +445,11 @@ class VideoRuntime:
             runtime.tick()
         if runtime.has_failures():
             status = "FAILED"
+        elif any(
+            task.status == TaskState.WAITING_PROMPT_REVISION.value
+            for task in runtime.tasks.values()
+        ):
+            status = "WAITING_PROMPT_REVISION"
         elif runtime.is_complete():
             status = "COMPLETED"
         else:

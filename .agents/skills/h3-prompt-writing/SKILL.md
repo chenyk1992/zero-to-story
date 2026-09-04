@@ -11,6 +11,10 @@ description: Write MiniMax H3 video generation prompts for T2VA, I2VA, FL2VA, L2
 2. For base text/keyframe modes, read `references/base-en.txt` and follow its final prompt structure.
 3. For full-reference mode, read `references/ref-en.txt` and follow its six-section rewrite format.
 4. Preserve the exact field names, section order, labels, and timing notation from the selected guide.
+5. Emit a prompt manifest sidecar for the single Panel. The manifest is a
+   preflight artifact, not an alternate prompt: it records the approved
+   ``plan_hash``, prompt hash, Setup windows, dialogue events, and typed
+   reference slots so accidental drift is caught before LFO.
 
 ## Base Modes
 
@@ -37,6 +41,16 @@ Choose/validate the operation from the approved director control intent and actu
 
 The mode recommendation is made upstream after the full-story rhythm and Camera Setup design. This Skill only checks that the recommendation can consume the supplied assets and writes the corresponding H3 form. If it cannot, stop with a concise incompatibility report instead of making a quiet fallback.
 
+The supplied production timing is authoritative. Do not stretch, compress,
+reorder, merge, or invent dialogue/action windows while rewriting prose. If a
+prompt cannot express the approved schedule, report the conflict to
+``zero-to-story`` before LFO; after the production lock, only wording-level
+prompt revision is allowed and it must carry the same ``plan_hash``.
+When revising a locked prompt, regenerate the manifest's prompt bytes and
+``prompt_hash`` while preserving its Setup windows, dialogue events,
+references, and ``plan_hash``; do not use a revision to alter timing or
+coverage.
+
 For P002 and later, the shared storyboard first cell is a zero-duration boundary anchor: preserve its completed pose, gaze, screen direction, and prop state without assigning it a new action, beat, dialogue, or duration. The first effective shot must advance from that state. Keep one `transition ownership` per boundary so adjacent clips cannot perform the same closing action twice.
 
 ## Full-Reference Mode
@@ -50,3 +64,29 @@ Read `references/ref-en.txt` for label rules, retention analysis, and complete e
 - Write rewrite sections in English; preserve dialogue, lyrics, and visible scene text in their original language.
 - Describe each shot by composition, subjects, environment, actions, camera, sound, and the exact point where referenced content appears.
 - Avoid plot summaries, unresolved reference labels, and timing that does not match the requested duration.
+- Alongside the confirmed prompt, write ``prompt-manifests/<panel>.json`` with
+  this minimum shape (all times are local milliseconds):
+
+  ```json
+  {
+    "schema": "h3.prompt-manifest.v1",
+    "clip_id": "P001",
+    "plan_hash": "<64-char SHA-256 from the locked Clip plan>",
+    "prompt_hash": "<SHA-256 of the exact UTF-8 prompt>",
+    "operation": "video.image_to_video",
+    "duration_ms": 8000,
+    "prompt": "<the complete confirmed H3 prompt>",
+    "setup_windows": [{"id": "C001", "start_ms": 0, "end_ms": 8000}],
+    "dialogue_events": [{
+      "event_id": "D001", "speaker_id": "S1", "text": "逐字对白",
+      "start_ms": 1200, "end_ms": 1800, "allow_overlap": false
+    }],
+    "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image"}]
+  }
+  ```
+
+  Validate it before handing the prompt to LFO:
+
+  ```powershell
+  python .agents/skills/h3-prompt-writing/scripts/validate_prompt_manifest.py prompt-manifests/P001.json
+  ```

@@ -52,6 +52,18 @@ class ExecutionReportService:
                 "task_type": task["task_type"],
                 "status": task["status"],
                 "error": task.get("error"),
+                "recovery": {
+                    key: metadata.get(key)
+                    for key in (
+                        "failure_class",
+                        "recovery_action",
+                        "prompt_revision",
+                        "prompt_revision_required",
+                        "plan_hash",
+                        "failure_evidence",
+                    )
+                    if key in metadata
+                },
                 "attempts": attempts_by_task.get(str(task["task_id"]), []),
                 "artifacts": task_artifacts,
             }
@@ -59,7 +71,13 @@ class ExecutionReportService:
             if clip_id is not None:
                 clip = clips.setdefault(
                     clip_id,
-                    {"clip_id": clip_id, "tasks": [], "backend_selection": None, "qc": None},
+                    {
+                        "clip_id": clip_id,
+                        "tasks": [],
+                        "backend_selection": None,
+                        "qc": None,
+                        "audio_qc": None,
+                    },
                 )
                 clip["tasks"].append({"type": task["task_type"], "status": task["status"]})
                 if task["task_type"] == "video.generate":
@@ -74,9 +92,17 @@ class ExecutionReportService:
                     qc_metadata = task_artifacts[-1]["metadata"] if task_artifacts else {}
                     clip["qc"] = {
                         "passed": qc_metadata.get("qc_passed"),
+                        "scope": qc_metadata.get("qc_scope", ["generation_quality"]),
                         "results": qc_metadata.get("qc_results", []),
                         "status": task["status"],
                     }
+                if task["task_type"] == "audio.mix":
+                    audio_metadata = (
+                        task_artifacts[-1]["metadata"]
+                        if task_artifacts
+                        else _json_object(metadata.get("failure_evidence"))
+                    )
+                    clip["audio_qc"] = audio_metadata.get("audio_quality_qc")
 
         connection = self.store.connect()
         lineage = [

@@ -1,0 +1,140 @@
+{
+  "schema": "zero-to-story.creative-blueprint.v2",
+  "project": {
+    "title": "[项目标题]",
+    "scope": "[本次制作范围]",
+    "target_duration_s": 8
+  },
+  "source": {
+    "canonical": "[原文文件或 handoff]",
+    "conflicts": []
+  },
+  "production": {
+    "profile": {
+      "locale": "zh-CN",
+      "postproduction": "none",
+      "dialogue_exactness": "verbatim",
+      "speech_units_per_second": 4.5,
+      "punctuation_pause_ms": 120,
+      "head_guard_ms": 250,
+      "tail_guard_ms": 350,
+      "turn_gap_ms": 180,
+      "safety_margin_ratio": 0.15
+    },
+    "speakers": [
+      {
+        "id": "S1",
+        "character_id": "[角色 ID]",
+        "gender": "[性别或声线]",
+        "age": "[年龄段]"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "S001",
+      "order": 1,
+      "purpose": "[本场让观众理解什么]",
+      "turn": "[本场发生的转折或推进]",
+      "next_obligation": "[离场时下一场必须承接的因果问题]",
+      "location": "[地点、时间、天气]",
+      "cast": ["[角色 ID]"],
+      "entry_state": {"[状态键]": "[进入时可见状态]"},
+      "exit_state": {"[状态键]": "[离场时可见状态]"},
+      "bridge_from_previous": null
+    }
+  ],
+  "panels": [
+    {
+      "id": "P001",
+      "order": 1,
+      "scene_id": "S001",
+      "duration_s": 8,
+      "shot_ids": ["C001"],
+      "coverage_ids": ["EV001"],
+      "entry_state": {"[状态键]": "[进入时可见状态]"},
+      "exit_state": {"[状态键]": "[离场时可见状态]"},
+      "transition_to_next": null
+    }
+  ],
+  "coverage": [
+    {
+      "id": "EV001",
+      "order": 1,
+      "priority": "must_show",
+      "source_refs": ["[原文段落或行号]"],
+      "event": "[必须发生的剧情事件]",
+      "visible_proof": "[观众必须看到什么才算发生]",
+      "before_state": {"[状态键]": "[事件前状态]"},
+      "after_state": {"[状态键]": "[事件后状态]"},
+      "scene_id": "S001",
+      "panel_id": "P001",
+      "shot_id": "C001"
+    }
+  ],
+  "dialogue": [
+    {
+      "id": "D001",
+      "order": 1,
+      "speaker": "[说话人]",
+      "speaker_id": "S1",
+      "text": "[逐字复制原文，不写大意]",
+      "coverage_id": "EV001",
+      "shot_id": "C001",
+      "measured_duration_ms": 1200,
+      "planned_start_ms": 800,
+      "planned_end_ms": 2000,
+      "allow_overlap": false
+    }
+  ],
+  "generation": {
+    "limits": {
+      "reference_slots": 3,
+      "max_critical_characters": 2,
+      "max_actions": 1,
+      "max_camera_moves": 1,
+      "max_dialogue_lines": 2
+    },
+    "panel_plans": [
+      {
+        "panel_id": "P001",
+        "operation": "video.reference_to_video",
+        "visual_asset_policy": "scene_keyframe",
+        "first_frame_source": null,
+        "last_frame_source": null,
+        "runtime_input_keys": ["character.[角色 ID]", "scene.S001.master"],
+        "planning_only_asset_keys": [],
+        "reason": "[先说明 operation 的控制需求，再说明为什么这是最小必要资产集]"
+      }
+    ],
+    "shots": [
+      {
+        "id": "C001",
+        "order": 1,
+        "scene_id": "S001",
+        "panel_id": "P001",
+        "start_ms": 0,
+        "end_ms": 8000,
+        "coverage_ids": ["EV001"],
+        "dialogue_ids": ["D001"],
+        "critical_characters": ["[角色 ID]"],
+        "reference_keys": ["character.[角色 ID]", "scene.S001.master"],
+        "actions": ["[一个可见主动作]"],
+        "action_schedule": [
+          {
+            "id": "A001",
+            "description": "[主动作]",
+            "duration_ms": 2200,
+            "serial_with_dialogue": true
+          }
+        ],
+        "camera_moves": ["[一个摄影机动作或 fixed]"],
+        "purpose": "[本镜头新增的信息]",
+        "state_before": {"[状态键]": "[镜头开始状态]"},
+        "state_after": {"[状态键]": "[镜头结束状态]"},
+        "text_strategy": "none",
+        "post_asset": null
+      }
+    ]
+  }
+}

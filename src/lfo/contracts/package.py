@@ -8,6 +8,11 @@ from .assets import AssetSpec
 from .clips import ClipSpec
 from .errors import ValidationResult
 from .operations import validate_operation_references
+from .production_lock import (
+    AUDIO_ACCEPTANCE_EXTENSION,
+    validate_audio_acceptance,
+    validate_production_lock,
+)
 from .timeline import ApprovalDeclaration, OutputPolicy, TimelineSpec
 from .upscale import UPSCALE_EXTENSION_KEY, validate_upscale_options
 
@@ -156,7 +161,11 @@ class VideoExecutionPackage:
         return d
 
 
-def validate_package(data: Any) -> ValidationResult:
+def validate_package(
+    data: Any,
+    *,
+    require_production_lock: bool = False,
+) -> ValidationResult:
     """Validate a raw Package dict. Returns structured errors."""
     result = ValidationResult()
     if not isinstance(data, dict):
@@ -182,6 +191,12 @@ def validate_package(data: Any) -> ValidationResult:
     except (TypeError, ValueError) as e:
         result.add("$", str(e), "parse")
     _validate_upscale_extension(result, data.get("extensions", {}), "$.extensions")
+    result.extend(
+        validate_production_lock(
+            data,
+            require=require_production_lock,
+        )
+    )
     # Cross-field: clip_id uniqueness
     clips = data.get("clips", [])
     if isinstance(clips, list):
@@ -193,6 +208,14 @@ def validate_package(data: Any) -> ValidationResult:
                     c.get("extensions", {}),
                     f"$.clips[{i}].extensions",
                 )
+                clip_extensions = c.get("extensions", {})
+                if isinstance(clip_extensions, dict) and AUDIO_ACCEPTANCE_EXTENSION in clip_extensions:
+                    result.extend(
+                        validate_audio_acceptance(
+                            clip_extensions[AUDIO_ACCEPTANCE_EXTENSION],
+                            f"$.clips[{i}].extensions.{AUDIO_ACCEPTANCE_EXTENSION}",
+                        )
+                    )
             if isinstance(c, dict) and isinstance(c.get("clip_id"), str):
                 cid = c["clip_id"]
                 if cid in seen_ids:

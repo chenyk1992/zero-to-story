@@ -1,18 +1,24 @@
-"""Technical QC — validate generated media against materialized output contract.
+"""Generation-output review for media tasks.
 
-QC rules check decodability, duration tolerance, resolution, fps, codec,
-and audio presence against the contract defined at materialization time.
+The runtime deliberately keeps this stage small.  H3 is responsible for the
+visual interpretation of the approved prompt, while audio mixing and boundary
+evidence have their own operational checks.  This module therefore only asks
+whether the generation handler produced a non-empty artifact.  It does not
+probe or judge duration, resolution, frame rate, codecs, audio streams, black
+frames, freeze frames, mid-shot actions, identity/space continuity, props, or
+on-screen text.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
 @dataclass
 class QCRuleResult:
-    """Result of a single QC rule check."""
+    """Result of a single generation-quality rule."""
 
     rule: str
     passed: bool
@@ -23,7 +29,7 @@ class QCRuleResult:
 
 @dataclass
 class QCReport:
-    """Aggregated QC result for a media asset."""
+    """Aggregated generation-quality result for a media artifact."""
 
     passed: bool
     results: list[QCRuleResult] = field(default_factory=list)
@@ -31,189 +37,62 @@ class QCReport:
 
     @property
     def failures(self) -> list[QCRuleResult]:
-        return [r for r in self.results if not r.passed]
+        return [result for result in self.results if not result.passed]
 
 
-@dataclass
-class QCContract:
-    """The contract that generated output must satisfy."""
+@dataclass(frozen=True)
+class GenerationQualityContract:
+    """Minimal contract for the generation-output gate.
 
-    min_duration_ms: int | None = None
-    max_duration_ms: int | None = None
-    tolerance_ms: int = 500  # acceptable duration deviation
-    expected_width: int | None = None
-    expected_height: int | None = None
-    expected_fps: float | None = None
-    expected_codec: str | None = None
-    requires_audio: bool | None = None  # None = don't care
-    min_width: int | None = None
-    min_height: int | None = None
-    max_width: int | None = None
-    max_height: int | None = None
+    ``require_artifact`` is intentionally the only policy here.  Output
+    encoding and audio policy are handled by their respective pipeline stages;
+    semantic review is an operator decision outside the LFO runtime gate.
+    """
+
+    require_artifact: bool = True
 
 
-class TechnicalQC:
-    """Run QC checks against a contract."""
+class GenerationQualityQC:
+    """Check only that generation returned a usable file artifact."""
 
-    def check(self, probe_result: dict[str, Any], contract: QCContract) -> QCReport:
-        """Run all QC checks.
-
-        Args:
-            probe_result: ffprobe-like metadata dict with keys like
-                duration_ms, width, height, fps, codec, has_audio.
-            contract: The QC contract to validate against.
-
-        Returns:
-            QCReport with per-rule results and overall pass/fail.
-        """
-        results: list[QCRuleResult] = []
-
-        results.append(self.check_decodable(probe_result))
-        results.append(self.check_duration(probe_result, contract))
-        results.append(self.check_resolution(probe_result, contract))
-        results.append(self.check_fps(probe_result, contract))
-        results.append(self.check_codec(probe_result, contract))
-        results.append(self.check_audio(probe_result, contract))
-
-        overall_passed = all(r.passed for r in results)
+    def check(
+        self,
+        artifact_path: str | Path | None,
+        contract: GenerationQualityContract | None = None,
+    ) -> QCReport:
+        policy = contract or GenerationQualityContract()
+        path = Path(artifact_path) if artifact_path is not None else None
+        try:
+            exists = path is not None and path.is_file()
+            size = path.stat().st_size if exists and path is not None else 0
+        except OSError:
+            # A provider may finish while its managed copy is still being
+            # released or become unreadable.  Treat that as a retryable empty
+            # artifact rather than allowing the QC handler to crash the run.
+            exists = False
+            size = 0
+        non_empty = exists and size > 0
+        passed = non_empty if policy.require_artifact else True
+        result = QCRuleResult(
+            rule="generation_artifact",
+            passed=passed,
+            message="" if passed else "Generated artifact is missing or empty",
+            expected="non-empty file" if policy.require_artifact else "optional",
+            actual=(str(path), size) if path is not None else None,
+        )
         return QCReport(
-            passed=overall_passed,
-            results=results,
-            asset_metadata=dict(probe_result),
+            passed=passed,
+            results=[result],
+            asset_metadata={
+                "file_path": str(path) if path is not None else None,
+                "file_size": size,
+            },
         )
 
-    def check_decodable(self, probe_result: dict[str, Any]) -> QCRuleResult:
-        """Check the media is decodable (has basic stream info)."""
-        has_video = probe_result.get("width") is not None and probe_result.get("height") is not None
-        return QCRuleResult(
-            rule="decodable",
-            passed=has_video,
-            message="" if has_video else "No video stream found",
-        )
 
-    def check_duration(
-        self,
-        probe_result: dict[str, Any],
-        contract: QCContract,
-    ) -> QCRuleResult:
-        """Check duration is within tolerance of expected."""
-        actual = probe_result.get("duration_ms")
-        if actual is None:
-            return QCRuleResult(rule="duration", passed=False, message="No duration info")
-
-        # Check min/max constraints
-        if contract.min_duration_ms is not None and actual < contract.min_duration_ms:
-            return QCRuleResult(
-                rule="duration",
-                passed=False,
-                message=f"Duration {actual}ms < min {contract.min_duration_ms}ms",
-                expected=contract.min_duration_ms,
-                actual=actual,
-            )
-        if contract.max_duration_ms is not None and actual > contract.max_duration_ms:
-            return QCRuleResult(
-                rule="duration",
-                passed=False,
-                message=f"Duration {actual}ms > max {contract.max_duration_ms}ms",
-                expected=contract.max_duration_ms,
-                actual=actual,
-            )
-        return QCRuleResult(rule="duration", passed=True)
-
-    def check_resolution(
-        self,
-        probe_result: dict[str, Any],
-        contract: QCContract,
-    ) -> QCRuleResult:
-        """Check resolution matches expected or is within bounds."""
-        width = probe_result.get("width")
-        height = probe_result.get("height")
-        if width is None or height is None:
-            return QCRuleResult(rule="resolution", passed=False, message="No resolution info")
-
-        # Exact match if expected
-        if contract.expected_width is not None and width != contract.expected_width:
-            return QCRuleResult(
-                rule="resolution",
-                passed=False,
-                message=f"Width {width} != expected {contract.expected_width}",
-                expected=contract.expected_width,
-                actual=width,
-            )
-        if contract.expected_height is not None and height != contract.expected_height:
-            return QCRuleResult(
-                rule="resolution",
-                passed=False,
-                message=f"Height {height} != expected {contract.expected_height}",
-                expected=contract.expected_height,
-                actual=height,
-            )
-        # Bounds check
-        if contract.min_width is not None and width < contract.min_width:
-            return QCRuleResult(
-                rule="resolution", passed=False, message=f"Width {width} < min {contract.min_width}"
-            )
-        if contract.max_width is not None and width > contract.max_width:
-            return QCRuleResult(
-                rule="resolution", passed=False, message=f"Width {width} > max {contract.max_width}"
-            )
-        return QCRuleResult(rule="resolution", passed=True)
-
-    def check_fps(
-        self,
-        probe_result: dict[str, Any],
-        contract: QCContract,
-    ) -> QCRuleResult:
-        """Check fps matches expected."""
-        if contract.expected_fps is None:
-            return QCRuleResult(rule="fps", passed=True)
-        actual = probe_result.get("fps")
-        if actual is None:
-            return QCRuleResult(rule="fps", passed=False, message="No fps info")
-        if abs(float(actual) - float(contract.expected_fps)) > 0.01:
-            return QCRuleResult(
-                rule="fps",
-                passed=False,
-                message=f"FPS {actual} != expected {contract.expected_fps}",
-                expected=contract.expected_fps,
-                actual=actual,
-            )
-        return QCRuleResult(rule="fps", passed=True)
-
-    def check_codec(
-        self,
-        probe_result: dict[str, Any],
-        contract: QCContract,
-    ) -> QCRuleResult:
-        """Check codec matches expected."""
-        if contract.expected_codec is None:
-            return QCRuleResult(rule="codec", passed=True)
-        actual = probe_result.get("codec")
-        if actual is None:
-            return QCRuleResult(rule="codec", passed=False, message="No codec info")
-        if actual != contract.expected_codec:
-            return QCRuleResult(
-                rule="codec",
-                passed=False,
-                message=f"Codec {actual} != expected {contract.expected_codec}",
-                expected=contract.expected_codec,
-                actual=actual,
-            )
-        return QCRuleResult(rule="codec", passed=True)
-
-    def check_audio(
-        self,
-        probe_result: dict[str, Any],
-        contract: QCContract,
-    ) -> QCRuleResult:
-        """Check audio presence matches contract."""
-        if contract.requires_audio is None:
-            return QCRuleResult(rule="audio", passed=True)
-        has_audio = probe_result.get("has_audio", False)
-        if contract.requires_audio and not has_audio:
-            return QCRuleResult(rule="audio", passed=False, message="Audio required but missing")
-        if not contract.requires_audio and has_audio:
-            return QCRuleResult(
-                rule="audio", passed=False, message="Audio present but not expected"
-            )
-        return QCRuleResult(rule="audio", passed=True)
+__all__ = [
+    "GenerationQualityContract",
+    "GenerationQualityQC",
+    "QCReport",
+    "QCRuleResult",
+]

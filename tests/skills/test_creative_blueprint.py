@@ -239,3 +239,142 @@ def test_cli_emits_json_result(tmp_path: Path, capsys: Any) -> None:
     assert MODULE.main([str(blueprint_path), "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result == {"ok": True, "issues": []}
+
+
+def _readiness_blueprint() -> dict[str, Any]:
+    blueprint = _valid_blueprint()
+    blueprint["schema"] = "zero-to-story.creative-blueprint.v2"
+    blueprint["generation"]["shots"][1]["reference_keys"] = ["boundary.P001.last_frame"]
+    blueprint["generation"]["panel_plans"] = [
+        {
+            "panel_id": "P001",
+            "operation": "video.reference_to_video",
+            "visual_asset_policy": "scene_keyframe",
+            "first_frame_source": None,
+            "last_frame_source": None,
+            "runtime_input_keys": ["character.teacher", "scene.S001.master"],
+            "planning_only_asset_keys": [],
+            "reason": "A new location and identity reference must be established together.",
+        },
+        {
+            "panel_id": "P002",
+            "operation": "video.image_to_video",
+            "visual_asset_policy": "none",
+            "first_frame_source": "boundary.P001.last_frame",
+            "last_frame_source": None,
+            "runtime_input_keys": ["boundary.P001.last_frame"],
+            "planning_only_asset_keys": ["board.P002"],
+            "reason": "Continue from the accepted real tail frame without generating another image.",
+        },
+    ]
+    blueprint["production"] = {
+        "profile": {
+            "locale": "en-US",
+            "postproduction": "none",
+            "dialogue_exactness": "verbatim",
+            "speech_units_per_second": 4.5,
+            "punctuation_pause_ms": 120,
+            "head_guard_ms": 250,
+            "tail_guard_ms": 350,
+            "turn_gap_ms": 180,
+            "safety_margin_ratio": 0.15,
+        },
+        "speakers": [
+            {"id": "S1", "character_id": "teacher", "gender": "male", "age": "adult"},
+            {"id": "S2", "character_id": "student", "gender": "female", "age": "young adult"},
+        ],
+    }
+    for line, speaker_id, start, end in (
+        (blueprint["dialogue"][0], "S1", 900, 1800),
+        (blueprint["dialogue"][1], "S2", 1000, 1700),
+    ):
+        line["speaker_id"] = speaker_id
+        line["measured_duration_ms"] = end - start
+        line["planned_start_ms"] = start
+        line["planned_end_ms"] = end
+        line["allow_overlap"] = False
+    for shot, end_ms, action_id, action_ms in (
+        (blueprint["generation"]["shots"][0], 8000, "A001", 2200),
+        (blueprint["generation"]["shots"][1], 6000, "A002", 1800),
+    ):
+        shot["start_ms"] = 0
+        shot["end_ms"] = end_ms
+        shot["action_schedule"] = [
+            {
+                "id": action_id,
+                "description": "single visible action",
+                "duration_ms": action_ms,
+                "serial_with_dialogue": True,
+            }
+        ]
+    return blueprint
+
+
+def test_readiness_blueprint_catches_timing_overload_before_generation() -> None:
+    blueprint = _readiness_blueprint()
+    assert MODULE.validate_blueprint(blueprint) == []
+
+    blueprint["generation"]["shots"][0]["action_schedule"][0]["duration_ms"] = 9000
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "production window is overfull" in messages
+
+
+def test_readiness_requires_speaker_registry_and_planned_windows() -> None:
+    blueprint = _readiness_blueprint()
+    blueprint["production"]["speakers"] = []
+    blueprint["dialogue"][0].pop("planned_end_ms")
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "unknown production speaker" in messages or "production.speakers" in messages
+    assert "planned_end_ms" in messages
+
+
+def test_readiness_requires_one_ordered_panel_plan_per_panel() -> None:
+    blueprint = _readiness_blueprint()
+    blueprint["generation"]["panel_plans"].pop()
+
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "generation.panel_plans" in messages
+    assert "exactly one plan per Panel" in messages
+
+
+def test_i2v_rejects_storyboard_board_as_runtime_input() -> None:
+    blueprint = _readiness_blueprint()
+    blueprint["generation"]["shots"][1]["reference_keys"].append("board.P002")
+    plan = blueprint["generation"]["panel_plans"][1]
+    plan["runtime_input_keys"].append("board.P002")
+    plan["planning_only_asset_keys"] = []
+
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "storyboard boards are planning assets" in messages
+    assert "image-to-video accepts only its first_frame_source" in messages
+
+
+def test_fl2v_requires_explicit_first_and_last_frame_sources() -> None:
+    blueprint = _readiness_blueprint()
+    plan = blueprint["generation"]["panel_plans"][1]
+    plan["operation"] = "video.first_last_frame"
+    plan["visual_asset_policy"] = "last_frame"
+
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "last_frame_source" in messages
+
+
+def test_i2v_allows_a_planning_only_board() -> None:
+    blueprint = _readiness_blueprint()
+    assert MODULE.validate_blueprint(blueprint) == []
+
+
+def test_panel_runtime_inputs_must_match_setup_reference_union() -> None:
+    blueprint = _readiness_blueprint()
+    blueprint["generation"]["panel_plans"][0]["runtime_input_keys"] = [
+        "character.teacher"
+    ]
+
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "must exactly match the Panel's ordered Setup reference union" in messages

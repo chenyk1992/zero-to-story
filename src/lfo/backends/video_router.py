@@ -87,6 +87,8 @@ class VideoTaskRouter(TaskHandler):
                 success=False,
                 error=f"Unsupported task type: {task_type}",
                 retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
             )
         backend_id = metadata.get("backend_id")
         if not isinstance(backend_id, str) or not backend_id:
@@ -94,6 +96,8 @@ class VideoTaskRouter(TaskHandler):
                 success=False,
                 error="video.generate metadata.backend_id is required",
                 retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
             )
         handler = self.handlers.get(backend_id)
         if handler is None:
@@ -101,6 +105,8 @@ class VideoTaskRouter(TaskHandler):
                 success=False,
                 error=f"Unknown video backend: {backend_id}",
                 retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
             )
 
         return handler.execute(

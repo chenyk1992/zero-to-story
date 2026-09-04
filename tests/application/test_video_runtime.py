@@ -9,6 +9,7 @@ from lfo.backends.capabilities import CapabilityManifest
 from lfo.backends.passthrough import PASSTHROUGH_BACKEND_ID, PASSTHROUGH_BACKEND_REVISION
 from lfo.backends.registry import BackendRegistry
 from lfo.backends.video_router import VideoTaskRouter
+from lfo.contracts import with_production_lock
 from lfo.execution.handlers import default_fake_registry
 
 
@@ -95,6 +96,23 @@ class TestVideoRuntime:
         result = rt.validate(p)
         assert not result.valid
         assert len(result.errors) > 0
+
+    def test_strict_runtime_requires_and_accepts_production_lock(self, tmp_path: pathlib.Path) -> None:
+        package_path = _package_json(tmp_path)
+        strict = VideoRuntime(
+            _registry(),
+            workspace_root=tmp_path / "strict-workspace",
+            handler_registry=default_fake_registry(),
+            require_production_lock=True,
+        )
+        rejected = strict.validate(package_path)
+        assert not rejected.valid
+        assert any(error["code"] == "production_lock_required" for error in rejected.errors)
+
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        package_path.write_text(json.dumps(with_production_lock(package)), encoding="utf-8")
+        accepted = strict.validate(package_path)
+        assert accepted.valid, accepted.errors
 
     def test_validate_missing_file(self, tmp_path: pathlib.Path) -> None:
         rt = _runtime(tmp_path)

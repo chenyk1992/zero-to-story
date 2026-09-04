@@ -36,6 +36,8 @@ class VideoPassthroughHandler(TaskHandler):
                 success=False,
                 error=f"Unsupported task type: {task_type}",
                 retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
             )
 
         try:
@@ -70,7 +72,13 @@ class VideoPassthroughHandler(TaskHandler):
                 },
             )
         except (ArtifactLayoutError, FileNotFoundError, OSError, TypeError, ValueError) as exc:
-            return HandlerResult(success=False, error=str(exc), retryable=False)
+            return HandlerResult(
+                success=False,
+                error=str(exc),
+                retryable=False,
+                failure_class="creative_input",
+                recovery_action="block_for_user",
+            )
 
 
 # Concise aliases make the backend discoverable without coupling callers to
