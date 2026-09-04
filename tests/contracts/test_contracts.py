@@ -15,6 +15,7 @@ from lfo.contracts import (
     GenerationSpec,
     ReferenceSpec,
     SubtitleCue,
+    SubtitleSpec,
     ValidationError,
     ValidationResult,
     VideoExecutionPackage,
@@ -137,6 +138,22 @@ class TestAssetSpec:
     def test_missing_uri(self):
         data = _make_asset(source={})
         with pytest.raises(ValueError, match="uri"):
+            AssetSpec.from_dict(data, "$")
+
+    @pytest.mark.parametrize(
+        "uri",
+        [
+            "C:/outside.png",
+            "/outside.png",
+            "\\\\server\\share.png",
+            "https://example.com/asset.png",
+            "../outside.png",
+            "assets/../outside.png",
+        ],
+    )
+    def test_source_uri_must_be_package_relative(self, uri: str):
+        data = _make_asset(source={"uri": uri})
+        with pytest.raises(ValueError, match="package-relative local URI"):
             AssetSpec.from_dict(data, "$")
 
     def test_metadata_preserved(self):
@@ -279,7 +296,6 @@ class TestGenerationSpec:
         data = {
             "operation": "video.reference_to_video",
             "prompt": "A hero walks",
-            "negative_prompt": "blurry",
             "seed": 42,
             "requirements": {"width": 1080, "height": 1920},
             "references": [
@@ -287,7 +303,7 @@ class TestGenerationSpec:
                     "reference_id": "r1",
                     "asset_key": "hero.img",
                     "semantic_usage": "subject",
-                    "binding": {},
+                    "binding": {"placement": "fixed", "slot": "ref_image_0"},
                 }
             ],
         }
@@ -300,6 +316,32 @@ class TestGenerationSpec:
     def test_missing_prompt(self):
         with pytest.raises(ValueError, match="prompt"):
             GenerationSpec.from_dict({"operation": "x"}, "$")
+
+    def test_duplicate_reference_ids_are_rejected(self):
+        reference = {
+            "reference_id": "same",
+            "asset_key": "hero.img",
+            "semantic_usage": "subject",
+            "binding": {"placement": "fixed", "slot": "ref_image_0"},
+        }
+        with pytest.raises(ValueError, match="duplicate reference_id"):
+            GenerationSpec.from_dict(
+                {
+                    "operation": "video.reference_to_video",
+                    "prompt": "A hero",
+                    "references": [reference, {**reference, "binding": {
+                        "placement": "fixed", "slot": "ref_image_1",
+                    }}],
+                },
+                "$",
+            )
+
+    def test_removed_l2va_operation_is_rejected_by_direct_parser(self):
+        with pytest.raises(ValueError, match="unsupported video operation"):
+            GenerationSpec.from_dict(
+                {"operation": "video.l2va", "prompt": "legacy"},
+                "$",
+            )
 
     def test_package_rejects_presenter_exact_first_frame_claim(self):
         reference = {
@@ -317,6 +359,63 @@ class TestGenerationSpec:
         )
         with pytest.raises(ValueError, match="exact/hard first-frame continuity"):
             VideoExecutionPackage.from_dict(_make_package(clips=[clip]))
+
+    def test_package_rejects_presenter_without_references(self):
+        clip = _make_clip(
+            generation={
+                "operation": "video.virtual_presenter",
+                "prompt": "Presenter",
+                "references": [],
+            }
+        )
+        with pytest.raises(ValueError, match="requires at least one reference"):
+            VideoExecutionPackage.from_dict(_make_package(clips=[clip]))
+
+    def test_package_rejects_presenter_untyped_slot(self):
+        reference = {
+            "reference_id": "r1",
+            "asset_key": "test.img",
+            "semantic_usage": "subject.identity",
+            "binding": {"placement": "fixed", "slot": "character"},
+        }
+        clip = _make_clip(
+            generation={
+                "operation": "video.virtual_presenter",
+                "prompt": "Presenter",
+                "references": [reference],
+            }
+        )
+        with pytest.raises(ValueError, match="typed fixed slots"):
+            VideoExecutionPackage.from_dict(_make_package(clips=[clip]))
+
+    def test_package_rejects_duplicate_r2v_slots(self):
+        data = _make_package(
+            assets=[
+                _make_asset(asset_key="first.image"),
+                _make_asset(asset_key="second.image"),
+            ],
+            clips=[_make_clip(generation={
+                "operation": "video.reference_to_video",
+                "prompt": "Two references",
+                "references": [
+                    {
+                        "reference_id": "first",
+                        "asset_key": "first.image",
+                        "semantic_usage": "subject.identity",
+                        "binding": {"placement": "fixed", "slot": "ref_image_0"},
+                    },
+                    {
+                        "reference_id": "second",
+                        "asset_key": "second.image",
+                        "semantic_usage": "style.visual",
+                        "binding": {"placement": "fixed", "slot": "ref_image_0"},
+                    },
+                ],
+            })],
+        )
+
+        with pytest.raises(ValueError, match="duplicate slot"):
+            VideoExecutionPackage.from_dict(data)
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +449,24 @@ class TestAudioPolicy:
         assert ap.tracks[0].asset_key == "dlg.wav"
         assert ap.to_dict() == data
 
+    @pytest.mark.parametrize(
+        "field",
+        ["offset_ms", "fade_in_ms", "fade_out_ms"],
+    )
+    def test_negative_timing_is_rejected(self, field):
+        with pytest.raises(ValueError, match=field):
+            AudioPolicy.from_dict(
+                {"tracks": [{"asset_key": "dlg.wav", "role": "dialogue", field: -1}]},
+                "$",
+            )
+
+    def test_non_numeric_gain_is_rejected(self):
+        with pytest.raises(ValueError, match="gain_db"):
+            AudioPolicy.from_dict(
+                {"tracks": [{"asset_key": "dlg.wav", "role": "dialogue", "gain_db": "loud"}]},
+                "$",
+            )
+
 
 # ---------------------------------------------------------------------------
 # SubtitleSpec & SubtitleCue
@@ -372,6 +489,24 @@ class TestSubtitleCue:
         with pytest.raises(ValueError, match="greater"):
             SubtitleCue.from_dict(
                 {"start_ms": 500, "end_ms": 500, "text": "x"}, "$"
+            )
+
+    def test_negative_start_and_empty_text_are_rejected(self):
+        with pytest.raises(ValueError, match="start_ms"):
+            SubtitleCue.from_dict({"start_ms": -1, "end_ms": 500, "text": "x"}, "$")
+        with pytest.raises(ValueError, match="text"):
+            SubtitleCue.from_dict({"start_ms": 0, "end_ms": 500, "text": " "}, "$")
+
+    def test_overlapping_cues_are_rejected(self):
+        with pytest.raises(ValueError, match="overlaps"):
+            SubtitleSpec.from_dict(
+                {
+                    "cues": [
+                        {"start_ms": 0, "end_ms": 1000, "text": "one"},
+                        {"start_ms": 500, "end_ms": 1200, "text": "two"},
+                    ]
+                },
+                "$",
             )
 
 
@@ -403,10 +538,29 @@ class TestClipSpec:
         with pytest.raises(ValueError, match="positive"):
             ClipSpec.from_dict(_make_clip(duration_ms=0), "$")
 
+    def test_sequence_positive(self):
+        with pytest.raises(ValueError, match=">= 1"):
+            ClipSpec.from_dict(_make_clip(sequence=0), "$")
+
     def test_minimal(self):
         clip = ClipSpec.from_dict(_make_clip(), "$")
         assert clip.dependencies == []
         assert clip.extensions == {}
+
+    def test_subtitle_cue_must_fit_clip_duration(self):
+        with pytest.raises(ValueError, match="exceeds clip duration"):
+            ClipSpec.from_dict(
+                _make_clip(
+                    duration_ms=1000,
+                    subtitles={"cues": [{"start_ms": 0, "end_ms": 1001, "text": "late"}]},
+                ),
+                "$",
+            )
+
+    @pytest.mark.parametrize("clip_id", ["../escape", "nested/clip", "nested\\clip"])
+    def test_clip_id_must_be_one_artifact_path_component(self, clip_id: str) -> None:
+        with pytest.raises(ValueError, match="single path component"):
+            ClipSpec.from_dict(_make_clip(clip_id=clip_id), "$")
 
 
 # ---------------------------------------------------------------------------
@@ -464,12 +618,151 @@ class TestVideoExecutionPackage:
         pkg = VideoExecutionPackage.from_dict(data)
         assert pkg.extensions == {"zero-to-story.x": [1]}
 
-    def test_empty_assets_clips_ok(self):
-        pkg = VideoExecutionPackage.from_dict(
-            _make_package(assets=[], clips=[])
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("package_id", "../escape"),
+            ("package_id", "CON"),
+            ("project_id", "nested/project"),
+            ("project_id", "LPT1.txt"),
+            ("directory", "nested/final"),
+            ("directory", "NUL"),
+        ],
+    )
+    def test_artifact_identifiers_are_safe_path_components(
+        self, field: str, value: str
+    ) -> None:
+        data = _make_package()
+        if field == "project_id":
+            data["project"]["project_id"] = value
+        elif field == "directory":
+            data["output"]["directory"] = value
+        else:
+            data[field] = value
+
+        with pytest.raises(ValueError):
+            VideoExecutionPackage.from_dict(data)
+
+    def test_explicit_null_timeline_is_rejected(self):
+        with pytest.raises(TypeError, match="timeline: expected object"):
+            VideoExecutionPackage.from_dict(_make_package(timeline=None))
+
+    def test_direct_parser_rejects_multiple_generated_clips(self):
+        data = _make_package(
+            clips=[
+                _make_clip(),
+                _make_clip(clip_id="clip-002", sequence=2),
+            ]
         )
-        assert pkg.assets == []
-        assert pkg.clips == []
+
+        with pytest.raises(ValueError, match="pure passthrough assembly"):
+            VideoExecutionPackage.from_dict(data)
+
+    def test_empty_clips_are_not_a_production_package(self):
+        result = validate_package(_make_package(assets=[], clips=[]))
+        assert not result.ok
+        assert any(error.code == "production_shape" for error in result.errors())
+
+    @pytest.mark.parametrize("clip_id", ["../escape", "nested/clip", "nested\\clip"])
+    def test_validate_rejects_clip_id_that_is_not_a_path_component(self, clip_id: str):
+        result = validate_package(_make_package(clips=[_make_clip(clip_id=clip_id)]))
+        assert not result.ok
+        assert any("single path component" in error.message for error in result.errors())
+
+    def test_multiple_generated_clips_are_not_a_production_package(self):
+        result = validate_package(
+            _make_package(
+                clips=[
+                    _make_clip(),
+                    _make_clip(clip_id="clip-002", sequence=2),
+                ]
+            )
+        )
+        assert not result.ok
+        assert any(error.code == "production_shape" for error in result.errors())
+
+    def test_multiple_passthrough_clips_are_allowed_for_assembly(self):
+        asset = _make_asset(
+            asset_key="accepted.video",
+            media_type="video",
+            source={"uri": "assets/accepted.mp4"},
+        )
+        passthrough = {
+            "clip_id": "clip-001",
+            "sequence": 1,
+            "duration_ms": 5000,
+            "generation": {
+                "operation": "video.passthrough",
+                "prompt": "Pass through accepted media",
+                "requirements": {},
+                "references": [{
+                    "reference_id": "source-video",
+                    "asset_key": "accepted.video",
+                    "semantic_usage": "source.accepted_video",
+                    "binding": {"placement": "fixed", "slot": "source_video"},
+                }],
+            },
+        }
+        second = dict(passthrough)
+        second["clip_id"] = "clip-002"
+        second["sequence"] = 2
+        result = validate_package(_make_package(assets=[asset], clips=[passthrough, second]))
+        assert result.ok, result.to_dict()
+
+    def test_passthrough_assembly_rejects_enabled_upscale(self):
+        asset = _make_asset(
+            asset_key="accepted.video",
+            media_type="video",
+            source={"uri": "assets/accepted.mp4"},
+        )
+        passthrough = {
+            "clip_id": "clip-001",
+            "sequence": 1,
+            "duration_ms": 5000,
+            "generation": {
+                "operation": "video.passthrough",
+                "prompt": "Pass through accepted media",
+                "requirements": {},
+                "references": [{
+                    "reference_id": "source-video",
+                    "asset_key": "accepted.video",
+                    "semantic_usage": "source.accepted_video",
+                    "binding": {"placement": "fixed", "slot": "source_video"},
+                }],
+            },
+        }
+
+        result = validate_package(
+            _make_package(
+                assets=[asset],
+                clips=[passthrough],
+                extensions={"upscale": {"enabled": True}},
+            )
+        )
+
+        assert not result.ok
+        assert any(
+            error.path == "$.extensions.upscale.enabled"
+            and "passthrough assembly" in error.message
+            for error in result.errors()
+        )
+
+    def test_passthrough_requires_one_video_reference(self):
+        passthrough = _make_clip(
+            generation={
+                "operation": "video.passthrough",
+                "prompt": "Pass through accepted media",
+                "requirements": {},
+            }
+        )
+
+        result = validate_package(_make_package(assets=[], clips=[passthrough]))
+
+        assert not result.ok
+        assert any(
+            "exactly one video reference" in error.message
+            for error in result.errors()
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -508,6 +801,43 @@ class TestValidatePackage:
         assert not vr.ok
         assert any(e.code == "unique" and "clip_id" in e.message for e in vr.errors())
 
+    def test_duplicate_clip_sequence(self):
+        first = _make_clip(
+            clip_id="clip-001",
+            generation={
+                "operation": "video.passthrough",
+                "prompt": "one",
+                "references": [{
+                    "reference_id": "source-one",
+                    "asset_key": "video.one",
+                    "semantic_usage": "source.accepted_video",
+                    "binding": {"placement": "fixed", "slot": "source_video"},
+                }],
+            },
+        )
+        second = _make_clip(
+            clip_id="clip-002",
+            generation={
+                "operation": "video.passthrough",
+                "prompt": "two",
+                "references": [{
+                    "reference_id": "source-two",
+                    "asset_key": "video.two",
+                    "semantic_usage": "source.accepted_video",
+                    "binding": {"placement": "fixed", "slot": "source_video"},
+                }],
+            },
+        )
+        vr = validate_package(_make_package(
+            assets=[
+                _make_asset(asset_key="video.one", media_type="video"),
+                _make_asset(asset_key="video.two", media_type="video"),
+            ],
+            clips=[first, second],
+        ))
+        assert not vr.ok
+        assert any(e.code == "unique" and "sequence" in e.message for e in vr.errors())
+
     def test_duplicate_asset_key(self):
         data = _make_package(
             assets=[_make_asset(), _make_asset()]
@@ -529,6 +859,42 @@ class TestValidatePackage:
         vr = validate_package(data)
         assert not vr.ok
         assert any(e.code == "reference" for e in vr.errors())
+
+    def test_unknown_audio_track_asset_is_rejected(self):
+        data = _make_package()
+        data["clips"][0]["audio"] = {
+            "native_audio": "replace",
+            "tracks": [{"asset_key": "missing.audio", "role": "narration"}],
+        }
+
+        vr = validate_package(data)
+
+        assert not vr.ok
+        assert any(
+            "unknown asset_key 'missing.audio'" in error.message
+            for error in vr.errors()
+        )
+
+    def test_audio_track_must_reference_audio_asset(self):
+        data = _make_package()
+        data["clips"][0]["audio"] = {
+            "native_audio": "replace",
+            "tracks": [{"asset_key": "test.img", "role": "narration"}],
+        }
+
+        vr = validate_package(data)
+
+        assert not vr.ok
+        assert any("expected audio asset" in error.message for error in vr.errors())
+
+    def test_subtitle_must_reference_subtitle_asset(self):
+        data = _make_package()
+        data["clips"][0]["subtitles"] = {"asset_key": "test.img"}
+
+        vr = validate_package(data)
+
+        assert not vr.ok
+        assert any("expected subtitle asset" in error.message for error in vr.errors())
 
 
 # ---------------------------------------------------------------------------
@@ -611,8 +977,7 @@ class TestExamplePackages:
         )
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         required = set(schema.get("required", []))
-        assert "assets" in required
-        assert "clips" in required
+        assert required == {"schema", "package_id", "revision", "project", "clips"}
         # No creative enums in top-level required
         for creative in ("characters", "scenes", "props", "panels", "beats"):
             assert creative not in required
@@ -658,9 +1023,7 @@ class TestJsonSchema:
             "package_id",
             "revision",
             "project",
-            "assets",
             "clips",
-            "output",
         }
 
     def test_schema_no_creative_enums(self):

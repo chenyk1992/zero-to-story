@@ -21,7 +21,17 @@ def _package(project_id: str = "project-1", package_id: str = "package-1") -> Vi
             "revision": 2,
             "project": {"title": "Test", "project_id": project_id},
             "assets": [],
-            "clips": [],
+            "clips": [
+                {
+                    "clip_id": "clip-1",
+                    "sequence": 1,
+                    "duration_ms": 5_000,
+                    "generation": {
+                        "operation": "video.text_to_video",
+                        "prompt": "layout test",
+                    },
+                }
+            ],
             "output": {"directory": "revision-002", "container": "mp4"},
         }
     )
@@ -55,7 +65,11 @@ def test_layout_is_project_scoped_and_versioned(tmp_path: Path) -> None:
 
 
 def test_layout_rejects_missing_or_unsafe_project_identity(tmp_path: Path) -> None:
-    package = _package(project_id="../escape")
+    with pytest.raises(ValueError, match="single path component"):
+        _package(project_id="../escape")
+
+    package = _package()
+    package.project.project_id = "../escape"
     with pytest.raises(ArtifactLayoutError):
         RunArtifactLayout.from_package(
             workspace_root=tmp_path / "workspace", run_id="run-1", package=package

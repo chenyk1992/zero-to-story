@@ -15,7 +15,6 @@ from lfo.environment.checks.comfy_runtime import (
 )
 from lfo.environment.checks.filesystem import (
     check_disk_space,
-    check_input_writable,
     check_output_readable,
     check_project_writable,
 )
@@ -29,7 +28,9 @@ from lfo.environment.checks.models import (
     check_models_present,
 )
 from lfo.environment.checks.tools import (
+    check_comfy_cli,
     check_ffmpeg,
+    check_ffprobe,
     check_python,
 )
 from lfo.environment.checks.workflows import (
@@ -47,7 +48,6 @@ def register_all_checks(runner: CheckRunner) -> None:
     runner.register(check_comfyui_correct_instance)
 
     # Filesystem
-    runner.register(check_input_writable)
     runner.register(check_output_readable)
     runner.register(check_disk_space)
     runner.register(check_project_writable)
@@ -67,7 +67,9 @@ def register_all_checks(runner: CheckRunner) -> None:
     runner.register(check_workflow_runtime_compatible)
 
     # Tools
+    runner.register(check_comfy_cli)
     runner.register(check_ffmpeg)
+    runner.register(check_ffprobe)
     runner.register(check_python)
 
 
@@ -84,7 +86,9 @@ class DoctorService:
     ) -> list[CheckResult]:
         """Run ALL checks."""
         if context is None:
-            context = CheckContext(machine_profile=self.profile)
+            context = CheckContext(
+                machine_profile=self.profile, required_tools={"comfy", "ffmpeg", "ffprobe"},
+            )
         return self.runner.run(context)
 
     def run_for_workflow(
@@ -97,6 +101,7 @@ class DoctorService:
             context = CheckContext(
                 machine_profile=self.profile,
                 required_workflow_ids={workflow_id},
+                required_tools={"comfy", "ffmpeg", "ffprobe"},
             )
         else:
             context.required_workflow_ids.add(workflow_id)

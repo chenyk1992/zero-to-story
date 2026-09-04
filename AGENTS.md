@@ -1,9 +1,15 @@
 # AGENTS.md
 
-LFO — Local Film Orchestrator. 本地视频实施运行时。上游 Creative Skill 负责故事、角色图、黑白分镜、Panel/Clip 提示词与用户审批，并交付 `lfo.video-execution.v1`；LFO 负责素材导入、后端选择、MiniMax H3/ComfyUI 视频生成、标准化、QC、音频、字幕、时间线、导出、重试与恢复。
+LFO — Local Film Orchestrator. 本地视频实施运行时。上游 Creative Skill 负责故事、角色图、黑白分镜、Panel/Clip 提示词与用户审批，并交付只含当前 Panel 的 `lfo.video-execution.v1`；LFO 负责素材读取、后端选择和同步 ComfyUI 视频生成。短命 Agent 的调用方负责最小语义 QC、真实尾帧登记与最终组装。
+
+当前执行基线是 breaking redesign，详见 [`docs/plans/2026-09-05-simple-panel-execution-plan.md`](docs/plans/2026-09-05-simple-panel-execution-plan.md)。不为历史执行入口、旧数据库语义或旧 CLI 保留兼容路径。
 
 - LFO 是执行运行时，不是创作工具；不要在 LFO 核心中生成故事、图片、分镜或其他创作决策。
-- Runtime 只理解公共执行包和素材，不理解故事板语义；创作侧可以把 PanelPack 映射为 Clip。
+- Runtime 只理解公共执行包和素材，不理解故事板语义；调用方把一个 Panel 映射为一个 Clip，并为每个 Panel 启动一个短命执行子 Agent，只传当前 Panel 的最小参数。
+- 每次生成执行只处理一个 Panel，Agent 严格串行运行并同步等待官方 ComfyUI/comfy-cli 完成；不得并行提交多个生成 Clip。最终组装是唯一例外：它使用一个或多个全 `video.passthrough` Clip，不调用生成模型。
+- 公开执行流程不暴露自动重试、后台恢复、失败候选、复杂审计或 Prompt revision。ComfyUI/CLI 失败即停，由调用方显式重新执行；Agent 不读取或维护恢复记录。
+- 执行必须绑定用户批准的 `execution-package.json` 完整文件字节 SHA-256（exact file SHA-256）。hash 不一致直接停止。
+- Agent 调用方给出 `ACCEPT` 的 Clip 才能按下游需要提取真实末帧并交给下一个 Panel；全部 Panel `ACCEPT` 后才做一次最终组装。
 - 上游 Skill 与 LFO 的公共边界是 `VideoExecutionPackage` 和素材文件；上游 Skill 不应操作 LFO 数据库、ComfyUI 节点或内部素材 ID。
 
 ## Agent operating boundaries
@@ -19,34 +25,34 @@ LFO — Local Film Orchestrator. 本地视频实施运行时。上游 Creative S
 ## Setup commands
 
 - Install dependencies: `python -m pip install -e ".[dev]"` (editable install with dev extras)
-- Run CLI: `python -m lfo.cli.main <command>`
+- Run CLI: `python -m lfo.cli.main <command>`；当前 Panel 主流程是 `validate` → `execute --approved-sha256`，`plan` 仅为可选诊断。
 - CLI command details and operational examples: see [`docs/cli-guide.md`](docs/cli-guide.md).
 - If the package is not installed in editable mode, use PowerShell: `$env:PYTHONPATH = "src"`
 - Run all tests: `python -m pytest tests/ -v`
 - Run single module tests: `python -m pytest tests/test_runtime.py -v`
-- Run live Package E2E when the task requires ComfyUI integration: `python scripts/live_e2e_execution_package.py <execution-package.json> --approve`
+- Run live single-Panel E2E only when the task requires ComfyUI integration: `python scripts/live_e2e_execution_package.py <execution-package.json> --approved-sha256 <hash>`
 - Local ComfyUI setup, doctor, preflight and machine-specific details: see [`docs/local-windows.md`](docs/local-windows.md).
 
 ## Workspace user data and maintenance
 
 `workspace/` 是持久化的用户数据目录，默认被 Git 忽略，不是 agent 的 scratch space。任何 agent 都必须把其中的数据视为用户资产，优先保护已有内容、引用关系和可恢复性。
 
-以 [`workspace/README.md`](workspace/README.md) 中的运行时布局为准。新数据只能进入已有的语义目录，不要在 `workspace/` 根部随意创建新目录：
+以本文件下列运行时布局为准；新数据只能进入已有的语义目录，不要在 `workspace/` 根部随意创建新目录：
 
 - `workspace/projects/<project_id>/execution-package.json`：执行包和项目资产。
 - `workspace/projects/<project_id>/outputs/<run_id>/`：Run 中间产物。
 - `workspace/projects/<project_id>/final/<output.directory>/`：最终视频、SRT 和 manifest。
 - `workspace/assets/sha256/`：内容寻址素材副本。
-- `workspace/db/runtime-v1.sqlite3`：运行状态与审计日志。
+- `workspace/db/runtime-v1.sqlite3`：已有的内部运行数据；简单执行不依赖复杂恢复审计，禁止直接改动。
 - 已有的 `workspace/spikes/` 仅用于明确要求的实验，不是通用临时目录；不要为普通任务新建类似 scratch 目录。
 
-- 新的执行包、Run 中间产物和最终产物必须写入对应的 `workspace/{故事名称}/<project_id>/`；Run 产物必须使用 `RunArtifactLayout`。
+- 新的执行包、Panel 中间产物和最终产物必须写入对应的 `workspace/projects/<project_id>/`；产物必须使用 `RunArtifactLayout`。
 - 不得创建或重新接入 `workspace/runs/`、`workspace/exports/`，也不得把生成媒体、日志、下载文件或临时文件直接放在 `workspace/` 根部。
 - 素材导入必须使用 LFO 的素材导入/CAS 机制，不要手工复制、改名或删除 `assets/sha256/` 下的内容。
-- 数据库和 CAS 文件是相互关联的持久化数据。除非任务明确是数据维护或迁移，不要直接编辑、移动或删除 `workspace/db/`、`workspace/assets/` 中的文件。
+- 数据库和 CAS 文件是相互关联的持久化数据。除非任务明确是数据维护，不要直接编辑、移动或删除 `workspace/db/`、`workspace/assets/` 中的文件。
 - 测试使用 `tmp_path` 或临时 workspace；不得让测试写入真实的仓库 `workspace/`。`tests/conftest.py` 已负责隔离默认 workspace。
 - 已存在但不符合当前布局的项目目录、历史目录或用户自定义目录一律视为用户数据：不要为了“整理目录”而自动重命名、合并或删除。发现问题时先报告路径、用途和引用风险，再等待明确的维护任务。
-- 在 `workspace/` 下创建、移动或删除任何内容前，先阅读 `workspace/README.md`，确认目标目录和生命周期；无法判断时不要猜测。
+- 在 `workspace/` 下创建、移动或删除任何内容前，先确认本文件列出的目录和生命周期；无法判断时不要猜测。
 
 ### Workspace maintenance workflow
 
@@ -58,16 +64,16 @@ LFO — Local Film Orchestrator. 本地视频实施运行时。上游 Creative S
 
 ## Project layout
 
-src layout — all system code lives under `src/lfo/`；user data lives under `workspace/`，canonical layout 见 `workspace/README.md`。
+src layout — all system code lives under `src/lfo/`；user data lives under `workspace/`，布局规则见本文件的 Workspace 小节。
 
 - `src/lfo/cli/` — argparse CLI 入口。`main.py` 分发，`registry.py` 注册，各 `*_cmd.py` 对应子命令
 - `src/lfo/contracts/` — `VideoExecutionPackage` 公共契约、Schema 与 Builder SDK
 - `src/lfo/assets/` — 路径安全、媒体探测、内容寻址存储与素材导入
 - `src/lfo/backends/` — 能力 Manifest、选择器与真实 ComfyUI H3 Handler
-- `src/lfo/execution/` — SQLite Store、物化快照、任务 DAG、持久化 Runtime、恢复与失效
+- `src/lfo/execution/` — 单 Panel 执行编排和产物衔接
 - `src/lfo/media/` — FFmpeg 标准化/QC/音频/字幕/时间线/原子导出
 - `src/lfo/skill_adapter/` — 上游 Skill 到公共执行包的纯转换适配器
-- `src/lfo/comfy/` — ComfyUI 交互层。`client.py`、`workflow.py`、`submit.py`、`monitor.py` 等
+- `src/lfo/comfy/` — ComfyUI 交互层与同步结果收集
 - `src/lfo/config/` — 4 层配置合并
 - `src/lfo/environment/` — 环境发现与校验
 - `src/lfo/application/` — `VideoRuntime` Facade 与运行报告
@@ -93,8 +99,8 @@ src layout — all system code lives under `src/lfo/`；user data lives under `w
 - 测试结构：`tests/test_<module>.py` 单元测试 + `tests/test_<module>/` 子目录分组
 - 共享 fixtures：`tests/conftest.py` 含 `isolate_process_state`（自动隔离 env vars 和 cwd）
 - Live E2E：`scripts/live_e2e_execution_package.py`（需本地 ComfyUI，时长取决于 Package）
-- 新增或修改行为必须有对应测试；测试应验证真实行为、状态转换、错误处理或公共契约，不要只为提高覆盖率测试常量和内部实现细节。
-- 根据改动风险选择验证范围：普通模块改动跑目标测试；公共契约、状态机、数据库、素材导入、产物布局或跨模块改动跑全量测试；ComfyUI 后端或环境改动再运行 doctor/preflight，必要时运行 live E2E。
+- 新增或修改行为必须有对应测试；测试应验证真实行为、错误处理或公共契约，不要只为提高覆盖率测试常量和内部实现细节。
+- 根据改动风险选择验证范围：普通模块改动跑目标测试；公共契约、素材导入、产物布局或跨模块改动跑全量测试；ComfyUI 后端或环境改动再运行 doctor/preflight，必要时运行单 Panel live E2E。
 - 完成任务时报告实际运行的检查和未运行的检查；如果无法运行完整测试，说明原因和剩余风险。
 
 ## Architecture notes
@@ -103,18 +109,17 @@ src layout — all system code lives under `src/lfo/`；user data lives under `w
 
 - **公共边界**：上游 Skill 只能写 `VideoExecutionPackage` 和素材文件；不得操作数据库、ComfyUI 节点或内部素材 ID
 - **包导入**：从 `lfo` 包导入，`tests/conftest.py` 自动注入 `src/` 到 `sys.path`
-- **SQLite 运行时**：WAL 模式，CAS 状态机，`rowcount` 不用 `total_changes`
-- **工作流 hash**：LFO-WFJ1 规范（float 归一化 + NFC + SHA-256），算法标识 `lfo-wfj1-sha256-v1`
-- **三级验证**：STATIC_VALID → RUNTIME_COMPATIBLE → SMOKE_TESTED
-- **ComfyUI**：通过配置层访问本地服务；机器路径、模型和环境检查见 [`docs/local-windows.md`](docs/local-windows.md)。
+- **批准锁**：执行前对完整 `execution-package.json` 计算完整文件字节 SHA-256（exact file SHA-256）；批准 hash 不匹配就停止，不在运行中修改包。
+- **ComfyUI**：通过配置层调用本地官方 ComfyUI/comfy-cli，单 Panel 同步提交并等待完成；机器路径、模型和环境检查见 [`docs/local-windows.md`](docs/local-windows.md)。
 - **素材导入**：Package 相对路径在导入时解析；之后只读取 CAS 内不可变副本
 - **产物布局**：所有新 Run 的中间/最终媒体必须使用 `RunArtifactLayout` 写入
   `workspace/projects/<project_id>/outputs/<run_id>/` 和
   `workspace/projects/<project_id>/final/<output.directory>/`；不得创建 workspace 根部
   的 `runs` 或 `exports` 目录。ComfyUI 输出仅作提供方缓存，必须复制到项目 Run 目录后
   才记录为 LFO artifact。
-- **Video execution**：每个 `clips[]` 是可独立重做的执行单元；创作侧可将 PanelPack 映射为 Clip，但 Runtime 不理解故事板语义
-- **逐镜接力生成**：ComfyUI 是单任务队列，多 Clip 并行只是排队，不会真正并行。因此**默认采用逐镜接力方案**：跑 P001 → ffmpeg 提取末帧 → P002 加入真实末帧为 `ref_image_0`（last-frame lock）→ 跑 P002 → 提取末帧 → ... → P006。每 Clip 生成后用 `ffmpeg -sseof -0.1` 提取末帧 PNG，作为下一 Clip 的 `last-frame lock`（`placement: "fixed"`, `binding.slot: "ref_image_0"`），`revision++`，`summary` 前缀改为 `[reference generation + keyframe completion]`，其他引用顺延。禁止用文字描述"脑补"末态替代真实末帧。脚本见 `workspace/projects/<project_id>/_sequential_gen.py`
+- **Video execution**：每个生成包只含一个当前 Panel 的非 passthrough Clip；Runtime 不理解故事板语义。调用方为每个 Panel 启动一个短命执行子 Agent，严格串行调用 LFO。最终 assembly package 可包含一个或多个 Clip，但必须全部为 `video.passthrough`。
+- **逐 Panel 接力**：Agent 调用方对当前 Clip 给出 `ACCEPT` 后从实际输出提取真实末帧；下一 Panel 只有在其 operation 需要时才将该帧作为精确首帧。不得用文字“脑补”末态，也不得并行生成。
+- **失败语义**：ComfyUI、素材、计划或最小 QC 任一失败都立即停止；这些失败处理不作为公开执行协议，Agent 不读取或维护恢复记录，失败候选不导入为正式产物。需要重做时由调用方显式创建/确认新的执行包。
 
 ## PR & commit conventions
 

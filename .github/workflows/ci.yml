@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, 'codex/**']
   pull_request:
     branches: [master, main]
 
@@ -26,5 +26,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: Install media test tools
+        # Media assembly, audio and subtitle tests must run in CI, not skip
+        # merely because the runner does not have the media executables.
+        run: |
+          choco install ffmpeg --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Command ffmpeg, ffprobe -ErrorAction Stop
+
+      - name: Run full test suite including real media
         run: python -m pytest tests/ -v --tb=short

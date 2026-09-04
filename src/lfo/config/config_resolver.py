@@ -240,6 +240,7 @@ def resolve_config(
                     "base_url": profile.comfyui.base_url,
                     "port": _extract_port(profile.comfyui.base_url),
                     "root": profile.comfyui.root,
+                    "cli": profile.comfyui.cli,
                     "python_path": profile.comfyui.python_path,
                     "expected_version": profile.comfyui.expected_version,
                 },

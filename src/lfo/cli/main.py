@@ -6,7 +6,7 @@ import sys
 
 import lfo.cli  # noqa: F401 — triggers @CommandRegistry.register decorators
 from lfo.cli.context import CLIContext
-from lfo.cli.output import EXIT_CLI_ERROR, EXIT_SUCCESS, format_output
+from lfo.cli.output import EXIT_CLI_ERROR, EXIT_SUCCESS, CommandResult, format_output
 from lfo.cli.registry import CommandRegistry
 
 
@@ -50,7 +50,13 @@ def main(argv: list[str] | None = None) -> int:
         json_output=args.json,
     )
 
-    result = cmd_class.execute(context, args)
+    try:
+        result = cmd_class.execute(context, args)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        result = CommandResult(
+            ok=False, command=args.command,
+            error={"code": "E_COMMAND_INPUT", "message": str(exc)},
+        )
     output = format_output(result, json_mode=args.json)
     print(output)
 

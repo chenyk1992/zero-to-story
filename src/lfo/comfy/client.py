@@ -124,3 +124,39 @@ class ComfyApiClient:
     def upload_image(self, image_path: Path, subfolder: str = "") -> dict:
         """Upload an image file to the ComfyUI input directory."""
         return self.upload_file(image_path, subfolder)
+
+    def download_output(
+        self,
+        filename: str,
+        destination: Path,
+        *,
+        subfolder: str = "",
+        file_type: str = "output",
+        timeout: float = 300.0,
+    ) -> Path:
+        """Download one CLI-reported output through ComfyUI's ``/view`` API."""
+        if not filename:
+            raise ValueError("ComfyUI output filename must not be empty")
+        if file_type not in {"output", "temp"}:
+            raise ValueError(f"Unsupported ComfyUI output type: {file_type!r}")
+        target = Path(destination)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        response = self._request(
+            "GET",
+            "/view",
+            params={
+                "filename": filename,
+                "subfolder": subfolder,
+                "type": file_type,
+            },
+            stream=True,
+            timeout=timeout,
+        )
+        try:
+            with target.open("wb") as stream:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        stream.write(chunk)
+        finally:
+            response.close()
+        return target

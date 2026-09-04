@@ -8,24 +8,26 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import pathlib
 import re
-import uuid
-from dataclasses import dataclass
+from contextlib import suppress
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from lfo.backends.capabilities import CapabilityManifest
 from lfo.backends.registry import BackendRegistry
 from lfo.comfy.bindings import Binding, BindingResolver
+from lfo.comfy.cli import ComfyCliOutput, ComfyCliRunner, ComfyCliRunResult
 from lfo.comfy.client import ComfyApiClient
-from lfo.comfy.exceptions import ComfyUnreachableError, LfoComfyError
-from lfo.comfy.monitor import ComfyMonitor
+from lfo.comfy.exceptions import ComfyCliTimeoutError, LfoComfyError
+from lfo.comfy.outputs import materialize_cli_video, resolve_cli_video
 from lfo.comfy.workflow import WorkflowLoader
 from lfo.contracts.operations import validate_operation_references
 from lfo.core.hashing import compute_workflow_hash
 from lfo.core.workflow_registry import KNOWN_WORKFLOWS, WorkflowManifest
 from lfo.execution.handlers import HandlerResult, TaskHandler
-from lfo.services.artifact_layout import atomic_copy_verified, managed_path
+from lfo.services.artifact_layout import managed_path
 
 H3_BACKEND_ID = "comfyui.h3"
 H3_BACKEND_REVISION = "3.0.0"
@@ -67,14 +69,12 @@ class ComfyH3Config:
 
     base_url: str = "http://127.0.0.1:8188"
     workflow_dir: pathlib.Path = pathlib.Path(__file__).resolve().parents[1] / "registry"
-    output_root: pathlib.Path = pathlib.Path(
-        "D:/ComfyUI/Comfy-Desktop/ComfyUI/ComfyUI/output"
+    output_root: pathlib.Path | None = field(
+        default_factory=lambda: _optional_env_path("LFO_COMFY_OUTPUT_ROOT")
     )
-    poll_interval_seconds: float = 3.0
-    # H3 768P clips with long reference videos can exceed the generic
-    # twenty-minute provider wait; keep the worker alive while ComfyUI
-    # continues sampling instead of orphaning a valid prompt.
+    # ``comfy run --wait`` owns monitoring; this is its per-event silence limit.
     timeout_seconds: float = 7_200.0
+    cli_binary: str = "comfy"
     # Match the H3 FL2VA turbo 8-step distillation lora
     # (minimax_h3_fl2v_turbo_8step_v1.0).
     steps: int = 8
@@ -207,11 +207,11 @@ class ComfyH3VideoHandler(TaskHandler):
         config: ComfyH3Config | None = None,
         *,
         client: ComfyApiClient | None = None,
-        monitor: ComfyMonitor | None = None,
+        runner: ComfyCliRunner | None = None,
     ) -> None:
         self.config = config or ComfyH3Config()
         self.client = client or ComfyApiClient(self.config.base_url)
-        self.monitor = monitor or ComfyMonitor(self.client)
+        self.runner = runner or ComfyCliRunner(self.config.cli_binary)
 
     def execute(
         self,
@@ -227,7 +227,7 @@ class ComfyH3VideoHandler(TaskHandler):
                 error=f"Unsupported task type: {task_type}",
                 retryable=False,
                 failure_class="creative_input",
-                recovery_action="block_for_user",
+                recovery_action=None,
             )
 
         try:
@@ -237,39 +237,17 @@ class ComfyH3VideoHandler(TaskHandler):
                 metadata,
                 output_prefix=f"lfo/{metadata.get('run_id', 'run')}/{task_id}/{attempt_id}/video",
             )
-            client_id = f"lfo-{uuid.uuid4().hex}"
-            submitted = self.client.submit_prompt(workflow, client_id=client_id)
-            prompt_id = submitted.get("prompt_id")
-            if not isinstance(prompt_id, str) or not prompt_id:
-                raise LfoComfyError("ComfyUI response did not include prompt_id")
-
-            status = self.monitor.poll_until_done(
-                prompt_id,
-                interval=self.config.poll_interval_seconds,
-                timeout=self.config.timeout_seconds,
+            cli_result = self.runner.run_workflow(
+                workflow,
+                base_url=self.config.base_url,
+                timeout_seconds=self.config.timeout_seconds,
             )
-            if status.get("status") == "timeout":
-                return HandlerResult(
-                    success=False,
-                    error=f"ComfyUI prompt {prompt_id} timed out",
-                    retryable=True,
-                    artifact_metadata={"provider_job_id": prompt_id},
-                    failure_class="execution_transient",
-                    recovery_action="retry_same",
-                )
-            if not status.get("completed"):
-                return HandlerResult(
-                    success=False,
-                    error=f"ComfyUI prompt {prompt_id} failed: {status.get('error') or status.get('status')}",
-                    retryable=False,
-                    artifact_metadata={"provider_job_id": prompt_id},
-                    failure_class="provider_rejection",
-                    recovery_action="block_for_user",
-                )
-
-            output = self._find_output(prompt_id, status)
+            prompt_id = cli_result.prompt_id
             managed = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
-            managed_hash, managed_size = atomic_copy_verified(output, managed)
+            managed_hash, managed_size, provider_source = self._materialize_cli_output(
+                cli_result,
+                managed,
+            )
             return HandlerResult(
                 success=True,
                 artifact_type="video",
@@ -281,8 +259,8 @@ class ComfyH3VideoHandler(TaskHandler):
                     "workflow_id": workflow_id,
                     "uploaded_references": uploaded,
                     "size": managed_size,
-                    "provider_source_path": str(output),
-                    "provider_file_hash": _sha256_file(output),
+                    "provider_source_path": provider_source,
+                    "provider_file_hash": managed_hash,
                 },
             )
         except (FileNotFoundError, ValueError, KeyError, TypeError) as exc:
@@ -291,24 +269,36 @@ class ComfyH3VideoHandler(TaskHandler):
                 error=str(exc),
                 retryable=False,
                 failure_class="creative_input",
-                recovery_action="block_for_user",
+                recovery_action=None,
             )
-        except ComfyUnreachableError as exc:
+        except ComfyCliTimeoutError as exc:
+            self._best_effort_interrupt()
+            artifact_metadata = (
+                {"provider_job_id": exc.prompt_id}
+                if exc.prompt_id is not None
+                else {}
+            )
             return HandlerResult(
                 success=False,
-                error=str(exc),
-                retryable=True,
-                failure_class="execution_transient",
-                recovery_action="retry_same",
+                error=f"comfy-cli execution error: {exc}",
+                retryable=False,
+                artifact_metadata=artifact_metadata,
+                failure_class="execution_failed",
+                recovery_action=None,
             )
         except Exception as exc:  # provider extensions may raise their own exception types
             return HandlerResult(
                 success=False,
-                error=f"ComfyUI execution error: {exc}",
-                retryable=True,
-                failure_class="execution_transient",
-                recovery_action="retry_same",
+                error=f"comfy-cli execution error: {exc}",
+                retryable=False,
+                failure_class="execution_failed",
+                recovery_action=None,
             )
+
+    def _best_effort_interrupt(self) -> None:
+        """Ask ComfyUI to stop the timed-out prompt once, without masking failure."""
+        with suppress(Exception):
+            self.client.interrupt()
 
     @staticmethod
     def _select_workflow(metadata: dict[str, Any]) -> str:
@@ -897,35 +887,27 @@ class ComfyH3VideoHandler(TaskHandler):
         if len(nodes) == 1:
             nodes[0][1].setdefault("inputs", {})["fps"] = 24
 
-    def _find_output(self, prompt_id: str, status: dict[str, Any]) -> pathlib.Path:
-        outputs = status.get("outputs")
-        if not isinstance(outputs, dict) or not outputs:
-            history = self.client.get_history(prompt_id)
-            entry = history.get(prompt_id, {})
-            outputs = entry.get("outputs", {}) if isinstance(entry, dict) else {}
+    def _find_cli_output(
+        self,
+        result: ComfyCliRunResult,
+    ) -> tuple[pathlib.Path | None, ComfyCliOutput]:
+        return resolve_cli_video(result, self.config.output_root)
 
-        candidates: list[pathlib.Path] = []
-        for node_output in outputs.values() if isinstance(outputs, dict) else []:
-            if not isinstance(node_output, dict):
-                continue
-            for collection in ("video", "videos", "images", "gifs"):
-                items = node_output.get(collection, [])
-                if not isinstance(items, list):
-                    continue
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    filename = item.get("filename")
-                    if not isinstance(filename, str) or not filename:
-                        continue
-                    subfolder = item.get("subfolder", "")
-                    path = self.config.output_root / str(subfolder) / filename
-                    if path.is_file():
-                        candidates.append(path.resolve())
-        if not candidates:
-            raise FileNotFoundError(f"No local output found for ComfyUI prompt {prompt_id}")
-        videos = [p for p in candidates if p.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}]
-        return max(videos or candidates, key=lambda p: p.stat().st_mtime_ns)
+    def _materialize_cli_output(
+        self,
+        result: ComfyCliRunResult,
+        managed: pathlib.Path,
+    ) -> tuple[str, int, str]:
+        return materialize_cli_video(
+            result, managed, output_root=self.config.output_root,
+            client=self.client, timeout_seconds=self.config.timeout_seconds,
+            base_url=self.config.base_url,
+        )
+
+
+def _optional_env_path(name: str) -> pathlib.Path | None:
+    value = os.environ.get(name)
+    return pathlib.Path(value) if value else None
 
 
 def _reject_pixel_dimensions(metadata: dict[str, Any]) -> None:

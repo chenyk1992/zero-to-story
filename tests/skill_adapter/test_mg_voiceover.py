@@ -7,14 +7,15 @@ from typing import Any
 import pytest
 
 from lfo.contracts.package import validate_package
-from lfo.skill_adapter.mg_voiceover import build_package
+from lfo.skill_adapter.mg_voiceover import build_assembly_package, build_package
 
 
 def _reference(
     asset_key: str = "product.hero",
     *,
     media_type: str = "image",
-    placement: str = "any",
+    placement: str = "fixed",
+    slot_index: int = 0,
 ) -> dict[str, Any]:
     return {
         "asset_key": asset_key,
@@ -25,6 +26,7 @@ def _reference(
         "required": True,
         "priority": 100,
         "placement": placement,
+        "slot": f"ref_{media_type}_{slot_index}",
         "on_unsupported": "fail",
         "producer": "imagegen",
         "operation": "image.generate",
@@ -39,6 +41,7 @@ def _build(**overrides: Any):
         "prompt": "A continuous vertical MG product voiceover animation",
         "duration_ms": 15_000,
         "approved_by": "user",
+        "generation_operation": "video.text_to_video",
     }
     values.update(overrides)
     return build_package(**values)
@@ -48,20 +51,26 @@ def _build(**overrides: Any):
     ("references", "operation"),
     [
         ([], "video.text_to_video"),
-        ([_reference()], "video.image_to_video"),
-        ([_reference("front"), _reference("detail")], "video.reference_to_video"),
+        ([_reference(placement="first")], "video.image_to_video"),
+        (
+            [_reference("front"), _reference("detail", slot_index=1)],
+            "video.reference_to_video",
+        ),
         ([_reference("motion", media_type="video")], "video.reference_to_video"),
     ],
 )
-def test_routes_by_visual_reference_shape(references: list[dict[str, Any]], operation: str) -> None:
-    package = _build(reference_assets=references)
+def test_uses_explicit_operation(references: list[dict[str, Any]], operation: str) -> None:
+    package = _build(reference_assets=references, generation_operation=operation)
 
     assert package.clips[0].generation.operation == operation
     assert validate_package(package.to_dict()).ok
 
 
-def test_single_image_is_bound_to_first_frame() -> None:
-    package = _build(reference_assets=[_reference(placement="any")])
+def test_explicit_first_frame_binding_is_preserved() -> None:
+    package = _build(
+        reference_assets=[_reference(placement="first")],
+        generation_operation="video.image_to_video",
+    )
 
     binding = package.clips[0].generation.references[0].binding
     assert package.clips[0].generation.requirements.reference_image_size == "match"
@@ -69,6 +78,24 @@ def test_single_image_is_bound_to_first_frame() -> None:
     assert binding.required is True
     assert binding.priority == 100
     assert binding.on_unsupported == "fail"
+
+
+def test_single_ordinary_image_is_not_inferred_as_first_frame() -> None:
+    with pytest.raises(ValueError, match="explicitly bound to first_frame"):
+        _build(
+            reference_assets=[_reference(placement="fixed")],
+            generation_operation="video.image_to_video",
+        )
+
+
+def test_single_ordinary_image_can_be_explicit_r2v_reference() -> None:
+    package = _build(
+        reference_assets=[_reference(placement="fixed")],
+        generation_operation="video.reference_to_video",
+    )
+
+    assert package.clips[0].generation.operation == "video.reference_to_video"
+    assert package.clips[0].generation.references[0].binding.placement == "fixed"
 
 
 def test_pixel_ratio_maps_without_generation_dimensions() -> None:
@@ -87,7 +114,7 @@ def test_output_dimensions_stay_on_output_policy() -> None:
     package = _build(width=720, height=1280, fps=30)
     requirements = package.clips[0].generation.requirements
 
-    assert requirements.megapixels == 0.4
+    assert requirements.megapixels is None
     assert requirements.width is None
     assert requirements.height is None
     assert requirements.fps == 30
@@ -145,9 +172,44 @@ def test_external_voiceover_replaces_native_audio() -> None:
     assert audio_asset.provenance.operation == "audio.synthesize"
 
 
+def test_assembly_package_applies_external_voiceover_to_accepted_clip() -> None:
+    generation = _build(
+        voiceover_audio={
+            "asset_key": "voiceover.zh",
+            "uri": "assets/voiceover.wav",
+            "producer": "tts",
+        }
+    )
+
+    package = build_assembly_package(
+        generation,
+        "accepted/clip-001.mp4",
+        accepted_clip_sha256="a" * 64,
+    )
+
+    assert validate_package(package.to_dict()).ok
+    assert package.package_id == f"{generation.package_id}-assembly"
+    assert len(package.clips) == 1
+    clip = package.clips[0]
+    assert clip.generation.operation == "video.passthrough"
+    assert clip.generation.references[0].asset_key == "source_video.clip-001"
+    assert clip.audio.native_audio == "replace"
+    assert clip.audio.tracks[0].asset_key == "voiceover.zh"
+    assert {asset.asset_key for asset in package.assets} == {
+        "source_video.clip-001",
+        "voiceover.zh",
+    }
+
+
+def test_assembly_package_rejects_non_relative_accepted_clip() -> None:
+    with pytest.raises(ValueError, match="package-relative"):
+        build_assembly_package(_build(), "C:/outside/clip.mp4")
+
+
 def test_approval_source_context_review_provenance_and_binding() -> None:
     package = _build(
         reference_assets=[_reference()],
+        generation_operation="video.reference_to_video",
         approved_at="2026-08-18T10:00:00+08:00",
         approval_notes="Prompt and product image approved",
         output_directory="summer-fashion-final",

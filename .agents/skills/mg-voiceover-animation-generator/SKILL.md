@@ -6,9 +6,9 @@ description: |
 
 # MG 口播动画生成器 Skill
 
-当用户要制作产品、界面、功能说明、发布展示或抽象主题的 MG 口播动画时使用。本 Skill 负责创作，不是视频运行时：负责文案、产品/视觉素材、风格与语义映射、H3 提示词和审批；LFO 负责后端选择、生成、重试、音频、字幕、时间线、导出与恢复。
+当用户要制作产品、界面、功能说明、发布展示或抽象主题的 MG 口播动画时使用。本 Skill 负责创作，不是视频运行时：负责文案、产品/视觉素材、风格与语义映射、H3 提示词和用户确认；LFO 负责后端选择，并同步调用官方 ComfyUI/comfy-cli 生成当前 Panel 的 Clip。调用方负责最小语义 QC、真实尾帧登记与后续 Panel 的衔接。
 
-唯一公共边界是 `lfo.video-execution.v1` 执行包与素材文件。用户确认后，调用 `lfo.skill_adapter.mg_voiceover.build_package` 形成执行包，再交给 LFO CLI/runtime 按 `validate -> plan -> execute --approve -> status/retry -> export` 处理；`preflight` 只做机器/工作流检查。Skill 不直接操作 ComfyUI、数据库或视频提供方编排。
+唯一公共边界是 `lfo.video-execution.v1` 执行包与素材文件。用户确认后，调用 `lfo.skill_adapter.mg_voiceover.build_package` 形成只含当前 Panel 的单 Clip 执行包，再交给 LFO CLI/runtime 按 `validate -> execute --approved-sha256 <PACKAGE_SHA256>` 处理；`plan` 仅为可选诊断。Runtime 同步等待官方 comfy-cli 完成并返回生成文件路径；调用方给出 `ACCEPT` 或 `REJECT`，失败即停，需要重做时由调用方显式生成/确认新的执行包。`status`、`retry`、`review`、`export` 不属于本 Skill 的生产交接协议。Skill 不直接操作 ComfyUI、数据库或视频提供方编排。
 
 风格不预设为固定菜单。根据输入、参考素材和口播语义选择一个主风格、0-2 个辅助视觉模块及核心结构；只有多个方向都成立且结果差异显著时才询问选择。真实对象必须保真，虚构概念可以原创但不得冒充真实品牌。
 
@@ -26,19 +26,15 @@ description: |
 3. 分析文案与素材，选择主风格、辅助模块、核心结构、画面关键词和保真约束；产品图若由 Skill 生成，先作为素材文件审阅。
 4. 按需读取参考资料，写成可审阅的 Markdown 文档；环境有文档或画布展示能力时可同步展示，但不能依赖某个旧 Hub 工具。文档结构见 [H3 提示词模板](references/h3-mg-prompt-template.md)。
 5. 用户未明确确认前，只允许修改提示词文档和创作素材；不得生成最终 MG 动画，也不得交付已批准的执行包。
-6. 用户修改时更新文档并再次等待确认。用户明确确认后，调用 `lfo.skill_adapter.mg_voiceover.build_package`，把 H3 提示词、素材文件、审批信息和输出策略写入一个 `lfo.video-execution.v1` 包。创建 LFO 项目数据前先读仓库 `workspace/README.md`，执行包固定写入 `workspace/projects/<project_id>/execution-package.json`，素材只放该项目的语义目录，不在 `workspace/` 根部创建临时目录。
-7. 将执行包和素材文件交给 LFO，按真实 CLI 执行：
+6. 用户修改时更新文档并再次等待确认。用户明确确认后，先显式确定 `generation_operation`，再调用 `lfo.skill_adapter.mg_voiceover.build_package`，把 H3 提示词、素材文件、审批信息和输出策略写入一个只含当前 Panel 的 `lfo.video-execution.v1` 单 Clip 包。每个 Panel 包和最终 assembly 包都直接写在 `workspace/projects/<project_id>/` 项目根目录，使用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要为 Panel 建子目录；素材只放该项目已有且用途明确的语义目录，不在 `workspace/` 根部创建临时目录。
+7. 将当前 Panel 的执行包和素材文件交给 LFO。先运行 `validate`，使用其返回的 `package_sha256` 取得用户批准，再按真实 CLI 执行：
 
    ```text
-   python -m lfo.cli.main validate execution-package.json
-   python -m lfo.cli.main plan execution-package.json
-   python -m lfo.cli.main execute execution-package.json --approve
-   python -m lfo.cli.main status RUN_ID
-   python -m lfo.cli.main retry RUN_ID
-   python -m lfo.cli.main export RUN_ID
+   python -m lfo.cli.main validate panel-P001.execution-package.json
+   python -m lfo.cli.main execute panel-P001.execution-package.json --approved-sha256 <PACKAGE_SHA256>
    ```
 
-   `retry` 仅在需要重试时使用；`status`、`retry`、`export` 使用实际 Run ID。`preflight` 只用于机器/工作流检查，不接执行包导入、审批或运行参数。
+   `PACKAGE_SHA256` 必须逐字使用 `validate` 返回的完整 package 文件字节 SHA-256；任何包内容变化都要重新 `validate` 和批准。`execute` 会同步调用官方 `comfy-cli` 并等待完成；命令返回生成文件路径后，由调用方做最小语义判断并给出 `ACCEPT` 或 `REJECT`。若还有后续 Panel，只把 ACCEPT Clip 的真实末帧交给下一个 Panel。全部 Panel 完成后，调用 `lfo.skill_adapter.mg_voiceover.build_assembly_package` 构造全 `video.passthrough` 的 assembly package，并对该包单独执行 `validate`、批准返回的 hash、再 `execute` 一次完成最终组装；本 Skill 默认只有一条连续 Clip 时，也使用单 Clip assembly 应用最终口播音频和输出策略。ComfyUI、素材或最小 QC 失败都立即停止，不在本 Skill 中自动重试或维护恢复记录。
 
 ## 输入规则
 
@@ -77,10 +73,10 @@ description: |
 
 ## 执行包不变量
 
-- **参考路由**：0 个视觉参考走 T2V（`video.text_to_video`）；1 个图片参考走 I2V（`video.image_to_video`）；多个视觉参考，或单个视频参考，走 R2V（`video.reference_to_video`）。素材都以文件和引用元数据进入执行包。
+- **参考路由**：`generation_operation` 必须由已确认的创作方案显式给出，适配器不按参考数量猜测。无参考可选 T2V；只有被明确确认是精确首帧的单张图片才可选 I2V 并绑定 `placement="first"`；精确首尾帧选 FL2V；普通身份、构图、风格图片或视频参考选 R2V，并使用类型匹配的 fixed slot。素材都以文件和引用元数据进入执行包。
 - **连续性**：默认生成一个连续 Clip，不拆多段、不生成静态分镜再合成；只有用户明确要求多条成片时才创建多个独立执行包。
-- **像素比**：用户说的 `pixel_ratio` 映射为 `GenerationRequirements.megapixels`；未指定时默认 `0.4`。H3 生成画布只写 `aspect_ratio` + `megapixels`（例如 `9:16` / `0.4`、`16:9` / `0.6`），不要写 generation width/height。`OutputPolicy` 仍可保持 `1080x1920` 等交付尺寸。
-- **口播音频**：有外部口播音频时，把音频作为普通素材/音轨绑定到 Clip，并让输出以外部音频为准；没有外部音频时才允许 H3 原生音频。两条路径都要在 H3 提示词和执行包中写明。
+- **像素比**：用户说的 `pixel_ratio` 映射为 `GenerationRequirements.megapixels`；未指定时保持空值，不猜测默认像素预算。H3 生成画布只写 `aspect_ratio` + 可选 `megapixels`（例如 `9:16` / `0.4`、`16:9` / `0.6`），不要写 generation width/height。`OutputPolicy` 仍可保持 `1080x1920` 等交付尺寸。
+- **口播音频**：有外部口播音频时，在生成包中登记音频素材/音轨，并在 ACCEPT 后由 passthrough assembly 实际替换音频；没有外部音频时允许 H3 原生音频并由 assembly 保留。两条路径都要在 H3 提示词和执行包中写明。
 - **字幕**：普通字幕默认 `subtitles_mode="none"`。MG 画面中的关键词、按钮、标题和动态字形是设计元素，不等于字幕；只有用户明确要字幕时才改变输出策略并提供字幕内容。
 - **素材治理**：每个产品图、参考图和外部音频都要有 `review`、`provenance`，并通过参考位或音轨绑定到 Clip；Skill 生成的产品图也按普通素材文件处理，不绕过执行包边界。
 - **审批**：执行包只能在用户明确确认 H3 提示词后生成，并记录确认者、时间或确认说明；没有确认不得进入 LFO execute。
@@ -179,7 +175,7 @@ description: |
 
 ## H3 生成规则
 
-- 默认让 H3 提示词描述一个完整连续 MG 动画；真正的生成由 LFO 在执行包审批后负责。
+- 默认让 H3 提示词描述一个完整连续 MG 动画；真正的生成由 LFO 在执行包 hash 校验后负责。
 - 默认不生成静态分镜图，不拆多段，不做多段合成。
 - 如果口播过长，先建议用户缩短或确认是否拆成多条 MG 口播动画；不要擅自拆多段。
 - 默认不添加普通底部字幕；画面文字只作为关键词、短句、步骤标签、数据标签、UI 标签、产品发布片标题或品牌短语。

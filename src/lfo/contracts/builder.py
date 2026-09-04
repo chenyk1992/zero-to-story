@@ -117,7 +117,6 @@ class VideoPackageBuilder:
         prompt: str | None = None,
         references: list[dict[str, Any]] | None = None,
         requirements: dict[str, Any] | None = None,
-        negative_prompt: str | None = None,
         seed: int | None = None,
         audio: dict[str, Any] | None = None,
         subtitles: dict[str, Any] | None = None,
@@ -147,8 +146,6 @@ class VideoPackageBuilder:
                 "requirements": dict(requirements or {}),
                 "references": list(references or []),
             }
-            if negative_prompt is not None:
-                generation["negative_prompt"] = negative_prompt
             if seed is not None:
                 generation["seed"] = seed
             clip = ClipSpec.from_dict(

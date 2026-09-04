@@ -1,6 +1,8 @@
 """ComfyUI runtime checks — reachability, version, instance correctness."""
 from __future__ import annotations
 
+from lfo.comfy.client import ComfyApiClient
+
 from .base import (
     CheckContext,
     CheckResult,
@@ -18,6 +20,21 @@ from .base import (
 def check_comfyui_reachable(ctx: CheckContext) -> CheckResult:
     """Check if ComfyUI HTTP API is reachable."""
     if ctx.env_snapshot is None:
+        if ctx.machine_profile is not None:
+            try:
+                stats = ComfyApiClient(ctx.machine_profile.comfyui.base_url).get_system_stats()
+                if not isinstance(stats, dict) or "system" not in stats:
+                    raise ValueError("Endpoint did not return ComfyUI system statistics")
+                return CheckResult(
+                    "comfyui.reachable", CheckSeverity.BLOCKER, CheckStatus.PASSED,
+                    f"ComfyUI is reachable: {ctx.machine_profile.comfyui.base_url}",
+                )
+            except Exception as exc:
+                return CheckResult(
+                    "comfyui.reachable", CheckSeverity.BLOCKER, CheckStatus.FAILED,
+                    f"ComfyUI is unreachable: {exc}",
+                    remediation="Start ComfyUI at the configured base_url",
+                )
         return CheckResult(
             check_id="comfyui.reachable",
             severity=CheckSeverity.BLOCKER,

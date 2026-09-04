@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from lfo.application.video_runtime import (
     ExportResult2,
     PlanResult,
-    ReviewResult,
     RunResult,
     StatusResult,
     ValidationResult2,
@@ -21,9 +20,6 @@ from lfo.cli.runtime_cmd import (
     cmd_execute,
     cmd_export,
     cmd_plan,
-    cmd_prompt_revision,
-    cmd_retry,
-    cmd_review,
     cmd_runtime_status,
     cmd_validate,
 )
@@ -57,47 +53,58 @@ class StubRuntime:
 
     def validate(self, path):
         self.calls.append(("validate", path))
-        return ValidationResult2(valid=True)
+        return ValidationResult2(valid=True, package_sha256="a" * 64)
 
     def plan(self, path):
         self.calls.append(("plan", path))
         return PlanResult(plan_id="plan-1", clip_plans=[{"clip_id": "clip-001"}])
 
-    def execute(self, path, approval=False):
-        self.calls.append(("execute", path, approval))
+    def execute(self, path, approved_sha256=None):
+        self.calls.append(("execute", path, approved_sha256))
         return RunResult(run_id="run-1", status="COMPLETED", clip_count=1)
 
     def status(self, run_id):
         self.calls.append(("status", run_id))
         return StatusResult(run_id=run_id, status="RUNNING", tasks={"t": "READY"})
 
-    def retry(self, run_id, scope=None):
-        self.calls.append(("retry", run_id, scope))
-        return RunResult(run_id=run_id, status="COMPLETED", clip_count=1)
-
     def cancel(self, run_id):
         self.calls.append(("cancel", run_id))
-
-    def review(self, run_id, target, decision):
-        self.calls.append(("review", run_id, target, decision))
-        return ReviewResult(review_id="review-1", decision=decision)
+        return True
 
     def export(self, run_id):
         self.calls.append(("export", run_id))
         return ExportResult2(export_id="export-1", status="READY", file_path="out.mp4")
 
-    def submit_prompt_revision(self, run_id, prompt, *, scope=None, plan_hash=None, negative_prompt=None, seed=None):
-        self.calls.append(("prompt-revision", run_id, prompt, scope, plan_hash, negative_prompt, seed))
-        return RunResult(run_id=run_id, status="WAITING_PROMPT_REVISION", clip_count=1)
-
-
 def _factory_with(stub: StubRuntime):
     return lambda: stub
 
 
+@dataclass
+class MissingRunRuntime(StubRuntime):
+    def cancel(self, run_id):
+        self.calls.append(("cancel", run_id))
+        return False
+
+    def status(self, run_id):
+        self.calls.append(("status", run_id))
+        return StatusResult(run_id=run_id, status="UNKNOWN", error="Run not found")
+
+
+@dataclass
+class CompletedRunRuntime(StubRuntime):
+    def cancel(self, run_id):
+        self.calls.append(("cancel", run_id))
+        return False
+
+    def status(self, run_id):
+        self.calls.append(("status", run_id))
+        return StatusResult(run_id=run_id, status="COMPLETED")
+
+
 def test_runtime_commands_are_registered() -> None:
     commands = CommandRegistry.all_commands()
-    assert {"validate", "plan", "execute", "status", "retry", "prompt-revision", "cancel", "review", "export"} <= set(commands)
+    assert set(commands) >= {"validate", "plan", "execute", "status", "cancel", "export"}
+    assert not {"retry", "prompt-revision", "review"} & set(commands)
 
 
 def test_direct_commands_delegate_to_injected_runtime(tmp_path: pathlib.Path) -> None:
@@ -105,31 +112,48 @@ def test_direct_commands_delegate_to_injected_runtime(tmp_path: pathlib.Path) ->
     stub = StubRuntime()
     factory = _factory_with(stub)
 
-    assert cmd_validate(package_path, runtime_factory=factory)["valid"]
+    validation = cmd_validate(package_path, runtime_factory=factory)
+    assert validation["valid"]
+    assert validation["package_sha256"] == "a" * 64
     assert cmd_plan(package_path, runtime_factory=factory)["success"]
-    assert cmd_execute(package_path, approve=True, runtime_factory=factory)["status"] == "COMPLETED"
+    assert cmd_execute(package_path, "a" * 64, runtime_factory=factory)["status"] == "COMPLETED"
     assert cmd_runtime_status("run-1", runtime_factory=factory)["status"] == "RUNNING"
-    assert cmd_retry("run-1", "clip-001", runtime_factory=factory)["success"]
     assert cmd_cancel("run-1", runtime_factory=factory)["success"]
-    assert cmd_review("run-1", "clip-001", "approved", runtime_factory=factory)["success"]
     assert cmd_export("run-1", runtime_factory=factory)["file_path"] == "out.mp4"
-    assert cmd_prompt_revision(
-        "run-1",
-        "rewritten prompt",
-        "clip-001",
-        plan_hash="clip-hash",
-        runtime_factory=factory,
-    )["status"] == "WAITING_PROMPT_REVISION"
 
     assert [call[0] for call in stub.calls] == [
-        "validate", "plan", "execute", "status", "retry", "cancel", "review", "export", "prompt-revision",
+        "validate", "plan", "execute", "status", "cancel", "export",
     ]
-    assert stub.calls[2][-1] is True
-    assert stub.calls[4][-1] == "clip-001"
+    assert stub.calls[2][-1] == "a" * 64
+
+
+def test_cancel_reports_missing_run(tmp_path: pathlib.Path) -> None:
+    stub = MissingRunRuntime()
+
+    result = cmd_cancel("missing-run", runtime_factory=_factory_with(stub))
+
+    assert result == {
+        "success": False,
+        "run_id": "missing-run",
+        "error": "Run not found",
+    }
+
+
+def test_cancel_reports_terminal_run_instead_of_missing(tmp_path: pathlib.Path) -> None:
+    stub = CompletedRunRuntime()
+
+    result = cmd_cancel("completed-run", runtime_factory=_factory_with(stub))
+
+    assert result == {
+        "success": False,
+        "run_id": "completed-run",
+        "status": "COMPLETED",
+        "error": "Run is COMPLETED and cannot be cancelled",
+    }
 
 
 def test_commands_forward_persistent_runtime_configuration(tmp_path: pathlib.Path) -> None:
-    observed: dict[str, pathlib.Path] = {}
+    observed: dict[str, object] = {}
     stub = StubRuntime()
 
     def factory(**kwargs):
@@ -140,11 +164,13 @@ def test_commands_forward_persistent_runtime_configuration(tmp_path: pathlib.Pat
         str(_package_json(tmp_path)),
         db_path=str(tmp_path / "execution.db"),
         workspace_root=str(tmp_path / "workspace"),
+        machine_id="local-windows",
         runtime_factory=factory,
     )
     assert observed == {
         "db_path": tmp_path / "execution.db",
         "workspace_root": tmp_path / "workspace",
+        "machine_id": "local-windows",
     }
 
 
@@ -153,9 +179,7 @@ def test_commands_reject_missing_required_values() -> None:
     assert not cmd_plan("")["success"]
     assert not cmd_execute("")["success"]
     assert not cmd_runtime_status("")["success"]
-    assert not cmd_retry("")["success"]
     assert not cmd_cancel("")["success"]
-    assert not cmd_review("", "clip", "approved")["success"]
     assert not cmd_export("")["success"]
 
 
@@ -168,8 +192,10 @@ def test_cli_subprocess_dispatch_and_help(tmp_path: pathlib.Path) -> None:
         check=False,
     )
     assert help_result.returncode == 0
-    for command in ("validate", "plan", "execute", "status", "retry", "prompt-revision", "cancel", "review", "export"):
+    for command in ("validate", "plan", "execute", "status", "cancel", "export"):
         assert command in help_result.stdout
+    for command in ("retry", "prompt-revision", "review"):
+        assert command not in help_result.stdout
 
     result = subprocess.run(
         [sys.executable, "-m", "lfo.cli.main", "--json", "validate", str(package_path)],

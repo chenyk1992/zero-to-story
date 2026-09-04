@@ -19,8 +19,6 @@ from .runtime_cmd import (
     cmd_execute,
     cmd_export,
     cmd_plan,
-    cmd_retry,
-    cmd_review,
     cmd_runtime_status,
     cmd_validate,
 )
@@ -40,8 +38,6 @@ __all__ = [
     "cmd_machine_validate",
     "cmd_plan",
     "cmd_preflight",
-    "cmd_retry",
-    "cmd_review",
     "cmd_runtime_status",
     "cmd_setup",
     "cmd_validate",

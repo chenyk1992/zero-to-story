@@ -1,4 +1,4 @@
 interface:
   display_name: "MiniMax H3 Prompt Writing"
-  short_description: "Write H3 base and full-reference video prompts"
-  default_prompt: "Use $h3-prompt-writing to rewrite this multimodal request into a MiniMax H3 generation prompt."
+  short_description: "Write one complete H3 prompt for an approved Panel"
+  default_prompt: "Use $h3-prompt-writing to rewrite this approved single-Panel multimodal request into one complete MiniMax H3 generation prompt, returning only the prompt text."

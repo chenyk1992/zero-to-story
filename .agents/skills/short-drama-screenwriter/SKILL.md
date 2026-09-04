@@ -36,7 +36,6 @@ description: |
 │   ├── characters_visual.md # 可拍视觉角色卡
 │   └── ep001/
 │       ├── storyboard_brief.md
-│       ├── intake.json
 │       └── cut_notes.md
 ├── compliance-report.md     # 合规报告
 └── export/
@@ -45,11 +44,11 @@ description: |
 
 ### 与项目管线的边界（重要）
 
-- **本 skill 只写剧 + 可选 handoff 桥接包**，不修改 `src/lfo/**`，不直接生成可执行的 `storyboard.json`。
+- **本 skill 只写剧 + 可选 handoff 桥接包**，不修改 `src/lfo/**`，不直接生成 LFO 执行包或调用运行时。
 - `episodes/epNNN.md` 是编剧主产物；`handoff/` 是给下游用的伴生包。
-- `storyboard_brief.md` → 交给 **zero-to-story**（设定图 / 黑白分镜）；单 Panel 的 H3 视频提示词再交给 **h3-prompt-writing**。
-- `intake.json` → 交给 **LFO**（decompose / `lfo run` 的上游输入）。
-- 默认由人/agent 将桥接产物复制到 `workspace/{drama_title}/chapter_{NN}/`。若项目状态显式设置 `workspaceSync.enabled = true`，视为用户已授权：每次 `/桥接` 完成后自动同步 `workspaceSync.artifacts` 到正式工作区；正式根目录只能是仓库根的 `workspace/`，不得写入 `src/lfo/workspace/`。
+- `storyboard_brief.md` 与 `characters_visual.md` → 交给 **zero-to-story**（故事板、设定图、必要视觉资产）；单 Panel 的 H3 视频提示词再交给 **h3-prompt-writing**。
+- zero-to-story 确认后才为每个 Panel 写 `lfo.video-execution.v1` 包并交给 LFO；本 skill 不创建旧 `intake`/`shots[]` schema，也不运行 `validate`/`execute`。
+- 桥接产物默认留在 `.short-drama/{drama_title}/handoff/`。用户明确开始视频项目后，由下游按 `workspace/projects/<project_id>/` 规则复制已确认的 brief 和素材；本 skill 不自动同步或在 `workspace/` 根部创建目录。
 
 ## 状态跟踪
 
@@ -71,18 +70,7 @@ description: |
 }
 ```
 
-可选的项目级正式工作区同步配置：
-
-```json
-"workspaceSync": {
-  "enabled": true,
-  "root": "workspace/{drama_title}",
-  "policy": "sync_on_bridge",
-  "artifacts": ["intake.json", "storyboard_brief.md", "cut_notes.md"]
-}
-```
-
-启用后以 `handoff/epNNN/` 为源，自动同步到 `workspace/{drama_title}/chapter_NN/`。
+桥接不会自动同步正式视频工作区。用户确认进入视频制作后，由 zero-to-story 或调用方把当前集的 brief、角色/场景素材和最新创作文件放入 `workspace/projects/<project_id>/`，并按该项目的执行包规则管理素材。
 
 每次会话开始时检查是否存在状态文件，如存在则恢复进度并告知用户当前阶段。
 
@@ -388,20 +376,16 @@ CLOSE-UP — {character} {action}
 
 ### 流程
 
-对指定集进行 5 维度评分：
+对指定集做一次简洁的创作检查，不给分、不生成分级 QC 报告：
 
-| 维度 | 检查项 | 分值 |
-|------|--------|------|
-| 节奏 | 开头是否有钩子？中段是否有递进？结尾是否有爆发？ | /10 |
-| 爽感 | 是否有明确的爽感类型？强度是否合适？ | /10 |
-| 对白 | 是否有角色区分？是否自然？是否有金句？ | /10 |
-| 格式 | 是否符合剧本格式？场次是否完整？ | /10 |
-| 连续性 | 与前后集是否衔接？角色是否一致？ | /10 |
+- 开头是否建立冲突或悬念，中段是否推进，结尾是否有钩子；
+- 主冲突、人物目标和付费/反转节点是否清楚；
+- 台词是否能区分角色，场景动作是否可拍；
+- 场次标题、对白、音效提示和钩子格式是否完整；
+- 与已写集的角色称呼、时间线、道具和伏笔是否一致。
 
 ### 输出
-- 总分 /50 + 详细评语
-- 如低于 35 分，标记需要修改的具体问题
-- 提供修改建议
+- 列出必须修正的具体问题和可选建议；没有阻断问题时直接标记「创作检查通过」。
 
 ---
 
@@ -452,50 +436,40 @@ CLOSE-UP — {character} {action}
 ### 加载参考
 - `references/handoff-mapping.md`
 - `references/handoff-brief-template.md`
-- `references/handoff-intake-template.json`
 
 ### 边界（必须遵守）
 - **不改写** `episodes/epNNN.md` 编剧正文
-- **不生成**完整 `lfo.storyboard.v1` JSON（避免与管线字段漂移；JSON 由 LFO decompose / 人工审镜产出）
-- 默认**不写入** `workspace/`；仅当 `.drama-state.json` 中 `workspaceSync.enabled = true` 时，按已授权配置自动同步
-- 与 **zero-to-story** / **LFO** 零代码耦合：只产文档与 JSON intake 伴生包
+- **不生成** `lfo.video-execution.v1` 执行包；Panel、operation、H3 提示词和批准 hash 由 zero-to-story / h3-prompt-writing 在后续阶段确定
+- **不调用** LFO、ComfyUI 或其他视频运行时，也不写旧 `lfo.intake.v1`、`storyboard.json`、`shots[]` 或旧 CLI 入口
+- 桥接只产创作侧 brief、可拍角色卡和剪辑说明，默认留在 `.short-drama/`；不自动写入 `workspace/`
 
 ### 流程
 
 1. **确保剧级文件**（若无则创建）：
-   - `handoff/project.json` — `novel_id`（=剧名，作 workspace 小说名）、默认 `9:16`、默认时长、风格关键词、mood、`workspace_copy_hint`
+   - `handoff/project.json` — 剧名、默认 `9:16`、目标总时长、风格关键词和 mood 等创作元数据；不写 LFO 内部 ID 或执行状态
    - `handoff/characters_visual.md` — 从 `characters.md` 抽取可拍视觉卡（外貌/服饰/标志特征/关键道具）
-   - 每集 intake 的 `project_id` 用 `{drama_title}-chapter_{NN}`，**不要**把剧级文件写成单一 `project_id` 冒充章节
 
 2. **按集生成** `handoff/ep{NNN}/`：
    - `storyboard_brief.md` — 对齐 zero-to-story brief 模板；**默认比例 9:16**
-   - `intake.json` — 对齐 `lfo.intake.v1`；`sources[].type = screenplay`
    - `cut_notes.md` — 场次折叠、对白取舍、钩子/预告隔离说明
 
 3. **桥接规则**（详见 `references/handoff-mapping.md`）：
-   - 1 集 → 1 支竖屏片；默认时长 45s 或 60s（镜头数 22 或 29；15s→8 / 30s→15 / 45s→22 / 60s→29）
-   - 3–6 场次压成 brief 内 1–2 个场景；`max_characters` 2–3，`max_scenes` ≤2
-   - 对白不逐句上镜，抽可拍节拍；台词列无则写「无」
-   - 每条分镜画面描述必须含空间关系（前景/中景/远景、左/右/中央）
-   - 🎣钩子、下集预告、付费墙设计只进 `cut_notes.md`（或 brief 附录），不进分镜表
-   - intake.`audio_policy`：竖屏短剧样例用 `full`（允许对白+音效）；若走纯画面则用 `effects_only`，并在 `cut_notes` 说明
+   - 1 集的目标总时长可以是 15–60 秒，但由 zero-to-story 按每个 Panel 4–15 秒拆成多个 Panel/Clip；不要把一集或 22/29 个旧镜头当作一个 LFO 包
+   - 3–6 场次压成 brief 内 1–2 个场景；角色和场景数量只作为创作约束，不写成旧 intake 限制
+   - 对白不逐句上镜，抽可拍节拍；台词列无则写「无」；精确对白交由后续 Panel 计划保留
+   - 每条候选 Panel/节拍描述必须含空间关系（前景/中景/远景、左/右/中央）和结束可见状态，供 zero-to-story 编译 Camera Setup
+   - 🎣钩子、下集预告、付费墙设计只进 `cut_notes.md`（或 brief 附录），不伪装成视频字幕或模型引用
+   - 在 `cut_notes.md` 写明对白/环境声/外部口播音频和字幕的创作意图；最终是否加入音轨或字幕由后续 execution package 与一次性 assembly 决定
 
-4. **完成后提示复制路径**（示例，第 1 集）：
-   - `workspace/{drama_title}/chapter_01/intake.json`
-   - `workspace/{drama_title}/chapter_01/storyboard_brief.md`
-   - LFO `project_id` 建议：`{drama_title}-chapter_01`（与 workspace README 一致）
-   - 映射：`episodes/ep001.md` / `handoff/ep001/` → `workspace/.../chapter_01/`（第 N 集 → `chapter_NN`）
-
-5. **可选正式工作区自动同步**：
-   - 读取 `.drama-state.json.workspaceSync`；仅在 `enabled = true` 时执行
-   - 将本集 `handoff/epNNN/` 中列入 `artifacts` 的文件同步到 `{root}/chapter_NN/`
-   - `handoff/epNNN/` 始终是桥接源文件；同步后校验源文件与正式副本内容一致，并校验 `intake.json`
-   - 目标必须解析在仓库根 `workspace/` 下；拒绝 `src/lfo/workspace/` 或仓库外路径
+4. **完成后交给下游**：
+   - 先让用户确认当前集 brief、角色/场景资产和剪辑说明；不把未确认内容当作视频输入
+   - 将已确认材料交给 zero-to-story；由它建立 Panel、视觉资产、H3 提示词和每 Panel 独立 package
+   - 只有各 Panel `ACCEPT` 后，才由调用方按当前 LFO 契约创建一次性 `video.passthrough` assembly；本 Skill 不记录执行 hash、尾帧或运行结果
 
 ### 输出
 - 写入 `handoff/` 下对应文件
 - 更新 `.drama-state.json` 的 `bridgedEpisodes`（可与 `completedEpisodes` 并存）
-- 若启用 `workspaceSync`，同步正式工作区并报告目标路径
+- 向用户报告 brief、角色卡和剪辑说明的路径，以及下一步交给 zero-to-story 的输入，不报告不存在的 LFO package 或执行结果
 
 ---
 
@@ -555,8 +529,8 @@ CLOSE-UP — {character} {action}
 | `/角色开发` | 角色档案、关系图、反派体系 | 方案完成 |
 | `/目录` | 全剧分集目录 | 角色完成 |
 | `/分集 N` | 写第 N 集（支持范围和 next） | 目录完成 |
-| `/自检 N` | 5 维度质量评分 | 第 N 集完成 |
-| `/桥接 N` | 生成 handoff 桥接包（brief + intake） | 第 N 集剧本已完成 |
+| `/自检 N` | 检查剧本结构、对白、节奏和连续性 | 第 N 集完成 |
+| `/桥接 N` | 生成交给 zero-to-story 的 handoff（brief + 角色卡 + cut notes） | 第 N 集剧本已完成 |
 | `/导出` | 导出完整剧本 | 部分集完成 |
 | `/出海` | 切换海外模式 | 随时 |
 | `/合规` | 内容合规审查 | 有内容 |

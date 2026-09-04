@@ -48,7 +48,6 @@ class ContentAddressedStore:
 
     def __init__(self, root: pathlib.Path) -> None:
         self.root = root.resolve(strict=False)
-        self.root.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Internal helpers

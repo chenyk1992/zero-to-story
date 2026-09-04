@@ -1,45 +1,35 @@
 {
-  "schema_version": "lfo.intake.v1",
-  "project_id": "{drama_title}-chapter_{NN}",
-  "sources": [
-    {
-      "source_id": "src_ep_{NNN}_screenplay",
-      "type": "screenplay",
-      "content": "【本集视觉剪辑版】\n标题：{episode_title}\n源文件：.short-drama/{drama_title}/episodes/ep{NNN}.md\n\n一句话：{logline_cut}\n\n场景摘要：\n1) {scene_a_summary}\n2) {scene_b_summary}\n\n关键对白（精简）：\n- {key_line_1}\n- {key_line_2}\n\n视觉重点：{visual_beats}\n\n注意：完整编剧正文见源文件；钩子与下集预告不进入本 intake 约束。",
-      "origin": "user",
-      "metadata": {
-        "language": "zh-CN",
-        "genre": "short_drama",
-        "episode": "{NNN}",
-        "drama_title": "{drama_title}",
-        "source_path": ".short-drama/{drama_title}/episodes/ep{NNN}.md",
-        "handoff_brief": ".short-drama/{drama_title}/handoff/ep{NNN}/storyboard_brief.md"
-      }
-    }
-  ],
-  "constraints": {
+  "schema": "short-drama.creative-handoff.v1",
+  "project": {
+    "title": "{drama_title}",
+    "default_aspect_ratio": "9:16",
     "target_duration_ms": 45000,
-    "aspect_ratio": "9:16",
-    "delivery_width": 1080,
-    "delivery_height": 1920,
     "language": "zh-CN",
     "visual_style": "wet-night neo-noir cinematic",
-    "medium_lock": "竖屏写实电影质感，夜雨都市，冷青与湿沥青反光；禁止漫画网纹与过度美颜。",
-    "max_characters": 3,
-    "max_scenes": 2,
-    "pacing": "medium",
-    "mood": "tense comedy unease",
-    "audio_policy": "full",
-    "custom": {
-      "shot_count_target": 22,
-      "bridge": "short-drama-screenwriter-handoff-v1",
-      "notes": "台词可进镜头；若改纯画面请将 audio_policy 改为 effects_only 并更新 cut_notes。"
-    }
+    "mood": "tense comedy unease"
+  },
+  "episode": {
+    "episode_id": "ep{NNN}",
+    "title": "{episode_title}",
+    "source_path": ".short-drama/{drama_title}/episodes/ep{NNN}.md",
+    "storyboard_brief_path": ".short-drama/{drama_title}/handoff/ep{NNN}/storyboard_brief.md",
+    "cut_notes_path": ".short-drama/{drama_title}/handoff/ep{NNN}/cut_notes.md",
+    "visual_summary": "{logline_cut}\n\n场景摘要：\n1) {scene_a_summary}\n2) {scene_b_summary}\n\n关键对白（精简）：\n- {key_line_1}\n- {key_line_2}\n\n视觉重点：{visual_beats}"
+  },
+  "panelization": {
+    "min_duration_ms": 4000,
+    "max_duration_ms": 15000,
+    "notes": "由 zero-to-story 按场景因果和 Camera Setup 拆成多个 Panel；不要用固定镜头数或整集单 Clip 替代 Panel 计划。"
+  },
+  "audio_intent": {
+    "dialogue": "{dialogue_intent}",
+    "effects": "{effects_intent}",
+    "external_voiceover": "{external_voiceover_intent}",
+    "subtitle_requested": false
   },
   "origin": {
     "source": "user",
-    "confidence": "high",
-    "derived_from": [],
-    "reason": "短剧编剧 skill /桥接 从 ep 剧本生成的 LFO intake 伴生包"
+    "derived_from": [".short-drama/{drama_title}/episodes/ep{NNN}.md"],
+    "reason": "短剧编剧 Skill /桥接 生成的创作侧简报；交给 zero-to-story，不直接交给 LFO。"
   }
 }

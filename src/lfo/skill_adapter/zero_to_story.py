@@ -1,9 +1,8 @@
 """Adapt approved zero-to-story creative output to ``VideoExecutionPackage``.
 
-The normal input is a Panel-first creative document: generated character and
-storyboard images are listed in ``assets`` and every approved panel becomes one
-independent Clip.  This module is deliberately the only place that understands
-the legacy ``shots`` shape; the LFO execution contract never does.
+The only accepted input is a Panel-first creative document.  A production
+package contains one approved Panel/Clip; multi-clip packages are reserved for
+the separate passthrough assembly adapter.
 """
 from __future__ import annotations
 
@@ -25,8 +24,6 @@ from lfo.contracts.operations import validate_operation_references
 from lfo.contracts.package import ApprovalDeclaration, VideoExecutionPackage
 from lfo.contracts.timeline import OutputPolicy
 
-_DEFAULT_MEGAPIXELS = 0.4
-
 
 def _aspect_from_pixels(width: object, height: object) -> str | None:
     if not isinstance(width, int) or isinstance(width, bool) or width <= 0:
@@ -45,19 +42,40 @@ def _canvas_requirements(data: dict[str, Any], path: str) -> GenerationRequireme
     aspect = payload.get("aspect_ratio")
     if not isinstance(aspect, str) or not aspect.strip():
         payload["aspect_ratio"] = _aspect_from_pixels(width, height) or "16:9"
-    if payload.get("megapixels") is None:
-        payload["megapixels"] = _DEFAULT_MEGAPIXELS
     return GenerationRequirements.from_dict(payload, path)
 
 
 def _asset_spec(data: dict[str, Any]) -> AssetSpec:
     """Accept a public AssetSpec dict or concise Skill asset declaration."""
-    if "source" in data and "provenance" in data:
-        return AssetSpec.from_dict(data, "$.assets[]")
+    if not isinstance(data, dict):
+        raise ValueError("assets[] must be an object")
+    # ``asset_id``/``external_asset_id`` belong to the creative handoff.  They
+    # are useful for resolving Panel references but are deliberately not part
+    # of the public AssetSpec object.
+    public_data = dict(data)
+    public_data.pop("asset_id", None)
+    public_data.pop("external_asset_id", None)
+    if "source" in public_data and "provenance" in public_data:
+        return AssetSpec.from_dict(public_data, "$.assets[]")
+    asset_key = data.get("asset_key")
+    if not isinstance(asset_key, str) or not asset_key:
+        raise ValueError("assets[].asset_key must be a non-empty string")
+    uri = data.get("uri", data.get("path", ""))
+    if not isinstance(uri, str) or not uri.strip():
+        raise ValueError(f"assets[{asset_key!r}].uri must be a non-empty string")
+    sha256 = data.get("sha256")
+    if sha256 is not None and not isinstance(sha256, str):
+        raise TypeError(f"assets[{asset_key!r}].sha256 must be a string when provided")
+    review_required = data.get("review_required", True)
+    if not isinstance(review_required, bool):
+        raise TypeError(f"assets[{asset_key!r}].review_required must be a boolean")
+    metadata = data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise TypeError(f"assets[{asset_key!r}].metadata must be an object")
     return AssetSpec(
-        asset_key=data["asset_key"],
+        asset_key=asset_key,
         media_type=data.get("media_type", "image"),
-        source=AssetSource(uri=data.get("uri", data.get("path", ""))),
+        source=AssetSource(uri=uri, sha256=sha256),
         provenance=ProvenanceSpec(
             source_type=data.get("source_type", "external_skill"),
             producer=data.get("producer", "zero-to-story"),
@@ -66,23 +84,73 @@ def _asset_spec(data: dict[str, Any]) -> AssetSpec:
             source_asset_keys=list(data.get("source_asset_keys", [])),
             prompt_hash=data.get("prompt_hash"),
         ),
-        review=ReviewDeclaration(required=data.get("review_required", True)),
-        metadata=dict(data.get("metadata", {})),
+        review=ReviewDeclaration(required=review_required),
+        metadata=dict(metadata),
     )
 
 
 def _asset_id_index(assets: list[dict[str, Any]]) -> dict[str, str]:
     """Resolve creator-facing asset IDs without leaking them to LFO."""
     index: dict[str, str] = {}
-    for asset in assets:
+    seen_keys: set[str] = set()
+    for position, asset in enumerate(assets):
+        if not isinstance(asset, dict):
+            raise ValueError(f"assets[{position}] must be an object")
         key = asset.get("asset_key")
         if not isinstance(key, str) or not key:
-            continue
+            raise ValueError(f"assets[{position}].asset_key must be a non-empty string")
+        if key in seen_keys or key in index:
+            raise ValueError(f"duplicate asset identifier {key!r}")
         index[key] = key
-        external_id = asset.get("asset_id") or asset.get("external_asset_id")
-        if isinstance(external_id, str) and external_id:
+        seen_keys.add(key)
+        for field in ("asset_id", "external_asset_id"):
+            external_id = asset.get(field)
+            if external_id is None:
+                continue
+            if not isinstance(external_id, str) or not external_id:
+                raise ValueError(f"assets[{position}].{field} must be a non-empty string")
+            existing = index.get(external_id)
+            if existing is not None and existing != key:
+                raise ValueError(f"duplicate asset identifier {external_id!r}")
             index[external_id] = key
     return index
+
+
+def _resolve_audio_asset_keys(
+    data: dict[str, Any],
+    asset_keys: dict[str, str],
+    path: str,
+) -> dict[str, Any]:
+    """Map creator-facing audio asset IDs to public ``asset_key`` values."""
+    resolved = dict(data)
+    tracks = resolved.get("tracks", [])
+    if not isinstance(tracks, list):
+        return resolved
+    resolved_tracks: list[Any] = []
+    for index, raw_track in enumerate(tracks):
+        if not isinstance(raw_track, dict):
+            raise ValueError(f"{path}.tracks[{index}] must be an object")
+        track = dict(raw_track)
+        source_key = track.get("asset_key") or track.get("asset_id")
+        track.pop("asset_id", None)
+        if isinstance(source_key, str):
+            track["asset_key"] = asset_keys.get(source_key, source_key)
+        resolved_tracks.append(track)
+    resolved["tracks"] = resolved_tracks
+    return resolved
+
+
+def _resolve_subtitle_asset_key(
+    data: dict[str, Any],
+    asset_keys: dict[str, str],
+) -> dict[str, Any]:
+    """Map a creator-facing subtitle asset ID to a public ``asset_key``."""
+    resolved = dict(data)
+    source_key = resolved.get("asset_key") or resolved.get("asset_id")
+    resolved.pop("asset_id", None)
+    if isinstance(source_key, str):
+        resolved["asset_key"] = asset_keys.get(source_key, source_key)
+    return resolved
 
 
 def _semantic_usage(role: str | None) -> str:
@@ -98,8 +166,9 @@ def _panel_references(
     panel: dict[str, Any],
     asset_keys: dict[str, str],
 ) -> list[ReferenceSpec]:
-    raw_refs = panel.get("references")
-    if not isinstance(raw_refs, list):
+    if "references" in panel:
+        raw_refs = panel["references"]
+    else:
         pack = panel.get("pack", {})
         if not isinstance(pack, dict):
             raise ValueError("panel.pack must be an object")
@@ -107,6 +176,7 @@ def _panel_references(
     if not isinstance(raw_refs, list):
         raise ValueError("panel references must be a list")
     refs: list[ReferenceSpec] = []
+    seen_reference_ids: set[str] = set()
     for index, raw in enumerate(raw_refs):
         if not isinstance(raw, dict):
             raise ValueError(f"panel references[{index}] must be an object")
@@ -120,6 +190,11 @@ def _panel_references(
         reference_id = raw.get("reference_id", f"ref-{index + 1:03d}")
         if not isinstance(reference_id, str) or not reference_id:
             raise ValueError(f"panel references[{index}].reference_id must be a non-empty string")
+        if reference_id in seen_reference_ids:
+            raise ValueError(
+                f"panel references[{index}].reference_id duplicates {reference_id!r}"
+            )
+        seen_reference_ids.add(reference_id)
         semantic_usage = raw.get("semantic_usage", _semantic_usage(raw.get("role")))
         if not isinstance(semantic_usage, str) or not semantic_usage:
             raise ValueError(f"panel references[{index}].semantic_usage must be a non-empty string")
@@ -146,7 +221,6 @@ def _validate_operation_references(
         operation,
         references,
         asset_media_types=asset_media_types,
-        require_typed_r2v_slots=True,
     )
 
 
@@ -162,9 +236,19 @@ def _panel_to_clip(
     generation_data = panel.get("generation", {})
     if not isinstance(generation_data, dict):
         raise ValueError(f"panel {panel_id!r}.generation must be an object")
+    if "negative_prompt" in generation_data:
+        raise ValueError(
+            f"panel {panel_id!r}.generation.negative_prompt is not part of the "
+            "approved single-prompt handoff"
+        )
     operation = generation_data.get("operation")
     if not isinstance(operation, str) or not operation:
         raise ValueError(f"panel {panel_id!r}.generation.operation is required")
+    if operation == "video.passthrough":
+        raise ValueError(
+            "zero-to-story production packages require one generated Clip; "
+            "use an assembly adapter for video.passthrough"
+        )
     if generation_data:
         prompt = generation_data.get("prompt", prompt)
     if not isinstance(prompt, str) or not prompt:
@@ -175,6 +259,12 @@ def _panel_to_clip(
     subtitle_data = panel.get("subtitles", {})
     if not isinstance(subtitle_data, dict):
         raise ValueError(f"panel {panel_id!r}.subtitles must be an object")
+    audio_policy = _resolve_audio_asset_keys(
+        audio_policy,
+        asset_keys,
+        f"$.panels[{sequence - 1}].audio",
+    )
+    subtitle_data = _resolve_subtitle_asset_key(subtitle_data, asset_keys)
     extension_data = panel.get("extensions", {})
     if not isinstance(extension_data, dict):
         raise ValueError(f"panel {panel_id!r}.extensions must be an object")
@@ -197,14 +287,15 @@ def _panel_to_clip(
         generation=GenerationSpec(
             operation=operation,
             prompt=prompt,
-            negative_prompt=generation_data.get("negative_prompt"),
             seed=generation_data.get("seed"),
             requirements=resolved_requirements,
             references=references,
         ),
         audio=AudioPolicy.from_dict(audio_policy, f"$.panels[{sequence - 1}].audio"),
         subtitles=SubtitleSpec.from_dict(subtitle_data, f"$.panels[{sequence - 1}].subtitles"),
-        dependencies=list(panel.get("dependencies", [])),
+        # Cross-Panel order is owned by the caller.  A one-Panel package must
+        # not carry references to Clip IDs that do not exist inside the package.
+        dependencies=[],
         source_context={
             "creative_unit": "panel",
             "beat_range": list(panel.get("beat_range", [])),
@@ -217,15 +308,36 @@ def _panel_to_clip(
 
 def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
     project_data = creative.get("project", {})
+    if not isinstance(project_data, dict):
+        raise ValueError("project must be an object")
     project_id = project_data.get("project_id") or creative.get("project_id")
     if not isinstance(project_id, str) or not project_id:
         raise ValueError("Panel-first input requires a stable project_id for workspace routing")
-    package_id = project_data.get("package_id") or project_id
+    panels = creative.get("panels", [])
+    if not isinstance(panels, list) or len(panels) != 1:
+        raise ValueError("Production execution requires exactly one approved panel")
+    panel = panels[0]
+    if not isinstance(panel, dict):
+        raise ValueError("panels[0] must be an object")
+    panel_id = panel.get("panel_id", "panel-001")
+    if not isinstance(panel_id, str) or not panel_id:
+        raise ValueError("panels[0].panel_id must be a non-empty string")
+    package_id = project_data.get("package_id") or f"{project_id}-{panel_id}"
     if not isinstance(package_id, str) or not package_id:
         raise ValueError("Panel-first input requires a non-empty package_id")
     raw_assets = creative.get("assets", [])
     if not isinstance(raw_assets, list):
         raise ValueError("assets must be a list")
+    asset_keys = _asset_id_index(raw_assets)
+    asset_records = {
+        asset["asset_key"]: asset
+        for asset in raw_assets
+        if isinstance(asset, dict) and isinstance(asset.get("asset_key"), str)
+    }
+    asset_media_types = {
+        asset_key: str(asset.get("media_type") or "image")
+        for asset_key, asset in asset_records.items()
+    }
     builder = VideoPackageBuilder(
         package_id,
         project_data.get("title", "Untitled"),
@@ -233,9 +345,10 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
         locale=project_data.get("locale"),
         project_id=project_id,
     )
-    for asset in raw_assets:
-        builder.add_asset(_asset_spec(asset))
-    custom = creative.get("user_constraints", creative.get("style", {}).get("custom", {}))
+    custom = creative.get("user_constraints")
+    if custom is None:
+        style = creative.get("style", {})
+        custom = style.get("custom", {}) if isinstance(style, dict) else {}
     if not isinstance(custom, dict):
         custom = {}
     resolution = custom.get("delivery_resolution")
@@ -265,27 +378,34 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
         },
         "$.generation.requirements",
     )
-    asset_keys = _asset_id_index(raw_assets)
-    asset_media_types = {
-        asset_key: str(asset.get("media_type") or "image")
-        for asset in raw_assets
-        if isinstance(asset, dict)
-        for asset_key in [asset.get("asset_key")]
-        if isinstance(asset_key, str) and asset_key
-    }
-    panels = creative.get("panels", [])
-    if not isinstance(panels, list) or not panels:
-        raise ValueError("Panel-first input requires at least one panel")
     for sequence, panel in enumerate(panels, start=1):
-        if not isinstance(panel, dict):
-            raise ValueError(f"panels[{sequence - 1}] must be an object")
-        builder.add_clip(
-            _panel_to_clip(panel, sequence, asset_keys, asset_media_types, requirements)
+        clip = _panel_to_clip(
+            panel,
+            sequence,
+            asset_keys,
+            asset_media_types,
+            requirements,
         )
+        # A generation package contains only the assets that this Panel's
+        # references/audio/subtitles actually consume.  Unrelated storyboard
+        # assets would otherwise be imported and could fail source validation.
+        builder.add_clip(clip)
+        required_asset_keys = {
+            reference.asset_key for reference in clip.generation.references
+        }
+        required_asset_keys.update(track.asset_key for track in clip.audio.tracks)
+        if clip.subtitles.asset_key is not None:
+            required_asset_keys.add(clip.subtitles.asset_key)
+        for asset_key in sorted(required_asset_keys):
+            raw_asset = asset_records.get(asset_key)
+            if raw_asset is not None:
+                builder.add_asset(_asset_spec(raw_asset))
     package_extensions = creative.get("extensions", {})
     if not isinstance(package_extensions, dict):
         raise ValueError("extensions must be an object")
     review = creative.get("review", {})
+    if not isinstance(review, dict):
+        raise ValueError("review must be an object")
     approval = ApprovalDeclaration(
         approved_by=review.get("reviewer") if review.get("status") == "approved" else None,
         approved_at=review.get("approved_at") if review.get("status") == "approved" else None,
@@ -294,95 +414,12 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
     return builder.output(output).approval(approval).extensions(**package_extensions).build()
 
 
-def _adapt_legacy_storyboard(storyboard: dict[str, Any]) -> VideoExecutionPackage:
-    """Explicit compatibility conversion kept inside the zero-to-story Skill."""
-    project_data = storyboard.get("project", {})
-    project_id = project_data.get("project_id") or storyboard.get("project_id")
-    if not isinstance(project_id, str) or not project_id:
-        raise ValueError("Storyboard requires project.project_id for workspace routing")
-    builder = VideoPackageBuilder(
-        project_data.get("package_id") or storyboard.get("project_id", "unknown"),
-        project_data.get("title", "Untitled"),
-        revision=project_data.get("revision", 1),
-        locale=project_data.get("locale"),
-        project_id=project_id,
-    )
-    assets = storyboard.get("assets", [])
-    if not isinstance(assets, list):
-        raise ValueError("assets must be a list")
-    for raw_asset in assets:
-        builder.add_asset(_asset_spec(raw_asset))
-    asset_keys = _asset_id_index(assets)
-    asset_media_types = {
-        asset_key: str(asset.get("media_type") or "image")
-        for asset in assets
-        if isinstance(asset, dict)
-        for asset_key in [asset.get("asset_key")]
-        if isinstance(asset_key, str) and asset_key
-    }
-    shots = storyboard.get("shots", [])
-    shot_id_to_clip_id = {
-        shot.get("shot_id", f"shot-{sequence:03d}"): shot.get("clip_id", f"clip-{sequence:03d}")
-        for sequence, shot in enumerate(shots, start=1)
-    }
-    for sequence, shot in enumerate(shots, start=1):
-        if not isinstance(shot, dict):
-            raise ValueError(f"shots[{sequence - 1}] must be an object")
-        generation = shot.get("generation", {})
-        if not isinstance(generation, dict):
-            raise ValueError(f"shots[{sequence - 1}].generation must be an object")
-        operation = generation.get("operation")
-        if not isinstance(operation, str) or not operation:
-            raise ValueError(f"shots[{sequence - 1}].generation.operation is required")
-        refs = _panel_references({"references": generation.get("references", [])}, asset_keys)
-        _validate_operation_references(operation, refs, asset_media_types)
-        shot_extensions = shot.get("extensions", {})
-        if not isinstance(shot_extensions, dict):
-            raise ValueError(f"shots[{sequence - 1}].extensions must be an object")
-        raw_requirements = generation.get("requirements", {})
-        if not isinstance(raw_requirements, dict):
-            raise TypeError("shot generation.requirements must be an object")
-        requirements = _canvas_requirements(
-            raw_requirements,
-            "$.shots[].generation.requirements",
-        )
-        builder.add_clip(ClipSpec(
-            clip_id=shot.get("clip_id", f"clip-{sequence:03d}"),
-            sequence=sequence,
-            duration_ms=shot.get("duration_ms", 5_000),
-            generation=GenerationSpec(
-                operation=operation,
-                prompt=generation.get("prompt", ""),
-                negative_prompt=generation.get("negative_prompt"),
-                seed=generation.get("seed"),
-                requirements=requirements,
-                references=refs,
-            ),
-            audio=AudioPolicy.from_dict(shot.get("audio", {}), "$.shots[].audio"),
-            subtitles=SubtitleSpec.from_dict(shot.get("subtitles", {}), "$.shots[].subtitles"),
-            dependencies=[
-                shot_id_to_clip_id.get(dependency, dependency)
-                for dependency in shot.get("dependencies", [])
-            ],
-            source_context={"creative_unit": "legacy_shot"},
-            extensions=dict(shot_extensions),
-        ))
-    package_extensions = storyboard.get("extensions", {})
-    if not isinstance(package_extensions, dict):
-        raise ValueError("extensions must be an object")
-    return (
-        builder
-        .output(OutputPolicy.from_dict(storyboard.get("output", {}), "$.output"))
-        .approval(ApprovalDeclaration.from_dict(storyboard.get("approval", {}), "$.approval"))
-        .extensions(**package_extensions)
-        .build()
-    )
-
-
 def adapt(creative: dict[str, Any]) -> VideoExecutionPackage:
-    """Convert approved Panel-first output; convert legacy shots only explicitly."""
-    if creative.get("panels"):
-        return _adapt_panels(creative)
-    if creative.get("shots"):
-        return _adapt_legacy_storyboard(creative)
-    raise ValueError("zero-to-story input requires panels; legacy shots are supported only for conversion")
+    """Convert one approved Panel into one production Clip package."""
+    if not isinstance(creative, dict):
+        raise TypeError("zero-to-story input must be an object")
+    if "shots" in creative:
+        raise ValueError("zero-to-story input must use panels; legacy shots are not supported")
+    if not creative.get("panels"):
+        raise ValueError("zero-to-story input requires one approved panel")
+    return _adapt_panels(creative)

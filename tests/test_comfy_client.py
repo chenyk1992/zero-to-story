@@ -115,6 +115,30 @@ class TestComfyApiClient:
         assert request.call_args.kwargs["data"] == {"subfolder": "lfo-input"}
         assert "image" in request.call_args.kwargs["files"]
 
+    def test_download_output_streams_view_response(self, client, tmp_path):
+        response = _mock_response({})
+        response.iter_content.return_value = [b"video", b"", b"-bytes"]
+        destination = tmp_path / "download" / "clip.mp4"
+
+        with patch.object(client, "_request", return_value=response) as request:
+            result = client.download_output(
+                "clip.mp4",
+                destination,
+                subfolder="lfo/run",
+                timeout=120,
+            )
+
+        assert result == destination
+        assert destination.read_bytes() == b"video-bytes"
+        assert request.call_args.args == ("GET", "/view")
+        assert request.call_args.kwargs["params"] == {
+            "filename": "clip.mp4",
+            "subfolder": "lfo/run",
+            "type": "output",
+        }
+        assert request.call_args.kwargs["stream"] is True
+        response.close.assert_called_once_with()
+
     def test_unreachable_raises(self, client):
         with patch.object(
             client._session,

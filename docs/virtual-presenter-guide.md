@@ -1,52 +1,31 @@
 # Virtual Presenter v1
 
-`virtual-presenter` is the creative-side workflow for a natural, continuous talking-head
-video. The Skill owns the approved presenter plan, Shot Contracts, H3 prompts, semantic QC
-and retry decisions. LFO owns asset import, backend selection, technical QC, media
-processing, timeline assembly and export.
+`virtual-presenter` 是创作侧用于规划自然连续口播镜头的 Skill。它负责角色、环境、文案、声音参考、H3 提示词和用户确认；LFO 只负责执行一个已经确认的 Panel/Clip。
 
-## Project files
+## 创作资产
 
-All project data stays under `workspace/projects/<project_id>/`:
+项目数据放在 `workspace/projects/<project_id>/` 下。角色图、全景图、声音和环境视图是输入素材；执行包只引用当前 Panel 实际需要的文件，不把平台缓存或内部 ID 写入公共契约。
+
+环境辅助工具可从大约 2:1 的 equirectangular 全景图生成四个方向视图。它拒绝不符合比例的输入，不拉伸原图。
+
+## 单 Panel 交付
+
+每个口播 Panel 生成一个只含一个 Clip 的 `lfo.video-execution.v1` package。需要连续接力时，下一条 Presenter Panel 使用上一段完整 `ACCEPT` 视频作为普通 `ref_video_0` 参考；只有其他下游 operation 明确要求精确首帧时，才从接受视频提取真实尾帧并绑定为 `first_frame`。
+
+执行顺序固定为：
 
 ```text
-presenter_plan.md          creative and stage-state source of truth
-inputs/                    byte-faithful character, panorama and voice inputs
-environment-pack/          four direction views, contact sheet and manifest
-packages/                  revisioned per-Shot and assembly packages
-qc/                        semantic QC for every candidate
-execution-package.json     package currently offered to LFO
-outputs/ and final/        LFO-managed run and publication artifacts
+创作审批 → package → validate（返回 package_sha256）
+→ 用户批准 package 完整文件字节 SHA-256（exact file SHA-256）
+→ 当前 Panel 的隔离执行单元 → 同步 ComfyUI/comfy-cli → 最小 QC → ACCEPT/REJECT
 ```
 
-The environment helper accepts a roughly 2:1 equirectangular panorama and uses FFmpeg
-`v360` to create 1024-square views at yaw `0`, `90`, `180` and `-90`, pitch `0`, and a
-90-degree field of view. It rejects other aspect ratios instead of stretching them.
+`plan` 只在需要时用于诊断，不是执行前置步骤。
 
-## Execution boundary
+LFO 不批量执行多个 Shot，不并行调用 ComfyUI，不做语义评分，不自动换 seed、改提示词或重试。ComfyUI/素材失败即停止；调用方做最小 QC 并决定 `ACCEPT/REJECT`，需要重做时由用户显式重新准备当前 Panel。
 
-An approved Shot Contract is converted with
-`lfo.skill_adapter.virtual_presenter.build_shot_package`. The package uses
-`video.virtual_presenter`; the materializer selects `comfyui.h3-presenter`, and the video
-router dispatches the task to the H3 Presenter workflow without teaching Runtime any
-presenter semantics.
+## 最终组装
 
-The first accepted Shot normally uses the standalone voice anchor. Later Shots add the
-same-aspect previous accepted clip as `ref_video_0` and default to its paired soundtrack.
-They add `ref_audio_0` as well only when the documented Scene-D comparison accepts the
-voice and continuity scores. Each package must pass `validate` and `plan` before execution.
+所有口播 Panel 都 `ACCEPT` 后，调用方一次性创建只含 `video.passthrough` Clip 的 assembly package，运行 `validate` 取得 `package_sha256`，由用户批准该完整文件字节 SHA-256 后再 `execute` 一次，按顺序直接 `cut` 并做一次可播放检查。最终文件写入项目的 `final/<output.directory>/`。
 
-After both aspect-ratio baselines are accepted, unchanged remaining Shots run in sequence.
-Each aspect ratio keeps an independent previous-clip chain. Semantic retries first change
-the seed and then refine the prompt without changing the Shot Contract; two failed semantic
-regenerations, an unparseable MiMo result after one retry, or a needed baseline change
-pauses automation.
-
-Accepted clips are converted with
-`lfo.skill_adapter.virtual_presenter.build_assembly_package`. Every clip uses
-`video.passthrough`, then follows technical QC, audio, subtitle,
-timeline and export DAG.
-
-Real H3 generation is intentionally serial on one local ComfyUI/GPU. Static validation and
-tests do not require user media, but the approximately 30-second 9:16 and 16:9 acceptance
-run requires a character image, a 360-degree panorama, approved copy and a voice sample.
+机器环境检查见 [`docs/local-windows.md`](local-windows.md)，当前执行契约见 [`docs/package-v1-reference.md`](package-v1-reference.md)。

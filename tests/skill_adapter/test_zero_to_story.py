@@ -9,7 +9,7 @@ from lfo.skill_adapter.zero_to_story import adapt
 
 @pytest.fixture
 def minimal_storyboard() -> dict:
-    """A minimal legacy storyboard dict."""
+    """A minimal approved Panel-first creative document."""
     return {
         "project_id": "test-story-001",
         "project": {
@@ -30,9 +30,9 @@ def minimal_storyboard() -> dict:
                 "review": {"required": True},
             },
         ],
-        "shots": [
+        "panels": [
             {
-                "shot_id": "shot-001",
+                "panel_id": "panel-001",
                 "duration_ms": 5000,
                 "generation": {
                     "operation": "video.reference_to_video",
@@ -42,21 +42,21 @@ def minimal_storyboard() -> dict:
                         "megapixels": 0.4,
                         "fps": 24,
                     },
-                    "references": [
-                        {
-                            "reference_id": "ref-001",
-                            "asset_key": "hero.identity.front",
-                            "semantic_usage": "subject.identity",
-                            "instruction": "Keep hero consistent",
-                            "binding": {
-                                "required": True,
-                                "priority": 100,
-                                "placement": "fixed",
-                                "slot": "ref_image_0",
-                            },
-                        },
-                    ],
                 },
+                "references": [
+                    {
+                        "reference_id": "ref-001",
+                        "asset_key": "hero.identity.front",
+                        "semantic_usage": "subject.identity",
+                        "instruction": "Keep hero consistent",
+                        "binding": {
+                            "required": True,
+                            "priority": 100,
+                            "placement": "fixed",
+                            "slot": "ref_image_0",
+                        },
+                    },
+                ],
                 "audio": {
                     "native_audio": "preserve",
                     "tracks": [],
@@ -82,9 +82,15 @@ class TestAdaptMinimal:
         result = validate_package(pkg.to_dict())
         assert result.ok, f"Validation failed: {result.errors()}"
 
-    def test_package_id_from_project(self, minimal_storyboard: dict) -> None:
+    def test_default_package_id_is_unique_to_panel(self, minimal_storyboard: dict) -> None:
         pkg = adapt(minimal_storyboard)
-        assert pkg.package_id == "test-story-001"
+        assert pkg.package_id == "test-story-001-panel-001"
+
+    def test_rejects_asset_uri_outside_package(self, minimal_storyboard: dict) -> None:
+        minimal_storyboard["assets"][0]["source"]["uri"] = "../outside.png"
+
+        with pytest.raises(ValueError, match="package-relative local URI"):
+            adapt(minimal_storyboard)
 
     def test_project_info(self, minimal_storyboard: dict) -> None:
         pkg = adapt(minimal_storyboard)
@@ -94,7 +100,7 @@ class TestAdaptMinimal:
     def test_one_clip_created(self, minimal_storyboard: dict) -> None:
         pkg = adapt(minimal_storyboard)
         assert len(pkg.clips) == 1
-        assert pkg.clips[0].clip_id == "clip-001"
+        assert pkg.clips[0].clip_id == "panel-001"
         assert pkg.clips[0].sequence == 1
         assert pkg.clips[0].duration_ms == 5000
 
@@ -122,9 +128,47 @@ class TestAdaptMinimal:
         asset_keys = {a.asset_key for a in pkg.assets}
         assert "hero.identity.front" in asset_keys
 
+    def test_only_panel_referenced_assets_are_routed(self, minimal_storyboard: dict) -> None:
+        minimal_storyboard["assets"].extend([
+            {
+                "asset_key": "voice.track",
+                "asset_id": "asset-voice",
+                "media_type": "audio",
+                "uri": "audio/voice.wav",
+            },
+            {
+                "asset_key": "captions.en",
+                "asset_id": "asset-captions",
+                "media_type": "subtitle",
+                "uri": "subtitles/en.srt",
+            },
+            {
+                "asset_key": "unrelated.scene",
+                "media_type": "image",
+                "uri": "assets/unrelated.png",
+            },
+        ])
+        minimal_storyboard["panels"][0]["audio"] = {
+            "native_audio": "replace",
+            "tracks": [{"asset_id": "asset-voice", "role": "dialogue"}],
+        }
+        minimal_storyboard["panels"][0]["subtitles"] = {
+            "asset_id": "asset-captions",
+        }
+
+        pkg = adapt(minimal_storyboard)
+
+        assert {asset.asset_key for asset in pkg.assets} == {
+            "hero.identity.front",
+            "voice.track",
+            "captions.en",
+        }
+        assert pkg.clips[0].audio.tracks[0].asset_key == "voice.track"
+        assert pkg.clips[0].subtitles.asset_key == "captions.en"
+
     def test_clip_and_package_extensions_are_preserved(self, minimal_storyboard: dict) -> None:
         minimal_storyboard["extensions"] = {"creative.contract.v1": {"approved": True}}
-        minimal_storyboard["shots"][0]["extensions"] = {
+        minimal_storyboard["panels"][0]["extensions"] = {
             "lfo.audio_acceptance.v1": {"require_audio": True}
         }
         pkg = adapt(minimal_storyboard)
@@ -140,6 +184,24 @@ class TestAdaptPanelFirst:
             "panels": [{"panel_id": "panel-001", "prompt_text": "Approved prompt."}],
         }
         with pytest.raises(ValueError, match="generation.operation is required"):
+            adapt(creative)
+
+    def test_panel_passthrough_is_reserved_for_assembly(self) -> None:
+        creative = {
+            "project": {"project_id": "panel-passthrough"},
+            "assets": [{"asset_key": "accepted", "media_type": "video", "uri": "accepted.mp4"}],
+            "panels": [{
+                "panel_id": "panel-001",
+                "prompt_text": "An accepted clip",
+                "generation": {"operation": "video.passthrough"},
+                "references": [{
+                    "asset_key": "accepted",
+                    "binding": {"placement": "fixed", "slot": "source_video"},
+                }],
+            }],
+        }
+
+        with pytest.raises(ValueError, match="assembly adapter"):
             adapt(creative)
 
     @pytest.mark.parametrize("operation", ["video.unknown", "video.not_supported"])
@@ -239,7 +301,7 @@ class TestAdaptPanelFirst:
         assert package.approval.approved_by == "user"
         requirements = package.clips[0].generation.requirements
         assert requirements.aspect_ratio == "9:16"
-        assert requirements.megapixels == 0.4
+        assert requirements.megapixels is None
         assert requirements.width is None
         assert package.output.width == 1080
         assert package.output.height == 1920
@@ -254,13 +316,13 @@ class TestAdaptPanelFirst:
                 "prompt_text": "A quiet room.",
                 "generation": {"operation": "video.text_to_video"},
                 "source_context": {"panel_hash": "abc"},
-                "extensions": {"lfo.prompt_manifest.v1": {"clip_id": "panel-001"}},
+                "extensions": {"creative.panel.v1": {"clip_id": "panel-001"}},
             }],
         }
         package = adapt(creative)
         assert package.extensions["creative.plan.v1"]["version"] == 2
         assert package.clips[0].source_context["panel_hash"] == "abc"
-        assert "lfo.prompt_manifest.v1" in package.clips[0].extensions
+        assert "creative.panel.v1" in package.clips[0].extensions
 
     def test_panel_preserves_explicit_frame_bindings(self) -> None:
         creative = {
@@ -293,6 +355,55 @@ class TestAdaptPanelFirst:
         assert package.clips[0].generation.operation == "video.first_last_frame"
         assert [ref.binding.placement for ref in refs] == ["first", "last"]
         assert [ref.binding.priority for ref in refs] == [9, 8]
+
+    def test_panel_drops_cross_package_dependencies(self) -> None:
+        creative = {
+            "project": {"project_id": "panel-dependency-001"},
+            "assets": [],
+            "panels": [{
+                "panel_id": "panel-002",
+                "prompt_text": "Continue forward.",
+                "generation": {"operation": "video.text_to_video"},
+                "dependencies": ["panel-001"],
+            }],
+        }
+
+        package = adapt(creative)
+
+        assert package.clips[0].dependencies == []
+
+    def test_panel_rejects_negative_prompt_side_channel(self) -> None:
+        creative = {
+            "project": {"project_id": "panel-negative-prompt"},
+            "assets": [],
+            "panels": [{
+                "panel_id": "panel-001",
+                "prompt_text": "Approved prompt.",
+                "generation": {
+                    "operation": "video.text_to_video",
+                    "negative_prompt": "unapproved extra instructions",
+                },
+            }],
+        }
+
+        with pytest.raises(ValueError, match="negative_prompt"):
+            adapt(creative)
+
+    def test_explicit_package_id_is_preserved(self) -> None:
+        creative = {
+            "project": {
+                "project_id": "panel-explicit-package",
+                "package_id": "custom-p001-package",
+            },
+            "assets": [],
+            "panels": [{
+                "panel_id": "panel-001",
+                "prompt_text": "Approved prompt.",
+                "generation": {"operation": "video.text_to_video"},
+            }],
+        }
+
+        assert adapt(creative).package_id == "custom-p001-package"
 
     @pytest.mark.parametrize(
         "claim",
@@ -349,7 +460,7 @@ class TestAdaptPanelFirst:
 
 
 class TestAdaptMultiShot:
-    def test_multiple_ships(self) -> None:
+    def test_legacy_shots_are_rejected(self) -> None:
         storyboard = {
             "project_id": "multi-001",
             "project": {"title": "Multi-Shot", "revision": 1},
@@ -366,15 +477,13 @@ class TestAdaptMultiShot:
             ],
             "output": {},
         }
-        pkg = adapt(storyboard)
-        assert len(pkg.clips) == 3
-        assert [c.clip_id for c in pkg.clips] == ["clip-001", "clip-002", "clip-003"]
-        assert [c.sequence for c in pkg.clips] == [1, 2, 3]
+        with pytest.raises(ValueError, match="legacy shots are not supported"):
+            adapt(storyboard)
 
 
 class TestAdaptWithSubtitles:
     def test_subtitle_cues_mapped(self, minimal_storyboard: dict) -> None:
-        minimal_storyboard["shots"][0]["subtitles"] = {
+        minimal_storyboard["panels"][0]["subtitles"] = {
             "cues": [
                 {"start_ms": 0, "end_ms": 2000, "text": "Hello"},
                 {"start_ms": 2000, "end_ms": 4000, "text": "World"},

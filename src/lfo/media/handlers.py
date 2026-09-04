@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
-from dataclasses import asdict, replace
 from typing import Any
 
 from lfo.execution.handlers import HandlerRegistry, HandlerResult, TaskHandler
 from lfo.media._ffmpeg import MediaCommandError, probe
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
-from lfo.media.audio_qc import AudioAcceptanceContract, AudioQualityQC
 from lfo.media.boundary import BoundaryEvidenceBuilder, BoundaryEvidenceSpec, evidence_to_dict
 from lfo.media.export import Exporter, ExportSpec
 from lfo.media.qc import GenerationQualityQC
@@ -39,13 +37,7 @@ def build_media_handler_registry(workspace_root: pathlib.Path | str) -> HandlerR
 
 
 class QCHandler(TaskHandler):
-    """Run the generation-output gate kept for runtime compatibility.
-
-    The task id remains ``media.qc`` so existing execution packages and
-    persisted runs keep their lineage.  Its scope is now only generation
-    quality (a non-empty artifact); technical media specs and semantic review
-    are intentionally not evaluated here.
-    """
+    """Run the minimal technical gate after a video-producing task."""
 
     def execute(self, task_id: str, task_type: str, logical_key: str,
                 metadata: dict[str, Any], attempt_id: str) -> HandlerResult:
@@ -53,11 +45,9 @@ class QCHandler(TaskHandler):
         if source is None:
             return HandlerResult(
                 False,
-                error="Generation output has no file_path",
-                retryable=True,
+                error="Video artifact has no file_path",
+                retryable=False,
                 qc_passed=False,
-                failure_class="execution_transient",
-                recovery_action="retry_same",
             )
         report = GenerationQualityQC().check(source)
         failures = [item.message or item.rule for item in report.failures]
@@ -65,22 +55,26 @@ class QCHandler(TaskHandler):
             return HandlerResult(
                 success=False,
                 error="; ".join(failures),
-                retryable=True,
+                retryable=False,
                 qc_passed=False,
-                failure_class="execution_transient",
-                recovery_action="retry_same",
+                artifact_metadata={"qc_results": [item.__dict__ for item in report.results]},
             )
         return HandlerResult(
             success=True,
             artifact_type="qc_video",
             artifact_metadata={
-                "file_path": str(source.resolve()),
+                "file_path": report.asset_metadata["file_path"],
                 "file_hash": _sha256(source),
                 "media_type": "video",
-                "file_size": source.stat().st_size,
+                "file_size": report.asset_metadata["file_size"],
                 "qc_passed": True,
-                "qc_scope": ["generation_quality"],
+                "qc_scope": ["decodable", "video_stream", "duration", "resolution"],
                 "qc_results": [item.__dict__ for item in report.results],
+                "probe": {
+                    key: value
+                    for key, value in report.asset_metadata.items()
+                    if key not in {"file_path", "file_size"}
+                },
             },
             qc_passed=True,
         )
@@ -169,57 +163,10 @@ class AudioHandler(TaskHandler):
                 failure_class="execution_transient",
                 recovery_action="retry_same",
             )
-        native_strategy = str(policy.get("native_audio", "preserve"))
-        expected_audio = (
-            bool(source_metadata.get("has_audio"))
-            and native_strategy in {"preserve", "mix"}
-        ) or bool(tracks)
-        declared_contract = AudioAcceptanceContract.from_dict(
-            metadata.get("audio_acceptance")
-        )
-        contract = declared_contract or AudioAcceptanceContract()
-        if contract.require_audio is None:
-            contract = replace(contract, require_audio=expected_audio)
-        try:
-            audio_report = AudioQualityQC().check(
-                result.output_path,
-                contract,
-                analysis=(
-                    metadata.get("audio_analysis")
-                    if isinstance(metadata.get("audio_analysis"), dict)
-                    else None
-                ),
-            )
-        except Exception as exc:
-            return HandlerResult(
-                False,
-                error=f"Audio quality check failed: {exc}",
-                retryable=True,
-                failure_class="execution_transient",
-                recovery_action="retry_same",
-            )
-        audio_qc = {
-            "passed": audio_report.passed,
-            "inconclusive": audio_report.inconclusive,
-            "expected_audio": expected_audio,
-            "actual_audio": bool(result.has_audio),
-            "results": [asdict(item) for item in audio_report.results],
-            "scope": ["audio_presence", "speech_evidence"] if declared_contract else ["audio_presence"],
-        }
-        if not audio_report.passed:
-            return HandlerResult(
-                False,
-                error="; ".join(item.message or item.rule for item in audio_report.failures),
-                retryable=False,
-                artifact_metadata={"audio_quality_qc": audio_qc},
-                qc_passed=False,
-                failure_class="audio_quality",
-                recovery_action="rewrite_prompt",
-            )
         return _file_result(
             "mixed_video",
             pathlib.Path(result.output_path),
-            {"has_audio": result.has_audio, "audio_quality_qc": audio_qc},
+            {"has_audio": result.has_audio},
         )
 
 

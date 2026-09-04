@@ -1,10 +1,7 @@
-"""Smoke test — full v1 end-to-end flow.
-
-Covers: validate → plan → execute → status → export
-using the VideoRuntime facade with fake backends.
-"""
+"""Smoke test — single-Panel flow using the VideoRuntime facade."""
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 
@@ -46,7 +43,7 @@ def h3_registry() -> BackendRegistry:
 
 
 def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
-    """Create a minimal 2-clip package file."""
+    """Create a minimal single-Panel package file."""
     pkg = {
         "schema": "lfo.video-execution.v1",
         "package_id": "smoke-test-001",
@@ -88,26 +85,13 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
                             "binding": {
                                 "required": True,
                                 "priority": 100,
+                                "placement": "fixed",
+                                "slot": "ref_image_0",
                             },
                         },
                     ],
                 },
                 "audio": {"native_audio": "preserve"},
-            },
-            {
-                "clip_id": "clip-002",
-                "sequence": 2,
-                "duration_ms": 4000,
-                "generation": {
-                    "operation": "video.text_to_video",
-                    "prompt": "Close-up of a letter",
-                    "requirements": {
-                        "aspect_ratio": "9:16",
-                        "megapixels": 0.4,
-                        "fps": 24,
-                    },
-                },
-                "audio": {"native_audio": "mute"},
             },
         ],
         "output": {
@@ -131,6 +115,10 @@ def _make_package(tmp_dir: pathlib.Path) -> pathlib.Path:
     return pkg_path
 
 
+def _approved(path: pathlib.Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 class TestSmokeFlow:
     def test_validate(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         pkg_path = _make_package(tmp_path)
@@ -143,14 +131,14 @@ class TestSmokeFlow:
         runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
         result = runtime.plan(pkg_path)
         assert result.error is None, f"Plan failed: {result.error}"
-        assert len(result.clip_plans) == 2
+        assert len(result.clip_plans) == 1
 
     def test_execute_completes(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
         pkg_path = _make_package(tmp_path)
         runtime = VideoRuntime(h3_registry, workspace_root=tmp_path / "workspace", handler_registry=default_fake_registry())
-        result = runtime.execute(pkg_path, approval=True)
+        result = runtime.execute(pkg_path, approved_sha256=_approved(pkg_path))
         assert result.status == "COMPLETED", f"Execute failed: {result.error}"
-        assert result.clip_count == 2
+        assert result.clip_count == 1
         assert result.run_id
 
     def test_full_flow(self, h3_registry: BackendRegistry, tmp_path: pathlib.Path) -> None:
@@ -165,10 +153,10 @@ class TestSmokeFlow:
         # Plan
         plan_result = runtime.plan(pkg_path)
         assert plan_result.error is None
-        assert len(plan_result.clip_plans) == 2
+        assert len(plan_result.clip_plans) == 1
 
         # Execute
-        exec_result = runtime.execute(pkg_path, approval=True)
+        exec_result = runtime.execute(pkg_path, approved_sha256=_approved(pkg_path))
         assert exec_result.status == "COMPLETED"
         run_id = exec_result.run_id
 
@@ -178,7 +166,8 @@ class TestSmokeFlow:
         assert status_result.status == "COMPLETED"
         assert len(status_result.tasks) > 0
 
-        # Fake handlers deliberately do not claim a durable final media file.
+        assert exec_result.file_path is None
+        # Single-Panel execution deliberately stops before final assembly.
         export_result = runtime.export(run_id)
         assert export_result.status == "FAILED"
         assert "durable final artifact" in (export_result.error or "")

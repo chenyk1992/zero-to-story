@@ -90,5 +90,9 @@ class DoctorCommand:
         return CommandResult(
             ok=False,
             command="doctor",
-            error={"code": "E_DOCTOR", "message": result.get("error", "unknown")},
+            data=result,
+            error={"code": "E_DOCTOR", "message": result.get("error") or "; ".join(
+                item["message"] for item in result.get("results", [])
+                if item["status"] == "failed" and item["severity"] == "blocker"
+            )},
         )

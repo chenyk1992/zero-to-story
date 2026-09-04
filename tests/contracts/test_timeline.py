@@ -12,19 +12,62 @@ def _package(timeline: dict | None = None) -> dict:
         "package_id": "pkg",
         "revision": 1,
         "project": {"title": "Test", "project_id": "test"},
-        "assets": [],
+        "assets": [
+            {
+                "asset_key": "accepted.a",
+                "media_type": "video",
+                "source": {"uri": "assets/a.mp4"},
+                "provenance": {
+                    "source_type": "external_skill",
+                    "producer": "test",
+                    "operation": "video.accepted",
+                },
+            },
+            {
+                "asset_key": "accepted.b",
+                "media_type": "video",
+                "source": {"uri": "assets/b.mp4"},
+                "provenance": {
+                    "source_type": "external_skill",
+                    "producer": "test",
+                    "operation": "video.accepted",
+                },
+            },
+        ],
         "clips": [
             {
                 "clip_id": "a",
                 "sequence": 1,
                 "duration_ms": 10_000,
-                "generation": {"operation": "video.text_to_video", "prompt": "a"},
+                "generation": {
+                    "operation": "video.passthrough",
+                    "prompt": "accepted a",
+                    "references": [
+                        {
+                            "reference_id": "source-a",
+                            "asset_key": "accepted.a",
+                            "semantic_usage": "source.accepted_video",
+                            "binding": {},
+                        }
+                    ],
+                },
             },
             {
                 "clip_id": "b",
                 "sequence": 2,
                 "duration_ms": 8_000,
-                "generation": {"operation": "video.text_to_video", "prompt": "b"},
+                "generation": {
+                    "operation": "video.passthrough",
+                    "prompt": "accepted b",
+                    "references": [
+                        {
+                            "reference_id": "source-b",
+                            "asset_key": "accepted.b",
+                            "semantic_usage": "source.accepted_video",
+                            "binding": {},
+                        }
+                    ],
+                },
             },
         ],
         "output": {},

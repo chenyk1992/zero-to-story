@@ -9,6 +9,7 @@ from lfo.config.machine_profile import (
     HardwareConfig,
     MachineProfile,
     PlatformInfo,
+    StorageConfig,
     get_machines_dir,
     load_machine_profile,
     save_machine_profile,
@@ -33,6 +34,11 @@ class EnvironmentService:
         """Discover environment and create a MachineProfile."""
         discovery = discover_environment()
 
+        storage = StorageConfig()
+        if discovery.comfyui_root is not None:
+            storage.comfy_input = str(discovery.comfyui_root / "input")
+            storage.comfy_output = str(discovery.comfyui_root / "output")
+
         profile = MachineProfile(
             machine_id=machine_id,
             platform=PlatformInfo(
@@ -48,6 +54,7 @@ class EnvironmentService:
                 gpu_name=discovery.gpu_name,
                 vram_mib=discovery.vram_mib,
             ),
+            storage=storage,
         )
 
         if save:

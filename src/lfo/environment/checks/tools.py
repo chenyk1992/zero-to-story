@@ -1,7 +1,8 @@
-"""Tool checks — FFmpeg, Python availability."""
+"""Checks for the executables used by synchronous video production."""
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 from .base import (
     CheckContext,
@@ -10,6 +11,50 @@ from .base import (
     CheckStatus,
     check,
 )
+
+
+@check("tools.comfy_cli_available", severity=CheckSeverity.BLOCKER)
+def check_comfy_cli(ctx: CheckContext) -> CheckResult:
+    """Verify the configured executable supports the current run protocol."""
+    check_id = "tools.comfy_cli_available"
+    if "comfy" not in ctx.required_tools:
+        return CheckResult(check_id, CheckSeverity.BLOCKER, CheckStatus.SKIPPED,
+                           "comfy-cli not required")
+    binary = ctx.machine_profile.comfyui.cli if ctx.machine_profile else "comfy"
+    path = shutil.which(binary)
+    if path:
+        try:
+            result = subprocess.run(
+                [path, "--skip-prompt", "--where", "local", "run", "--help"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=15, check=False,
+            )
+            help_text = result.stdout + result.stderr
+            if result.returncode == 0 and "--wait" in help_text and "--json" in help_text:
+                return CheckResult(check_id, CheckSeverity.BLOCKER, CheckStatus.PASSED,
+                                   f"comfy-cli run --wait --json available: {path}")
+            message = "Configured comfy-cli does not support run --wait --json"
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            message = f"Could not run configured comfy-cli: {exc}"
+    else:
+        message = f"comfy-cli executable not found: {binary}"
+    return CheckResult(check_id, CheckSeverity.BLOCKER, CheckStatus.FAILED, message,
+                       remediation="Install current official comfy-cli and configure comfyui.cli or PATH")
+
+
+@check("tools.ffprobe_available", severity=CheckSeverity.BLOCKER)
+def check_ffprobe(ctx: CheckContext) -> CheckResult:
+    """FFprobe is needed for asset probing and the minimal technical QC."""
+    check_id = "tools.ffprobe_available"
+    if "ffprobe" not in ctx.required_tools:
+        return CheckResult(check_id, CheckSeverity.BLOCKER, CheckStatus.SKIPPED,
+                           "FFprobe not required")
+    path = shutil.which("ffprobe")
+    return CheckResult(
+        check_id, CheckSeverity.BLOCKER, CheckStatus.PASSED if path else CheckStatus.FAILED,
+        f"FFprobe found: {path}" if path else "FFprobe not found in PATH",
+        remediation=None if path else "Install FFmpeg including ffprobe and add its bin directory to PATH",
+    )
 
 
 @check(

@@ -9,27 +9,6 @@
     "canonical": "[原文文件或 handoff]",
     "conflicts": []
   },
-  "production": {
-    "profile": {
-      "locale": "zh-CN",
-      "postproduction": "none",
-      "dialogue_exactness": "verbatim",
-      "speech_units_per_second": 4.5,
-      "punctuation_pause_ms": 120,
-      "head_guard_ms": 250,
-      "tail_guard_ms": 350,
-      "turn_gap_ms": 180,
-      "safety_margin_ratio": 0.15
-    },
-    "speakers": [
-      {
-        "id": "S1",
-        "character_id": "[角色 ID]",
-        "gender": "[性别或声线]",
-        "age": "[年龄段]"
-      }
-    ]
-  },
   "scenes": [
     {
       "id": "S001",
@@ -77,14 +56,9 @@
       "id": "D001",
       "order": 1,
       "speaker": "[说话人]",
-      "speaker_id": "S1",
       "text": "[逐字复制原文，不写大意]",
       "coverage_id": "EV001",
-      "shot_id": "C001",
-      "measured_duration_ms": 1200,
-      "planned_start_ms": 800,
-      "planned_end_ms": 2000,
-      "allow_overlap": false
+      "shot_id": "C001"
     }
   ],
   "generation": {
@@ -99,12 +73,13 @@
       {
         "panel_id": "P001",
         "operation": "video.reference_to_video",
-        "visual_asset_policy": "scene_keyframe",
+        "visual_asset_policy": "storyboard_board",
+        "storyboard_layout": "2x2",
         "first_frame_source": null,
         "last_frame_source": null,
-        "runtime_input_keys": ["character.[角色 ID]", "scene.S001.master"],
+        "runtime_input_keys": ["storyboard_board.P001"],
         "planning_only_asset_keys": [],
-        "reason": "[先说明 operation 的控制需求，再说明为什么这是最小必要资产集]"
+        "reason": "[STEP 1 先说明为什么 R2V 需要这一张 [rowsxcolumns] 自包含分镜板，再说明板内每格按从左到右、从上到下映射的 Beat、Setup 和唯一信息；STEP 3 只调用一次图片生成，不生成独立帧或后期拼接；必要时才在 runtime_input_keys 追加非分镜引用]"
       }
     ],
     "shots": [
@@ -113,21 +88,11 @@
         "order": 1,
         "scene_id": "S001",
         "panel_id": "P001",
-        "start_ms": 0,
-        "end_ms": 8000,
         "coverage_ids": ["EV001"],
         "dialogue_ids": ["D001"],
         "critical_characters": ["[角色 ID]"],
-        "reference_keys": ["character.[角色 ID]", "scene.S001.master"],
+        "reference_keys": ["storyboard_board.P001"],
         "actions": ["[一个可见主动作]"],
-        "action_schedule": [
-          {
-            "id": "A001",
-            "description": "[主动作]",
-            "duration_ms": 2200,
-            "serial_with_dialogue": true
-          }
-        ],
         "camera_moves": ["[一个摄影机动作或 fixed]"],
         "purpose": "[本镜头新增的信息]",
         "state_before": {"[状态键]": "[镜头开始状态]"},

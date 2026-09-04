@@ -13,13 +13,13 @@ def validate_operation_references(
     references: object,
     *,
     asset_media_types: Mapping[str, str] | None = None,
-    require_typed_r2v_slots: bool = False,
 ) -> None:
     """Validate the reference shape consumed by a known video operation.
 
     The public contract and provider handlers use the same rules.  Providers
-    may keep additional capability limits, while ``require_typed_r2v_slots``
-    lets a creative adapter require explicit ``ref_<type>_N`` bindings.
+    may keep additional capability limits.  R2V references always use an
+    explicit typed slot (``ref_image_N``, ``ref_video_N`` or ``ref_audio_N``)
+    so the runtime never has to infer provider input positions.
     """
     if operation not in KNOWN_OPERATIONS:
         raise ValueError(f"Unsupported video operation: {operation!r}")
@@ -55,17 +55,49 @@ def validate_operation_references(
         return
 
     if operation == "video.virtual_presenter":
+        if not views:
+            raise ValueError("video.virtual_presenter requires at least one reference")
+        seen_slots: set[str] = set()
         for view in views:
             if _claims_exact_first_frame(view.semantic_usage, view.instruction):
                 raise ValueError(
                     "video.virtual_presenter cannot claim exact/hard first-frame continuity"
                 )
+            if view.placement != "fixed":
+                raise ValueError(
+                    "video.virtual_presenter references require typed fixed slots "
+                    "ref_image_N, ref_video_N or ref_audio_N"
+                )
+            match = re.fullmatch(r"ref_(image|video|audio)_(\d+)", view.slot)
+            if match is None:
+                raise ValueError(
+                    "video.virtual_presenter references require typed fixed slots "
+                    "ref_image_N, ref_video_N or ref_audio_N"
+                )
+            if match.group(1) != view.media_type:
+                raise ValueError(
+                    f"video.virtual_presenter slot {view.slot!r} does not match "
+                    f"reference media type {view.media_type!r}"
+                )
+            if view.slot in seen_slots:
+                raise ValueError(
+                    f"video.virtual_presenter contains duplicate slot {view.slot!r}"
+                )
+            seen_slots.add(view.slot)
+        return
+
+    if operation == "video.passthrough":
+        if len(views) != 1 or views[0].media_type != "video":
+            raise ValueError(
+                "video.passthrough requires exactly one video reference"
+            )
         return
 
     if operation != "video.reference_to_video":
         return
     if not views:
         raise ValueError("video.reference_to_video requires at least one reference")
+    seen_slots: set[str] = set()
     for view in views:
         if view.placement in {"first", "last"} or view.slot in {
             "first_frame",
@@ -81,23 +113,27 @@ def validate_operation_references(
             raise ValueError(
                 "video.reference_to_video cannot claim exact/hard first-frame continuity"
             )
-        if require_typed_r2v_slots:
-            if view.placement != "fixed":
-                raise ValueError(
-                    "video.reference_to_video references require typed fixed slots "
-                    "ref_image_N, ref_video_N or ref_audio_N"
-                )
-            match = re.fullmatch(r"ref_(image|video|audio)_(\d+)", view.slot)
-            if match is None:
-                raise ValueError(
-                    "video.reference_to_video references require typed fixed slots "
-                    "ref_image_N, ref_video_N or ref_audio_N"
-                )
-            if match.group(1) != view.media_type:
-                raise ValueError(
-                    f"video.reference_to_video slot {view.slot!r} does not match "
-                    f"reference media type {view.media_type!r}"
-                )
+        if view.placement != "fixed":
+            raise ValueError(
+                "video.reference_to_video references require typed fixed slots "
+                "ref_image_N, ref_video_N or ref_audio_N"
+            )
+        match = re.fullmatch(r"ref_(image|video|audio)_(\d+)", view.slot)
+        if match is None:
+            raise ValueError(
+                "video.reference_to_video references require typed fixed slots "
+                "ref_image_N, ref_video_N or ref_audio_N"
+            )
+        if match.group(1) != view.media_type:
+            raise ValueError(
+                f"video.reference_to_video slot {view.slot!r} does not match "
+                f"reference media type {view.media_type!r}"
+            )
+        if view.slot in seen_slots:
+            raise ValueError(
+                f"video.reference_to_video contains duplicate slot {view.slot!r}"
+            )
+        seen_slots.add(view.slot)
 
 
 @dataclass(frozen=True, slots=True)

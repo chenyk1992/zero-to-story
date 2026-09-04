@@ -130,7 +130,7 @@ class FakeQCHandler(TaskHandler):
                 artifact_type="qc_report",
                 artifact_metadata={
                     "qc_passed": False,
-                    "qc_scope": ["generation_quality"],
+                    "qc_scope": ["decodable", "video_stream", "duration", "resolution"],
                     "qc_results": [],
                 },
                 error="Generation quality gate failed",
@@ -142,7 +142,7 @@ class FakeQCHandler(TaskHandler):
                 artifact_type="qc_video",
                 artifact_metadata={
                     "qc_passed": True,
-                    "qc_scope": ["generation_quality"],
+                    "qc_scope": ["decodable", "video_stream", "duration", "resolution"],
                     "qc_results": [],
                 },
                 qc_passed=True,

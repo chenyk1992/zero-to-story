@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-DEFAULT_TIMEOUT_SEC = 1200  # 20 minutes for agent timeout
+DEFAULT_TIMEOUT_SEC = 7200  # Long local video jobs: 2-hour CLI silence limit
 DEFAULT_COMFYUI_PORT = 8188
 DEFAULT_COMFYUI_BASE_URL = "http://127.0.0.1:8188"
 

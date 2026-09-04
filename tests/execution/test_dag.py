@@ -4,7 +4,6 @@ from __future__ import annotations
 from lfo.contracts.timeline import TimelineSegment, TimelineSpec
 from lfo.execution.dag import (
     TASK_AUDIO_MIX,
-    TASK_BOUNDARY_EVIDENCE,
     TASK_EXPORT_FINALIZE,
     TASK_MEDIA_QC,
     TASK_SUBTITLE_RENDER,
@@ -31,7 +30,6 @@ def _make_clip(
         duration_ms=5000,
         operation=operation,
         prompt=f"Prompt for {clip_id}",
-        negative_prompt=None,
         seed=None,
         backend_id="comfyui.h3",
         backend_revision="1.0.0",
@@ -71,15 +69,15 @@ class TestBuildDag:
     def test_single_clip(self) -> None:
         run = _make_run([_make_clip()])
         graph = build_dag(run)
-        # Four clip tasks plus timeline and export.
-        assert len(graph.tasks) == 6
+        # A Panel run ends after generation and the minimal QC gate.
+        assert len(graph.tasks) == 2
         types = [t.task_type for t in graph.tasks]
         assert types.count(TASK_VIDEO_GENERATE) == 1
         assert types.count(TASK_MEDIA_QC) == 1
-        assert types.count(TASK_AUDIO_MIX) == 1
-        assert types.count(TASK_SUBTITLE_RENDER) == 1
-        assert types.count(TASK_TIMELINE_ASSEMBLE) == 1
-        assert types.count(TASK_EXPORT_FINALIZE) == 1
+        assert types.count(TASK_AUDIO_MIX) == 0
+        assert types.count(TASK_SUBTITLE_RENDER) == 0
+        assert types.count(TASK_TIMELINE_ASSEMBLE) == 0
+        assert types.count(TASK_EXPORT_FINALIZE) == 0
 
     def test_generation_task_carries_megapixels(self) -> None:
         clip = _make_clip()
@@ -89,28 +87,40 @@ class TestBuildDag:
         assert generate is not None
         assert generate.metadata["megapixels"] == 0.3
 
-    def test_two_clips_no_deps(self) -> None:
-        clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
-        graph = build_dag(_make_run(clips))
-        assert len(graph.tasks) == 11  # 4 per clip + boundary evidence + timeline + export
+    def test_single_passthrough_is_assembled(self) -> None:
+        graph = build_dag(
+            _make_run([_make_clip(operation="video.passthrough")])
+        )
+        assert len(graph.tasks) == 7  # 4 clip tasks + timeline + export + final QC
+        assert graph.tasks_by_type(TASK_AUDIO_MIX)
+        assert graph.tasks_by_type(TASK_SUBTITLE_RENDER)
+        assert graph.tasks_by_type(TASK_TIMELINE_ASSEMBLE)
+        assert graph.tasks_by_type(TASK_EXPORT_FINALIZE)
+        final_qc = graph.task_by_id("run-1.final.media.qc")
+        assert final_qc is not None
+        assert final_qc.dependencies == ["run-1.export.finalize"]
+        assert final_qc.clip_id is None
 
-    def test_adjacent_timeline_clips_get_boundary_evidence(self) -> None:
-        clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
-        graph = build_dag(_make_run(clips))
-        evidence = graph.tasks_by_type(TASK_BOUNDARY_EVIDENCE)
-        assert len(evidence) == 1
-        assert evidence[0].metadata["boundary_id"] == "clip-001__clip-002"
-        assert evidence[0].metadata["next_source_in_ms"] == 0
-        assert evidence[0].dependencies == [
-            "run-1.clip-clip-001.audio.mix",
-            "run-1.clip-clip-002.audio.mix",
+    def test_two_clips_no_deps(self) -> None:
+        clips = [
+            _make_clip("clip-001", operation="video.passthrough"),
+            _make_clip("clip-002", sequence=2, operation="video.passthrough"),
         ]
-        timeline = graph.task_by_id("run-1.timeline.assemble")
-        assert timeline is not None
-        assert evidence[0].task_id in timeline.dependencies
+        graph = build_dag(_make_run(clips))
+        assert len(graph.tasks) == 11  # 4 per clip + timeline + export + final QC
+        assert not graph.tasks_by_type("media.boundary_evidence")
+
+    def test_multiple_generated_clips_are_rejected(self) -> None:
+        import pytest
+
+        with pytest.raises(ValueError, match="pure passthrough assembly"):
+            build_dag(_make_run([_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]))
 
     def test_timeline_depends_on_all_mix_tasks(self) -> None:
-        clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
+        clips = [
+            _make_clip("clip-001", operation="video.passthrough"),
+            _make_clip("clip-002", sequence=2, operation="video.passthrough"),
+        ]
         graph = build_dag(_make_run(clips))
         timeline = graph.task_by_id("run-1.timeline.assemble")
         assert timeline is not None
@@ -119,7 +129,10 @@ class TestBuildDag:
             assert mt.task_id in timeline.dependencies
 
     def test_export_depends_on_timeline_and_subtitles(self) -> None:
-        clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
+        clips = [
+            _make_clip("clip-001", operation="video.passthrough"),
+            _make_clip("clip-002", sequence=2, operation="video.passthrough"),
+        ]
         graph = build_dag(_make_run(clips))
         export = graph.task_by_id("run-1.export.finalize")
         assert export is not None
@@ -128,14 +141,17 @@ class TestBuildDag:
         for st in sub_tasks:
             assert st.task_id in export.dependencies
 
+        final_qc = graph.task_by_id("run-1.final.media.qc")
+        assert final_qc is not None
+        assert final_qc.dependencies == [export.task_id]
+
     def test_chain_dependencies_within_clip(self) -> None:
         graph = build_dag(_make_run([_make_clip()]))
         gen = graph.task_by_id("run-1.clip-clip-001.video.generate")
         qc = graph.task_by_id("run-1.clip-clip-001.media.qc")
-        mix = graph.task_by_id("run-1.clip-clip-001.audio.mix")
-        assert gen is not None and qc is not None and mix is not None
+        assert gen is not None and qc is not None
         assert gen.task_id in qc.dependencies
-        assert qc.task_id in mix.dependencies
+        assert graph.task_by_id("run-1.clip-clip-001.audio.mix") is None
         assert not graph.tasks_by_type("media.normalize")
 
     def test_enabled_upscale_is_inserted_before_qc(self) -> None:
@@ -147,7 +163,6 @@ class TestBuildDag:
                         "enabled": True,
                         "scale_multiplier": 2,
                         "seed": 7,
-                        "segment_seconds": 2,
                     }
                 },
             )
@@ -162,7 +177,6 @@ class TestBuildDag:
             "enabled": True,
             "scale_multiplier": 2.0,
             "seed": 7,
-            "segment_seconds": 2.0,
         }
         assert str(upscale.metadata["output_path"]).replace("\\", "/").endswith(
             "/clip-001/upscaled.mp4"
@@ -180,8 +194,13 @@ class TestBuildDag:
     def test_clip_dependencies_wired(self) -> None:
         """Clip 2 depends on Clip 1 — generate task of clip 2 depends on generate of clip 1."""
         clips = [
-            _make_clip("clip-001"),
-            _make_clip("clip-002", sequence=2, dependencies=["clip-001"]),
+            _make_clip("clip-001", operation="video.passthrough"),
+            _make_clip(
+                "clip-002",
+                sequence=2,
+                operation="video.passthrough",
+                dependencies=["clip-001"],
+            ),
         ]
         graph = build_dag(_make_run(clips))
         gen2 = graph.task_by_id("run-1.clip-clip-002.video.generate")
@@ -189,15 +208,19 @@ class TestBuildDag:
         assert gen2 is not None and gen1 is not None
         assert gen1.task_id in gen2.dependencies
 
-    def test_forward_clip_dependency_is_wired(self) -> None:
+    def test_forward_clip_dependency_conflicts_with_serial_panel_order(self) -> None:
+        import pytest
+
         clips = [
-            _make_clip("clip-001", dependencies=["clip-002"]),
-            _make_clip("clip-002", sequence=2),
+            _make_clip(
+                "clip-001",
+                operation="video.passthrough",
+                dependencies=["clip-002"],
+            ),
+            _make_clip("clip-002", sequence=2, operation="video.passthrough"),
         ]
-        graph = build_dag(_make_run(clips))
-        assert "run-1.clip-clip-002.video.generate" in graph.task_by_id(
-            "run-1.clip-clip-001.video.generate"
-        ).dependencies
+        with pytest.raises(ValueError, match="cycle"):
+            build_dag(_make_run(clips))
 
     def test_unknown_clip_dependency_is_rejected(self) -> None:
         import pytest
@@ -211,7 +234,10 @@ class TestBuildDag:
 
     def test_clip_dependency_cycle_is_rejected(self) -> None:
         import pytest
-        clips = [_make_clip("one", dependencies=["two"]), _make_clip("two", dependencies=["one"])]
+        clips = [
+            _make_clip("one", operation="video.passthrough", dependencies=["two"]),
+            _make_clip("two", operation="video.passthrough", dependencies=["one"]),
+        ]
         with pytest.raises(ValueError, match="cycle"):
             build_dag(_make_run(clips))
 
@@ -220,17 +246,20 @@ class TestBuildDag:
         assert graph.is_acyclic()
 
     def test_roots_are_generate_tasks(self) -> None:
-        clips = [_make_clip("clip-001"), _make_clip("clip-002", sequence=2)]
+        clips = [
+            _make_clip("clip-001", operation="video.passthrough"),
+            _make_clip("clip-002", sequence=2, operation="video.passthrough"),
+        ]
         graph = build_dag(_make_run(clips))
         roots = graph.roots()
         for r in roots:
             assert r.task_type == TASK_VIDEO_GENERATE
 
-    def test_leaves_include_export(self) -> None:
+    def test_single_panel_leaves_include_qc(self) -> None:
         graph = build_dag(_make_run([_make_clip()]))
         leaves = graph.leaves()
         leaf_ids = {t.task_id for t in leaves}
-        assert "run-1.export.finalize" in leaf_ids
+        assert "run-1.clip-clip-001.media.qc" in leaf_ids
 
     def test_stable_task_ids(self) -> None:
         """Same run produces same task ids."""
@@ -240,7 +269,10 @@ class TestBuildDag:
         assert g1.task_ids == g2.task_ids
 
     def test_timeline_metadata_uses_explicit_order_and_trim(self) -> None:
-        clips = [_make_clip("a", sequence=1), _make_clip("b", sequence=2)]
+        clips = [
+            _make_clip("a", sequence=1, operation="video.passthrough"),
+            _make_clip("b", sequence=2, operation="video.passthrough"),
+        ]
         graph = build_dag(
             _make_run(
                 clips,
@@ -255,9 +287,6 @@ class TestBuildDag:
         assert [item["clip_id"] for item in timeline.metadata["segments"]] == ["b", "a"]
         assert timeline.metadata["segments"][0]["edited_duration_ms"] == 3_000
         assert timeline.metadata["segments"][0]["source_in_ms"] == 1_000
-        evidence = graph.tasks_by_type(TASK_BOUNDARY_EVIDENCE)
-        assert evidence[0].metadata["previous_source_in_ms"] == 1_000
-        assert evidence[0].metadata["next_source_in_ms"] == 0
 
 
 class TestTaskGraph:

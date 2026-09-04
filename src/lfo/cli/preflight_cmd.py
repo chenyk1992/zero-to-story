@@ -42,7 +42,7 @@ def cmd_preflight(
         machine_id=machine_id,
         required_workflow_ids=set(workflow_ids or []),
         required_model_ids=set(model_ids or []),
-        required_tools=set(tool_ids or []),
+        required_tools=set(tool_ids) if tool_ids is not None else {"comfy", "ffmpeg", "ffprobe"},
     )
 
     service = PreflightService(profile)
@@ -60,6 +60,7 @@ def cmd_preflight(
                 "severity": r.severity.value,
                 "status": r.status.value,
                 "message": r.message,
+                "remediation": r.remediation,
             }
             for r in results
         ],
@@ -95,5 +96,9 @@ class PreflightCommand:
         return CommandResult(
             ok=False,
             command="preflight",
-            error={"code": "E_PREFLIGHT", "message": result.get("error", "unknown")},
+            data=result,
+            error={"code": "E_PREFLIGHT", "message": result.get("error") or "; ".join(
+                item["message"] for item in result.get("results", [])
+                if item["status"] == "failed" and item["severity"] == "blocker"
+            )},
         )

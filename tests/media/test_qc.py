@@ -7,16 +7,51 @@ from lfo.media.qc import GenerationQualityContract, GenerationQualityQC
 
 
 class TestGenerationQualityQC:
-    def test_non_empty_generation_artifact_passes(self, tmp_path) -> None:
+    def test_valid_video_passes_minimal_technical_gate(self, tmp_path, monkeypatch) -> None:
         artifact = tmp_path / "generated.mp4"
         artifact.write_bytes(b"provider output")
+        monkeypatch.setattr(qc_module, "probe", lambda path: {
+            "duration_ms": 5000,
+            "width": 720,
+            "height": 1280,
+            "codec": "h264",
+        })
 
         report = GenerationQualityQC().check(artifact)
 
         assert report.passed
         assert report.failures == []
-        assert [result.rule for result in report.results] == ["generation_artifact"]
+        assert [result.rule for result in report.results] == [
+            "decodable", "video_stream", "duration", "resolution",
+        ]
         assert report.asset_metadata["file_size"] == len(b"provider output")
+
+    def test_unreadable_video_fails_decode_check(self, tmp_path, monkeypatch) -> None:
+        artifact = tmp_path / "generated.mp4"
+        artifact.write_bytes(b"not a video")
+        monkeypatch.setattr(qc_module, "probe", lambda path: (_ for _ in ()).throw(ValueError("bad media")))
+
+        report = GenerationQualityQC().check(artifact)
+
+        assert not report.passed
+        assert report.failures[0].rule == "decodable"
+
+    def test_invalid_technical_metadata_fails_without_semantic_checks(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        artifact = tmp_path / "generated.mp4"
+        artifact.write_bytes(b"provider output")
+        monkeypatch.setattr(qc_module, "probe", lambda path: {
+            "duration_ms": 0,
+            "width": 0,
+            "height": 1280,
+            "codec": "h264",
+        })
+
+        report = GenerationQualityQC().check(artifact)
+
+        assert not report.passed
+        assert {item.rule for item in report.failures} == {"duration", "video_stream", "resolution"}
 
     def test_missing_artifact_fails(self, tmp_path) -> None:
         report = GenerationQualityQC().check(tmp_path / "missing.mp4")
@@ -44,6 +79,3 @@ class TestGenerationQualityQC:
     def test_technical_and_semantic_rules_are_not_exposed(self) -> None:
         assert not hasattr(qc_module, "TechnicalQC")
         assert not hasattr(qc_module, "QCContract")
-        assert not hasattr(GenerationQualityContract, "expected_width")
-        assert not hasattr(GenerationQualityContract, "expected_fps")
-        assert not hasattr(GenerationQualityContract, "expected_codec")

@@ -25,7 +25,6 @@ class MaterializedClip:
     duration_ms: int
     operation: str
     prompt: str
-    negative_prompt: str | None
     seed: int | None
     backend_id: str
     backend_revision: str
@@ -367,7 +366,6 @@ def materialize(
             duration_ms=clip.duration_ms,
             operation=clip.generation.operation,
             prompt=clip.generation.prompt,
-            negative_prompt=clip.generation.negative_prompt,
             seed=clip.generation.seed,
             backend_id=sel.backend_id,
             backend_revision=sel.revision,
@@ -403,9 +401,9 @@ def materialize(
         "timeline": timeline.to_dict(),
         "asset_resolutions": dict(asset_resolutions),
         "output_policy": package.output.to_dict(),
-        # The lock and audio/prompt contracts are part of the immutable
-        # execution snapshot. Prompt revisions are task-level audit events;
-        # they do not mutate this snapshot or require storyboard re-layout.
+        # Package extensions remain part of the immutable execution snapshot;
+        # execution approval itself is the raw package SHA-256 supplied to the
+        # runtime and is already carried by ``package_hash``.
         "extensions": dict(package.extensions),
         "artifact_layout": _layout_hash_payload(artifact_layout or {}),
     }
@@ -435,7 +433,6 @@ def _clip_to_dict(clip: MaterializedClip) -> dict[str, Any]:
         "duration_ms": clip.duration_ms,
         "operation": clip.operation,
         "prompt": clip.prompt,
-        "negative_prompt": clip.negative_prompt,
         "seed": clip.seed,
         "backend_id": clip.backend_id,
         "backend_revision": clip.backend_revision,

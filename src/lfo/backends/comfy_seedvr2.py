@@ -1,36 +1,24 @@
 """SeedVR2 video-upscale handler for local ComfyUI."""
 from __future__ import annotations
 
-import hashlib
-import json
-import logging
 import os
 import pathlib
-import uuid
-from collections.abc import Callable
-from dataclasses import dataclass
+from contextlib import suppress
+from dataclasses import dataclass, field
 from typing import Any
 
 from lfo.comfy.bindings import Binding, BindingResolver
+from lfo.comfy.cli import ComfyCliRunner
 from lfo.comfy.client import ComfyApiClient
-from lfo.comfy.exceptions import ComfyUnreachableError, LfoComfyError
-from lfo.comfy.monitor import ComfyMonitor
+from lfo.comfy.exceptions import ComfyCliTimeoutError, LfoComfyError
+from lfo.comfy.outputs import materialize_cli_video
 from lfo.comfy.workflow import WorkflowLoader
-from lfo.contracts.upscale import resolve_upscale_options
+from lfo.contracts.upscale import UpscaleOptions, resolve_upscale_options
 from lfo.core.workflow_registry import KNOWN_WORKFLOWS, WorkflowManifest
 from lfo.execution.handlers import HandlerResult, TaskHandler
-from lfo.media._ffmpeg import MediaCommandError, atomic_replace, probe, run_command
-from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
-from lfo.services.artifact_layout import atomic_copy_verified, managed_path
+from lfo.services.artifact_layout import managed_path
 
 SEEDVR2_UPSCALE_WORKFLOW_ID = "seedvr2_upscale"
-# SeedVR2's native temporal chunker is a better first line of defence than
-# extracting and re-encoding short FFmpeg segments.  Callers can still set a
-# positive ``segment_seconds`` when a long source needs resumable segments.
-DEFAULT_SEGMENT_SECONDS: float | None = None
-logger = logging.getLogger(__name__)
-
-ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 @dataclass(frozen=True)
@@ -39,14 +27,15 @@ class ComfyUpscaleConfig:
 
     base_url: str = "http://127.0.0.1:8188"
     workflow_dir: pathlib.Path = pathlib.Path(__file__).resolve().parents[1] / "registry"
-    output_root: pathlib.Path = pathlib.Path(
-        os.environ.get(
-            "LFO_COMFY_OUTPUT_ROOT",
-            "D:/ComfyUI/Comfy-Desktop/ComfyUI/ComfyUI/output",
+    output_root: pathlib.Path | None = field(
+        default_factory=lambda: (
+            pathlib.Path(value)
+            if (value := os.environ.get("LFO_COMFY_OUTPUT_ROOT"))
+            else None
         )
     )
-    poll_interval_seconds: float = 3.0
-    timeout_seconds: float = 1_200.0
+    cli_binary: str = "comfy"
+    timeout_seconds: float = 7_200.0
 
 
 class ComfyUpscaleVideoHandler(TaskHandler):
@@ -57,13 +46,11 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         config: ComfyUpscaleConfig | None = None,
         *,
         client: ComfyApiClient | None = None,
-        monitor: ComfyMonitor | None = None,
-        progress_callback: ProgressCallback | None = None,
+        cli_runner: ComfyCliRunner | None = None,
     ) -> None:
         self.config = config or ComfyUpscaleConfig()
         self.client = client or ComfyApiClient(self.config.base_url)
-        self.monitor = monitor or ComfyMonitor(self.client)
-        self.progress_callback = progress_callback
+        self.cli_runner = cli_runner or ComfyCliRunner(self.config.cli_binary)
 
     def execute(
         self,
@@ -79,21 +66,11 @@ class ComfyUpscaleVideoHandler(TaskHandler):
                 error=f"Unsupported task type: {task_type}",
                 retryable=False,
                 failure_class="creative_input",
-                recovery_action="block_for_user",
+                recovery_action=None,
             )
 
         try:
             source_video = self._source_video_path(metadata)
-            segment_seconds = self._segment_seconds(metadata)
-            if segment_seconds is not None:
-                return self._execute_segmented(
-                    task_id,
-                    logical_key,
-                    metadata,
-                    attempt_id,
-                    source_video,
-                    segment_seconds,
-                )
             return self._execute_single(
                 task_id,
                 logical_key,
@@ -107,23 +84,30 @@ class ComfyUpscaleVideoHandler(TaskHandler):
                 error=str(exc),
                 retryable=False,
                 failure_class="creative_input",
-                recovery_action="block_for_user",
+                recovery_action=None,
             )
-        except ComfyUnreachableError as exc:
+        except ComfyCliTimeoutError as exc:
+            self._best_effort_interrupt()
+            return HandlerResult(
+                success=False, error=str(exc), retryable=False,
+                artifact_metadata={"provider_job_id": exc.prompt_id} if exc.prompt_id else {},
+                failure_class="execution_transient",
+            )
+        except LfoComfyError as exc:
             return HandlerResult(
                 success=False,
                 error=str(exc),
-                retryable=True,
+                retryable=False,
                 failure_class="execution_transient",
-                recovery_action="retry_same",
+                recovery_action=None,
             )
         except Exception as exc:  # provider extensions may raise their own exception types
             return HandlerResult(
                 success=False,
                 error=f"ComfyUI execution error: {exc}",
-                retryable=True,
+                retryable=False,
                 failure_class="execution_transient",
-                recovery_action="retry_same",
+                recovery_action=None,
             )
 
     def _execute_single(
@@ -133,15 +117,14 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         metadata: dict[str, Any],
         attempt_id: str,
         source_video: pathlib.Path,
-        *,
-        release_memory: bool = True,
     ) -> HandlerResult:
         """Upscale one video file through one ComfyUI prompt."""
+        # Validate all local prerequisites before spending provider resources.
+        managed = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
+        options = self._upscale_options(metadata)
         # H3 and SeedVR2 are both large GPU models.  Release H3's cached
-        # weights before loading SeedVR2 on single-GPU workstations, but do
-        # not evict SeedVR2 between explicit outer segments.
-        if release_memory:
-            self.client.free_memory()
+        # weights before loading SeedVR2 on single-GPU workstations.
+        self.client.free_memory()
         upload = self.client.upload_file(source_video, subfolder="lfo-input")
         uploaded_name = self._uploaded_name(upload)
         output_prefix = (
@@ -151,101 +134,44 @@ class ComfyUpscaleVideoHandler(TaskHandler):
             metadata,
             uploaded_name,
             output_prefix=output_prefix,
+            options=options,
         )
-        prompt_id, status = self._submit_and_wait(workflow)
-        fallback_from_prompt_id: str | None = None
-        if self._is_out_of_memory(status):
-            # The direct workflow matches the native ComfyUI template and is
-            # fastest on the local 16 GB target.  If it does not fit, retry
-            # once with ComfyUI's own VRAM-aware chunk calculation.
-            fallback_from_prompt_id = prompt_id
-            logger.warning(
-                "SeedVR2 prompt %s ran out of memory; retrying with adaptive temporal chunks",
-                prompt_id,
-            )
-            self.client.free_memory()
-            workflow, scale_multiplier = self._prepare_workflow(
-                metadata,
-                uploaded_name,
-                output_prefix=f"{output_prefix}-chunked",
-            )
-            self._enable_temporal_chunking(workflow)
-            prompt_id, status = self._submit_and_wait(workflow)
-        if status.get("status") == "timeout":
-            return HandlerResult(
-                success=False,
-                error=f"ComfyUI prompt {prompt_id} timed out",
-                retryable=True,
-                artifact_metadata={"provider_job_id": prompt_id},
-                failure_class="execution_transient",
-                recovery_action="retry_same",
-            )
-        if not status.get("completed"):
-            return HandlerResult(
-                success=False,
-                error=(
-                    f"ComfyUI prompt {prompt_id} failed: "
-                    f"{status.get('error') or status.get('status')}"
-                ),
-                retryable=False,
-                artifact_metadata={"provider_job_id": prompt_id},
-                failure_class="provider_rejection",
-                recovery_action="block_for_user",
-            )
-
-        output = self._find_output(prompt_id, status)
-        managed = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
-        managed_hash, managed_size = atomic_copy_verified(output, managed)
+        # Use the workflow's native adaptive temporal chunking on the first
+        # and only submission.  An OOM is terminal; LFO never submits a hidden
+        # fallback attempt.
+        self._enable_temporal_chunking(workflow)
+        result = self.cli_runner.run_workflow(
+            workflow, base_url=self.config.base_url,
+            timeout_seconds=self.config.timeout_seconds,
+        )
+        managed_hash, managed_size, provider_source = materialize_cli_video(
+            result, managed, output_root=self.config.output_root,
+            client=self.client, timeout_seconds=self.config.timeout_seconds,
+            base_url=self.config.base_url,
+        )
         artifact_metadata = {
             "file_path": str(managed.resolve()),
             "file_hash": managed_hash,
             "media_type": "video",
-            "provider_job_id": prompt_id,
+            "provider_job_id": result.prompt_id,
             "workflow_id": SEEDVR2_UPSCALE_WORKFLOW_ID,
             "source_video_path": str(source_video),
             "uploaded_source": uploaded_name,
             "scale_multiplier": scale_multiplier,
             "size": managed_size,
-            "provider_source_path": str(output),
-            "provider_file_hash": _sha256_file(output),
+            "provider_source_path": provider_source,
+            "provider_file_hash": managed_hash,
         }
-        if fallback_from_prompt_id is not None:
-            artifact_metadata["temporal_chunk_fallback_from_prompt_id"] = fallback_from_prompt_id
         return HandlerResult(
             success=True,
             artifact_type="video",
             artifact_metadata=artifact_metadata,
         )
 
-    def _submit_and_wait(self, workflow: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        client_id = f"lfo-{uuid.uuid4().hex}"
-        submitted = self.client.submit_prompt(workflow, client_id=client_id)
-        prompt_id = submitted.get("prompt_id")
-        if not isinstance(prompt_id, str) or not prompt_id:
-            raise LfoComfyError("ComfyUI response did not include prompt_id")
-        status = self.monitor.poll_until_done(
-            prompt_id,
-            interval=self.config.poll_interval_seconds,
-            timeout=self.config.timeout_seconds,
-        )
-        return prompt_id, status
-
-    @staticmethod
-    def _is_out_of_memory(status: dict[str, Any]) -> bool:
-        """Return whether a ComfyUI terminal status indicates a GPU OOM."""
-        try:
-            detail = json.dumps(status.get("error", ""), ensure_ascii=False, default=str).lower()
-        except (TypeError, ValueError):
-            detail = str(status.get("error", "")).lower()
-        return any(
-            marker in detail
-            for marker in (
-                "out of memory",
-                "cuda oom",
-                "torch.cuda.outofmemoryerror",
-                "cudnn_status_alloc_failed",
-            )
-        )
+    def _best_effort_interrupt(self) -> None:
+        """Ask ComfyUI to stop the timed-out prompt once, without masking failure."""
+        with suppress(Exception):
+            self.client.interrupt()
 
     @staticmethod
     def _enable_temporal_chunking(workflow: dict[str, Any]) -> None:
@@ -256,350 +182,16 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         chunk_inputs["chunking_mode"] = "auto"
         chunk_inputs.pop("chunking_mode.frames_per_chunk", None)
 
-    def _execute_segmented(
-        self,
-        task_id: str,
-        logical_key: str,
-        metadata: dict[str, Any],
-        attempt_id: str,
-        source_video: pathlib.Path,
-        segment_seconds: float,
-    ) -> HandlerResult:
-        """Upscale explicitly requested sequential segments and concatenate them."""
-        final_path = managed_path(metadata.get("output_path"), metadata.get("artifact_layout"))
-        duration_ms = int(probe(source_video)["duration_ms"] or 0)
-        ranges = self._segment_ranges(duration_ms, segment_seconds)
-        if len(ranges) <= 1:
-            return self._execute_single(task_id, logical_key, metadata, attempt_id, source_video)
-
-        segment_root = final_path.parent / f".{final_path.stem}.segments-{attempt_id}"
-        segment_root.mkdir(parents=True, exist_ok=True)
-        source_hash = _sha256_file(source_video)
-        manifest_path = segment_root / "segments.json"
-        manifest = {
-            "source_hash": source_hash,
-            "duration_ms": duration_ms,
-            "segment_seconds": segment_seconds,
-            "ranges": [[start, end] for start, end in ranges],
-        }
-        manifest_path.write_text(
-            json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2),
-            encoding="utf-8",
-        )
-        upscaled_segments: list[ClipSegment] = []
-        provider_jobs: list[str] = []
-        segment_reports: list[dict[str, Any]] = []
-        scale_multiplier: float | None = None
-        seedvr2_prepared = False
-        configured_scale = metadata.get("upscale", {})
-        if isinstance(configured_scale, dict):
-            configured_multiplier = configured_scale.get("scale_multiplier")
-            if isinstance(configured_multiplier, (int, float)):
-                scale_multiplier = float(configured_multiplier)
-
-        self._report_progress(
-            task_id,
-            logical_key,
-            status="running",
-            segment_index=0,
-            segment_count=len(ranges),
-            completed_segments=0,
-        )
-
-        for index, (start_ms, end_ms) in enumerate(ranges, start=1):
-            segment_source = segment_root / f"segment-{index:03d}.mp4"
-            segment_output = segment_root / f"segment-{index:03d}.upscaled.mp4"
-            expected_duration_ms = end_ms - start_ms
-            reused = self._reuse_segment_if_valid(
-                segment_root,
-                segment_output,
-                source_hash,
-                duration_ms,
-                segment_seconds,
-                ranges,
-                index,
-                expected_duration_ms,
-            )
-            if reused:
-                segment_probe = reused
-                provider_jobs.append("reused")
-                self._report_progress(
-                    task_id,
-                    logical_key,
-                    status="reused",
-                    segment_index=index,
-                    segment_count=len(ranges),
-                    completed_segments=index,
-                )
-            else:
-                self._report_progress(
-                    task_id,
-                    logical_key,
-                    status="processing",
-                    segment_index=index,
-                    segment_count=len(ranges),
-                    completed_segments=index - 1,
-                )
-                if not self._is_valid_media(segment_source, expected_duration_ms):
-                    self._extract_segment(
-                        source_video,
-                        segment_source,
-                        start_ms / 1000.0,
-                        (end_ms - start_ms) / 1000.0,
-                    )
-                self._require_valid_media(segment_source, expected_duration_ms, "source segment")
-                segment_metadata = dict(metadata)
-                segment_metadata["input_task_ids"] = ["segment-source"]
-                segment_metadata["input_artifacts"] = {
-                    "segment-source": {"file_path": str(segment_source.resolve())}
-                }
-                segment_metadata["output_path"] = str(segment_output)
-                result = self._execute_single(
-                    f"{task_id}.segment-{index:03d}",
-                    f"{logical_key}:segment-{index:03d}",
-                    segment_metadata,
-                    f"{attempt_id}-segment-{index:03d}",
-                    segment_source,
-                    release_memory=not seedvr2_prepared,
-                )
-                if not result.success:
-                    return result
-                seedvr2_prepared = True
-                provider_job = result.artifact_metadata.get("provider_job_id")
-                if isinstance(provider_job, str):
-                    provider_jobs.append(provider_job)
-                multiplier = result.artifact_metadata.get("scale_multiplier")
-                if isinstance(multiplier, (int, float)):
-                    scale_multiplier = float(multiplier)
-                segment_probe = self._require_valid_media(
-                    segment_output, expected_duration_ms, "upscaled segment"
-                )
-                self._report_progress(
-                    task_id,
-                    logical_key,
-                    status="completed",
-                    segment_index=index,
-                    segment_count=len(ranges),
-                    completed_segments=index,
-                )
-            upscaled_segments.append(
-                ClipSegment(
-                    clip_id=f"{task_id}.segment-{index:03d}",
-                    file_path=str(segment_output),
-                    duration_ms=int(segment_probe["duration_ms"] or expected_duration_ms),
-                )
-            )
-            segment_reports.append(
-                {
-                    "index": index,
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                    "reused": reused is not None,
-                    "file_path": str(segment_output),
-                    "probe": segment_probe,
-                }
-            )
-
-        self._report_progress(
-            task_id,
-            logical_key,
-            status="assembling",
-            segment_index=len(ranges),
-            segment_count=len(ranges),
-            completed_segments=len(ranges),
-        )
-        assembled_temp = final_path.with_name(
-            f".{final_path.stem}.{uuid.uuid4().hex}.tmp{final_path.suffix}"
-        )
-        timeline = TimelineAssembler().assemble(
-            TimelineSpec(segments=upscaled_segments, transitions="cut", output_path=str(assembled_temp)),
-            timeout_s=self.config.timeout_seconds,
-        )
-        if not timeline.success or not assembled_temp.is_file():
-            assembled_temp.unlink(missing_ok=True)
-            raise MediaCommandError(timeline.error or "Segmented upscale concatenation failed")
-        atomic_replace(assembled_temp, final_path)
-        final_probe = self._require_valid_media(final_path, duration_ms, "assembled upscale")
-        final_hash = _sha256_file(final_path)
-        self._report_progress(
-            task_id,
-            logical_key,
-            status="completed",
-            segment_index=len(ranges),
-            segment_count=len(ranges),
-            completed_segments=len(ranges),
-        )
-        return HandlerResult(
-            success=True,
-            artifact_type="video",
-            artifact_metadata={
-                "file_path": str(final_path.resolve()),
-                "file_hash": final_hash,
-                "media_type": "video",
-                "provider_job_id": "segmented:" + ",".join(provider_jobs),
-                "workflow_id": SEEDVR2_UPSCALE_WORKFLOW_ID,
-                "source_video_path": str(source_video),
-                "scale_multiplier": scale_multiplier,
-                "size": final_path.stat().st_size,
-                "segmented": True,
-                "segment_seconds": segment_seconds,
-                "segment_count": len(upscaled_segments),
-                "segment_root": str(segment_root),
-                "segments": segment_reports,
-                "probe": final_probe,
-            },
-        )
-
-    @staticmethod
-    def _segment_seconds(metadata: dict[str, Any]) -> float | None:
-        config = metadata.get("upscale")
-        if not isinstance(config, dict):
-            return DEFAULT_SEGMENT_SECONDS
-        if "segment_seconds" not in config:
-            return DEFAULT_SEGMENT_SECONDS
-        value = config["segment_seconds"]
-        if value is None:
-            return None
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-            raise ValueError("video.upscale metadata.upscale.segment_seconds must be positive")
-        return float(value)
-
-    def _reuse_segment_if_valid(
-        self,
-        current_root: pathlib.Path,
-        current_output: pathlib.Path,
-        source_hash: str,
-        duration_ms: int,
-        segment_seconds: float,
-        ranges: list[tuple[int, int]],
-        index: int,
-        expected_duration_ms: int,
-    ) -> dict[str, Any] | None:
-        roots = [current_root]
-        prefix = current_root.name.rsplit("segments-", 1)[0] + "segments-"
-        roots.extend(
-            sorted(
-                (
-                    path
-                    for path in current_root.parent.glob(f"{prefix}*")
-                    if path.is_dir() and path != current_root
-                ),
-                key=lambda path: path.stat().st_mtime,
-                reverse=True,
-            )
-        )
-        for root in roots:
-            manifest_path = root / "segments.json"
-            if not manifest_path.is_file():
-                continue
-            try:
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            try:
-                manifest_segment_seconds = float(manifest.get("segment_seconds", 0))
-            except (TypeError, ValueError):
-                continue
-            if (
-                manifest.get("source_hash") != source_hash
-                or manifest.get("duration_ms") != duration_ms
-                or manifest_segment_seconds != segment_seconds
-                or manifest.get("ranges") != [[start, end] for start, end in ranges]
-            ):
-                continue
-            candidate = root / f"segment-{index:03d}.upscaled.mp4"
-            if not self._is_valid_media(candidate, expected_duration_ms):
-                continue
-            if candidate != current_output:
-                atomic_copy_verified(candidate, current_output)
-            return probe(current_output)
-        return None
-
-    @staticmethod
-    def _is_valid_media(path: pathlib.Path, expected_duration_ms: int | None = None) -> bool:
-        try:
-            details = probe(path)
-        except (MediaCommandError, OSError, ValueError, TypeError):
-            return False
-        duration_ms = int(details.get("duration_ms") or 0)
-        if not details.get("width") or not details.get("height") or not details.get("codec"):
-            return False
-        if expected_duration_ms is not None:
-            tolerance = max(250, round(expected_duration_ms * 0.08))
-            if abs(duration_ms - expected_duration_ms) > tolerance:
-                return False
-        return duration_ms > 0
-
-    @classmethod
-    def _require_valid_media(
-        cls,
-        path: pathlib.Path,
-        expected_duration_ms: int | None,
-        label: str,
-    ) -> dict[str, Any]:
-        if not cls._is_valid_media(path, expected_duration_ms):
-            raise MediaCommandError(f"{label} failed media validation: {path}")
-        return probe(path)
-
-    def _report_progress(
-        self,
-        task_id: str,
-        logical_key: str,
-        **progress: Any,
-    ) -> None:
-        if self.progress_callback is None:
-            return
-        event = {"task_id": task_id, "logical_key": logical_key, **progress}
-        try:
-            self.progress_callback(event)
-        except Exception as exc:  # progress must never fail media execution
-            logger.warning("Unable to persist upscale progress: %s", exc)
-
-    @staticmethod
-    def _segment_ranges(duration_ms: int, segment_seconds: float) -> list[tuple[int, int]]:
-        if duration_ms <= 0:
-            raise ValueError("video.upscale segmented source has no duration")
-        step_ms = max(1, round(segment_seconds * 1000))
-        ranges = [
-            (start, min(start + step_ms, duration_ms))
-            for start in range(0, duration_ms, step_ms)
-        ]
-        if len(ranges) > 1 and ranges[-1][1] - ranges[-1][0] < 250:
-            ranges[-2] = (ranges[-2][0], ranges[-1][1])
-            ranges.pop()
-        return ranges
-
-    @staticmethod
-    def _extract_segment(
-        source: pathlib.Path,
-        destination: pathlib.Path,
-        start_seconds: float,
-        duration_seconds: float,
-    ) -> None:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        run_command(
-            [
-                "ffmpeg", "-y", "-ss", f"{start_seconds:.3f}", "-i", str(source),
-                "-t", f"{duration_seconds:.3f}", "-map", "0:v:0", "-map", "0:a?",
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-                "-pix_fmt", "yuv420p", "-c:a", "aac", "-ar", "44100",
-                "-avoid_negative_ts", "make_zero", "-movflags", "+faststart",
-                str(destination),
-            ],
-            timeout_s=300.0,
-        )
-
     def _prepare_workflow(
         self,
         metadata: dict[str, Any],
         uploaded_name: str,
         *,
         output_prefix: str,
+        options: UpscaleOptions | None = None,
     ) -> tuple[dict[str, Any], float]:
-        config = metadata.get("upscale", {})
-        options = resolve_upscale_options({"upscale": config}, {})
-        if not options.enabled:
-            raise ValueError("video.upscale metadata.upscale.enabled must be true")
+        if options is None:
+            options = self._upscale_options(metadata)
 
         manifest = KNOWN_WORKFLOWS[SEEDVR2_UPSCALE_WORKFLOW_ID]
         workflow = WorkflowLoader.load(self.config.workflow_dir / manifest.source_file)
@@ -615,6 +207,14 @@ class ComfyUpscaleVideoHandler(TaskHandler):
             (bindings[key], value) for key, value in values.items() if key in bindings
         ]
         return BindingResolver(workflow).apply_values(resolved_values), options.scale_multiplier
+
+    @staticmethod
+    def _upscale_options(metadata: dict[str, Any]) -> UpscaleOptions:
+        config = metadata.get("upscale", {})
+        options = resolve_upscale_options({"upscale": config}, {})
+        if not options.enabled:
+            raise ValueError("video.upscale metadata.upscale.enabled must be true")
+        return options
 
     @staticmethod
     def _resolve_bindings(
@@ -666,44 +266,3 @@ class ComfyUpscaleVideoHandler(TaskHandler):
         if not isinstance(subfolder, str):
             raise TypeError("ComfyUI upload response subfolder must be a string")
         return f"{subfolder.rstrip('/')}/{name}" if subfolder else name
-
-    def _find_output(self, prompt_id: str, status: dict[str, Any]) -> pathlib.Path:
-        outputs = status.get("outputs")
-        if not isinstance(outputs, dict) or not outputs:
-            history = self.client.get_history(prompt_id)
-            entry = history.get(prompt_id, {})
-            outputs = entry.get("outputs", {}) if isinstance(entry, dict) else {}
-
-        candidates: list[pathlib.Path] = []
-        for node_output in outputs.values() if isinstance(outputs, dict) else []:
-            if not isinstance(node_output, dict):
-                continue
-            for collection in ("video", "videos", "images", "gifs"):
-                items = node_output.get(collection, [])
-                if not isinstance(items, list):
-                    continue
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    filename = item.get("filename")
-                    if not isinstance(filename, str) or not filename:
-                        continue
-                    subfolder = item.get("subfolder", "")
-                    path = self.config.output_root / str(subfolder) / filename
-                    if path.is_file():
-                        candidates.append(path.resolve())
-        if not candidates:
-            raise FileNotFoundError(f"No local output found for ComfyUI prompt {prompt_id}")
-        videos = [
-            path for path in candidates
-            if path.suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}
-        ]
-        return max(videos or candidates, key=lambda path: path.stat().st_mtime_ns)
-
-
-def _sha256_file(path: pathlib.Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()

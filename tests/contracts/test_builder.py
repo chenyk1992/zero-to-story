@@ -45,7 +45,12 @@ def _clip() -> ClipSpec:
                 reference_id="hero",
                 asset_key="subject.hero",
                 semantic_usage="subject.identity",
-                binding=BindingPolicy(required=True, priority=100),
+                binding=BindingPolicy(
+                    required=True,
+                    priority=100,
+                    placement="fixed",
+                    slot="ref_image_0",
+                ),
             )],
         ),
     )
@@ -113,7 +118,12 @@ def test_builder_convenience_fields_round_trip(tmp_path: Path) -> None:
                 "reference_id": "hero-ref",
                 "asset_key": "hero",
                 "semantic_usage": "subject.identity",
-                "binding": {"required": True, "priority": 100},
+                "binding": {
+                    "required": True,
+                    "priority": 100,
+                    "placement": "fixed",
+                    "slot": "ref_image_0",
+                },
             }
         ],
     )

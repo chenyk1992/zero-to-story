@@ -86,116 +86,15 @@
   ],
   "clips": [
     {
-      "clip_id": "clip-001",
-      "sequence": 1,
-      "duration_ms": 5000,
-      "generation": {
-        "operation": "video.text_to_video",
-        "prompt": "一台高端智能咖啡机在极简白色厨房中，镜头缓慢推近，蒸汽升腾，晨光透过窗户洒落，产品广告质感，16:9横屏",
-        "requirements": {
-          "aspect_ratio": "16:9",
-          "width": 1920,
-          "height": 1080,
-          "fps": 24,
-          "native_audio": "mute"
-        },
-        "references": []
-      },
-      "audio": {
-        "native_audio": "mute",
-        "tracks": [
-          {
-            "asset_key": "voiceover.main",
-            "role": "narration",
-            "offset_ms": 200,
-            "gain_db": "0",
-            "fade_in_ms": 200,
-            "fade_out_ms": 300
-          },
-          {
-            "asset_key": "bgm.upbeat",
-            "role": "bgm",
-            "offset_ms": 0,
-            "gain_db": "-12",
-            "fade_in_ms": 500,
-            "fade_out_ms": 1000,
-            "duck_group": "background"
-          }
-        ]
-      },
-      "subtitles": {
-        "cues": [
-          {
-            "start_ms": 200,
-            "end_ms": 4800,
-            "text": "全新智能咖啡机，一键唤醒清晨。"
-          }
-        ]
-      },
-      "source_context": {
-        "skill": "product-promo",
-        "script_line": "intro"
-      }
-    },
-    {
-      "clip_id": "clip-002",
-      "sequence": 2,
-      "duration_ms": 4000,
-      "generation": {
-        "operation": "video.image_to_video",
-        "prompt": "咖啡机特写，按钮被按下，咖啡缓缓流出，蒸汽缭绕，慢动作，产品质感，16:9横屏",
-        "requirements": {
-          "aspect_ratio": "16:9",
-          "width": 1920,
-          "height": 1080,
-          "fps": 24,
-          "native_audio": "mute"
-        },
-        "references": [
-          {
-            "reference_id": "ref-001",
-            "asset_key": "product.photo.front",
-            "semantic_usage": "product.main_view",
-            "instruction": "保持咖啡机外观、颜色和细节一致",
-            "binding": {
-              "required": true,
-              "priority": 100,
-              "placement": "first",
-              "on_unsupported": "fail"
-            }
-          }
-        ]
-      },
-      "audio": {
-        "native_audio": "mute",
-        "tracks": [
-          {
-            "asset_key": "bgm.upbeat",
-            "role": "bgm",
-            "offset_ms": 0,
-            "gain_db": "-12",
-            "fade_in_ms": 0,
-            "fade_out_ms": 500,
-            "duck_group": "background"
-          }
-        ]
-      },
-      "source_context": {
-        "skill": "product-promo",
-        "script_line": "feature-1"
-      }
-    },
-    {
       "clip_id": "clip-003",
-      "sequence": 3,
+      "sequence": 1,
       "duration_ms": 3000,
       "generation": {
         "operation": "video.reference_to_video",
         "prompt": "咖啡机45度角特写，Logo清晰可见，镜头缓慢平移，高端质感，16:9横屏",
         "requirements": {
           "aspect_ratio": "16:9",
-          "width": 1920,
-          "height": 1080,
+          "megapixels": 0.6,
           "fps": 24,
           "native_audio": "mute"
         },

@@ -121,6 +121,8 @@ def _validate_shots(plan: dict[str, Any]) -> list[dict[str, Any]]:
         sequence = shot.get("sequence")
         if not isinstance(sequence, int) or isinstance(sequence, bool):
             raise ValueError(f"plan.shots[{index}].sequence must be an integer")
+        if sequence < 1:
+            raise ValueError(f"plan.shots[{index}].sequence must be >= 1")
         if shot_id in seen_ids:
             raise ValueError(
                 f"duplicate shot_id {shot_id!r} (first at index {seen_ids[shot_id]})"
@@ -179,11 +181,19 @@ def _approval_declaration(approval: dict[str, Any]) -> ApprovalDeclaration:
     return ApprovalDeclaration(approved_by=approved_by, approved_at=approved_at, notes=notes)
 
 
-def _asset(asset_key: str, media_type: str, uri: str) -> AssetSpec:
+def _asset(
+    asset_key: str,
+    media_type: str,
+    uri: str,
+    *,
+    sha256: str | None = None,
+) -> AssetSpec:
+    if sha256 is not None and (not isinstance(sha256, str) or not sha256.strip()):
+        raise TypeError("asset sha256 must be a non-empty string when provided")
     return AssetSpec(
         asset_key=asset_key,
         media_type=media_type,
-        source=AssetSource(uri=uri),
+        source=AssetSource(uri=uri, sha256=sha256),
         provenance=ProvenanceSpec(
             source_type="external_skill",
             producer="virtual-presenter",
@@ -227,7 +237,6 @@ def _aspect_from_pixels(width: object, height: object) -> str | None:
 def _requirements(output: OutputPolicy) -> GenerationRequirements:
     return GenerationRequirements(
         aspect_ratio=_aspect_from_pixels(output.width, output.height) or "16:9",
-        megapixels=0.4,
         fps=output.fps,
         native_audio="allowed",
     )
@@ -237,7 +246,7 @@ def _source_context(shot: dict[str, Any], shot_id: str) -> dict[str, Any]:
     return {
         "skill": "virtual-presenter",
         "shot": shot_id,
-        # Runtime preserves this record for audit and recovery but does not
+        # Runtime preserves this record as source context but does not
         # interpret any presenter-specific semantics inside it.
         "shot_contract": dict(shot),
     }
@@ -331,7 +340,7 @@ def build_shot_package(
 def _accepted_clip_values(
     accepted: Any,
     index: int,
-) -> tuple[str, int, int, str, SubtitleSpec, dict[str, Any]]:
+) -> tuple[str, int, int, str, str | None, SubtitleSpec, dict[str, Any]]:
     item = _required_mapping(accepted, f"accepted_clips[{index}]")
     shot_id = _required_string(item.get("shot_id"), f"accepted_clips[{index}].shot_id")
     sequence = item.get("sequence")
@@ -339,8 +348,11 @@ def _accepted_clip_values(
         raise ValueError(f"accepted_clips[{index}].sequence must be an integer")
     duration_ms = _validate_duration(item.get("duration_ms"), f"accepted_clips[{index}].duration_ms")
     uri = _package_relative_uri(item.get("uri"), f"accepted_clips[{index}].uri")
+    sha256 = item.get("sha256")
+    if sha256 is not None and (not isinstance(sha256, str) or not sha256.strip()):
+        raise TypeError(f"accepted_clips[{index}].sha256 must be a non-empty string when provided")
     subtitles = _subtitle_spec(item.get("subtitles"), f"accepted_clips[{index}].subtitles", duration_ms)
-    return shot_id, sequence, duration_ms, uri, subtitles, item
+    return shot_id, sequence, duration_ms, uri, sha256, subtitles, item
 
 
 def build_assembly_package(
@@ -359,9 +371,9 @@ def build_assembly_package(
     plan_shot_by_id = {str(shot["shot_id"]): shot for shot in shots}
     seen_ids: dict[str, int] = {}
     seen_sequences: dict[int, int] = {}
-    values: list[tuple[str, int, int, str, SubtitleSpec, dict[str, Any]]] = []
+    values: list[tuple[str, int, int, str, str | None, SubtitleSpec, dict[str, Any]]] = []
     for index, accepted in enumerate(accepted_clips):
-        shot_id, sequence, duration_ms, uri, subtitles, item = _accepted_clip_values(accepted, index)
+        shot_id, sequence, duration_ms, uri, sha256, subtitles, item = _accepted_clip_values(accepted, index)
         if shot_id in seen_ids:
             raise ValueError(
                 f"duplicate accepted shot_id {shot_id!r} (first at index {seen_ids[shot_id]})"
@@ -389,7 +401,7 @@ def build_assembly_package(
             )
         seen_ids[shot_id] = index
         seen_sequences[sequence] = index
-        values.append((shot_id, sequence, duration_ms, uri, subtitles, item))
+        values.append((shot_id, sequence, duration_ms, uri, sha256, subtitles, item))
 
     missing_shots = plan_shot_ids - set(seen_ids)
     if missing_shots:
@@ -407,9 +419,9 @@ def build_assembly_package(
         locale=locale,
         project_id=project_id,
     )
-    for shot_id, sequence, duration_ms, uri, subtitles, item in values:
+    for shot_id, sequence, duration_ms, uri, sha256, subtitles, item in values:
         asset_key = f"source_video.{shot_id}"
-        builder.add_asset(_asset(asset_key, "video", uri))
+        builder.add_asset(_asset(asset_key, "video", uri, sha256=sha256))
         context: dict[str, Any] = {"skill": "virtual-presenter", "shot": shot_id}
         continuity = item.get("continuity", plan_shot_by_id[shot_id].get("continuity"))
         if continuity is not None:

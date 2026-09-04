@@ -17,7 +17,13 @@ class RunReport:
 
 
 class ExecutionReportService:
-    """Build a complete report exclusively from persistent runtime state."""
+    """Build the small execution report exposed to callers.
+
+    Attempts, recovery decisions, and prompt-revision metadata belong to the
+    retired long-running runtime.  The v1 Panel boundary only reports the
+    current task outcome and the artifacts needed by the caller's ACCEPT/REJECT
+    decision.
+    """
 
     def __init__(self, store: ExecutionStore) -> None:
         self.store = store
@@ -28,11 +34,7 @@ class ExecutionReportService:
             raise KeyError(f"Run not found: {run_id}")
         revision = self.store.get_package_revision(str(run["revision_id"]))
         tasks = self.store.list_tasks(run_id)
-        attempts = self.store.list_attempts(run_id)
         artifacts = self.store.list_artifacts(run_id)
-        attempts_by_task: dict[str, list[dict[str, Any]]] = {}
-        for attempt in attempts:
-            attempts_by_task.setdefault(str(attempt["task_id"]), []).append(attempt)
         artifacts_by_task: dict[str, list[dict[str, Any]]] = {}
         for artifact in artifacts:
             parsed = dict(artifact)
@@ -52,19 +54,6 @@ class ExecutionReportService:
                 "task_type": task["task_type"],
                 "status": task["status"],
                 "error": task.get("error"),
-                "recovery": {
-                    key: metadata.get(key)
-                    for key in (
-                        "failure_class",
-                        "recovery_action",
-                        "prompt_revision",
-                        "prompt_revision_required",
-                        "plan_hash",
-                        "failure_evidence",
-                    )
-                    if key in metadata
-                },
-                "attempts": attempts_by_task.get(str(task["task_id"]), []),
                 "artifacts": task_artifacts,
             }
             task_reports.append(task_report)
@@ -76,7 +65,6 @@ class ExecutionReportService:
                         "tasks": [],
                         "backend_selection": None,
                         "qc": None,
-                        "audio_qc": None,
                     },
                 )
                 clip["tasks"].append({"type": task["task_type"], "status": task["status"]})
@@ -96,13 +84,6 @@ class ExecutionReportService:
                         "results": qc_metadata.get("qc_results", []),
                         "status": task["status"],
                     }
-                if task["task_type"] == "audio.mix":
-                    audio_metadata = (
-                        task_artifacts[-1]["metadata"]
-                        if task_artifacts
-                        else _json_object(metadata.get("failure_evidence"))
-                    )
-                    clip["audio_qc"] = audio_metadata.get("audio_quality_qc")
 
         connection = self.store.connect()
         lineage = [

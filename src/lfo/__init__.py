@@ -1,6 +1,6 @@
 """LFO — Local Film Orchestrator.
 
-A stable, recoverable local video execution engine.
+A stable, deterministic local video execution engine.
 Submit a VideoExecutionPackage; LFO handles the rest.
 """
 from __future__ import annotations

@@ -1,6 +1,7 @@
 """Filesystem checks — directory permissions, disk space."""
 from __future__ import annotations
 
+import os
 import shutil
 
 from .base import (
@@ -32,9 +33,8 @@ def check_input_writable(ctx: CheckContext) -> CheckResult:
         return CheckResult(
             check_id="storage.input_writable",
             severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.FAILED,
-            message="ComfyUI input directory not configured",
-            remediation="Set storage.comfy_input in machine profile",
+            status=CheckStatus.SKIPPED,
+            message="ComfyUI input directory not configured; API upload will be used",
         )
 
     import pathlib
@@ -89,9 +89,8 @@ def check_output_readable(ctx: CheckContext) -> CheckResult:
         return CheckResult(
             check_id="storage.output_readable",
             severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.FAILED,
-            message="ComfyUI output directory not configured",
-            remediation="Set storage.comfy_output in machine profile",
+            status=CheckStatus.SKIPPED,
+            message="ComfyUI output directory not configured; outputs will be downloaded via /view",
         )
 
     import pathlib
@@ -213,38 +212,14 @@ def check_project_writable(ctx: CheckContext) -> CheckResult:
     import pathlib
 
     path = pathlib.Path(projects_dir)
-    if path.exists() and path.is_dir():
-        try:
-            probe = path / ".lfo_write_probe"
-            probe.write_text("ok")
-            probe.unlink()
-            return CheckResult(
-                check_id="storage.project_writable",
-                severity=CheckSeverity.BLOCKER,
-                status=CheckStatus.PASSED,
-                message=f"Projects directory writable: {projects_dir}",
-            )
-        except (OSError, PermissionError) as exc:
-            return CheckResult(
-                check_id="storage.project_writable",
-                severity=CheckSeverity.BLOCKER,
-                status=CheckStatus.FAILED,
-                message=f"Projects directory not writable: {exc}",
-            )
-
-    # Try to create it
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-        return CheckResult(
-            check_id="storage.project_writable",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.PASSED,
-            message=f"Projects directory created: {projects_dir}",
-        )
-    except (OSError, PermissionError) as exc:
-        return CheckResult(
-            check_id="storage.project_writable",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.FAILED,
-            message=f"Cannot create projects directory: {exc}",
-        )
+    # Diagnostics must not create project directories or overwrite probe files
+    # in persistent user data. The actual output operation verifies write access.
+    while not path.exists() and path.parent != path:
+        path = path.parent
+    writable = path.is_dir() and os.access(path, os.W_OK)
+    return CheckResult(
+        check_id="storage.project_writable",
+        severity=CheckSeverity.BLOCKER,
+        status=CheckStatus.PASSED if writable else CheckStatus.FAILED,
+        message=f"Project parent access {'available' if writable else 'unavailable'}: {path}",
+    )

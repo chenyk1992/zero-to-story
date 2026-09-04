@@ -53,7 +53,7 @@ def test_build_shot_package_maps_fixed_and_optional_references() -> None:
     assert clip.source_context["shot"] == "shot-001"
     assert clip.source_context["shot_contract"]["continuity"] == {"gaze": "camera"}
     assert clip.generation.requirements.aspect_ratio == "9:16"
-    assert clip.generation.requirements.megapixels == 0.4
+    assert clip.generation.requirements.megapixels is None
     assert clip.generation.requirements.width is None
     assert package.output.width == 1080
     assert all(not asset.source.uri.startswith(("/", "\\")) for asset in package.assets)
@@ -105,6 +105,24 @@ def test_build_assembly_package_maps_each_accepted_clip_to_passthrough() -> None
         for clip in package.clips
     )
     assert package.clips[0].subtitles.cues[0].text == "你好"
+
+
+def test_build_assembly_package_preserves_accepted_clip_source_hash() -> None:
+    package = build_assembly_package(
+        _plan(),
+        [
+            {
+                "shot_id": "shot-001",
+                "sequence": 1,
+                "duration_ms": 5000,
+                "uri": "accepted/001.mp4",
+                "sha256": "accepted-hash",
+            },
+            {"shot_id": "shot-002", "sequence": 2, "duration_ms": 6000, "uri": "accepted/002.mp4"},
+        ],
+    )
+    source = next(asset for asset in package.assets if asset.asset_key == "source_video.shot-001")
+    assert source.source.sha256 == "accepted-hash"
 
 
 def test_build_assembly_package_requires_complete_matching_accepted_clips() -> None:
@@ -161,4 +179,9 @@ def test_adapter_rejects_unapproved_duplicate_and_out_of_range_plan() -> None:
     plan = _plan()
     plan["shots"][0]["duration_ms"] = 3000
     with pytest.raises(ValueError, match="between 4000ms"):
+        build_shot_package(plan, "shot-001")
+
+    plan = _plan()
+    plan["shots"][0]["sequence"] = 0
+    with pytest.raises(ValueError, match="sequence must be >= 1"):
         build_shot_package(plan, "shot-001")

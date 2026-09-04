@@ -1,6 +1,10 @@
 ﻿"""Tests for CLI command functions."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
 from lfo.cli.config_cmd import cmd_config_resolve
 from lfo.cli.doctor_cmd import cmd_doctor
 from lfo.cli.machine_cmd import (
@@ -15,15 +19,18 @@ from lfo.cli.workflow_cmd import cmd_workflow_fork
 
 
 class TestCmdSetup:
-    def test_invalid_smoke_level(self):
-        result = cmd_setup(smoke_level="invalid")
-        assert result["success"] is False
-        assert "smoke level" in result["error"].lower()
-
-    def test_default_smoke_level(self):
-        result = cmd_setup(smoke_level="none", machine_id="test-setup")
-        # May succeed or fail depending on environment, but shouldn't crash
-        assert "success" in result
+    def test_setup_does_not_create_runtime_database_or_snapshot(self, monkeypatch):
+        discovery = SimpleNamespace(comfyui_running=False, comfyui_pid=None,
+                                    gpu_name="test", vram_mib=1000)
+        monkeypatch.setattr(
+            "lfo.services.environment_service.EnvironmentService.discover_and_create_profile",
+            lambda self, machine_id, save: (discovery, None),
+        )
+        result = cmd_setup(machine_id="test-setup")
+        assert result["success"] is True
+        assert result["machine_id"] == "test-setup"
+        assert "snapshot_id" not in result
+        assert not Path(os.environ["LFO_WORKSPACE"]).exists()
 
 
 class TestCmdDoctor:

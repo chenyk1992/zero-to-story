@@ -1,13 +1,14 @@
 """Optional post-generation video-upscale configuration."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
-
 
 UPSCALE_EXTENSION_KEY = "upscale"
 DEFAULT_SCALE_MULTIPLIER = 2.0
 MAX_SEED = 2**64 - 1
+_SUPPORTED_FIELDS = frozenset({"enabled", "scale_multiplier", "seed"})
 
 
 @dataclass(frozen=True)
@@ -27,17 +28,12 @@ class UpscaleOptions:
     enabled: bool = False
     scale_multiplier: float = DEFAULT_SCALE_MULTIPLIER
     seed: int | None = None
-    # SeedVR2 has native temporal chunking for constrained GPUs.  Keep a
-    # normal short clip in one ComfyUI prompt unless the package explicitly
-    # asks for outer FFmpeg segmentation.
-    segment_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
             "scale_multiplier": self.scale_multiplier,
             "seed": self.seed,
-            "segment_seconds": self.segment_seconds,
         }
 
 
@@ -54,6 +50,21 @@ def validate_upscale_options(config: object, path: str) -> list[UpscaleOptionIss
         ]
 
     issues: list[UpscaleOptionIssue] = []
+    for key, value in config.items():
+        if key == "segment_seconds":
+            # Keep this as a dedicated diagnostic while the public field is
+            # removed, so callers get an actionable migration error.
+            continue
+        if key not in _SUPPORTED_FIELDS:
+            issues.append(
+                UpscaleOptionIssue(
+                    f"{path}.{key}",
+                    f"unsupported field {key!r}",
+                    "unsupported",
+                    value,
+                )
+            )
+
     if "enabled" in config and not isinstance(config["enabled"], bool):
         issues.append(
             UpscaleOptionIssue(
@@ -75,15 +86,29 @@ def validate_upscale_options(config: object, path: str) -> list[UpscaleOptionIss
                     multiplier,
                 )
             )
-        elif float(multiplier) <= 0:
-            issues.append(
-                UpscaleOptionIssue(
-                    f"{path}.scale_multiplier",
-                    "must be > 0",
-                    "minimum",
-                    multiplier,
+        else:
+            try:
+                multiplier_value = float(multiplier)
+            except (TypeError, ValueError, OverflowError):
+                multiplier_value = float("inf")
+            if not math.isfinite(multiplier_value):
+                issues.append(
+                    UpscaleOptionIssue(
+                        f"{path}.scale_multiplier",
+                        "must be finite",
+                        "finite",
+                        multiplier,
+                    )
                 )
-            )
+            elif multiplier_value <= 0:
+                issues.append(
+                    UpscaleOptionIssue(
+                        f"{path}.scale_multiplier",
+                        "must be > 0",
+                        "minimum",
+                        multiplier,
+                    )
+                )
 
     if "seed" in config:
         seed = config["seed"]
@@ -104,30 +129,26 @@ def validate_upscale_options(config: object, path: str) -> list[UpscaleOptionIss
                     "range",
                     seed,
                 )
-                )
+            )
 
     if "segment_seconds" in config:
-        segment_seconds = config["segment_seconds"]
-        if segment_seconds is not None:
-            if isinstance(segment_seconds, bool) or not isinstance(segment_seconds, (int, float)):
-                issues.append(
-                    UpscaleOptionIssue(
-                        f"{path}.segment_seconds",
-                        "expected positive number or null",
-                        "type",
-                        segment_seconds,
-                    )
-                )
-            elif float(segment_seconds) <= 0:
-                issues.append(
-                    UpscaleOptionIssue(
-                        f"{path}.segment_seconds",
-                        "must be > 0 or null",
-                        "minimum",
-                        segment_seconds,
-                    )
-                )
+        issues.append(
+            UpscaleOptionIssue(
+                f"{path}.segment_seconds",
+                "is not supported; SeedVR2 uses native temporal chunking",
+                "unsupported",
+                config["segment_seconds"],
+            )
+        )
     return issues
+
+
+def _raise_invalid_upscale_options(config: object, path: str) -> None:
+    """Raise the first structured upscale error for direct object parsing."""
+    issues = validate_upscale_options(config, path)
+    if issues:
+        issue = issues[0]
+        raise ValueError(f"{issue.path}: {issue.message}")
 
 
 def resolve_upscale_options(
@@ -145,11 +166,6 @@ def resolve_upscale_options(
         enabled=bool(merged.get("enabled", False)),
         scale_multiplier=float(merged.get("scale_multiplier", DEFAULT_SCALE_MULTIPLIER)),
         seed=merged.get("seed"),
-        segment_seconds=(
-            None
-            if merged.get("segment_seconds") is None
-            else float(merged["segment_seconds"])
-        ),
     )
 
 

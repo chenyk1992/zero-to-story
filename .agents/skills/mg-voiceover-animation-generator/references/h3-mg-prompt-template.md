@@ -51,7 +51,7 @@
 
 | 提示词信息 | 执行包位置 | 规则 |
 |---|---|---|
-| `pixel_ratio` | `GenerationRequirements.megapixels` | 例如 `0.4 -> 0.4`，缺省 `0.4`；generation 不写 width/height |
+| `pixel_ratio` | `GenerationRequirements.megapixels` | 例如 `0.4 -> 0.4`；缺省时不写入，generation 不写 width/height |
 | 交付画幅 | `OutputPolicy` | 可独立保持 `1080x1920` |
 | 视觉参考 | `assets` + `references` | 0/1/多参考分别路由 T2V/I2V/R2V |
 | 外部口播 | audio asset + Clip audio track | 以外部音频为准，避免重复原生口播 |

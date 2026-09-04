@@ -10,6 +10,9 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from .strict import ensure_allowed_fields
+from .upscale import _raise_invalid_upscale_options
+
 # Operations are open strings; these are the well-known v1 examples.
 KNOWN_OPERATIONS = frozenset({
     "video.text_to_video",
@@ -52,6 +55,11 @@ class BindingPolicy:
     def from_dict(cls, data: dict[str, Any], path: str) -> BindingPolicy:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {"required", "priority", "placement", "on_unsupported", "slot"},
+        )
         required = data.get("required", True)
         if not isinstance(required, bool):
             raise TypeError(f"{path}.required: expected boolean")
@@ -112,6 +120,11 @@ class ReferenceSpec:
     def from_dict(cls, data: dict[str, Any], path: str) -> ReferenceSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {"reference_id", "asset_key", "semantic_usage", "instruction", "binding"},
+        )
         ref_id = data.get("reference_id")
         if not isinstance(ref_id, str) or not ref_id:
             raise ValueError(f"{path}.reference_id: required string")
@@ -119,8 +132,8 @@ class ReferenceSpec:
         if not isinstance(asset_key, str) or not asset_key:
             raise ValueError(f"{path}.asset_key: required string")
         semantic_usage = data.get("semantic_usage")
-        if not isinstance(semantic_usage, str):
-            raise ValueError(f"{path}.semantic_usage: required string")
+        if not isinstance(semantic_usage, str) or not semantic_usage.strip():
+            raise ValueError(f"{path}.semantic_usage: required non-empty string")
         binding_data = data.get("binding")
         if not isinstance(binding_data, dict):
             raise ValueError(f"{path}.binding: required object")
@@ -164,6 +177,19 @@ class GenerationRequirements:
     def from_dict(cls, data: dict[str, Any], path: str) -> GenerationRequirements:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {
+                "aspect_ratio",
+                "megapixels",
+                "width",
+                "height",
+                "fps",
+                "native_audio",
+                "reference_image_size",
+            },
+        )
         aspect_ratio = data.get("aspect_ratio")
         if aspect_ratio is not None and not isinstance(aspect_ratio, str):
             raise TypeError(f"{path}.aspect_ratio: expected string or null")
@@ -174,7 +200,7 @@ class GenerationRequirements:
                 raise TypeError(f"{path}.megapixels: expected positive number")
             try:
                 megapixels_value = float(megapixels)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise TypeError(f"{path}.megapixels: expected positive number") from None
             if not math.isfinite(megapixels_value) or megapixels_value <= 0:
                 raise ValueError(f"{path}.megapixels: must be positive")
@@ -241,7 +267,6 @@ class GenerationSpec:
     operation: str
     prompt: str
     references: list[ReferenceSpec] = field(default_factory=list)
-    negative_prompt: str | None = None
     seed: int | None = None
     requirements: GenerationRequirements = field(default_factory=GenerationRequirements)
 
@@ -249,15 +274,19 @@ class GenerationSpec:
     def from_dict(cls, data: dict[str, Any], path: str) -> GenerationSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {"operation", "prompt", "seed", "requirements", "references"},
+        )
         operation = data.get("operation")
         if not isinstance(operation, str) or not operation:
             raise ValueError(f"{path}.operation: required string")
         prompt = data.get("prompt")
         if not isinstance(prompt, str) or not prompt:
             raise ValueError(f"{path}.prompt: required string")
-        negative_prompt = data.get("negative_prompt")
-        if negative_prompt is not None and not isinstance(negative_prompt, str):
-            raise TypeError(f"{path}.negative_prompt: expected string or null")
+        if operation not in KNOWN_OPERATIONS:
+            raise ValueError(f"{path}.operation: unsupported video operation {operation!r}")
         seed = data.get("seed")
         if seed is not None:
             if not isinstance(seed, int) or isinstance(seed, bool):
@@ -269,6 +298,14 @@ class GenerationSpec:
             ReferenceSpec.from_dict(r, f"{path}.references[{i}]")
             for i, r in enumerate(refs_data)
         ]
+        seen_reference_ids: set[str] = set()
+        for index, reference in enumerate(references):
+            if reference.reference_id in seen_reference_ids:
+                raise ValueError(
+                    f"{path}.references[{index}].reference_id: duplicate reference_id "
+                    f"{reference.reference_id!r}"
+                )
+            seen_reference_ids.add(reference.reference_id)
         req_data = data.get("requirements", {})
         if not isinstance(req_data, dict):
             raise TypeError(f"{path}.requirements: expected object")
@@ -277,15 +314,12 @@ class GenerationSpec:
             operation=operation,
             prompt=prompt,
             references=references,
-            negative_prompt=negative_prompt,
             seed=seed,
             requirements=requirements,
         )
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {"operation": self.operation, "prompt": self.prompt}
-        if self.negative_prompt is not None:
-            d["negative_prompt"] = self.negative_prompt
         if self.seed is not None:
             d["seed"] = self.seed
         d["requirements"] = self.requirements.to_dict()
@@ -310,24 +344,49 @@ class AudioTrackSpec:
     def from_dict(cls, data: dict[str, Any], path: str) -> AudioTrackSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {
+                "asset_key",
+                "role",
+                "offset_ms",
+                "gain_db",
+                "fade_in_ms",
+                "fade_out_ms",
+                "duck_group",
+            },
+        )
         asset_key = data.get("asset_key")
         if not isinstance(asset_key, str) or not asset_key:
             raise ValueError(f"{path}.asset_key: required string")
         role = data.get("role")
-        if not isinstance(role, str):
-            raise ValueError(f"{path}.role: required string")
+        if not isinstance(role, str) or not role.strip():
+            raise ValueError(f"{path}.role: required non-empty string")
         offset_ms = data.get("offset_ms", 0)
         if not isinstance(offset_ms, int) or isinstance(offset_ms, bool):
             raise TypeError(f"{path}.offset_ms: expected integer")
         gain_db = data.get("gain_db", "0")
         if not isinstance(gain_db, str):
             raise TypeError(f"{path}.gain_db: expected string")
+        try:
+            gain_value = float(gain_db)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError(f"{path}.gain_db: expected a finite number") from None
+        if not math.isfinite(gain_value):
+            raise ValueError(f"{path}.gain_db: expected a finite number")
         fade_in_ms = data.get("fade_in_ms", 0)
         if not isinstance(fade_in_ms, int) or isinstance(fade_in_ms, bool):
             raise TypeError(f"{path}.fade_in_ms: expected integer")
+        if offset_ms < 0:
+            raise ValueError(f"{path}.offset_ms: must be >= 0")
+        if fade_in_ms < 0:
+            raise ValueError(f"{path}.fade_in_ms: must be >= 0")
         fade_out_ms = data.get("fade_out_ms", 0)
         if not isinstance(fade_out_ms, int) or isinstance(fade_out_ms, bool):
             raise TypeError(f"{path}.fade_out_ms: expected integer")
+        if fade_out_ms < 0:
+            raise ValueError(f"{path}.fade_out_ms: must be >= 0")
         duck_group = data.get("duck_group")
         if duck_group is not None and not isinstance(duck_group, str):
             raise TypeError(f"{path}.duck_group: expected string or null")
@@ -366,6 +425,7 @@ class AudioPolicy:
     def from_dict(cls, data: dict[str, Any], path: str) -> AudioPolicy:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(data, path, {"native_audio", "tracks"})
         native_audio = data.get("native_audio", "preserve")
         if native_audio not in NATIVE_AUDIO:
             raise ValueError(
@@ -399,15 +459,18 @@ class SubtitleCue:
     def from_dict(cls, data: dict[str, Any], path: str) -> SubtitleCue:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(data, path, {"start_ms", "end_ms", "text"})
         start_ms = data.get("start_ms")
         if not isinstance(start_ms, int) or isinstance(start_ms, bool):
             raise TypeError(f"{path}.start_ms: expected integer")
+        if start_ms < 0:
+            raise ValueError(f"{path}.start_ms: must be >= 0")
         end_ms = data.get("end_ms")
         if not isinstance(end_ms, int) or isinstance(end_ms, bool):
             raise TypeError(f"{path}.end_ms: expected integer")
         text = data.get("text")
-        if not isinstance(text, str):
-            raise ValueError(f"{path}.text: required string")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"{path}.text: required non-empty string")
         if end_ms <= start_ms:
             raise ValueError(f"{path}.end_ms: must be greater than start_ms")
         return cls(start_ms=start_ms, end_ms=end_ms, text=text)
@@ -427,6 +490,7 @@ class SubtitleSpec:
     def from_dict(cls, data: dict[str, Any], path: str) -> SubtitleSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(data, path, {"cues", "asset_key"})
         cues_data = data.get("cues", [])
         if not isinstance(cues_data, list):
             raise TypeError(f"{path}.cues: expected array")
@@ -434,6 +498,13 @@ class SubtitleSpec:
             SubtitleCue.from_dict(c, f"{path}.cues[{i}]")
             for i, c in enumerate(cues_data)
         ]
+        previous_end = 0
+        for index, cue in enumerate(cues):
+            if cue.start_ms < previous_end:
+                raise ValueError(
+                    f"{path}.cues[{index}].start_ms: overlaps the previous cue"
+                )
+            previous_end = cue.end_ms
         asset_key = data.get("asset_key")
         if asset_key is not None and not isinstance(asset_key, str):
             raise TypeError(f"{path}.asset_key: expected string or null")
@@ -463,15 +534,47 @@ class ClipSpec:
     extensions: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], path: str) -> ClipSpec:
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        path: str,
+        *,
+        _validate_upscale: bool = True,
+    ) -> ClipSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {
+                "clip_id",
+                "sequence",
+                "duration_ms",
+                "generation",
+                "audio",
+                "subtitles",
+                "dependencies",
+                "source_context",
+                "extensions",
+            },
+        )
         clip_id = data.get("clip_id")
         if not isinstance(clip_id, str) or not clip_id:
             raise ValueError(f"{path}.clip_id: required string")
+        # Keep the public contract aligned with the artifact layout: clip IDs
+        # are path components, never paths.  Import lazily to avoid the
+        # artifact-layout module's contract import cycle.
+        from lfo.services.artifact_layout import ArtifactLayoutError, safe_component
+
+        try:
+            safe_component(clip_id, field="clip_id")
+        except ArtifactLayoutError as exc:
+            raise ValueError(f"{path}.clip_id: {exc}") from exc
         sequence = data.get("sequence")
         if not isinstance(sequence, int) or isinstance(sequence, bool):
             raise TypeError(f"{path}.sequence: expected integer")
+        if sequence < 1:
+            raise ValueError(f"{path}.sequence: must be >= 1")
         duration_ms = data.get("duration_ms")
         if not isinstance(duration_ms, int) or isinstance(duration_ms, bool):
             raise TypeError(f"{path}.duration_ms: expected integer")
@@ -487,6 +590,11 @@ class ClipSpec:
         subtitles = SubtitleSpec.from_dict(
             data.get("subtitles", {}), f"{path}.subtitles"
         )
+        for index, cue in enumerate(subtitles.cues):
+            if cue.end_ms > duration_ms:
+                raise ValueError(
+                    f"{path}.subtitles.cues[{index}].end_ms: exceeds clip duration"
+                )
         deps = data.get("dependencies", [])
         if not isinstance(deps, list):
             raise TypeError(f"{path}.dependencies: expected array")
@@ -499,6 +607,11 @@ class ClipSpec:
         extensions = data.get("extensions", {})
         if not isinstance(extensions, dict):
             raise TypeError(f"{path}.extensions: expected object")
+        if _validate_upscale and "upscale" in extensions:
+            _raise_invalid_upscale_options(
+                extensions["upscale"],
+                f"{path}.extensions.upscale",
+            )
         return cls(
             clip_id=clip_id,
             sequence=sequence,

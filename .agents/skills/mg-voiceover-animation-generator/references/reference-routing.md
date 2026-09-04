@@ -19,39 +19,36 @@
 
 ## 2. 视觉参考路由
 
-在构建执行包前统计视觉参考文件（图片或视频，不含口播音频）：
+在构建执行包前，由已确认的创作方案显式选择 `generation_operation`。参考数量只用于核对，不用于自动推断 operation：
 
-| 参考输入 | H3/执行包路由 |
+| 已确认意图 | H3/执行包路由 |
 |---|---|
-| 0 个 | T2V：`video.text_to_video` |
-| 1 个图片 | I2V：`video.image_to_video` |
-| 1 个视频，或 2 个及以上视觉参考 | R2V：`video.reference_to_video` |
+| 无视觉参考 | T2V：`video.text_to_video` |
+| 单张图片被明确批准为精确首帧 | I2V：`video.image_to_video`，绑定 `placement="first"` |
+| 两张图片被明确批准为精确首帧和尾帧 | FL2V：`video.first_last_frame` |
+| 普通身份/构图/风格参考，或视频参考 | R2V：`video.reference_to_video`，使用类型匹配的 fixed slot |
 
 每个视觉参考都要写清 `semantic_usage`、保真要求、与 Clip 的 binding、review 状态和 provenance。产品图由 Skill 生成时同样如此；生成产品图不等于已经生成最终动画。外部口播音频通过 audio track 绑定到 Clip，不伪装成视觉 reference。
 
 ## 3. 执行包组装
 
-确认后调用 `lfo.skill_adapter.mg_voiceover.build_package`：
+确认后调用 `lfo.skill_adapter.mg_voiceover.build_package(..., generation_operation="已批准的 operation")`：
 
-- 默认一个连续 Clip，Clip 时长覆盖整条 MG 动画；不要把时间线段落误建成多个 Clip。
-- `pixel_ratio` 只写到 `GenerationRequirements.megapixels`，未指定时默认 `0.4`。例如 `0.4` 写成 `megapixels: 0.4`；同时需要 `1080x1920` 时把它放在 `OutputPolicy`，不要再向 generation requirements 写 width/height。
-- 有外部口播音频时绑定音频 asset/track，并让输出使用外部音频；无外部口播时允许 H3 原生音频。音频来源必须在提示词和包中一致。
+- 默认一个连续生成 Clip，Clip 时长覆盖整条 MG 动画；不要把时间线段落误建成多个生成 Clip。生成结果 `ACCEPT` 后必须再由 `lfo.skill_adapter.mg_voiceover.build_assembly_package` 构建一个单 Clip passthrough 组装包，用于落实最终音频和输出策略。
+- `pixel_ratio` 只写到 `GenerationRequirements.megapixels`；未指定时保持空值，不推断默认像素预算。例如用户明确选择 `0.4` 时写成 `megapixels: 0.4`；同时需要 `1080x1920` 时把它放在 `OutputPolicy`，不要再向 generation requirements 写 width/height。
+- 有外部口播音频时在生成包中登记音频 asset/track，并由最终 passthrough assembly 实际替换音频；无外部口播时 assembly 保留 H3 原生音频。音频来源必须在提示词和包中一致。
 - 普通字幕默认 `subtitles_mode: "none"`。MG 动态字、UI 标签、标题和数据标签不是字幕。
 - 记录用户确认信息；确认前不调用 adapter，不把未批准包交给运行时。
 
 ## 4. LFO CLI 交付顺序
 
-执行包固定写入 `workspace/projects/<project_id>/execution-package.json`；创建项目前先按仓库 `workspace/README.md` 确认布局。随后使用实际 CLI：
+每个 Panel 包和最终 assembly 包都直接写入 `workspace/projects/<project_id>/` 项目根目录，并使用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`）；不要为每个 Panel 建子目录，否则 `outputs/<run_id>/...` 无法用包内相对 URI 稳定引用。每个 Panel 都是独立执行包，调用方先运行 `validate`，使用其返回的完整文件字节 `package_sha256` 取得用户批准，随后使用实际 CLI：
 
 ```text
-python -m lfo.cli.main validate execution-package.json
-python -m lfo.cli.main plan execution-package.json
-python -m lfo.cli.main execute execution-package.json --approve
-python -m lfo.cli.main status RUN_ID
-python -m lfo.cli.main retry RUN_ID
-python -m lfo.cli.main export RUN_ID
+python -m lfo.cli.main validate panel-P001.execution-package.json
+python -m lfo.cli.main execute panel-P001.execution-package.json --approved-sha256 <PACKAGE_SHA256>
 ```
 
-通常顺序是 `validate -> plan -> execute --approve -> status -> export`；仅在失败且需要重试时使用 `retry`。`status`、`retry`、`export` 需要真实的 `RUN_ID`。
+当前 Panel 必须按 `validate → 批准其 package_sha256 → execute --approved-sha256` 严格串行执行；包内容变化后必须重新 `validate` 和批准。`plan` 仅为可选诊断，不是生产必经步骤。`execute` 同步调用官方 `comfy-cli`，等待完成并返回生成文件路径。调用方对返回 Clip 做最小语义判断，输出 `ACCEPT` 或 `REJECT`；REJECT 或任一执行失败即停止，需要重做时显式生成/确认新的执行包。
 
-`preflight` 仅用于机器、后端和工作流检查；它不是执行包导入、审批或运行子命令。不要把这些动作拆成额外的 CLI 子命令，唯一的执行审批形式是上方的 `execute --approve`。
+`status`、`retry`、`review`、`export` 不属于本 Skill 的生产交接协议。每个 ACCEPT Clip 的真实末帧只有在确有下一个 Panel 时才交给下一个 Panel；全部 Panel 接受后调用 `build_assembly_package(generation_package, accepted_clip_uri, ...)`，对返回的单 Clip `video.passthrough` package 独立执行 `validate`、hash 批准和一次 `execute`，应用最终口播音频和输出策略。不要把执行拆成额外的审批、监控或恢复步骤。

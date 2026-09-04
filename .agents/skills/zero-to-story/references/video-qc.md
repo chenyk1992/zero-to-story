@@ -1,59 +1,54 @@
-# LFO 运行时 QC 与前置准备度边界
+# 最小视频接受检查
 
-## 原则
+## 目的
 
-镜头、对白、动作、身份、空间、道具和画面文字的“应该是什么”，在进入 LFO 前由 `storyboard_brief.md`、`creative_blueprint.v2`、已确认的选择性视觉控制资产和 H3 prompt manifest 一次性确定。LFO 是执行运行时，不重新理解故事，也不把提示词里的每个形容词变成二元验收合同。
+故事、镜头、对白、身份、空间、道具和画面文字由故事板、蓝图、已确认视觉资产和当前 Panel 的 H3 提示词预先确定。LFO 只执行批准的 `VideoExecutionPackage`；本文件把检查按用途拆开，每项仍只给一次简单的 ACCEPT/REJECT 结论，不把每个提示词形容词变成复杂验收合同。
 
-生产锁（`lfo.production_lock.v1`）建立后，故事板、Panel 数量、Panel/Setup 时长、对白顺序和时窗、参考素材、operation 与剪辑关系均不可变。LFO 阶段最多接受同一 Clip 的确定性重试，或由 `$h3-prompt-writing` 提交一次保持 `plan_hash` 不变的完整提示词重写；不因失败退回故事板重排。
+不维护 prompt manifest、production lock、分数、多个通过等级、失败候选或恢复记录。拒绝或执行错误即停止，是否重新开始由用户或调用方明确决定。
 
-## LFO 只保留的三类检查
+## 按用途检查
 
-### 1. 生成质量
+| 对象 | 只检查什么 | 结论 |
+|---|---|---|
+| 视觉控制资产 | 能否表达它声明的身份、空间、构图、动作或状态用途 | 可用 / 阻断；细则见 [角色与视觉控制资产规范](creative-assets.md#视觉可用性检查与提示词诊断) |
+| 当前 Panel 视频 | 文件可播放，计划中的主体与主要动作存在 | ACCEPT / REJECT |
+| 跨 Panel 接力 | 开头能否从上一段已接受的真实尾帧自然继续 | ACCEPT / REJECT |
+| 最终组装 | 顺序、可播放性和基本音视频是否存在 | ACCEPT / REJECT |
 
-`media.qc`（为兼容历史任务仍保留该 task id）只确认生成任务返回了非空文件。它不检查解码、时长、分辨率、帧率、编码、黑帧、冻结帧、中段动作、身份/空间、道具或文字语义。缺少文件属于执行失败，允许 `retry_same`；不要据此重排故事板。
+“不够纯火柴人”、环境较细、线条、材质、阴影或不影响故事的小幅构图差异，不能单独成为视觉资产或视频的拒绝理由。若内容仍可承担用途就接受，并把现象归入提示词、Medium Lock 或参考组合诊断；只有主体、身份、空间、关键动作、道具状态或连续性错误到足以误导成片时才阻断。R2V 分镜板的行列、格数或阅读顺序与已批准 `storyboard_layout` 不符属于功能错误，而不是风格错误。
 
-### 2. 音频质量
+## Panel 接受
 
-`audio.mix` 负责按已锁定的 `lfo.audio_acceptance.v1` 检查：
+每个 Panel 生成后只做一次判断：
 
-- 是否存在合同要求的音轨；
-- 可选的峰值/能量指标；
-- 若提供 ASR/说话人分析，逐句文本、说话人和起止时窗是否与前置对白清单一致；
-- 说话事件是否意外重叠。
+- 文件能打开并播放，时长和输出规格基本可用；
+- 画面有计划中的主要主体和动作，没有空画面、严重伪影或无法使用的明显故障；
+- P002 起，当前开头能从上一段已接受的真实尾帧自然继续，没有明显回卷、重置或跳变。
 
-没有分析证据或分析返回 `INCONCLUSIVE` 时，记录为需人工听审的 `inconclusive`，不自动升级为创作失败。确有音频合同不符时，当前 Clip 进入 `WAITING_PROMPT_REVISION`，由提示词 Skill 重写对白/声音表达；达到锁定的修订次数后 `block_for_user`。
+满足即可记录 `ACCEPT`；否则用具体的功能或连续性错误记录 `REJECT`，并停止当前串行流程。轻微且不影响故事的差异不升级为额外评分或自动重试。
 
-### 3. 首尾帧/边界连续性
+## 尾帧接力
 
-`media.boundary_evidence` 只生成客观证据：上一 Clip 尾帧、下一 Clip 首帧、尾 2 秒 + 头 3 秒预览、接触表和 metrics。它不自动判定剧情连续性。Creative Skill 结合已确认分镜和视频理解给出 `PASS`、`PASS_WITH_REPAIR` 或 `FAIL`：
+只有 `ACCEPT` 的视频才进入下一 Panel。若 LFO 的执行结果不自动提供尾帧，调用方在 ACCEPT 后使用现有 ffmpeg 能力从已接受视频提取真实末帧，再按下一 Panel 的计划作为 `first_frame` 输入。不能用文字描述或人工猜测代替真实末帧。
 
-- `PASS`：可直接提取真实尾帧接力；
-- `PASS_WITH_REPAIR`：完成确定性裁切/重定时/硬切或音频替换并复核，若尾帧变化则重新提取；
-- `FAIL`：当前 Clip 不得接入下一 Clip。生产锁后只可重试当前 Clip 或提示词重写，不能重新排 Setup/Panel。
+## 最终组装
 
-## 不再由 LFO 自动判定的内容
+全部 Panel 都 ACCEPT 后，按执行包顺序组装一次。最终检查只确认：
 
-解码/时长/分辨率/帧率/编码/采样率、黑帧/冻结帧、中段对白抢拍、角色换脸/越轴、背景书册/砚台/纸面伪字等，不是 LFO 的自动 QC 类别。需要它们成为硬约束时，必须在 `creative_blueprint.v2`、当前 Panel 的已批准视觉资产或 manifest 中前置规划并由创作侧审阅；普通背景差异不应因为不等于提示词而触发重生成。
-
-## 运行顺序与止损
-
-1. LFO 接收前：`validate_creative_blueprint.py`、`validate_prompt_manifest.py` 和生产锁校验全部通过，并取得用户确认。
-2. Clip 生成后：生成质量检查 → 音频混合与音频合同检查 → 由创作侧审阅单片和相邻边界。
-3. 执行失败（无文件、服务/文件系统错误）：`retry_same`，遵守运行时重试上限。
-4. 已生成内容但音频/边界合同不符：`rewrite_prompt`，只修改完整 H3 提示词，携带相同 Clip `plan_hash`；不修改故事板字段。
-5. 修订预算耗尽、锁哈希不匹配或问题需要改变时长/镜头/对白顺序：`block_for_user`，停止当前 Clip 并等待用户决策。
-
-每次重试都保留旧 run、旧提示词、证据和最终采用片段；不覆盖历史产物。只有通过的真实尾帧才能进入下一 Clip 的 `first_frame`。
+- 最终文件能打开并播放；
+- Clip 顺序和时长关系正确；
+- 基本音频轨道、字幕策略和输出文件存在。
 
 ## 最小记录
 
+只保留执行继续所需的信息：
+
 ```text
-Panel / package revision / run id
-production plan_hash / prompt_revision
-generation quality: PASS | FAIL
-audio quality: PASS | INCONCLUSIVE | FAIL
-boundary: PASS | PASS_WITH_REPAIR | FAIL
-recovery: retry_same | rewrite_prompt | block_for_user
-hard blockers: 无或具体原因
-approved clip and tail path
+panel_id
+ACCEPT | REJECT | ERROR
+video_path
+tail_frame_path（ACCEPT 且下一 Panel 需要时）
+一句结果或错误说明
 ```
+
+不要记录候选片、自动恢复分支、复杂指标、边界证据侧车或重复 QC 报告。

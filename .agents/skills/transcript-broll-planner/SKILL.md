@@ -2,8 +2,6 @@
 name: transcript-broll-planner
 description: |
   将逐字稿、口播稿、数据型讲稿或知识视频脚本转成 B-roll 规划与确认后生成流程。适用于用户提供脚本、数据表、截图、Logo 或参考素材后，需要语义拆分、镜头选择、缺失素材检查、屏幕文字语言控制、连续一镜到底设计、可审片 B-roll 方案与批准后生成。触发词：B-roll 规划、B-roll 生成、逐字稿驱动副镜头、口播 B-roll、副镜头规划、副镜头生成。
-trigger-words: [B-roll 规划, B-roll 生成, 逐字稿驱动副镜头, 口播 B-roll, 副镜头规划, 副镜头生成]
-allowed-tools: [question, hub_analyse_media, hub_generate_image, hub_generate_video, hub_canvas_get_node, hub_canvas_group_recent_outputs, hub_save_file_to_session]
 ---
 
 # Transcript B-roll Planner
@@ -17,7 +15,7 @@ allowed-tools: [question, hub_analyse_media, hub_generate_image, hub_generate_vi
 
 可选：
 - 现有素材、截图、Logo、UI 截屏、产品图、文档、地图、图表、数据表或其他参考素材。
-- 用户对比例、单镜头时长、连续一镜到底、风格方向、屏幕文字语言、目标生成模型、以及结果更偏写实还是更偏抽象的要求。
+- 用户对比例、单镜头时长、连续一镜到底、风格方向、屏幕文字语言，以及结果更偏写实还是更偏抽象的要求。
 
 不要把这个 Skill 用在单张图片提示词、纯字幕导出、简单剪切，或无关的长篇剪辑任务上。
 
@@ -77,7 +75,7 @@ allowed-tools: [question, hub_analyse_media, hub_generate_image, hub_generate_vi
 - 不要编造事实、品牌卖点、引用、法律文字或来源。
 - 任何依赖精确文字的镜头，都必须由用户提供准确文本或可信来源。
 - 如果用户指定屏幕文字语言，所有屏幕文字都使用该语言；如果用户指定提示词语言，生成提示词使用用户要求的语言。
-- 默认视频模型是 MiniMax-H3。用户明确指定其他模型时，经过能力检查后遵循用户选择。
+- 生成路线由已确认的 Panel 计划和当前 LFO 能力共同决定；本 Skill 不默认或强制某个模型，也不把提供方参数写进创作计划。
 
 ## STEP 4：输出可审片的 B-roll 计划
 
@@ -113,14 +111,36 @@ allowed-tools: [question, hub_analyse_media, hub_generate_image, hub_generate_vi
 用户确认后，只生成已批准的镜头或已批准的连续长镜头。
 
 规则：
-- 能批量的类似工作尽量一起做。
-- 对共享同一主体、产品、数据系统或视觉世界的镜头，保持连续性。
-- 以审片计划作为镜头顺序、节拍顺序、运动连续性和素材需求的唯一依据。
-- 如果某个镜头失败，只针对缺失或被拒的部分重试一次，不要整套重来；仍失败则切换 MiniMax-H3 或其他可用模型，不要反复重试同一模型。
-- 生成结果要整理好，便于后续复审和修改。
+- 每个需要生成的 B-roll 计划项都是一个 Panel/Clip；Panel 时长遵守当前 H3/LFO 契约的 4–15 秒范围。不要把整段逐字稿或多个 Panel 合并成一个生成请求。
+- 对共享同一主体、产品、数据系统或视觉世界的 Panel，按计划逐个生成并保持连续性；不要并行提交多个视频任务。
+- 以已确认的计划作为 Panel 顺序、节拍顺序、运动连续性和素材需求的唯一依据。视频提示词交给 `$h3-prompt-writing`，本 Skill 不手工补写 H3 提示词。
+- 某个 Panel 生成失败或被拒时立即停止当前序列，不自动重试、换模型、保留失败候选或改写已批准计划；需要重做时由调用方显式重新准备该 Panel。
+- 生成结果先回传给调用方做一次最小 `ACCEPT`/`REJECT` 判断，不做分数或分级 QC。
 
-## STEP 7：交付计划与素材
+## STEP 7：逐 Panel 交给 LFO
 
-把最终 B-roll 计划、已生成镜头和缺失素材说明一起交付，方便用户立即审阅。
+用户确认 B-roll 计划和每个 Panel 的 H3 提示词后，调用方为每个 Panel 写出一份 `lfo.video-execution.v1` 的 execution package。所有 Panel 包和最终 assembly 包都直接放在同一个 `workspace/projects/<project_id>/` 项目根目录，用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要放入 Panel 子目录，否则前一 Run 的 `outputs/<run_id>/...` 无法用包内相对 URI 稳定引用。每份包只含当前 Panel 的一个非 `video.passthrough` Clip，并写入已确认的 operation、时长、H3 prompt、最小素材引用、字幕/音频策略和输出策略；不要创建旧 `intake`、`shots[]`、prompt manifest 或生产锁文件。
+
+逐 Panel 交接固定为：
+
+```text
+写当前 Panel package
+  → validate，取得 package_sha256 并让用户确认
+  → execute --approved-sha256 <hash>（同步、一次）
+  → 调用方最小 QC：ACCEPT / REJECT
+```
+
+只有当前 Panel `ACCEPT` 后才能准备下一个 Panel。若下一 Panel 需要连续性：
+
+- I2V：从已接受视频实际输出提取真实末帧 PNG，把它作为下一包唯一的 `first_frame` 素材；
+- FL2V：按批准计划把真实首帧和真实尾帧写入下一包；
+- R2V：只有批准 operation 明确需要时，才把上一段完整 `ACCEPT` 视频作为一个 `ref_video_N` fixed typed slot；它不是精确首帧；
+- T2V 或硬切 R2V：只用已接受视频做人工边界检查，不伪装成模型首帧。
+
+尾帧尚未从实际 `ACCEPT` 输出提取时，不在下一包中虚构路径。前一 Panel `REJECT`/`ERROR` 时不启动下一 Panel。所有 Panel 接受后，如用户要求交付完整视频，调用方再创建一份只含已接受视频 `video.passthrough` Clip 的 assembly package，独立 `validate`、批准其完整文件字节 SHA-256 后只执行一次 `cut` 组装。外部口播音频应作为 assembly 的音频轨道实际替换或保留；用户明确需要字幕时才加入字幕素材/策略，不能把整段逐字稿默认当作字幕。最终 assembly 只做一次可播放、顺序和基本音视频/字幕存在检查。
+
+## STEP 8：交付计划与素材
+
+把最终 B-roll 计划、每个已接受 Panel 的视频路径、必要的真实尾帧路径、缺失素材说明和（若用户要求）最终 assembly 路径一起交付，方便用户审阅。不要记录重试次数、失败候选、后台恢复状态或复杂 QC 报告。
 
 这个 Skill 最适合逐字稿驱动的 B-roll 规划和确认后生成流程，不适合纯字幕翻译、简单剪切、长篇剧本写作，或无关的品牌工作流。

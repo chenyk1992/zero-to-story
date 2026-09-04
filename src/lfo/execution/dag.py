@@ -3,21 +3,17 @@
 Standard task types:
 - video.generate
 - video.upscale (optional)
-- media.qc (generation-output gate; legacy task id)
-- audio.mix
-- subtitle.render
-- media.boundary_evidence
-- timeline.assemble
-- export.finalize
+- media.qc (minimal technical generation-output gate)
+- audio.mix / subtitle.render (assembly only)
+- timeline.assemble / export.finalize (assembly only)
+- media.qc (final exported-video gate for assembly)
 """
 from __future__ import annotations
 
-import itertools
 import pathlib
 from dataclasses import dataclass, field
 from typing import Any
 
-from lfo.contracts.production_lock import AUDIO_ACCEPTANCE_EXTENSION, PRODUCTION_LOCK_EXTENSION
 from lfo.contracts.timeline import TimelineSegment
 from lfo.contracts.upscale import resolve_upscale_options
 from lfo.execution.materializer import MaterializedRun
@@ -29,7 +25,6 @@ TASK_VIDEO_UPSCALE = "video.upscale"
 TASK_MEDIA_QC = "media.qc"
 TASK_AUDIO_MIX = "audio.mix"
 TASK_SUBTITLE_RENDER = "subtitle.render"
-TASK_BOUNDARY_EVIDENCE = "media.boundary_evidence"
 TASK_TIMELINE_ASSEMBLE = "timeline.assemble"
 TASK_EXPORT_FINALIZE = "export.finalize"
 
@@ -136,13 +131,15 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     - video.generate (depends on clip dependencies' generate tasks)
     - video.upscale (optional; depends on generate)
     - media.qc (generation-output gate; depends on generate or upscale)
-    - audio.mix (depends on qc)
-    - subtitle.render (depends on qc)
+
+    A one-Clip generation run ends at ``media.qc``.  A pure passthrough
+    assembly (with one or more Clips) adds audio, subtitle, timeline and
+    export tasks.
 
     Global tasks:
-    - media.boundary_evidence (one per adjacent timeline pair)
-    - timeline.assemble (depends on all clips' audio.mix and boundary evidence)
+    - timeline.assemble (depends on all clips' audio.mix)
     - export.finalize (depends on timeline.assemble + all subtitle.render)
+    - final media.qc (depends on export.finalize)
 
     Args:
         materialized_run: The immutable run snapshot.
@@ -161,34 +158,33 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     layout = materialized_run.artifact_layout
     if not layout:
         raise ValueError("Materialized run is missing its project artifact layout")
-    # Build the complete map before adding edges. This deliberately permits a
-    # clip to depend on a later sequence item, while still validating cycles.
-    clip_ids = [clip.clip_id for clip in materialized_run.clips]
+    ordered_clips = sorted(materialized_run.clips, key=lambda clip: clip.sequence)
+    if not ordered_clips:
+        raise ValueError("production execution requires at least one clip")
+    single_generation = (
+        len(ordered_clips) == 1
+        and ordered_clips[0].operation != "video.passthrough"
+    )
+    passthrough_assembly = all(
+        clip.operation == "video.passthrough" for clip in ordered_clips
+    )
+    if len(ordered_clips) > 1 and not passthrough_assembly:
+        raise ValueError(
+            "multi-clip execution is reserved for pure passthrough assembly"
+        )
+    # Build the complete map before adding edges so explicit references can be
+    # checked before the single execution path is wired.
+    clip_ids = [clip.clip_id for clip in ordered_clips]
     if len(clip_ids) != len(set(clip_ids)):
         raise ValueError("Materialized run contains duplicate clip ids")
     generate_tasks = {
         clip_id: f"{task_prefix}clip-{clip_id}.video.generate" for clip_id in clip_ids
     }
-    lock = materialized_run.extensions.get(PRODUCTION_LOCK_EXTENSION)
-    locked_plan_hash = lock.get("plan_hash") if isinstance(lock, dict) else None
-    locked_package_plan_hash = lock.get("package_plan_hash") if isinstance(lock, dict) else None
-    max_prompt_revisions = lock.get("max_prompt_revisions", 0) if isinstance(lock, dict) else 0
-    locked_clip_entries = lock.get("clips", {}) if isinstance(lock, dict) else {}
-
     # Build clip-level tasks
-    for clip in materialized_run.clips:
+    previous_qc_id: str | None = None
+    for clip in ordered_clips:
         clip_id = clip.clip_id
         base = f"{task_prefix}clip-{clip_id}"
-        clip_lock_entry = (
-            locked_clip_entries.get(clip_id)
-            if isinstance(locked_clip_entries, dict)
-            else None
-        )
-        clip_plan_hash = (
-            clip_lock_entry.get("plan_hash")
-            if isinstance(clip_lock_entry, dict)
-            else None
-        )
 
         # Determine dependencies from Package-level clip dependencies
         clip_deps: list[str] = []
@@ -198,6 +194,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             if dep_clip_id not in generate_tasks:
                 raise ValueError(f"Clip {clip_id!r} depends on unknown clip {dep_clip_id!r}")
             clip_deps.append(generate_tasks[dep_clip_id])
+        if previous_qc_id is not None and previous_qc_id not in clip_deps:
+            clip_deps.append(previous_qc_id)
 
         # 1. video.generate
         gen_id = f"{base}.video.generate"
@@ -216,7 +214,6 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "workflow_hash": clip.workflow_hash,
                 "operation": clip.operation,
                 "prompt": clip.prompt,
-                "negative_prompt": clip.negative_prompt,
                 "seed": clip.seed,
                 "duration_ms": clip.duration_ms,
                 "aspect_ratio": clip.aspect_ratio,
@@ -227,15 +224,6 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "native_audio": clip.native_audio,
                 "reference_image_size": clip.reference_image_size,
                 "resolved_references": list(clip.resolved_references),
-                "production_lock": materialized_run.extensions.get(PRODUCTION_LOCK_EXTENSION),
-                # ``plan_hash`` is the exact Clip hash used by the prompt
-                # revision endpoint; the aggregate lock remains available for
-                # audit and callers that want to display the whole run hash.
-                "plan_hash": clip_plan_hash,
-                "aggregate_plan_hash": locked_plan_hash,
-                "package_plan_hash": locked_package_plan_hash,
-                "max_prompt_revisions": max_prompt_revisions,
-                "prompt_revision": _prompt_revision(clip.extensions),
                 "output_policy": dict(materialized_run.output_policy),
                 "output_path": _task_output_path(layout, "video.generate", clip.clip_id),
                 "artifact_layout": dict(layout),
@@ -268,7 +256,7 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
             )
             upstream_video_id = upscale_id
 
-        # 2. generation-quality gate (legacy task id: media.qc)
+        # 2. minimal technical generation-quality gate
         qc_id = f"{base}.media.qc"
         qc_task = TaskNode(
             task_id=qc_id,
@@ -281,12 +269,19 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "clip_id": clip_id,
                 "generation_task_id": gen_id,
                 "input_task_ids": [upstream_video_id],
-                "qc_scope": ["generation_quality"],
+                "qc_scope": ["decodable", "video_stream", "duration", "resolution"],
                 "output_policy": dict(materialized_run.output_policy),
                 "artifact_layout": dict(layout),
             },
         )
         tasks.append(qc_task)
+        previous_qc_id = qc_id
+
+        # A normal production run ends at the current Panel's verified video.
+        # Audio, subtitle, timeline and export work belongs to the caller's
+        # final assembly, not to this synchronous one-Panel execution.
+        if single_generation:
+            continue
 
         # 3. audio.mix
         mix_id = f"{base}.audio.mix"
@@ -302,7 +297,6 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "generation_task_id": gen_id,
                 "duration_ms": clip.duration_ms,
                 "audio_policy": dict(clip.audio_policy),
-                "audio_acceptance": clip.extensions.get(AUDIO_ACCEPTANCE_EXTENSION),
                 "clip_extensions": dict(clip.extensions),
                 "input_task_ids": [qc_id],
                 "output_policy": dict(materialized_run.output_policy),
@@ -334,12 +328,17 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
         )
         tasks.append(sub_task)
 
+    if single_generation:
+        graph = TaskGraph(run_id=materialized_run.run_id, tasks=tasks)
+        graph.validate()
+        return graph
+
     # Global tasks
     all_mix_ids = [t.task_id for t in tasks if t.task_type == TASK_AUDIO_MIX]
     all_sub_ids = [t.task_id for t in tasks if t.task_type == TASK_SUBTITLE_RENDER]
 
-    # 5. Boundary evidence + 6. timeline.assemble.  The explicit edit list owns both
-    # assembly order and the source range used from each generated clip.
+    # The explicit edit list owns both assembly order and the source range
+    # used from each accepted passthrough clip.
     clips_by_id = {clip.clip_id: clip for clip in materialized_run.clips}
     timeline_segments = materialized_run.timeline.segments
     if not timeline_segments:
@@ -365,44 +364,8 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
                 "input_task_id": f"{task_prefix}clip-{clip.clip_id}.audio.mix",
             }
         )
-    boundary_task_ids: list[str] = []
-    for index, (previous, following) in enumerate(
-        itertools.pairwise(timeline_segments),
-        1,
-    ):
-        previous_mix = f"{task_prefix}clip-{previous.clip_id}.audio.mix"
-        next_mix = f"{task_prefix}clip-{following.clip_id}.audio.mix"
-        boundary_id = f"{previous.clip_id}__{following.clip_id}"
-        task_id = f"{task_prefix}boundary-{index:03d}.media.boundary_evidence"
-        tasks.append(
-            TaskNode(
-                task_id=task_id,
-                task_type=TASK_BOUNDARY_EVIDENCE,
-                logical_key=f"{boundary_id}:media.boundary_evidence",
-                dependencies=[previous_mix, next_mix],
-                metadata={
-                    "run_id": materialized_run.run_id,
-                    "boundary_id": boundary_id,
-                    "previous_input_task_id": previous_mix,
-                    "next_input_task_id": next_mix,
-                    "previous_source_in_ms": previous.source_in_ms,
-                    "previous_source_out_ms": previous.source_out_ms,
-                    "next_source_in_ms": following.source_in_ms,
-                    "next_source_out_ms": following.source_out_ms,
-                    "input_task_ids": [previous_mix, next_mix],
-                    "output_path": _task_output_path(
-                        layout,
-                        "media.boundary_evidence",
-                        boundary_id,
-                    ),
-                    "artifact_layout": dict(layout),
-                },
-            )
-        )
-        boundary_task_ids.append(task_id)
-
     timeline_id = f"{task_prefix}timeline.assemble"
-    timeline_dependencies = [*all_mix_ids, *boundary_task_ids]
+    timeline_dependencies = list(all_mix_ids)
     timeline_task = TaskNode(
         task_id=timeline_id,
         task_type=TASK_TIMELINE_ASSEMBLE,
@@ -443,6 +406,27 @@ def build_dag(materialized_run: MaterializedRun) -> TaskGraph:
     )
     tasks.append(export_task)
 
+    # The generated/passthrough Clip gates above only prove that each input
+    # is usable.  Assembly and optional subtitle burn-in can still produce an
+    # unreadable final file, so completion must pass the same objective media
+    # QC once more on the actual exported path.  Keep this as the existing
+    # ``media.qc`` handler rather than introducing a second QC contract.
+    final_qc_id = f"{task_prefix}final.media.qc"
+    tasks.append(
+        TaskNode(
+            task_id=final_qc_id,
+            task_type=TASK_MEDIA_QC,
+            logical_key="final.media.qc",
+            dependencies=[export_id],
+            metadata={
+                "run_id": materialized_run.run_id,
+                "input_task_ids": [export_id],
+                "qc_scope": ["decodable", "video_stream", "duration", "resolution"],
+                "artifact_layout": dict(layout),
+            },
+        )
+    )
+
     graph = TaskGraph(run_id=materialized_run.run_id, tasks=tasks)
 
     graph.validate()
@@ -473,24 +457,8 @@ def _task_output_path(
         if clip_id is None:
             raise ValueError("subtitle.render requires clip_id")
         return str(clips_root / safe_component(clip_id, field="clip_id") / "subtitles.srt")
-    if task_type == "media.boundary_evidence":
-        if clip_id is None:
-            raise ValueError("media.boundary_evidence requires boundary_id")
-        boundary_id = safe_component(clip_id, field="boundary_id")
-        return str(global_root / "boundaries" / boundary_id)
     if task_type == "timeline.assemble":
         return str(global_root / f"timeline.{container}")
     if task_type == "export.finalize":
         return str(layout["final_path"])
     raise ValueError(f"Unknown task type for output path: {task_type}")
-
-
-def _prompt_revision(extensions: dict[str, Any]) -> int:
-    """Read the prompt revision without making the DAG creative-aware."""
-
-    value = extensions.get("lfo.prompt_revision.v1")
-    if isinstance(value, dict):
-        revision = value.get("revision", 0)
-        if isinstance(revision, int) and not isinstance(revision, bool) and revision >= 0:
-            return revision
-    return 0

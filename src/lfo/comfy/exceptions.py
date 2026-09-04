@@ -9,6 +9,14 @@ class LfoComfyError(Exception):
     pass
 
 
+class ComfyCliTimeoutError(LfoComfyError):
+    """The official ``comfy`` CLI stopped waiting before a workflow finished."""
+
+    def __init__(self, message: str, *, prompt_id: str | None = None) -> None:
+        super().__init__(message)
+        self.prompt_id = prompt_id
+
+
 class ComfyUnreachableError(LfoComfyError):
     """ComfyUI service is not reachable on the configured port."""
 

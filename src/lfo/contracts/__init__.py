@@ -33,20 +33,6 @@ from .package import (
     VideoExecutionPackage,
     validate_package,
 )
-from .production_lock import (
-    AUDIO_ACCEPTANCE_EXTENSION,
-    PRODUCTION_LOCK_EXTENSION,
-    PROMPT_MANIFEST_EXTENSION,
-    PROMPT_MANIFEST_MUTABLE_FIELDS,
-    aggregate_plan_hash,
-    build_production_lock,
-    clip_plan_hash,
-    package_plan_hash,
-    package_plan_payload,
-    validate_audio_acceptance,
-    validate_production_lock,
-    with_production_lock,
-)
 from .timeline import OutputPolicy, TimelineSegment, TimelineSpec
 from .validation import package_content_hash
 
@@ -76,17 +62,5 @@ __all__ = [
     "VideoPackageBuilder",
     "package_content_hash",
     "validate_operation_references",
-    "AUDIO_ACCEPTANCE_EXTENSION",
-    "PROMPT_MANIFEST_EXTENSION",
-    "PROMPT_MANIFEST_MUTABLE_FIELDS",
-    "PRODUCTION_LOCK_EXTENSION",
-    "aggregate_plan_hash",
-    "build_production_lock",
-    "clip_plan_hash",
-    "package_plan_hash",
-    "package_plan_payload",
-    "validate_audio_acceptance",
-    "validate_production_lock",
-    "with_production_lock",
     "validate_package",
 ]

@@ -8,6 +8,7 @@ contract; it performs no I/O and knows nothing about LFO runtime internals.
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 from lfo.contracts.assets import AssetSource, AssetSpec, ProvenanceSpec, ReviewDeclaration
@@ -22,17 +23,39 @@ from lfo.contracts.clips import (
     ReferenceSpec,
     SubtitleSpec,
 )
+from lfo.contracts.operations import validate_operation_references
 from lfo.contracts.package import VideoExecutionPackage, validate_package
 from lfo.contracts.timeline import ApprovalDeclaration, OutputPolicy
 
 _SKILL_NAME = "mg-voiceover-animation-generator"
 _VISUAL_MEDIA_TYPES = frozenset({"image", "video"})
+_GENERATION_OPERATIONS = frozenset({
+    "video.text_to_video",
+    "video.image_to_video",
+    "video.first_last_frame",
+    "video.reference_to_video",
+})
+_URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 
 
 def _required_string(value: Any, path: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{path} must be a non-empty string")
     return value
+
+
+def _package_relative_uri(value: Any, path: str) -> str:
+    uri = _required_string(value, path)
+    normalized = uri.replace("\\", "/")
+    if (
+        normalized.startswith("/")
+        or normalized.startswith("//")
+        or (len(normalized) >= 2 and normalized[1] == ":")
+        or _URI_SCHEME.match(uri) is not None
+        or any(part == ".." for part in normalized.split("/"))
+    ):
+        raise ValueError(f"{path} must be a package-relative URI")
+    return uri
 
 
 def _positive_int(value: Any, path: str) -> int:
@@ -75,7 +98,7 @@ def _asset(
     default_operation: str,
 ) -> AssetSpec:
     asset_key = _required_string(data.get("asset_key"), f"{path}.asset_key")
-    uri = _required_string(data.get("uri"), f"{path}.uri")
+    uri = _package_relative_uri(data.get("uri"), f"{path}.uri")
     review_required = data.get("review_required", True)
     if not isinstance(review_required, bool):
         raise TypeError(f"{path}.review_required must be a boolean")
@@ -101,18 +124,7 @@ def _asset(
 
 def _visual_references(
     values: list[dict[str, Any]],
-) -> tuple[list[AssetSpec], list[ReferenceSpec], str]:
-    single_media_type: Any = None
-    if len(values) == 1:
-        single = _mapping(values[0], "reference_assets[0]")
-        single_media_type = single.get("media_type", "image")
-    operation = (
-        "video.text_to_video"
-        if not values
-        else "video.image_to_video"
-        if single_media_type == "image"
-        else "video.reference_to_video"
-    )
+) -> tuple[list[AssetSpec], list[ReferenceSpec]]:
     assets: list[AssetSpec] = []
     references: list[ReferenceSpec] = []
     seen_keys: set[str] = set()
@@ -152,8 +164,6 @@ def _visual_references(
         _required_string(placement, f"{path}.placement")
         on_unsupported = data.get("on_unsupported")
         _required_string(on_unsupported, f"{path}.on_unsupported")
-        if operation == "video.image_to_video":
-            placement = "first"
         slot = data.get("slot")
         if slot is not None and not isinstance(slot, str):
             raise TypeError(f"{path}.slot must be a string when provided")
@@ -176,7 +186,7 @@ def _visual_references(
             )
         )
         assets.append(asset)
-    return assets, references, operation
+    return assets, references
 
 
 def build_package(
@@ -188,6 +198,7 @@ def build_package(
     reference_assets: list[dict[str, Any]] | None = None,
     voiceover_audio: dict[str, Any] | None = None,
     *,
+    generation_operation: str,
     project_id: str | None = None,
     locale: str = "zh-CN",
     aspect_ratio: str = "9:16",
@@ -210,10 +221,23 @@ def build_package(
     _positive_int(width, "width")
     _positive_int(height, "height")
     _positive_int(fps, "fps")
+    generation_operation = _required_string(
+        generation_operation,
+        "generation_operation",
+    )
+    if generation_operation not in _GENERATION_OPERATIONS:
+        raise ValueError(
+            f"generation_operation must be one of {sorted(_GENERATION_OPERATIONS)}"
+        )
     if reference_assets is not None and not isinstance(reference_assets, list):
         raise TypeError("reference_assets must be an array")
-    visual_assets, references, operation = _visual_references(reference_assets or [])
-    megapixels = _megapixels(pixel_ratio) if pixel_ratio is not None else 0.4
+    visual_assets, references = _visual_references(reference_assets or [])
+    validate_operation_references(
+        generation_operation,
+        references,
+        asset_media_types={asset.asset_key: asset.media_type for asset in visual_assets},
+    )
+    megapixels = _megapixels(pixel_ratio)
     effective_project_id = (
         package_id if project_id is None else _required_string(project_id, "project_id")
     )
@@ -258,7 +282,7 @@ def build_package(
             sequence=1,
             duration_ms=duration_ms,
             generation=GenerationSpec(
-                operation=operation,
+                operation=generation_operation,
                 prompt=prompt,
                 references=references,
                 requirements=requirements,
@@ -296,3 +320,106 @@ def build_package(
     if not result.ok:
         raise ValueError(f"invalid VideoExecutionPackage: {result.to_dict()}")
     return package
+
+
+def build_assembly_package(
+    generation_package: VideoExecutionPackage,
+    accepted_clip_uri: str,
+    *,
+    package_revision: int = 1,
+    accepted_clip_sha256: str | None = None,
+) -> VideoExecutionPackage:
+    """Build the one-Clip passthrough package that applies final MG audio/output."""
+
+    if not isinstance(generation_package, VideoExecutionPackage):
+        raise TypeError("generation_package must be a VideoExecutionPackage")
+    if len(generation_package.clips) != 1:
+        raise ValueError("MG generation package must contain exactly one clip")
+    source_clip = generation_package.clips[0]
+    if source_clip.generation.operation == "video.passthrough":
+        raise ValueError("generation_package must contain a generated clip")
+    _positive_int(package_revision, "package_revision")
+    uri = _package_relative_uri(accepted_clip_uri, "accepted_clip_uri")
+    if accepted_clip_sha256 is not None and (
+        not isinstance(accepted_clip_sha256, str) or not accepted_clip_sha256.strip()
+    ):
+        raise TypeError("accepted_clip_sha256 must be a non-empty string when provided")
+
+    builder = VideoPackageBuilder(
+        f"{generation_package.package_id}-assembly",
+        generation_package.project.title,
+        revision=package_revision,
+        locale=generation_package.project.locale,
+        project_id=generation_package.project.project_id,
+    )
+    source_asset_key = f"source_video.{source_clip.clip_id}"
+    builder.add_asset(
+        AssetSpec(
+            asset_key=source_asset_key,
+            media_type="video",
+            source=AssetSource(uri=uri, sha256=accepted_clip_sha256),
+            provenance=ProvenanceSpec(
+                source_type="external_skill",
+                producer=_SKILL_NAME,
+                operation="video.accepted",
+            ),
+            review=ReviewDeclaration(required=True),
+        )
+    )
+
+    required_asset_keys = {track.asset_key for track in source_clip.audio.tracks}
+    if source_clip.subtitles.asset_key:
+        required_asset_keys.add(source_clip.subtitles.asset_key)
+    assets_by_key = {asset.asset_key: asset for asset in generation_package.assets}
+    missing = required_asset_keys - assets_by_key.keys()
+    if missing:
+        raise ValueError(
+            "MG assembly assets are missing: " + ", ".join(sorted(missing))
+        )
+    for asset_key in sorted(required_asset_keys):
+        builder.add_asset(assets_by_key[asset_key])
+
+    builder.add_clip(
+        ClipSpec(
+            clip_id=source_clip.clip_id,
+            sequence=1,
+            duration_ms=source_clip.duration_ms,
+            generation=GenerationSpec(
+                operation="video.passthrough",
+                prompt=f"Pass through accepted MG clip {source_clip.clip_id}",
+                requirements=source_clip.generation.requirements,
+                references=[
+                    ReferenceSpec(
+                        reference_id="source_video",
+                        asset_key=source_asset_key,
+                        semantic_usage="source.accepted_video",
+                        binding=BindingPolicy(
+                            required=True,
+                            priority=100,
+                            placement="fixed",
+                            slot="source_video",
+                            on_unsupported="fail",
+                        ),
+                    )
+                ],
+            ),
+            audio=source_clip.audio,
+            subtitles=source_clip.subtitles,
+            source_context={
+                "skill": _SKILL_NAME,
+                "workflow": "accepted-mg-assembly",
+            },
+        )
+    )
+    package = (
+        builder.output(generation_package.output)
+        .approval(generation_package.approval)
+        .build()
+    )
+    result = validate_package(package.to_dict())
+    if not result.ok:
+        raise ValueError(f"invalid MG assembly package: {result.to_dict()}")
+    return package
+
+
+__all__ = ["build_assembly_package", "build_package"]

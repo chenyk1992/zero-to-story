@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .strict import ensure_allowed_fields
+
 SUBTITLE_MODES = frozenset({"none", "sidecar", "burnin", "both"})
 CONTAINER_FORMATS = frozenset({"mp4", "mov", "mkv", "webm"})
 VIDEO_ENCODERS = frozenset({"h264", "h265", "av1", "vp9"})
@@ -28,12 +30,16 @@ class TimelineSegment:
     def from_dict(cls, data: dict[str, Any], path: str) -> TimelineSegment:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
-        unknown = set(data) - {"clip_id", "source_in_ms", "source_out_ms"}
-        if unknown:
-            raise ValueError(f"{path}: unknown fields: {sorted(unknown)}")
+        ensure_allowed_fields(data, path, {"clip_id", "source_in_ms", "source_out_ms"})
         clip_id = data.get("clip_id")
         if not isinstance(clip_id, str) or not clip_id:
             raise ValueError(f"{path}.clip_id: required string")
+        from lfo.services.artifact_layout import ArtifactLayoutError, safe_component
+
+        try:
+            safe_component(clip_id, field="clip_id")
+        except ArtifactLayoutError as exc:
+            raise ValueError(f"{path}.clip_id: {exc}") from exc
         source_in_ms = data.get("source_in_ms", 0)
         if not isinstance(source_in_ms, int) or isinstance(source_in_ms, bool):
             raise TypeError(f"{path}.source_in_ms: expected integer")
@@ -89,9 +95,7 @@ class TimelineSpec:
     ) -> TimelineSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
-        unknown = set(data) - {"segments"}
-        if unknown:
-            raise ValueError(f"{path}: unknown fields: {sorted(unknown)}")
+        ensure_allowed_fields(data, path, {"segments"})
         segments_data = data.get("segments")
         if not isinstance(segments_data, list):
             raise TypeError(f"{path}.segments: required array")
@@ -165,6 +169,23 @@ class OutputPolicy:
     def from_dict(cls, data: dict[str, Any], path: str) -> OutputPolicy:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {
+                "container",
+                "video_encoder",
+                "audio_encoder",
+                "width",
+                "height",
+                "fps",
+                "sample_rate",
+                "loudness_db",
+                "transitions",
+                "subtitles_mode",
+                "directory",
+            },
+        )
         container = data.get("container", "mp4")
         if container not in CONTAINER_FORMATS:
             raise ValueError(
@@ -221,16 +242,12 @@ class OutputPolicy:
         if directory is not None:
             if not isinstance(directory, str):
                 raise TypeError(f"{path}.directory: expected string or null")
-            if (
-                not directory
-                or directory in {".", ".."}
-                or "/" in directory
-                or "\\" in directory
-                or directory.startswith("/")
-                or (len(directory) >= 2 and directory[1] == ":")
-                or directory.rstrip(" .") != directory
-            ):
-                raise ValueError(f"{path}.directory: must be one safe logical path component")
+            from lfo.services.artifact_layout import ArtifactLayoutError, safe_component
+
+            try:
+                safe_component(directory, field="directory")
+            except ArtifactLayoutError as exc:
+                raise ValueError(f"{path}.directory: {exc}") from exc
         return cls(
             container=container,
             video_encoder=video_encoder,
@@ -276,8 +293,8 @@ class OutputPolicy:
 class ApprovalDeclaration:
     """Skill-side declaration that creative content was approved.
 
-    This is *not* an LFO execution approval. LFO maintains its own review
-    records bound to package hash, required asset hashes, etc.
+    This is *not* an LFO execution approval. The execution gate is supplied
+    by the caller and binds the approved package's exact file SHA-256.
     """
 
     approved_by: str | None = None
@@ -288,6 +305,7 @@ class ApprovalDeclaration:
     def from_dict(cls, data: dict[str, Any], path: str) -> ApprovalDeclaration:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(data, path, {"approved_by", "approved_at", "notes"})
         approved_by = data.get("approved_by")
         if approved_by is not None and not isinstance(approved_by, str):
             raise TypeError(f"{path}.approved_by: expected string or null")

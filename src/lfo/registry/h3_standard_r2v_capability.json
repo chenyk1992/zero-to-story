@@ -11,6 +11,6 @@
   "produces_video": true,
   "produces_audio": true,
   "limitations": [
-    "Fixed 3 reference slots"
+    "Up to 9 image, 3 video and 3 optional standalone audio references"
   ]
 }

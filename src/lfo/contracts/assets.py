@@ -6,11 +6,27 @@ source path again.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .strict import ensure_allowed_fields
+
 # Media types recognised by v1.
 MEDIA_TYPES = frozenset({"image", "video", "audio", "subtitle", "document"})
+_URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+def _validate_package_relative_uri(uri: str, path: str) -> None:
+    """Require a local URI rooted at the package directory."""
+    normalized = uri.replace("\\", "/")
+    if (
+        normalized.startswith("/")
+        or (len(normalized) >= 2 and normalized[1] == ":")
+        or _URI_SCHEME.match(uri) is not None
+        or any(part == ".." for part in normalized.split("/"))
+    ):
+        raise ValueError(f"{path}: must be a package-relative local URI")
 
 
 @dataclass
@@ -24,9 +40,11 @@ class AssetSource:
     def from_dict(cls, data: dict[str, Any], path: str) -> AssetSource:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(data, path, {"uri", "sha256"})
         uri = data.get("uri")
-        if not isinstance(uri, str) or not uri:
+        if not isinstance(uri, str) or not uri.strip():
             raise ValueError(f"{path}.uri: required string")
+        _validate_package_relative_uri(uri, f"{path}.uri")
         sha256 = data.get("sha256")
         if sha256 is not None and not isinstance(sha256, str):
             raise TypeError(f"{path}.sha256: expected string or null")
@@ -58,6 +76,18 @@ class ProvenanceSpec:
     def from_dict(cls, data: dict[str, Any], path: str) -> ProvenanceSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {
+                "source_type",
+                "producer",
+                "operation",
+                "producer_version",
+                "source_asset_keys",
+                "prompt_hash",
+            },
+        )
         source_type = data.get("source_type")
         if not isinstance(source_type, str):
             raise ValueError(f"{path}.source_type: required string")
@@ -113,6 +143,7 @@ class ReviewDeclaration:
     def from_dict(cls, data: dict[str, Any], path: str) -> ReviewDeclaration:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(data, path, {"required"})
         required = data.get("required", True)
         if not isinstance(required, bool):
             raise TypeError(f"{path}.required: expected boolean")
@@ -137,6 +168,11 @@ class AssetSpec:
     def from_dict(cls, data: dict[str, Any], path: str) -> AssetSpec:
         if not isinstance(data, dict):
             raise TypeError(f"{path}: expected object, got {type(data).__name__}")
+        ensure_allowed_fields(
+            data,
+            path,
+            {"asset_key", "media_type", "source", "provenance", "review", "metadata"},
+        )
         asset_key = data.get("asset_key")
         if not isinstance(asset_key, str) or not asset_key:
             raise ValueError(f"{path}.asset_key: required string")

@@ -2,96 +2,83 @@
 
 ## 目的
 
-`storyboard_brief.md` 仍是故事、视觉和连续性的人工可读唯一源文件。`creative_blueprint.json` 是从它同步编译出的机器可读索引，不是第二套剧情，也不取代故事板；两者冲突时先修故事板，再重新编译蓝图。
+storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_blueprint.json 是从它同步编译的机器可读索引，用于一次低成本静态预检；它不是第二套剧情，也不是视频成片评分器。两者冲突时修正故事板，再重新编译蓝图。
 
-蓝图只做一次低成本静态预检，不生成图片、视频或音频，也不新增用户审批节点。它把最容易在成片阶段暴露、且一旦暴露就会浪费生成资源的问题前移：原文冲突、剧情覆盖遗漏、场景因果断裂、状态跳变、对白顺序错误，以及单镜头超出模型可控范围。
+新流程只使用 zero-to-story.creative-blueprint.v2，不读取旧 schema，不做迁移兼容。蓝图在任何角色图、视觉控制资产或视频生成前通过一次即可。
 
-新项目使用 `zero-to-story.creative-blueprint.v2`。v1 仍可读取以兼容历史项目，但只有 v2 的生产准备度通过并生成生产锁后，才进入严格 LFO 执行。
+## 必须回答的问题
 
-## 最小字段
-
-| 区域 | 必须回答的问题 |
+| 区域 | 内容 |
 |---|---|
-| `source` | 当前采用哪一份原文？所有冲突是否已经写明选择并标记 `resolved`？ |
-| `coverage` | 这一段故事哪些事件 `must_show` / `must_explain`？每件事的原文出处、可见证据、前态和后态是什么？ |
-| `scenes` | 每场的目的、转折、入场状态、离场状态和下一场义务是什么？场景切换如何桥接？ |
-| `panels` | 每个 Panel 的时长、场景、镜头集合、覆盖事件和前后状态是什么？相邻 Panel 的动作归属是谁？ |
-| `dialogue` | 每句对白的说话人、逐字原文、全局顺序、事件和镜头是什么？ |
-| `generation.panel_plans`（v2） | 每个 Panel 使用什么 operation？STEP 3 是不生成图、生成六格板、场景关键帧还是目标尾帧？哪些素材真正进入视频模型？ |
-| `generation.shots` | 每个 Camera Setup 只承担什么主动作？有多少关键人物、参考图、运镜和对白？开始/结束状态如何接力？ |
-| `production`（v2） | 每个说话人是谁？对白和动作在什么时窗发生？头尾保护区与安全余量是否足够？ |
+| source | 当前原文、已经解决的冲突和采用版本 |
+| coverage | 观众必须看到/理解的事件、原文出处、可见证据和前后状态 |
+| scenes | 每场目的、转折、入场/离场状态、下一场义务和必要桥接 |
+| panels | Panel 顺序、4–15 秒时长、场景、六 Beat、状态和边界归属 |
+| dialogue | 按原文顺序的逐字对白、说话人、语言和所属 Setup |
+| generation.panel_plans | 每个 Panel 的 operation、可选视觉资产、首尾帧来源和最小运行时引用 |
+| generation.shots | 每个 Camera Setup 的镜头边界、动作、人物、参考和状态 |
 
-`must_show` 与 `must_explain` 必须且只能映射到一个生成镜头；`optional` 可以被删减，但不能在蓝图里伪装成已完成。无后期项目的可读文字使用 `text_strategy: "prompt"`，在已确认的 H3 提示词中逐字写明；只有明确具备确定性后期链路时才允许 `text_strategy: "post"`。
+must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事件可以在创作阶段删减。需要出现的文字要么写进已确认 H3 提示词，要么在故事板中明确标记确定性后期。
 
 ## 编译顺序
 
-1. 从原文或 handoff 建立 `source.conflicts`，先解决版本、人物关系、关键道具和结尾钩子等冲突。
-2. 按观众必须获得的信息建立 `coverage`，给每个事件写出可见证据和状态变化；没有可见证据的事件不能进入视频生成。
-3. 按完整因果链填写 `scenes`，再拆成 `panels` 和 Camera Setup。场景切换必须有 `bridge_from_previous`；Panel 切换必须声明唯一的 `transition_to_next.ownership` 和桥接理由。
-4. 先按每个 Panel 的精确首尾帧与多参考需求选择 operation，再填写 `generation.panel_plans`。不得根据分镜板是否已存在反向选择 R2V。
-5. 按镜头顺序填写对白和生成预算。单镜头默认只保留一个主动作、少量关键人物和有限参考槽位；复杂内容拆成新的 Setup 或 Panel，不让 H3 猜测隐含顺序。
-6. 在任何角色卡、视觉控制资产或视频生成前执行预检：
+1. 从原文建立 source.conflicts，先解决人物、版本、道具和结尾等歧义。
+2. 列出观众必须获得的信息，给每个 coverage 事件写可见证据、before_state 和 after_state。
+3. 先按因果链填写 scenes，再拆 panels 和 Camera Setup；Panel 边界写唯一的 transition ownership。
+4. 根据真实首帧/尾帧和参考控制需要选择 operation，再选择 visual_asset_policy；分镜板不能反向决定 R2V。
+5. 按镜头顺序填写对白、动作和状态。每个 Setup 只承担一个清晰主动作，复杂内容拆成新的 Setup 或 Panel。
+6. 运行一次预检：
 
-```powershell
+~~~powershell
 python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creative_blueprint.json
-```
+~~~
 
-只有 `CREATIVE PREFLIGHT: PASS` 才能进入下游生成。失败时回到 `storyboard_brief.md` 修复，然后同步蓝图；不消耗视频生成额度来验证一个本可静态发现的问题。
+只有 CREATIVE PREFLIGHT: PASS 才能进入角色卡、视觉资产和视频提示词阶段。失败时修正文档后重新运行，不消耗视频生成资源。
 
-## 预检覆盖范围
+## 最小预检范围
 
-- 目标总时长等于所有 Panel 时长之和，且每个 Panel 在 4–15 秒范围内。
-- 场景、Panel、coverage、对白和 Camera Setup 的 ID/顺序连续且相互回指。
-- 所有必需剧情事件都有唯一镜头落点；没有无来源、无证据或被重复覆盖的关键事件。
-- 同场相邻 Panel、Setup 和 Beat 的 `after_state → before_state` 完全相等；换场必须有明确桥接，不允许无解释硬跳。
-- 对白全局顺序唯一，并与事件和镜头一致；同一镜头内不回退顺序。
-- 参考槽位、关键人物数、主动作数、运镜数和对白行数不超过预算。
-- v2 中每个 Panel 恰好有一条 `generation.panel_plans`，顺序与 Panel 一致；运行时引用等于当前 Panel 各 Setup 参考的有序并集，且与仅规划资产不重叠。
-- I2V 只接受一个精确首帧来源；FL2V 只按首帧、尾帧顺序接受两个来源；T2V 不接受视觉参考；`board.*` 只能出现在 R2V 的运行时引用中。
-- 生成文字策略显式选择（`none` / `prompt` / `post`）；本项目若 `postproduction: "none"`，不得登记 `text_strategy: "post"`，需要出现的真实文字必须用 `prompt` 并在已确认的 H3 提示词中逐字写清，LFO 不负责补字或替换。
+预检只阻断会让执行包无法运行或破坏 Panel 接力的错误：
 
-## v2 生产准备度闸门
+- JSON 结构、ID、顺序和跨区域引用完整。
+- 每个 Panel 为 4–15 秒，目标总时长等于 Panel 时长之和。
+- `must_show` / `must_explain` 事件都有唯一镜头落点，镜头有来源、证据和前后状态。
+- 同场相邻 Panel 的状态链相接；换场有明确桥接，不能无解释跳转。
+- 对白顺序、Setup 归属和已确认的文字策略可执行。
+- 每个 Panel 恰好一条 `generation.panel_plans`；operation、首尾帧和引用槽位相互一致。
+- I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 必须在创作阶段锁定一张 `storyboard_board.<panel>` 及其 `storyboard_layout`。
 
-### `generation.panel_plans` 字段
+预检不做最终视频评分，不计算对白关键路径、不要求形容词计数，也不生成候选片、恢复记录或独立锁文件。
 
-每个 Panel 的记录使用以下结构：
+## `generation.panel_plans`
+
+每个 Panel 使用一个最小计划：
 
 ```json
 {
   "panel_id": "P002",
   "operation": "video.image_to_video",
   "visual_asset_policy": "none",
+  "storyboard_layout": null,
   "first_frame_source": "boundary.P001.last_frame",
   "last_frame_source": null,
   "runtime_input_keys": ["boundary.P001.last_frame"],
-  "planning_only_asset_keys": ["board.P002"],
-  "reason": "同场连续，使用上一 Clip 通过版真实尾帧即可锁定起点。"
+  "planning_only_asset_keys": [],
+  "reason": "同场连续，使用上一 Panel 接受后的真实尾帧锁定起点。"
 }
 ```
 
-- `operation` 只能是 `video.text_to_video`、`video.image_to_video`、`video.first_last_frame` 或 `video.reference_to_video`。
-- `visual_asset_policy` 只能是 `none`、`board`、`scene_keyframe` 或 `last_frame`，表示 STEP 3 需要物化的资产，不是 operation 别名。
-- `first_frame_source` / `last_frame_source` 只填精确帧来源的 asset key；不适用时必须为 `null`。
-- `runtime_input_keys` 是 Clip 级最小引用集，必须与该 Panel 的 Setup `reference_keys` 有序并集完全一致，并不超过 `generation.limits.reference_slots`。
-- `planning_only_asset_keys` 用于保留既有分镜板或审阅资产；这些 key 不得同时出现在 `runtime_input_keys` 或 Setup `reference_keys` 中。
-- `reason` 说明为什么该 operation 和资产策略是最小且充分的控制集；“已经有分镜板”不是有效理由。
+`operation` 只能是 `video.text_to_video`、`video.image_to_video`、`video.first_last_frame` 或 `video.reference_to_video`。`visual_asset_policy` 只能是 `none`、`storyboard_board`、`scene_keyframe` 或 `last_frame`。帧来源只能引用实际 asset key；`runtime_input_keys` 是当前 Panel 的最小引用集，不能混入只供审阅的规划资产。
 
-`production.profile` 的默认目标是无后期、逐字对白：
+`storyboard_board` 是本 Skill 的 R2V 视觉资产策略。R2V Panel 必须在 STEP 1 写入规范的 `storyboard_layout: "rowsxcolumns"`，例如 `1x2`、`2x2` 或 `2x3`，且行数乘列数为 2–6；其他 operation 的该字段必须为 `null` 或省略。STEP 3 按此布局一次生成或复用一张 `storyboard_board.<panel>`，不能生成 `storyboard_frame.*` 独立格子，也不能在事后拼板。
 
-- `speech_units_per_second` 与 `punctuation_pause_ms` 用于没有录音时的保守时长估算；已有配音则填写 `measured_duration_ms`。
-- `head_guard_ms`、`tail_guard_ms` 为进出镜和尾帧接力保留安全空间；`turn_gap_ms` 防止相邻说话人抢拍。
-- `safety_margin_ratio` 对对白、串行动作和必要停顿的关键路径整体加余量。
-- `production.speakers` 为每个实际发声角色登记稳定 `id`、`character_id`、声线性别和年龄段。
-- 每句 `dialogue` 增加 `speaker_id`、`planned_start_ms`、`planned_end_ms`、`allow_overlap`，每个 Setup 增加 `start_ms`、`end_ms` 和 `action_schedule`。校验器还会检查对白时窗是否容纳测量/估算时长、是否越过 Setup 保护区、是否出现未声明的说话人或动作。
+`storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。`generation.limits.reference_slots` 统计最终实际输入数，执行包 `validate` 仍负责确认后端能力。
 
-关键路径计算为：
+## 接力与执行包
 
-```text
-required = (Σ对白时长 + Σ说话人间隔 + 串行主动作时长 + 并行动作最长时长)
-           × (1 + safety_margin_ratio)
-           + head_guard_ms + tail_guard_ms
-```
+Panel 按顺序生成。当前 Panel 只有在上一 Panel 已 ACCEPT 后才启动；调用方使用现有 ffmpeg 从已接受视频提取真实尾帧，再把它作为下一 Panel 的首帧输入。不能用文字描述代替真实尾帧。
 
-`required > Setup 可用时长` 就在前置阶段失败。它是一次性规划错误，不应等 H3 或 LFO 生成后才发现；进入生产锁后不再回退重排。
+每个 Panel 编译一份只含一个 Clip 的独立 `execution-package.json`。每份包的锁值是该文件的精确文件字节 SHA-256，并通过运行时的 `--approved-sha256 <hash>` 传入；不再维护 prompt manifest 或独立 production lock。任何包内容变化都必须重新取得批准并重新计算 hash。
 
-脚本会一次返回全部问题，方便在一个创作编辑周期内修完；它不是对最终视频逐帧打分的 QC，也不要求为了轻微偏差重复生成。
+## 输出
+
+通过预检后，按本文件和故事板编译一次执行包。视频阶段只保留每个 Panel 的 ACCEPT/REJECT 结果和已接受媒体路径；REJECT 或执行错误即停止，是否重新开始由用户或调用方明确决定。全部 Panel 接受后只做一次最终组装检查，确认视频可播放、顺序正确、基本音频存在。

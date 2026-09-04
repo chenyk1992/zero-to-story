@@ -6,7 +6,7 @@ Write all six rewrite sections in English. Preserve the original language only f
 
 **Description detail:** Make `detailed_description` as detailed and explicit as possible. For each shot, clearly establish the current composition, subject appearance and position, environment and lighting, actions and state changes, camera movement, current sound, and the points where referenced content actually appears or takes effect. Avoid reducing the description to a plot summary or a list of reference relationships.
 
-> The basic formats for shots, camera movement, speakers, dialogue, and ordinary sound are shared with the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA). This guide focuses on the reference labels, analysis sections, and format differences specific to full-reference mode.
+> The basic formats for shots, camera movement, speakers, dialogue, and ordinary sound are shared with the Video Prompt Writing Guide (T2VA / I2VA / FL2VA). This guide focuses on the reference labels, analysis sections, and format differences specific to full-reference mode.
 
 ## 1. Overall Structure
 
@@ -70,8 +70,10 @@ If an image is used only to define a character, scene, costume, or style, do not
 When an image acts as a storyboard or shot-planning reference, state which shots it maps to and what planning information it provides:
 
 ```text
-<Picture 3> is a storyboard reference for [Shot 1] and [Shot 2], defining their viewpoint, subject placement, and shot order.
+<Picture 3> is the single input image containing the approved variable-grid storyboard board for [Shot 1] and [Shot 2], defining their ordered viewpoints, subject placement, and state changes.
 ```
+
+A self-contained variable-grid storyboard board is one source image and therefore receives exactly one `<Picture N>` label, even when it contains several cells or informs several shots. Follow the layout and row-major cell mapping supplied by the approved director plan. Do not assign labels to individual cells, request cropped cell images, or treat the cells as additional input assets. The board is a planning and consistency reference, not an exact first frame, keyframe, or last frame, unless the upstream plan separately supplies an actual frame asset for that purpose under a supported keyframe mode.
 
 ### 2.3 `<Video N>`
 
@@ -212,17 +214,17 @@ This is the main body of a full-reference rewrite. It describes visuals, actions
 
 ### 5.1 Basic Format
 
-The basic format follows the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA):
+The basic format follows the Video Prompt Writing Guide (T2VA / I2VA / FL2VA):
 
 - Write the body in English. Preserve the original language of dialogue, lyrics, and visible text.
-- `[Shot 1]` marks the opening shot and has no timestamp. Later shots use `[Shot N] At MM:SS.mmm, ...` to mark cut times.
+- `[Shot 1]` marks the opening shot and must be followed immediately by prose, never by `At 00:00.000`, `From 00:00.000`, a time range, or any other timestamp. Its end is implied by the next header. Later shots use `[Shot N] At MM:SS.mmm, ...` to mark approved cut times. Treat any time expression in the first shot header as a format error and remove it before returning.
 - Write camera movement as natural English within the current shot, including movement type, amplitude, and speed when they need to be expressed.
 - Give vocal sources stable `(S1)`, `(S2)`, and subsequent IDs. Write dialogue and lyrics as `<d>[Language] ...</d>`.
 - Use `<scenetrans>`, `<cutoff>`, and the corresponding continuity descriptions for dialogue crossing a cut, speech truncated by the video ending, and continuous audio across shots.
 
-The `[Shot N]` sequence follows the approved Camera Setup plan, not the six cells of a storyboard board. Consecutive Beat moments assigned to one Setup remain inside one shot; introduce a new timestamp only when the camera setup or edit viewpoint changes.
+The `[Shot N]` sequence follows the approved Camera Setup plan, not the number of cells in a variable-grid storyboard board. Consecutive Beat moments assigned to one Setup remain inside one shot; introduce a new timestamp only when the camera setup or edit viewpoint changes.
 
-For complete rules and examples covering camera vocabulary, group speech, voice-over, dialogue across cuts, and visible text, see the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA).
+For complete rules and examples covering camera vocabulary, group speech, voice-over, dialogue across cuts, and visible text, see the Video Prompt Writing Guide (T2VA / I2VA / FL2VA).
 
 ### 5.2 Full-Reference Mode Differences
 
@@ -255,6 +257,8 @@ the shot's keyframe corresponds to <Picture 2>
 the shot ends on <Picture 3>
 ```
 
+Do not use those concrete-frame phrases for a storyboard board. Cite its `<Picture N>` label as a planning anchor for the relevant shot composition, action order, or state relationship; do not describe the composite grid, cell dividers, or the whole board as a visible target-video frame.
+
 When editing or continuing an original video, cite `<Video N>` naturally where its source state, structure, or continuation relationship applies. Cite `<Audio N>` in the shot or semantic phase where the audio relationship is active.
 
 ### 5.4 Speakers, Audio Sources, and Dialogue
@@ -281,7 +285,7 @@ Assign `(Sx)` once according to the order of actual vocal events in the target v
 
 ## 6. `overall_soundscape` and `non_diegetic_music`
 
-The definitions of these two sound categories follow the Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA).
+The definitions of these two sound categories follow the Video Prompt Writing Guide (T2VA / I2VA / FL2VA).
 
 `overall_soundscape` summarizes ambience and physical sounds across the full video. Dialogue, singing, and sound events synchronized to a particular shot remain in `detailed_description`:
 

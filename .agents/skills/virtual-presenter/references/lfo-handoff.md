@@ -2,24 +2,25 @@
 
 ## 边界
 
-Skill 只交付公共执行包和已确认素材语义。LFO Runtime 负责素材导入、后端选择、生成、标准化、QC、时间线、音频和导出；Skill 不写数据库、ComfyUI 节点、模型路径、内部素材 ID 或平台缓存路径。
+Skill 只交付公共执行包和已确认素材语义。LFO Runtime 负责素材读取、后端选择和同步调用官方 ComfyUI/comfy-cli；调用方负责最小语义 QC、上一条完整 `ACCEPT` 视频接力和最终组装，只有其他下游 operation 明确需要精确首帧时才提取真实尾帧。Skill 不写数据库、ComfyUI 节点、模型路径、内部素材 ID 或平台缓存路径。
 
 适配器入口固定为：
 
 - lfo.skill_adapter.virtual_presenter.build_shot_package
 - lfo.skill_adapter.virtual_presenter.build_assembly_package
 
-这两个函数负责把已确认的 Presenter Plan/Shot Contract 转成 LFO 可校验的执行包。若运行环境尚未提供模块或函数，保持计划为 暂停 并报告缺失接口；不要在 Skill 目录里复制一个“伪适配器”。
+这两个函数负责把已确认的 Presenter Plan/Shot Contract 转成 LFO 可校验的执行包。若运行环境尚未提供模块或函数，立即停止并报告缺失接口；不要在 Skill 目录里复制一个“伪适配器”。
 
-## Shot package 约定
+## Shot/Panel package 约定
 
-对每个画幅和 shot 调用 build_shot_package，传入已经确认的 Shot Contract、H3 最终提示词、素材语义映射、项目标识、revision 和连续性信息。函数的具体 Python 签名由仓库适配器定义；Skill 不猜测位置参数，优先按仓库公开的命名参数或 Builder 使用方式调用。
+每个 Shot/Panel 单独调用 `build_shot_package`。Shot Contract、H3 最终提示词、素材语义映射、项目标识和输出策略先写入已确认的 `plan`；函数只额外接收目标 `shot_id`、可选的上一条完整 ACCEPT 视频 URI 和 package revision。每个生成包只含当前 Panel 的一个 Clip；不要把多个 Panel、跨 Panel dependencies 或最终组装塞进同一生成包。
+每个 Panel package 和最终 assembly package 都直接写在 `workspace/projects/<project_id>/` 项目根目录，使用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要把它们分散到 Panel 子目录；这样 `accepted_clips` 中的 `outputs/<run_id>/...` URI 对所有包都保持可解析。
 当前仓库适配器公开的命名入口为：
 
     build_shot_package(plan, shot_id, *, previous_clip_uri=None, package_revision=1)
     build_assembly_package(plan, accepted_clips, *, package_revision=1)
 
-shot plan 至少提供 project、inputs、output、shots 和 approval；shot 提供 shot_id、sequence、duration_ms、prompt、environment_view_uri；组装使用已接受片段的 shot_id、sequence、duration_ms 和 package-relative uri。若仓库接口发生变化，先读取实现和测试再更新本 Skill，不把这些字段猜写到 LFO 内部。
+shot plan 至少提供 project、inputs、output、shots 和 approval；当前 shot 提供 shot_id、sequence、duration_ms、prompt、environment_view_uri；组装使用已接受片段的 shot_id、sequence、duration_ms 和 package-relative uri。若仓库接口发生变化，先读取实现和测试再更新本 Skill，不把这些字段猜写到 LFO 内部。
 
 素材语义映射固定如下，不能因为缺失一项而移动编号：
 
@@ -31,45 +32,44 @@ shot plan 至少提供 project、inputs、output、shots 和 approval；shot 提
 | ref_audio_0 | 声音参考 | `<Audio 1>` |
 | ref_video_0 | 同画幅上一条已接受片 | `<Video 1>` |
 
-首片没有上一条接受片时省略 ref_video_0，绝不拿 contact sheet 或其他图片填补。第二条起，只有 PASS 或用户明确接受的 REVIEW 输出才能成为同画幅下一条的 ref_video_0；横竖画幅维护独立连续性链。上一条的路径和素材语义保持可追溯，不能把正在重做的失败片当作连续性输入。
+首片没有上一条接受片时省略 `ref_video_0`，绝不拿 contact sheet 或其他图片填补。后续 Panel 只使用同画幅上一条完整 `ACCEPT` 视频；`ref_video_0` 是普通连续性参考，不等于精确 `first_frame` 尾帧锁。上一条的路径和素材语义保持可追溯，不能把失败或被拒绝的输出当作连续性输入。需要另一画幅或精确首帧 operation 时由上游另行建立对应序列，不在 virtual-presenter 适配器内猜测切换。
 
-存在 ref_video_0 时默认不再附加 ref_audio_0，让 Presenter 继承上一片视频的配对音轨。只有 Scene D 对比确认声音评分不下降且连续性不降低，才在 Shot Contract 设 `include_voice_reference: true`，让适配器同时映射独立声音参考。
+存在 `ref_video_0` 时默认不再附加 `ref_audio_0`，让 Presenter 继承上一片视频的配对音轨；只有当前 Shot Contract 明确要求独立声音参考时，才设置 `include_voice_reference: true`，让适配器同时映射 `ref_audio_0`。
 
-每个包至少记录 project_id、package kind、shot_id、画幅、duration、prompt revision、references、dependencies 和 output 语义。包内的 duration 必须与 Shot Contract 相同且在 4–15 秒；任何修改都提升 revision。
+每个包至少通过现有公共字段记录 `project.project_id`、`package_id`、Clip `operation`、`source_context.shot`、画幅、duration、prompt、references 和 output 语义；不要添加不存在的 `package kind` 字段。包内的 duration 必须与 Shot Contract 相同且在 4–15 秒；包发生修改时重新构建并重新取得文件 hash，不维护额外的 lock/manifest 或重做记录。
 
-## validate、plan、execute
+## validate → execute
 
-每个 shot package 生成后依次运行：
+每个 Shot/Panel package 生成后独立执行：
 
-1. lfo validate package；
-2. lfo plan package；
-3. 读取 resolved references，核对 `ref_image_0/1/2`、`ref_audio_0`、后续 `ref_video_0` 与 `<Picture 1/2/3>`、`<Audio 1>`、`<Video 1>`；
-4. 把 validate 和 plan 的摘要写回 presenter_plan.md；
-5. 检查本次执行是否落在已记录授权范围内，再调用 LFO execute。
+1. 读取 resolved references，核对 `ref_image_0/1/2`、`ref_audio_0`、需要时的 `ref_video_0` 与 `<Picture 1/2/3>`、`<Audio 1>`、`<Video 1>`；
+2. 运行 `python -m lfo.cli.main validate <panel-execution-package.json>`，取得结果中的 `package_sha256`；
+3. 由用户批准该完整文件字节 SHA-256（exact file SHA-256）；
+4. `plan` 只在需要查看后端、工作流或引用诊断时运行，不是执行前置条件；
+5. 启动当前 Panel 的隔离执行单元，运行 `python -m lfo.cli.main execute <panel-execution-package.json> --approved-sha256 <package_sha256>`，同步等待官方 ComfyUI `comfy-cli` 完成。
 
-计划通过不等于执行授权。完整计划确认授权两个画幅的首片；两个首片分别确认后，授权未改变方案的剩余 Shot、QC 和最终组装自动推进。授权记录包含时间、package revision、画幅、范围和用户原文/摘要；超出范围时暂停。执行失败按 LFO 恢复规则处理，不在 Skill 中直接改数据库或复制 CAS。
+每个 Panel 都必须独立 `validate`，使用其返回的 `package_sha256` 完成用户批准，并由 `execute` 重新核对自己的文件 hash；不使用跨 Panel 的预检或锁文件。执行包未获用户批准、hash 不一致或引用不完整时立即停止。
 
-## 两个画幅的首片
+## Panel 串行执行
 
-完整 Presenter Plan 确认后，为每个目标画幅各构建并计划 S001。分别展示两个输出，分别记录用户的明确接受依据和 baseline。两者均确认后，剩余 shot 按 Shot Plan 自动生成、QC 和串接；不要求用户逐片确认。
+Presenter Plan 确认后，按 Shot/Panel 顺序逐个构建、validate、取得并批准 `package_sha256`、执行。每个 Panel 建立一个独立的短生命周期执行单元；前一个同步完成并返回结果后，才启动下一个。执行输入只包含当前 Panel 的 package 路径、批准 hash、输出位置和可选的上一条完整 `ACCEPT` 视频 URI；具体运行机制由宿主工具自行决定。
 
-若任一首片不接受，允许只针对对应画幅修订并重做；两个画幅的首片都通过前不启动剩余片。若用户改变方向、区域、角色、声音、时长、画幅或表演预算，所有受影响 package 作废，提升 revision，回到直接上游确认。
+调用方对当前输出只做最小可播放与明显内容错误检查，QC 决策只有 `ACCEPT` 或 `REJECT`；校验或执行失败记为 `ERROR`。下一条 Presenter Panel 将当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考。只有其他下游 operation 明确需要精确首帧时，才从实际输出提取真实末帧并绑定。`ERROR` 或 `REJECT` 立即停止，不自动重试、不把失败输出加入 accepted 列表；需要重做时重新构建当前 Panel package 并重新批准其 hash。
 
 ## Assembly package
 
-所有目标画幅的片段均已通过 QC（或用户明确接受 REVIEW），并且没有暂停项后调用 build_assembly_package。传入已接受片段的有序清单、画幅、音频策略、字幕/文案语义、project_id 和 revision；不要让组装器重新生成语义镜头。
+全部 Panel 都 `ACCEPT` 后才调用 `build_assembly_package(plan, accepted_clips, *, package_revision=1)`。目标画幅、输出策略、字幕和 `project_id` 已写在 `plan` 中；`accepted_clips` 只提供已接受片段的 `shot_id`、`sequence`、`duration_ms`、package-relative `uri` 及可选字幕覆盖。不要让组装器重新生成语义镜头，也不要把未接受或被拒绝的片段混入清单。
 
-最终视频后端固定为 video.passthrough：片段顺序、每段时长、音频/字幕时间线和输出目录交给 LFO Runtime 的公共契约。Assembly package 同样依次 validate、plan；若没有改变已确认计划或 baseline，则沿用自动推进授权执行。最终输出必须遵守 LFO 的项目 Run artifact layout；Skill 不在 workspace 根目录创建 runs 或 exports。
+最终视频后端固定为 `video.passthrough`：片段顺序、每段时长、音频/字幕时间线和输出目录交给 LFO Runtime 的公共契约。Assembly package 也要独立运行 `validate`，取得其返回的 `package_sha256`，由用户批准该完整文件字节 SHA-256 后，再运行 `python -m lfo.cli.main execute <assembly-package.json> --approved-sha256 <package_sha256>` 一次。其 accepted video URI、音频和字幕 URI 都相对同一项目根目录下的 assembly 文件；最终输出必须遵守 LFO 的项目 Run artifact layout；Skill 不在 workspace 根目录创建 runs 或 exports。
 
 ## 接口假设与故障处理
 
-当前 Skill 假设适配器公开上述两个入口，并能接受“Shot Contract + 提示词 + 引用语义 + project/revision”的构建请求，返回可被 LFO validate/plan 的 package；以及 assembly 能接受已接受片段列表并将 backend 设为 video.passthrough。具体字段名、包文件位置、字幕字段和项目路径以仓库适配器/公共契约为准。
+当前 Skill 使用上述两个入口：生成入口从已确认 `plan` 读取 Shot Contract、提示词、引用语义、project 和 output；assembly 入口从同一 `plan` 与全部已接受片段列表构建 `video.passthrough` 包。具体字段名、包文件位置、字幕字段和项目路径以仓库适配器/公共契约为准。
 
-若 validate、plan、适配器导入、引用解析或执行授权检查失败：
+若 validate、hash、适配器导入、引用解析、comfy-cli 执行或最小 QC 失败：
 
-- 保留 presenter_plan.md、失败 package 和错误摘要；
-- 不执行、不把失败片作为 accepted；
-- 只在当前阶段有明确修复依据时提升 revision 后重建；
-- 若缺少外部能力或同一失败连续发生，状态置为 暂停 并向用户说明需要的选择。
+- 立即停止当前 Panel，不执行下一 Panel 或最终组装；
+- 不把失败输出作为 accepted，也不自动重试、自动修改提示词或维护恢复记录；
+- 需要重做时，由调用方明确重新构建当前 Panel package，并重新取得用户批准的文件 hash。
 
 

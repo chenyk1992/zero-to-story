@@ -1,6 +1,6 @@
 # Handoff 对照表：短剧剧本 → 项目桥接包
 
-本文件供 `/桥接` 使用。目标：让 `episodes/epNNN.md` 伴生出可交给 **zero-to-story** 与 **LFO intake** 的产物，而不改写编剧正文、不生成完整 `storyboard.json`。
+本文件供 `/桥接` 使用。目标是把 `episodes/epNNN.md` 的可拍事实整理成创作侧简报，交给 **zero-to-story** 继续完成故事板、视觉资产、Panel、H3 提示词和执行包。短剧编剧 Skill 不调用 LFO、不生成执行包，也不决定视频 operation。
 
 ---
 
@@ -9,8 +9,9 @@
 | 层 | 路径 | 消费者 | 是否改写 ep 剧本 |
 |----|------|--------|------------------|
 | 编剧主产物 | `episodes/epNNN.md` | 人类审剧 / 导出 | 否 |
-| 桥接包 | `handoff/epNNN/*` | zero-to-story / LFO | 否（只读 ep） |
-| 管线 JSON | `workspace/.../storyboard.json` | `lfo run` | 本 skill **不产出** |
+| 桥接简报 | `handoff/epNNN/storyboard_brief.md` | zero-to-story | 否（只读 ep） |
+| 可拍角色卡 | `handoff/characters_visual.md` | zero-to-story / 资产阶段 | 否（抽取事实） |
+| 剪辑说明 | `handoff/epNNN/cut_notes.md` | zero-to-story / 用户 | 否（补充取舍） |
 
 ---
 
@@ -21,42 +22,38 @@
 | 集标题 + logline 切片 | `storyboard_brief.md` → 故事梗概 | 2–3 句，只含本集可拍主线 |
 | `characters.md` 叙事档案 | `characters_visual.md` + brief 角色列表 | 只留外貌/服饰/标志特征/关键道具；动机弧光可附一行「表演提示」但非必填 |
 | 场次标题（地点·时间·内外） | brief「场景列表」 | 3–6 场压成 **1–2** 个场景；合并同地点多场次 |
-| △ 镜头描写 | brief「分镜列表」画面描述 | 每条必须补全空间关系（前景/中/远、左/右/中） |
-| 景别中文（全景/中景/近景/特写…） | 分镜表「景别」列 | 保持中文；生成 LFO JSON 时再映射英文 enum |
-| 角色对白（15–25 句） | 分镜表「角色台词」 | **不逐句上镜**；每镜 0–1 句关键台词，其余写「无」 |
-| ♪ 音乐提示 | cut_notes 或分镜「音效设计」 | 默认环境声/动作声；叙事 BGM 不强制进镜 |
-| 🎣 钩子 / 下集预告 | **仅** `cut_notes.md` | 禁止写入分镜表与 intake constraints |
-| 💰 付费墙信息 | cut_notes | 同上 |
-| 情绪强度 / 关键词 | intake `mood` / `custom` + brief 项目信息 | 与本集一致 |
+| △ 镜头描写 | brief「候选 Panel/节拍」画面描述 | 每条补全前景/中/远、左/右/中、主体关系和可见结束状态 |
+| 景别中文（全景/中景/近景/特写…） | 候选 Panel 的创作事实 | 保持原意；Camera Setup 和 operation 由 zero-to-story 按当前关系确定 |
+| 角色对白（15–25 句） | 候选 Panel 的对白栏或 `cut_notes.md` | **不逐句上镜**；每个可拍节拍保留必要关键句，逐字对白交下游 Panel 计划确认 |
+| ♪ 音乐提示 | `cut_notes.md` 音频意图 | 区分对白、环境声、动作声、外部口播和临时音乐；不把意图写成已存在的音频文件 |
+| 🎣 钩子 / 下集预告 | **仅** `cut_notes.md` | 不伪装成模型素材或最终字幕，除非用户另行确认字幕内容 |
+| 💰 付费墙信息 | cut_notes | 作为叙事节奏提示，不进入执行包的隐藏控制字段 |
+| 情绪强度 / 关键词 | brief 项目信息和节奏意图 | 与本集一致，不生成分数或运行时 QC 等级 |
 | 全剧类型/基调 | `handoff/project.json` | 剧级默认值 |
 
 ---
 
-## 3. 时长与镜头数（对齐 zero-to-story）
+## 3. 时长与 Panel 化
 
-| 目标时长 | `target_duration_ms` | 目标镜头数 |
-|----------|----------------------|------------|
-| 15 秒 | 15000 | 8 |
-| 30 秒 | 30000 | 15 |
-| 45 秒 | 45000 | 22 |
-| 60 秒 | 60000 | 29 |
+桥接可保留用户希望的本集总时长（常见 15–60 秒）和 9:16 画幅，但不要把整集当作一个生成 Clip，也不要用固定镜头数替代 Panel 计划。
 
-竖屏短剧默认：**45 秒 / 22 镜 / 9:16**。用户另有指定则覆盖，并同步改 brief 与 intake。
+- zero-to-story 按场景因果和 Camera Setup 将本集拆成多个 Panel；每个 Panel 目标时长为 4–15 秒，并对应一个 Clip。
+- 相邻 Panel 的连续关系、真实首尾帧和 operation 在 zero-to-story 的故事板/蓝图中确认；桥接只提供可见事实和意图。
+- 本集可拍节拍数量不是视频请求数量；同一 Panel 内多个 Beat 可以属于同一个 Camera Setup。
 
 ---
 
-## 4. 约束默认值（intake）
+## 4. 创作约束
 
 | 字段 | 短剧默认 |
 |------|----------|
 | `aspect_ratio` | `9:16` |
 | `delivery_width` / `height` | 1080 / 1920 |
-| `max_characters` | 2–3（本集出镜） |
-| `max_scenes` | ≤2 |
-| `pacing` | 按基调：悬疑偏 `fast`/`medium`，轻喜偏 `medium` |
-| `audio_policy` | `full`（对白+音效）；纯画面实验用 `effects_only` |
-| `sources[].type` | `screenplay` |
-| `sources[].content` | 「本集视觉剪辑版」摘要正文（含精简场次与关键对白），可注明源文件相对路径 |
+| 角色 | 每集优先 2–3 个主要出镜角色；超出时在 `cut_notes.md` 说明取舍 |
+| 场景 | 每集最多 2 个主要可拍场景，合并同地点场次 |
+| 节奏 | 按基调给出 `fast` / `medium` / `slow` 的文字建议，不写模型或运行时参数 |
+| 音频 | 写清对白、环境声和外部口播的意图；实际音频文件由下游确认并在最终 assembly 中绑定 |
+| 字幕 | 只有用户明确要求时才准备字幕内容；画面中的标题、按钮和动效文字不等于字幕 |
 
 ---
 
@@ -84,24 +81,20 @@
 
 ---
 
-## 7. 复制到 LFO workspace（人工/agent）
+## 7. 交给 zero-to-story
 
-对齐 `workspace/<小说名>/<章节名>/`：
-
-| 短剧侧 | workspace 侧 |
-|--------|----------------|
-| 剧名 `{drama_title}` | `workspace/{drama_title}/`（小说名根目录） |
-| 第 N 集 `epNNN` | `chapter_NN/`（如 ep001 → `chapter_01`） |
-| intake `project_id` | 必须 `{drama_title}-chapter_NN`（剧级 `handoff/project.json` 只用 `novel_id`，不写章节 project_id） |
+默认保留桥接源文件：
 
 ```
-.short-drama/{drama_title}/handoff/ep001/intake.json
-  → workspace/{drama_title}/chapter_01/intake.json
-
 .short-drama/{drama_title}/handoff/ep001/storyboard_brief.md
-  → workspace/{drama_title}/chapter_01/storyboard_brief.md
+.short-drama/{drama_title}/handoff/characters_visual.md
+.short-drama/{drama_title}/handoff/ep001/cut_notes.md
 ```
 
-示例：《午夜不接单》第 1 集 → `workspace/午夜不接单/chapter_01/`
+用户明确开始视频项目后，由 zero-to-story 或调用方把已确认的 brief、视觉素材和最新创作文件放入：
 
-随后走现有流程：审 brief →（可选）zero-to-story 视觉链路，或 LFO decompose → `storyboard.json` → `lfo run`。
+```
+workspace/projects/<project_id>/
+```
+
+随后按 zero-to-story 的 Panel 流程：创作确认 → 单 Panel H3 提示词 → 单 Panel package → `validate`/批准精确文件字节 SHA-256 → 串行 `execute` → `ACCEPT` 后按需提取真实尾帧 → 全部 Panel `ACCEPT` 后一次 `video.passthrough` assembly。短剧编剧 Skill 不复制、重命名或删除用户媒体，也不维护执行状态。

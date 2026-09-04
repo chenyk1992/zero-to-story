@@ -67,4 +67,7 @@ def test_report_contains_revision_backend_hash_and_qc(tmp_path) -> None:
     assert report["clips"][0]["qc"]["passed"] is True
     assert report["clips"][0]["qc"]["scope"] == ["generation_quality"]
     assert report["hash_lineage"][0]["file_hash"] == "video-hash"
+    assert "attempts" not in report["tasks"][0]
+    assert "recovery" not in report["tasks"][0]
+    assert "audio_qc" not in report["clips"][0]
     json.dumps(report)

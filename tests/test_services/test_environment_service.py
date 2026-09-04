@@ -1,6 +1,8 @@
 ﻿"""Tests for EnvironmentService."""
 from __future__ import annotations
 
+import lfo.services.environment_service as environment_service_module
+from lfo.environment.discovery import DiscoveredEnvironment
 from lfo.services.environment_service import EnvironmentService
 
 
@@ -25,3 +27,38 @@ class TestEnvironmentService:
         custom.mkdir()
         service = EnvironmentService(machines_dir=custom)
         assert service.machines_dir == custom
+
+    def test_discover_and_create_populates_comfy_storage_from_root(
+        self, tmp_path, monkeypatch
+    ):
+        comfyui_root = tmp_path / "ComfyUI"
+        discovery = DiscoveredEnvironment(comfyui_root=comfyui_root)
+        monkeypatch.setattr(
+            environment_service_module,
+            "discover_environment",
+            lambda: discovery,
+        )
+
+        _, profile = EnvironmentService(machines_dir=tmp_path).discover_and_create_profile(
+            "local-windows", save=False
+        )
+
+        assert profile.storage.comfy_input == str(comfyui_root / "input")
+        assert profile.storage.comfy_output == str(comfyui_root / "output")
+
+    def test_discover_and_create_leaves_comfy_storage_empty_without_root(
+        self, tmp_path, monkeypatch
+    ):
+        discovery = DiscoveredEnvironment()
+        monkeypatch.setattr(
+            environment_service_module,
+            "discover_environment",
+            lambda: discovery,
+        )
+
+        _, profile = EnvironmentService(machines_dir=tmp_path).discover_and_create_profile(
+            "local-windows", save=False
+        )
+
+        assert profile.storage.comfy_input == ""
+        assert profile.storage.comfy_output == ""

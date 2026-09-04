@@ -296,12 +296,15 @@ class ExecutionStore:
 
     def __init__(self, db_path: pathlib.Path | str) -> None:
         self.db_path = pathlib.Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection | None = None
 
     def connect(self) -> sqlite3.Connection:
         """Get or create the SQLite connection."""
         if self._conn is None:
+            # Opening SQLite creates the database file.  Keep that write lazy
+            # so constructing a runtime (or running validate/plan) remains
+            # read-only until an operation explicitly needs durable state.
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = sqlite3.connect(
                 str(self.db_path),
                 timeout=30,
