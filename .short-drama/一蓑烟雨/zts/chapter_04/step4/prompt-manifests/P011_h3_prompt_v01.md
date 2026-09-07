@@ -1,0 +1,9 @@
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song historical realism, vertical 9:16. Begin exactly from <Picture 1>, the completed P010 tail: the mountain inn meal is over, Su Xun has finished saying that the capital tests more than examination questions, and the four family members remain seated in the same long-table order beneath warm oil lamps. Preserve their faces, robes, the nearly empty shared dishes, and the quiet room. This completed boundary has no new action and no repeated warning.
+
+Hold a fixed medium-wide group composition on the same side of the table for the full 12 seconds. Su Zhe, the reserved gray-robed near-adult, asks exactly once from 00:00.600 to 00:01.609 in a soft questioning male voice (S1): <d>[Chinese] 还有什么？</d> After a short natural pause, Su Xun looks across the three younger men and says exactly once from 00:01.900 to 00:07.611 in the same measured mature male voice (S2): <d>[Chinese] 人心。考场上的文章只考三天——考官心里的文章，写一辈子。</d> Synchronize each speaker's lips only to their own line; no overlap and no extra words. Su Shi, Su Zhe, and Chaoer listen without interrupting; Chaoer's posture is respectful but he remains a family member at the same table. Keep the oil lamps steady, do not introduce a new shot, and let the final seconds settle into four-person silence after the phrase “写一辈子”. No visible writing, subtitles, readable plaques, modern objects, or narrator. The end state is the unchanged table and a named human-hearted warning, ready for the hard cut to the capital.
+
+overall_soundscape: Quiet waystation room tone, low oil-lamp hiss, and faint ceramic settling continue beneath the two separated voices. Sleeves, breathing, and a small wooden table creak remain natural; there is no music, extra speech, or modern sound.
+
+non_diegetic_music: N/A

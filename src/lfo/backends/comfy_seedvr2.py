@@ -230,7 +230,7 @@ class ComfyUpscaleVideoHandler(TaskHandler):
                 selector_class_type=slot.selector_class_type,
                 input_name=slot.input_name,
             )
-            resolved[slot.binding_id] = resolver.resolve_binding(binding, mode="strict")
+            resolved[slot.binding_id] = resolver.resolve_binding(binding)
         return resolved
 
     @staticmethod

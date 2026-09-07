@@ -1,0 +1,17 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P012",
+  "plan_hash": "29bf497a609f873ebcda24e340908905a4662f69ad311270ed4d9083ac21fc8b",
+  "prompt_hash": "6fdf315081a19acb78139614cb4dffb23e66f2de6da737dd7d72c7f592575227",
+  "operation": "video.reference_to_video",
+  "duration_ms": 6000,
+  "prompt_path": "P012_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C020", "start_ms": 0, "end_ms": 3000}, {"id": "C021", "start_ms": 3000, "end_ms": 6000}],
+  "dialogue_events": [],
+  "references": [
+    {"label": "Subject 1", "slot": "ref_image_0", "media_type": "image", "asset_key": "character.chaoer"},
+    {"label": "Subject 2", "slot": "ref_image_1", "media_type": "image", "asset_key": "character.su_shi"},
+    {"label": "Picture 1", "slot": "ref_image_2", "media_type": "image", "asset_key": "board.P012"}
+  ],
+  "status": "draft_for_user_confirmation"
+}

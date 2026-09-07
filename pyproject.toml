@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：PyYAML 仅加入开发依赖，用于真实解析 Skill 配置。
 [project]
 name = "lfo"
 version = "1.0.0"
@@ -15,6 +16,7 @@ dev = [
     "pytest-timeout>=2.3",
     "ruff>=0.7",
     "pyright>=1.1",
+    "PyYAML>=6.0",
 ]
 
 [build-system]

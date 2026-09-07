@@ -1,16 +1,12 @@
 {
   "workflow_id": "h3_standard_r2v",
-  "version": "2.0.0",
+  "version": "4.0.0",
   "family": "h3_ref2va",
-  "description": "H3 Reference-to-Video (v2): adds ComfyMathExpression for auto frame-count calculation on 17k+5 grid.",
+  "workflow_mode": "r2v",
+  "description": "H3 VDN Stage-DMD 8-step Reference-to-Video-Audio: ApplyVDNH3 and MiniMaxH3SigmaShift with ComfyMathExpression frame-count calculation on the 17k+5 grid. VDN startup timing is currently unknown and is not represented by the resource profile.",
   "source_file": "h3_standard_r2v.json",
-  "workflow_hash": "1a842efbc592e156a1943f344999bf57e1500668391bdab40ab40b502248fea0",
+  "workflow_hash": "2b8417cf77b6bf93cb5695ff88b346b38a3c6a843a7bed57cdda78391458d2cc",
   "workflow_hash_algorithm": "lfo-wfj1-sha256-v1",
-  "binding_policy": "strict",
-  "production_ready": true,
-  "static_valid": true,
-  "runtime_compatible": true,
-  "smoke_tested": false,
   "frame_constraints": {
     "step": 17,
     "min_frames": 5,
@@ -109,11 +105,51 @@
       "role": "audio_vae",
       "filename": "minimax_h3_audio_vae_fp32.safetensors",
       "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/linear_branch/model.safetensors",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/adapters/default/adapter_model.safetensors",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/adapters/turbo/adapter_model.safetensors",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/metadata.json",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/model_spec.json",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/adapters/default/adapter_config.json",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/adapters/turbo/adapter_config.json",
+      "required": true
+    },
+    {
+      "role": "vdn_checkpoint",
+      "filename": "vdn/stage-dmd-step-250/linear_branch/config.json",
+      "required": true
     }
   ],
   "resource_profile": {
-    "cold_start_sec": 370.6,
-    "hot_start_sec": 370.0,
+    "cold_start_sec": 0.0,
+    "hot_start_sec": 0.0,
     "peak_vram_mb": 0
   },
   "generates_audio": true,
@@ -123,5 +159,8 @@
     "ref2va",
     "multi-reference",
     "auto-duration"
-  ]
+  ],
+  "production_ready": true,
+  "static_valid": true,
+  "runtime_compatible": false
 }

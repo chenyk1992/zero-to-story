@@ -1,0 +1,9 @@
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song historical realism in vertical 9:16. Start exactly from <Picture 1>, the completed P012 tail: Chaoer stands stopped at the LEFT side of the Kaifeng gate threshold, staring through the gate into the imperial-street and river depth; Su Shi is nearby on the RIGHT, and carts, bridge, sails, and pedestrians continue in the distance. Preserve the bright thin-cloud light, gray brick, period clothing, faces, and axis. This is a completed arrival state; do not replay the gate reveal.
+
+The fixed camera holds Chaoer as his eyes travel through the depth. From 00:00.400 to 00:01.871 he asks exactly once in an awed young male voice (S1), with a small breath before the question: <d>[Chinese] 这就是……京城？</d> His lips match only this line, then close. At 00:04.000, the shot cuts to a slow arc shot around the two men without crossing the established city-facing axis. Su Shi walks the short distance to stand beside Chaoer on the RIGHT while Chaoer remains on the LEFT; both face the street and river, their shoulders nearly aligned. Su Shi then says exactly once from 00:04.400 to 00:09.871 in a warm but ambitious youthful voice (S2): <d>[Chinese] 记住今天。总有一天，这座城里的人都会知道我们的名字。</d> Keep his gaze directed into the capital, not at camera, and keep Chaoer listening in stunned silence. End with the two side by side, left/right positions stable, city depth open ahead. No readable banner, subtitle, extra speech, or modern object.
+
+overall_soundscape: Cart wheels, hoofbeats, river wash, oars, layered footsteps, and muted market calls continue through the gate. The two spoken lines sit cleanly above the city sound; cloth and dust move naturally as Su Shi joins Chaoer, with no music or added voice.
+
+non_diegetic_music: N/A

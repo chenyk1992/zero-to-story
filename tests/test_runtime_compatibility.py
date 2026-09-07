@@ -5,6 +5,7 @@ import pathlib
 import pytest
 
 from lfo.core.workflow_registry import (
+    VDN_STAGE_DMD_STEP_250_FILES,
     WorkflowRegistry,
 )
 
@@ -18,6 +19,7 @@ MOCK_OBJECT_INFO = {
         "input": {
             "required": {
                 "unet_name": ["STRING", {"default": "model.safetensors"}],
+                "weight_dtype": ["STRING", {"default": "default"}],
             },
         },
         "output": ["MODEL"],
@@ -53,6 +55,42 @@ MOCK_OBJECT_INFO = {
         "display_name": "VAE Loader",
         "description": "Load a VAE model",
         "category": "loaders",
+    },
+    "ApplyVDNH3": {
+        "input": {
+            "required": {
+                "model": ["MODEL", {}],
+                "vdn_checkpoint": [["stage-dmd-step-250"], {}],
+                "apply_turbo_adapter": ["BOOLEAN", {"default": True}],
+                "strength": ["FLOAT", {"default": 1.0}],
+                "lora_mode": [["bypass", "merge"], {"default": "merge"}],
+                "branch_weights": [["auto", "stream", "cache_gpu"], {"default": "auto"}],
+                "retain_buffers": [["auto", "on", "off"], {"default": "auto"}],
+                "verbose": ["BOOLEAN", {"default": False}],
+                "attention_backend": [["grouped", "flex"], {"default": "grouped"}],
+            },
+        },
+        "output": ["MODEL"],
+        "output_name": ["MODEL"],
+        "name": "Apply VDN H3",
+        "display_name": "Apply VDN H3",
+        "description": "Apply VDN-H3 to a MiniMax-H3 model",
+        "category": "model_patch/video",
+    },
+    "MiniMaxH3SigmaShift": {
+        "input": {
+            "required": {
+                "model": ["MODEL", {}],
+                "shift_video": ["FLOAT", {"default": 12.0}],
+                "shift_audio": ["FLOAT", {"default": 3.0}],
+            },
+        },
+        "output": ["MODEL"],
+        "output_name": ["MODEL"],
+        "name": "MiniMax H3 Sigma Shift",
+        "display_name": "ModelSamplingMiniMaxH3",
+        "description": "Set the video/audio flow shifts",
+        "category": "model/patch/minimax",
     },
     # --- Expanded pipeline: conditioning ---
     "MiniMaxH3ImageToVideo": {
@@ -341,6 +379,16 @@ class MockComfyClient:
         return self._info
 
 
+def _materialize_vdn_model_root(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Create a complete lightweight VDN bundle below a model root."""
+    model_root = tmp_path / "models"
+    for filename in VDN_STAGE_DMD_STEP_250_FILES:
+        model_path = model_root / filename
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        model_path.write_bytes(b"test-vdn-resource")
+    return model_root
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -369,20 +417,22 @@ def registry(workflow_dir):
 # ---------------------------------------------------------------------------
 
 class TestRuntimeCompatibilityHappy:
-    def test_fl2va_runtime_compatible(self, registry):
+    def test_fl2va_runtime_compatible(self, registry, tmp_path):
         registry.register("h3_standard_fl2va")
         result = registry.check_runtime_compatibility(
             "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
+            model_dir=str(_materialize_vdn_model_root(tmp_path)),
         )
         assert result["compatible"] is True
         assert result["level"] == "RUNTIME_COMPATIBLE"
 
-    def test_r2v_runtime_compatible(self, registry):
+    def test_r2v_runtime_compatible(self, registry, tmp_path):
         registry.register("h3_standard_r2v")
         result = registry.check_runtime_compatibility(
             "h3_standard_r2v",
             comfy_client=MockComfyClient(),
+            model_dir=str(_materialize_vdn_model_root(tmp_path)),
         )
         assert result["compatible"] is True
         assert result["level"] == "RUNTIME_COMPATIBLE"
@@ -413,6 +463,33 @@ class TestRuntimeCompatibilityHappy:
 # ---------------------------------------------------------------------------
 
 class TestRuntimeCompatibilityFailures:
+    def test_runtime_rejects_graph_changed_after_registration(
+        self,
+        registry,
+        monkeypatch,
+    ):
+        registry.register("h3_standard_fl2va")
+        workflow_path = registry.workflow_dir / "h3_standard_fl2va.json"
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        workflow["8"]["inputs"]["prompt"] = "changed after registration"
+        workflow_path.write_text(json.dumps(workflow), encoding="utf-8")
+
+        def fail_if_requested(*args, **kwargs):
+            raise AssertionError("runtime lookup must not run after static failure")
+
+        monkeypatch.setattr(MockComfyClient, "get_object_info", fail_if_requested)
+        result = registry.check_runtime_compatibility(
+            "h3_standard_fl2va",
+            comfy_client=MockComfyClient(),
+        )
+
+        assert result["compatible"] is False
+        assert result["checks"][0]["name"] == "static_validation"
+        assert any(
+            check["name"] == "hash_match" and check["status"] == "fail"
+            for check in result["checks"]
+        )
+
     def test_missing_node_class(self, registry):
         """When a node class doesn't exist in ComfyUI."""
         registry.register("h3_standard_fl2va")
@@ -455,6 +532,89 @@ class TestRuntimeCompatibilityFailures:
         )
         assert prompt_check["status"] == "fail"
 
+    def test_workflow_environment_rejects_invalid_vdn_parameter(self, registry):
+        registry.register("h3_standard_fl2va")
+        bad_info = json.loads(json.dumps(MOCK_OBJECT_INFO))
+        bad_info["ApplyVDNH3"]["input"]["required"]["lora_mode"][0] = ["bypass"]
+
+        result = registry.check_runtime_compatibility(
+            "h3_standard_fl2va",
+            comfy_client=MockComfyClient(object_info=bad_info),
+        )
+
+        environment_check = next(
+            check for check in result["checks"] if check["name"] == "workflow_environment"
+        )
+        assert environment_check["status"] == "fail"
+        assert "ApplyVDNH3.lora_mode" in environment_check["message"]
+
+    def test_vdn_requires_configured_model_root(self, registry):
+        registry.register("h3_standard_fl2va")
+
+        result = registry.check_runtime_compatibility(
+            "h3_standard_fl2va",
+            comfy_client=MockComfyClient(),
+        )
+
+        assert result["compatible"] is False
+        root_check = next(
+            check for check in result["checks"] if check["name"] == "model_vdn_checkpoint_root"
+        )
+        assert root_check["status"] == "fail"
+
+    def test_vdn_bundle_missing_file_fails(self, registry, tmp_path):
+        registry.register("h3_standard_r2v")
+        model_root = _materialize_vdn_model_root(tmp_path)
+        missing = model_root / "vdn/stage-dmd-step-250/model_spec.json"
+        missing.unlink()
+
+        result = registry.check_runtime_compatibility(
+            "h3_standard_r2v",
+            comfy_client=MockComfyClient(),
+            model_dir=str(model_root),
+        )
+
+        assert result["compatible"] is False
+        missing_check = next(
+            check
+            for check in result["checks"]
+            if check["name"] == "model_vdn_checkpoint_vdn/stage-dmd-step-250/model_spec.json"
+        )
+        assert missing_check["status"] == "fail"
+
+    def test_base_models_are_validated_by_object_info_not_model_root(
+        self,
+        registry,
+        tmp_path,
+    ):
+        registry.register("h3_standard_fl2va")
+        model_root = _materialize_vdn_model_root(tmp_path)
+        object_info = json.loads(json.dumps(MOCK_OBJECT_INFO))
+        object_info["UNETLoader"]["input"]["required"]["unet_name"][0] = [
+            "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        ]
+        object_info["CLIPLoader"]["input"]["required"]["clip_name"][0] = [
+            "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        ]
+        object_info["VAELoader"]["input"]["required"]["vae_name"][0] = [
+            "minimax_h3_video_vae_fp16.safetensors",
+            "minimax_h3_audio_vae_fp32.safetensors",
+        ]
+
+        result = registry.check_runtime_compatibility(
+            "h3_standard_fl2va",
+            comfy_client=MockComfyClient(object_info=object_info),
+            model_dir=str(model_root),
+        )
+
+        assert result["compatible"] is True
+        assert not any(
+            check["name"].startswith("model_unet")
+            or check["name"].startswith("model_clip")
+            or check["name"].startswith("model_vae")
+            for check in result["checks"]
+        )
+
     def test_comfyui_unreachable(self, registry):
         registry.register("h3_standard_fl2va")
         result = registry.check_runtime_compatibility(
@@ -477,37 +637,46 @@ class TestValidationLevels:
         assert result["valid"] is True
         assert result["level"] == "STATIC_VALID"
 
-    def test_runtime_compatible_after_check(self, registry):
+    def test_runtime_compatible_after_check(self, registry, tmp_path):
         """After runtime check, level upgrades to RUNTIME_COMPATIBLE."""
         registry.register("h3_standard_fl2va")
         registry.check_runtime_compatibility(
             "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
+            model_dir=str(_materialize_vdn_model_root(tmp_path)),
         )
         result = registry.validate_workflow("h3_standard_fl2va")
         assert result["level"] == "RUNTIME_COMPATIBLE"
 
-    def test_smoke_tested_highest(self, registry):
-        """Smoke tested is the highest level."""
+    def test_manifest_fields_updated(self, registry, tmp_path):
         registry.register("h3_standard_fl2va")
         registry.check_runtime_compatibility(
             "h3_standard_fl2va",
             comfy_client=MockComfyClient(),
-        )
-        registry.mark_smoke_tested("h3_standard_fl2va")
-        result = registry.validate_workflow("h3_standard_fl2va")
-        assert result["level"] == "SMOKE_TESTED"
-
-    def test_manifest_fields_updated(self, registry):
-        registry.register("h3_standard_fl2va")
-        registry.check_runtime_compatibility(
-            "h3_standard_fl2va",
-            comfy_client=MockComfyClient(),
+            model_dir=str(_materialize_vdn_model_root(tmp_path)),
         )
         m = registry.get_manifest("h3_standard_fl2va")
         assert m.static_valid is True
         assert m.runtime_compatible is True
-        assert m.smoke_tested is False
+
+    def test_runtime_failure_clears_previous_compatibility(self, registry, tmp_path):
+        registry.register("h3_standard_fl2va")
+        model_root = _materialize_vdn_model_root(tmp_path)
+        first = registry.check_runtime_compatibility(
+            "h3_standard_fl2va",
+            comfy_client=MockComfyClient(),
+            model_dir=str(model_root),
+        )
+        assert first["compatible"] is True
+        assert registry.get_manifest("h3_standard_fl2va").runtime_compatible is True
+
+        second = registry.check_runtime_compatibility(
+            "h3_standard_fl2va",
+            comfy_client=MockComfyClient(fail_connect=True),
+            model_dir=str(model_root),
+        )
+        assert second["compatible"] is False
+        assert registry.get_manifest("h3_standard_fl2va").runtime_compatible is False
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +689,6 @@ class TestProductionReady:
         m = registry.get_manifest("h3_standard_fl2va")
         # Should be production_ready after successful registration
         assert m.production_ready is True
-        assert m.binding_policy == "strict_title_and_class"
 
     def test_not_ready_when_unregistered(self, registry):
         result = registry.validate_workflow("h3_standard_fl2va")

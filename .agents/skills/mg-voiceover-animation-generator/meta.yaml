@@ -1,9 +1,10 @@
+# GPT-6 适配变更说明：同步入口说明与当前授权复用规则，保留原有元数据结构。
 display-name-zh: MG 口播动画生成器
 version: 0.1.6
 summary-en: "Create reviewable H3 prompts for explainers, launches, demos, and feature walkthroughs before final animation generation."
 summary-cn: "基于口播、产品素材或主题需求，生成 H3 提示词并产出 MG 动画，适用于讲解与演示场景。"
-desc-en: "Create a complete H3 MG animation prompt for explainers, launches, demos, walkthroughs, concepts, and abstract themes. The user may provide product images, screenshots, voiceover text, audio, product documents, a real product, a fictional product name, or only a theme. The skill first clarifies missing voiceover, on-screen text, duration, ratio, style, and whether a product is real or fictional when needed. It then uses MG animation references to write a H3 prompt with delivery specs, product setup, visual style, narrative structure, timed shots, screen text, voiceover, element motion, transition bridges, brand or product rules, music, and subtle sound effects. The complete prompt is placed on the canvas as a Markdown document for review, and final H3 generation starts only after explicit approval."
-desc-cn: "面向需要制作 MG 动画讲解、产品发布、功能演示、App/SaaS 界面说明、概念产品和抽象主题表达的用户。用户可提供口播文案、配音音频、产品图、界面截图、产品资料或主题设定。Skill 会先判断素材类型、真实或虚构属性和缺失信息，再结合 MG 动画知识库确定视觉风格与叙事结构，生成包含规格、分镜节奏、屏幕文字、Voiceover、动效、转场、品牌规则和音频设计的 H3 提示词。提示词会先上画布供用户审阅，确认后才生成最终 MG 动画。适合信息讲解和产品演示，不适合真人写实视频或复杂剧情短片制作。"
+desc-en: "Create a complete H3 MG animation prompt for explainers, launches, demos, walkthroughs, concepts, and abstract themes. The user may provide product images, screenshots, voiceover text, audio, product documents, a real product, a fictional product name, or only a theme. The skill resolves missing facts only when they change the result, then uses MG animation references to write a H3 prompt with delivery specs, product setup, visual style, narrative structure, timed shots, screen text, voiceover, element motion, transition bridges, brand or product rules, music, and subtle sound effects. The complete prompt can be delivered as a Markdown document for review when requested; otherwise an already authorized task proceeds to the LFO package, where the exact file hash remains the execution gate."
+desc-cn: "面向需要制作 MG 动画讲解、产品发布、功能演示、App/SaaS 界面说明、概念产品和抽象主题表达的用户。用户可提供口播文案、配音音频、产品图、界面截图、产品资料或主题设定。Skill 会只在关键事实缺失时补问，再结合 MG 动画知识库确定视觉风格与叙事结构，生成包含规格、分镜节奏、屏幕文字、Voiceover、动效、转场、品牌规则和音频设计的 H3 提示词。用户要求审阅时交付文档；已授权任务可直接进入 LFO，最终执行仍以完整文件 hash 的明确批准为准。适合信息讲解和产品演示，不适合真人写实视频或复杂剧情短片制作。"
 tag-en: "Education / Creative Generation"
 tag-cn: "教育 / 创作生成"
 complete-tags-en:

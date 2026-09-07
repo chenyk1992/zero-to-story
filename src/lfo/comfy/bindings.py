@@ -1,11 +1,4 @@
-"""Node binding resolution — map logical selectors to concrete workflow node IDs.
-
-Two modes:
-- strict (default for production): title must be non-empty, match by title + class_type.
-  Empty title raises BindingNotFoundError — no silent fallback.
-- migration (for old workflow import): empty title falls back to class_type-only match.
-  Each fallback is recorded as a warning in the binding report.
-"""
+"""Resolve stable logical selectors to concrete ComfyUI node IDs."""
 
 from __future__ import annotations
 
@@ -13,6 +6,8 @@ import copy
 from dataclasses import dataclass
 
 from .exceptions import BindingAmbiguousError, BindingNotFoundError
+
+JsonScalar = str | int | float | bool | None
 
 
 @dataclass
@@ -42,90 +37,54 @@ class BindingResolver:
 
     # -- resolution -------------------------------------------------------- #
 
-    def resolve_binding(
-        self,
-        binding: Binding,
-        mode: str = "strict",
-        warnings: list[str] | None = None,
-    ) -> Binding:
+    def resolve_binding(self, binding: Binding) -> Binding:
         """Match *binding* to exactly one node by title + class_type.
 
-        Args:
-            mode: ``"strict"`` (production) or ``"migration"`` (import/legacy).
-            warnings: Optional list to append migration-fallback warnings to.
-
-        Matching strategy:
-        - If ``selector_title`` is non-empty: match by title + class_type (both modes).
-        - If ``selector_title`` is empty and ``mode="migration"``: fall back to
-          class_type-only match. Each fallback is recorded in *warnings*.
-        - If ``selector_title`` is empty and ``mode="strict"``: raises
-          BindingNotFoundError. No silent fallback.
+        A binding must have a non-empty ``selector_title``. Matching always uses
+        both ``_meta.title`` and ``class_type``; a missing title never falls back
+        to a class-only match.
 
         Raises:
-            BindingNotFoundError: zero matches (or empty title in strict mode).
+            BindingNotFoundError: zero matches or an empty selector title.
             BindingAmbiguousError: more than one match.
         """
-        # Strict mode: empty title is an error
-        if not binding.selector_title and mode == "strict":
+        if not binding.selector_title:
             raise BindingNotFoundError(
                 f"Binding '{binding.binding_id}' has empty selector_title "
-                f"— strict mode requires a stable title. "
-                f"Add _meta.title to the target node or use mode='migration'."
+                "— a stable _meta.title is required."
             )
 
         matches: list[str] = []
-        used_fallback = False
         for node_id, node_data in self.workflow.items():
             if not isinstance(node_data, dict):
                 continue
             if node_data.get("class_type") != binding.selector_class_type:
                 continue
-            if binding.selector_title:
-                meta = node_data.get("_meta", {})
-                if meta.get("title") != binding.selector_title:
-                    continue
-            else:
-                # Migration fallback: match by class_type only
-                used_fallback = True
+            meta = node_data.get("_meta")
+            if not isinstance(meta, dict) or meta.get("title") != binding.selector_title:
+                continue
             matches.append(node_id)
 
         if not matches:
             raise BindingNotFoundError(
                 f"No node matches title='{binding.selector_title}' "
                 f"class_type='{binding.selector_class_type}' "
-                f"(binding_id='{binding.binding_id}', mode='{mode}')"
+                f"(binding_id='{binding.binding_id}')"
             )
         if len(matches) > 1:
             raise BindingAmbiguousError(
                 f"{len(matches)} nodes match title='{binding.selector_title}' "
                 f"class_type='{binding.selector_class_type}' "
-                f"(binding_id='{binding.binding_id}', mode='{mode}'): {matches}"
-            )
-
-        # Record migration fallback warning
-        if used_fallback and warnings is not None:
-            warnings.append(
-                f"Migration fallback for '{binding.binding_id}': "
-                f"matched by class_type='{binding.selector_class_type}' only "
-                f"(no _meta.title). Node ID: {matches[0]}"
+                f"(binding_id='{binding.binding_id}'): {matches}"
             )
 
         binding.resolved_node_id = matches[0]
         return binding
 
-    def resolve_all(
-        self,
-        bindings: list[Binding],
-        mode: str = "strict",
-        warnings: list[str] | None = None,
-    ) -> list[Binding]:
-        """Resolve every binding in order, returning the updated list."""
-        return [self.resolve_binding(b, mode=mode, warnings=warnings) for b in bindings]
-
     # -- value injection --------------------------------------------------- #
 
     def apply_values(
-        self, resolved_bindings: list[tuple[Binding, str]]
+        self, resolved_bindings: list[tuple[Binding, JsonScalar]]
     ) -> dict:
         """Inject values into a deep copy of the workflow.
 

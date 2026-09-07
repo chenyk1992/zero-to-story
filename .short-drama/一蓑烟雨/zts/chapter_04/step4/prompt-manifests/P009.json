@@ -1,0 +1,13 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P009",
+  "plan_hash": "7823a04f23650e7e22930d8dfde85d0f8a5b161775a69e53b7f452da7ec4b7f7",
+  "prompt_hash": "bc39bc30cce66bd5082b3d2ca5e3a0bb37b34b90b159d514472b0564e6018387",
+  "operation": "video.image_to_video",
+  "duration_ms": 5000,
+  "prompt_path": "P009_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C015", "start_ms": 0, "end_ms": 2000}, {"id": "C016", "start_ms": 2000, "end_ms": 5000}],
+  "dialogue_events": [],
+  "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image", "asset_key": "boundary.P008.last_frame"}],
+  "status": "draft_for_user_confirmation"
+}

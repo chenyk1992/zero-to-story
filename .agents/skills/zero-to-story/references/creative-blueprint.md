@@ -1,3 +1,5 @@
+> GPT-6 适配变更说明：蓝图和预检属于可逆前置输入；在当前授权范围内可按具体报错定点修正并复核，无新依据不重复相同修复。生成、精确 hash 批准、ACCEPT/REJECT 和最终 QC 仍按硬停止处理，不自动循环修复。
+
 # 创作蓝图与低成本预检
 
 ## 目的
@@ -18,7 +20,7 @@ storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_
 | generation.panel_plans | 每个 Panel 的 operation、可选视觉资产、首尾帧来源和最小运行时引用 |
 | generation.shots | 每个 Camera Setup 的镜头边界、动作、人物、参考和状态 |
 
-must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事件可以在创作阶段删减。需要出现的文字要么写进已确认 H3 提示词，要么在故事板中明确标记确定性后期。
+must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事件可以在创作阶段删减。场景内文字要么写进已确认 H3 提示词，要么在故事板中明确标记确定性后期；台词字幕单独沿用逐字对白和执行包字幕策略，不要求生成模型烧录。导演决策复用已有 purpose、visible_proof、状态、运镜和 reason 等字段，不为审美判断增加 Schema 字段或静态评分。
 
 ## 编译顺序
 
@@ -26,14 +28,14 @@ must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事�
 2. 列出观众必须获得的信息，给每个 coverage 事件写可见证据、before_state 和 after_state。
 3. 先按因果链填写 scenes，再拆 panels 和 Camera Setup；Panel 边界写唯一的 transition ownership。
 4. 根据真实首帧/尾帧和参考控制需要选择 operation，再选择 visual_asset_policy；分镜板不能反向决定 R2V。
-5. 按镜头顺序填写对白、动作和状态。每个 Setup 只承担一个清晰主动作，复杂内容拆成新的 Setup 或 Panel。
-6. 运行一次预检：
+5. 按镜头顺序填写对白、动作和状态。每个 Setup 只承担一个清晰主动作；先简化不必要的动作耦合，再按叙事理由拆 Setup 或 Panel，不把一个动作的表演发展机械拆成多个任务。
+6. 运行一次预检；发现可逆的文档或输入错误时，在当前授权范围内按具体报错修正后复核一次：
 
 ~~~powershell
 python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creative_blueprint.json
 ~~~
 
-只有 CREATIVE PREFLIGHT: PASS 才能进入角色卡、视觉资产和视频提示词阶段。失败时修正文档后重新运行，不消耗视频生成资源。
+只有 CREATIVE PREFLIGHT: PASS 才能进入角色卡、视觉资产和视频提示词阶段。失败时按具体报错修正文档并复核；没有新依据或缺关键事实时报告阻塞，不消耗视频生成资源，也不重复同一无效修复。
 
 ## 最小预检范围
 
@@ -75,10 +77,10 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 ## 接力与执行包
 
-Panel 按顺序生成。当前 Panel 只有在上一 Panel 已 ACCEPT 后才启动；调用方使用现有 ffmpeg 从已接受视频提取真实尾帧，再把它作为下一 Panel 的首帧输入。不能用文字描述代替真实尾帧。
+Panel 按顺序生成。当前 Panel 只有在上一 Panel 已 ACCEPT 后才启动；下一 Panel 的 I2VA/FL2VA 计划需要时，调用方使用现有 ffmpeg 从已接受视频提取真实尾帧作为精确首帧。明确切镜或换场按已批准的 operation 和引用执行，不能用文字描述代替真实尾帧。
 
 每个 Panel 编译一份只含一个 Clip 的独立 `execution-package.json`。每份包的锁值是该文件的精确文件字节 SHA-256，并通过运行时的 `--approved-sha256 <hash>` 传入；不再维护 prompt manifest 或独立 production lock。任何包内容变化都必须重新取得批准并重新计算 hash。
 
 ## 输出
 
-通过预检后，按本文件和故事板编译一次执行包。视频阶段只保留每个 Panel 的 ACCEPT/REJECT 结果和已接受媒体路径；REJECT 或执行错误即停止，是否重新开始由用户或调用方明确决定。全部 Panel 接受后只做一次最终组装检查，确认视频可播放、顺序正确、基本音频存在。
+通过预检后，按本文件和故事板编译一次执行包。视频阶段只保留每个 Panel 的 ACCEPT/REJECT 结果和已接受媒体路径；REJECT 或执行错误即停止，是否重新开始由用户或调用方明确决定。片段接受、替换后的相邻接缝和实际交付文件的一次完整视听检查，统一遵守 [最小视频接受检查](video-qc.md)，不以静态预检通过替代成片检查。

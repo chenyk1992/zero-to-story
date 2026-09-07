@@ -1,8 +1,12 @@
 ---
 name: transcript-broll-planner
 description: |
-  将逐字稿、口播稿、数据型讲稿或知识视频脚本转成 B-roll 规划与确认后生成流程。适用于用户提供脚本、数据表、截图、Logo 或参考素材后，需要语义拆分、镜头选择、缺失素材检查、屏幕文字语言控制、连续一镜到底设计、可审片 B-roll 方案与批准后生成。触发词：B-roll 规划、B-roll 生成、逐字稿驱动副镜头、口播 B-roll、副镜头规划、副镜头生成。
+  将逐字稿、口播稿、数据型讲稿或知识视频脚本转成 B-roll 规划与已授权后的生成流程。适用于用户提供脚本、数据表、截图、Logo 或参考素材后，需要语义拆分、镜头选择、缺失素材检查、屏幕文字语言控制、连续一镜到底设计、可审片 B-roll 方案与逐 Panel 交接。触发词：B-roll 规划、B-roll 生成、逐字稿驱动副镜头、口播 B-roll、副镜头规划、副镜头生成。
 ---
+
+## GPT-6 适配变更说明
+
+2026-09-07：区分只做规划与完整生成，复用已有方案授权，保留具体包批准。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
 
 # Transcript B-roll Planner
 
@@ -35,7 +39,7 @@ description: |
 - 宁可少而清楚，不要过度切碎脚本。
 - 如果用户要求连续一镜到底，就把所有语义单元设计成同一个连续运镜里的视觉节拍，而不是互相断开的镜头。
 - 如果一句话里包含必须精确的声明、数字、品牌名、法律文字、引用或任何不能出错的内容，就标记为证据或确定性处理，不要让自由生成去猜。
-- 如果逐字稿太弱，无法可靠拆分，先向用户索要完整脚本或更干净的逐字稿。
+- 如果逐字稿太弱，无法可靠拆分，先报告不确定处；只有缺少内容会阻止可靠交付时才向用户索要完整脚本或更干净的逐字稿。
 
 ## STEP 2：匹配模板路线
 
@@ -98,17 +102,17 @@ description: |
 - 当用户要求连续性时，必须明确说明上一段视觉形态如何自然变形成下一段。
 - 如果用户要求更精致、更写实或更连续，调整计划，但保持语义结构不变。
 
-## STEP 5：生成前先确认
+## STEP 5：处理计划授权
 
-计划完成后停住，等待用户确认镜头或提出修改。
+计划完成后交付镜头方案并检查当前指令、已有计划或先前回复中是否已经授权相同的生成范围。
 
-在真正生成视频之前，必须先获得确认。
+如果用户已明确要求按该脚本直接生成，且没有未决的关键素材、事实、语言、连续性或风格选择，直接继续到执行包准备；不要为了形式再要求一次计划确认。用户只要求计划、审阅或留出选择时，停在计划阶段。
 
-即使计划看起来很明显，也不要跳过这一步。
+对会改变成品的缺失输入或真实边界提出一个最少的问题；不要把可由上下文合理推断的选择变成追问。
 
 ## STEP 6：生成已批准镜头
 
-用户确认后，只生成已批准的镜头或已批准的连续长镜头。
+按当前指令或已确定计划只生成授权范围内的镜头或连续长镜头；用户后续修改时使受影响的 Panel 失效并重新准备。
 
 规则：
 - 每个需要生成的 B-roll 计划项都是一个 Panel/Clip；Panel 时长遵守当前 H3/LFO 契约的 4–15 秒范围。不要把整段逐字稿或多个 Panel 合并成一个生成请求。
@@ -119,13 +123,13 @@ description: |
 
 ## STEP 7：逐 Panel 交给 LFO
 
-用户确认 B-roll 计划和每个 Panel 的 H3 提示词后，调用方为每个 Panel 写出一份 `lfo.video-execution.v1` 的 execution package。所有 Panel 包和最终 assembly 包都直接放在同一个 `workspace/projects/<project_id>/` 项目根目录，用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要放入 Panel 子目录，否则前一 Run 的 `outputs/<run_id>/...` 无法用包内相对 URI 稳定引用。每份包只含当前 Panel 的一个非 `video.passthrough` Clip，并写入已确认的 operation、时长、H3 prompt、最小素材引用、字幕/音频策略和输出策略；不要创建旧 `intake`、`shots[]`、prompt manifest 或生产锁文件。
+在计划和每个 Panel 的 H3 提示词已经由当前指令或已有确认确定后，调用方为每个 Panel 写出一份 `lfo.video-execution.v1` 的 execution package。所有 Panel 包和最终 assembly 包都直接放在同一个 `workspace/projects/<project_id>/` 项目根目录，用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要放入 Panel 子目录，否则前一 Run 的 `outputs/<run_id>/...` 无法用包内相对 URI 稳定引用。每份包只含当前 Panel 的一个非 `video.passthrough` Clip，并写入已确认的 operation、时长、H3 prompt、最小素材引用、字幕/音频策略和输出策略；不要创建旧 `intake`、`shots[]`、prompt manifest 或生产锁文件。
 
 逐 Panel 交接固定为：
 
 ```text
 写当前 Panel package
-  → validate，取得 package_sha256 并让用户确认
+  → validate，取得 package_sha256；仅在该完整文件 hash 尚未有明确批准时请求一次精确 hash 批准
   → execute --approved-sha256 <hash>（同步、一次）
   → 调用方最小 QC：ACCEPT / REJECT
 ```
@@ -137,7 +141,7 @@ description: |
 - R2V：只有批准 operation 明确需要时，才把上一段完整 `ACCEPT` 视频作为一个 `ref_video_N` fixed typed slot；它不是精确首帧；
 - T2V 或硬切 R2V：只用已接受视频做人工边界检查，不伪装成模型首帧。
 
-尾帧尚未从实际 `ACCEPT` 输出提取时，不在下一包中虚构路径。前一 Panel `REJECT`/`ERROR` 时不启动下一 Panel。所有 Panel 接受后，如用户要求交付完整视频，调用方再创建一份只含已接受视频 `video.passthrough` Clip 的 assembly package，独立 `validate`、批准其完整文件字节 SHA-256 后只执行一次 `cut` 组装。外部口播音频应作为 assembly 的音频轨道实际替换或保留；用户明确需要字幕时才加入字幕素材/策略，不能把整段逐字稿默认当作字幕。最终 assembly 只做一次可播放、顺序和基本音视频/字幕存在检查。
+尾帧尚未从实际 `ACCEPT` 输出提取时，不在下一包中虚构路径。前一 Panel `REJECT`/`ERROR` 时不启动下一 Panel。所有 Panel 接受后，如用户要求交付完整视频，调用方再创建一份只含已接受视频 `video.passthrough` Clip 的 assembly package，独立 `validate`、核对其完整文件字节 SHA-256；只有该 hash 已明确批准时才执行一次 `cut` 组装。外部口播音频应作为 assembly 的音频轨道实际替换或保留；用户明确需要字幕时才加入字幕素材/策略，不能把整段逐字稿默认当作字幕。最终 assembly 只做一次可播放、顺序和基本音视频/字幕存在检查。
 
 ## STEP 8：交付计划与素材
 

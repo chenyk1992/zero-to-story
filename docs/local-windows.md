@@ -2,6 +2,11 @@
 
 本文只记录本机环境和单 Panel 执行前检查。机器路径、模型和凭据不进入 package，也不写入提示词。
 
+相关工作流说明：
+
+- [H3 工作流约定](workflow-conventions.md)：JSON、绑定、预检、执行和结果记录边界；
+- [H3 VDN8](h3-vdn8.md)：VDN8 采样参数、已验证范围和性能口径。
+
 ## 当前机器
 
 - ComfyUI Desktop：`D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI`

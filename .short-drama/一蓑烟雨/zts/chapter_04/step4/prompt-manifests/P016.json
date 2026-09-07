@@ -1,0 +1,13 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P016",
+  "plan_hash": "5365c23bdc169bd8420d37709580244b6cc990edc8b3c9d587f46a69bb82f52a",
+  "prompt_hash": "0e7055455ddc9b111b49cb15c6477b46071b0fc65bd58e799d461a607bba9252",
+  "operation": "video.image_to_video",
+  "duration_ms": 10000,
+  "prompt_path": "P016_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C026", "start_ms": 0, "end_ms": 10000}],
+  "dialogue_events": [{"event_id": "D014", "speaker_id": "SP_CANDIDATE_B", "text": "嘘，慎言！变法的事，可不是我们这些人该议论的……", "start_ms": 600, "end_ms": 5422, "allow_overlap": false}],
+  "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image", "asset_key": "boundary.P015.last_frame"}],
+  "status": "draft_for_user_confirmation"
+}

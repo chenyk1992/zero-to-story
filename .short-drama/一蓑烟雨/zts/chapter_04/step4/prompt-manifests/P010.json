@@ -1,0 +1,13 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P010",
+  "plan_hash": "9c358b29f2aa8606bc91324c88c5dbd1db901bd166f04b1505408ce6cd2f9970",
+  "prompt_hash": "52d5d30c3be1f24bf4bc8e470cd0d994f6a6ccb6669bcb4bf0979afb435c62bd",
+  "operation": "video.image_to_video",
+  "duration_ms": 9000,
+  "prompt_path": "P010_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C017", "start_ms": 0, "end_ms": 2000}, {"id": "C018", "start_ms": 2000, "end_ms": 9000}],
+  "dialogue_events": [{"event_id": "D007", "speaker_id": "SP_SU_XUN", "text": "都听好了。进了京城，你们面对的不只是考题。", "start_ms": 2400, "end_ms": 6760, "allow_overlap": false}],
+  "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image", "asset_key": "boundary.P009.last_frame"}],
+  "status": "draft_for_user_confirmation"
+}

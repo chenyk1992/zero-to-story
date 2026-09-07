@@ -1,0 +1,493 @@
+{
+  "_note": "GPT-6 适配变更说明：保存真实文字产物与静态复核；这些是评估数据，不是执行指令。",
+  "schema": "ai-config-evaluation.v1",
+  "date": "2026-09-07",
+  "requests": {
+    "A": "用 shuorenhua 直接润色「我们将充分赋能销售团队，全面提升协同效能。试点为期 14 天，由王琳负责。共有 12 人参加，其中 9 人完成培训；这是试点记录，不能证明业绩已经增长。」要求保留事实、数字、责任人，给成稿即可。",
+    "B": "用 short-drama-screenwriter 写一集约 45 秒竖屏短剧，只有两名成年角色（女店主林岚、男顾客陈远），只在修表店内，反转为顾客拿来的表里藏着店主父亲留下的道歉录音；中文，只要本集可拍剧本，不要季纲/后续集/视频交接。",
+    "C": "用 h3-prompt-writing 交一个信息已确认的 T2VA 单 Panel H3 提示词：6 秒、16:9、24fps、单连续镜头，无人空厨房，固定机位，清晨暖光，红色搪瓷茶壶从左向右缓慢冒出白色蒸汽，无人物/对白/可读文字/Logo，只有轻微水沸声。不要包、manifest、质检附件。",
+    "D": "用 zero-to-story 只交一份单Panel黑白分镜设计Brief，不生成图片、视频或执行包。内容已确认：6秒，成年修表师在雨夜店内打开旧怀表，听见父亲录音后停住动作。两个Camera Setup：前3秒桌面特写打开怀表，后3秒胸部近景看修表师反应。用一个含2格的黑白Storyboard Sheet表达两个机位；只要该Brief。"
+  },
+  "rounds": {
+    "baseline": {
+      "outputs": {
+        "A": {
+          "file": "A_shuorenhua.md",
+          "bytes": 198,
+          "sha256": "9a6f1930611d0deef85d863493496d1d254afbd02c8e2a15e0da052d6edc95ca",
+          "text": "我们将支持销售团队，提升协同效能。试点为期 14 天，由王琳负责，共有 12 人参加，其中 9 人完成培训。这只是试点记录，不能证明业绩已经增长。\n"
+        },
+        "B": {
+          "file": "B_short_drama_episode.md",
+          "bytes": 2048,
+          "sha256": "a927917be2f20163e75ec996736a9bfd6c5c4bad5de2a28c1689753443de8b65",
+          "text": "# 单集《怀表里的道歉》\n\n> 时长：约 45 秒｜画幅：9:16 竖屏｜场景：修表店内·雨夜｜角色：林岚（女，成年，店主）、陈远（男，成年，顾客）\n\n## 场次一·修表台·雨夜·内景（0–12 秒）\n\n△ 中景——雨声敲着店窗，林岚在台灯下收拾工具。陈远推门进来，把一块旧怀表放到桌上。\n\n**陈远**（急切）：“老板，帮我看看这块表。”\n\n**林岚**（接过）：“先放下。哪里不走？”\n\n**陈远**：“停在三天前，多少钱都行。”\n\n**林岚**：“谁的表？”\n\n**陈远**：“我爸的。他临终前让我来找你。”\n\n**林岚**（抬眼）：“你爸叫什么？”\n\n**陈远**：“陈国山。”\n\n## 场次二·修表台·连续·内景（12–30 秒）\n\n△ 特写——林岚的手停在表背旧划痕上。她看向陈远，打开怀表后盖，露出藏在夹层里的微型录音装置。\n\n**林岚**（压住情绪）：“陈国山……他欠我一句道歉。”\n\n**陈远**（愣住）：“你认识他？”\n\n**林岚**：“他是我父亲。”\n\n**陈远**：“可我爸从没提过你。”\n\n**林岚**（伸手）：“把表给我。”\n\n**陈远**：“里面有东西？”\n\n△ 林岚轻轻拨动表冠。咔哒一声，录音启动。\n\n## 场次三·修表台·连续·内景（30–45 秒）\n\n△ 胸部近景——林岚按住怀表，手上的动作在半空停住。雨声压低，怀表里的录音清楚传出；录音只有声音，不出现第三名现场角色。\n\n**怀表录音**（男声，断续）：“岚岚，对不起……那年我走了，以为很快能回来。这一走，就是二十年。”\n\n**怀表录音**：“陈远，替我告诉她，我从没忘记她。”\n\n**陈远**（低声）：“他只说，必须让你亲手听见。”\n\n**林岚**（望着打开的表）：“它不是坏了……它是在等我。”\n\n△ 特写——怀表停在打开状态，林岚和陈远都不再说话。录音以一声轻微电流咔哒结束，画面停住。\n"
+        },
+        "C": {
+          "file": "C_h3_t2va_prompt.txt",
+          "bytes": 673,
+          "sha256": "d16808e0c34275792a1f34483056916f7073500ceeb39759a0fed1956169ebe5",
+          "text": "integrated_multimodal_description: [Shot 1] Live-action, cinematic, a single continuous 6-second shot in a 16:9 frame at 24 fps shows an empty kitchen in warm early-morning light. A red enamel tea kettle rests on the left side of a clean countertop; the camera is locked in a fixed position with no pan, tilt, zoom, or shake. Thin white steam slowly drifts left to right from the kettle while the water inside lightly boils. No people, dialogue, readable text, or logos appear anywhere in the frame. The shot remains continuous through the exact 6.00-second duration.\n\noverall_soundscape: Only the soft, light bubbling of boiling water is audible.\n\nnon_diegetic_music: N/A\n"
+        },
+        "D": {
+          "file": "D_zero_to_story_storyboard_brief.md",
+          "bytes": 4137,
+          "sha256": "6f6e06d3056c192e573be07b82cd03201d79f08e4afd6adf112c83e6619238d5",
+          "text": "# 单 Panel 黑白分镜设计 Brief\n\n## 已确认规格\n\n- Panel / Clip：P001 / 1 条 Clip\n- 时长：6 秒\n- 场景：修表店内，雨夜\n- 主体：一名成年修表师\n- 核心动作：修表师打开旧怀表，听见父亲留下的录音后停住动作\n- Camera Setup：2 个；前 3 秒桌面特写，后 3 秒胸部近景反应\n- 黑白 Storyboard Sheet：一张自包含、2 格、从左到右阅读的 `1x2` 网格；左格对应 C001，右格对应 C002\n- 交付边界：只交本 Brief 的设计文字；不生成图片、视频、执行包或运行时素材\n\n## 场景与视觉约束\n\n- 画面为黑白线稿分镜，保留修表台、旧怀表、台灯和雨夜窗面作为可辨识环境锚点。\n- 雨夜通过窗面雨痕、窗外暗色块和室内台灯形成明暗对比；不把窗外空间扩展成第二场景。\n- 修表师的手、怀表开合状态和停住动作是主要视觉证据。\n- 父亲录音作为怀表内的现场道具声音表现；不出现父亲的画面或第三名现场角色。\n\n## Camera Setup\n\n| Setup | 时间范围 | 景别 / 机位 | 画面与动作 | 声音与锁定末态 |\n|---|---:|---|---|---|\n| C001 | 0–3 秒 | 桌面特写，镜头俯向修表台 | 前景是修表师双手和旧怀表，怀表位于画面中央；手指拨开表盖，露出表盘与夹层内的微型录音装置，动作在 3 秒切点前完成开盖。 | 表盖轻响；录音在开盖后开始，切点时怀表已打开、双手仍在表旁。 |\n| C002 | 3–6 秒 | 胸部近景，正面略偏向修表台 | 切到修表师胸部近景；他/她听见录音，手上的动作立刻停住，视线落向画面下方的打开怀表，保持停住的反应。 | 父亲的道歉录音跨切连续可闻；末态为人物停止动作、怀表保持打开。 |\n\n## 2 格黑白 Storyboard Sheet 设计\n\n### 左格｜C001｜0–3 秒\n\n- 构图：桌面占据画面主体，修表师双手从左右两侧进入；旧怀表居中偏前景，表盖正被打开。\n- 关键可见状态：表盖打开到能看见表盘和夹层装置；手指仍贴着表盖边缘，动作完成但尚未反应。\n- 线条重点：怀表轮廓、表盖转轴、手部接触关系、修表台细小工具；雨窗与台灯只作背景明暗块。\n- 声音标注（置于 Brief，不作为画面文字）：表盖咔哒声后，父亲录音开始。\n\n### 右格｜C002｜3–6 秒\n\n- 构图：修表师胸部居中，肩颈和双手下缘入画；视线向下，画面下方保留打开怀表的方向感。\n- 关键可见状态：听见录音后双手停住，肩背和头部短暂停顿；人物没有继续修理或回到开盖动作。\n- 线条重点：胸部近景的停顿姿态、下视方向、手部冻结状态；背景保留修表店台灯和雨窗的黑白层次。\n- 声音标注（置于 Brief，不作为画面文字）：父亲道歉录音继续，6 秒末保持低声未再加入人物对白。\n\n## 六个有序 Beat 映射\n\n| Beat | 时间位置 | Setup | 可见语义时刻 | 末态 / 承接 |\n|---|---:|---|---|---|\n| B001 | 0.0 秒 | C001 | 修表师双手在桌面上固定旧怀表。 | 怀表居中，表盖闭合。 |\n| B002 | 0.8 秒 | C001 | 手指找到表盖边缘并开始开启。 | 表盖抬起，手指保持接触。 |\n| B003 | 2.0 秒 | C001 | 表盖继续打开，表盘与夹层装置显现。 | 怀表已半开，装置可见。 |\n| B004 | 3.0 秒 | C002 | 录音响起，切到胸部近景；修表师听见第一句。 | 双手从动作中停住，视线下落。 |\n| B005 | 4.5 秒 | C002 | 修表师确认声音来自怀表，身体保持不动。 | 怀表保持打开，人物没有继续修理。 |\n| B006 | 6.0 秒 | C002 | 道歉录音落下，停顿状态被锁定。 | 人物停住，打开的怀表和雨夜店内状态保持可见。 |\n\n## 单张分镜板格位映射\n\n- `1x2` 左格 → C001 / B001–B003：打开旧怀表并露出录音装置。\n- `1x2` 右格 → C002 / B004–B006：听见录音后停住动作的胸部近景反应。\n- 两格共用同一黑白画风、同一修表台空间锚点和同一怀表开合状态；右格承接左格的已完成开盖状态。\n"
+        }
+      },
+      "agent_self_report": {
+        "evaluation": {
+          "snapshot_root": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline",
+          "results_root": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline-results",
+          "snapshot_files_read": [
+            "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\AGENTS.md",
+            "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\docs\\ai-system-prompt.md"
+          ],
+          "skills_used": [
+            "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\shuorenhua\\SKILL.md",
+            "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\short-drama-screenwriter\\SKILL.md",
+            "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\h3-prompt-writing\\SKILL.md",
+            "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\zero-to-story\\SKILL.md"
+          ],
+          "real_outputs": true,
+          "paid_or_media_generation_called": false,
+          "real_project_write_targeted": false
+        },
+        "outputs": [
+          {
+            "task": "A",
+            "skill": "shuorenhua",
+            "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline-results\\A_shuorenhua.md",
+            "exists_measured": true,
+            "bytes_measured": 198,
+            "completed": true,
+            "dedicated_snapshot_content_reads_measured": 8,
+            "shared_instruction_reads_measured": 2,
+            "read_files": [
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\shuorenhua\\SKILL.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\shuorenhua\\references\\protected-spans.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\shuorenhua\\references\\operation-manual.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\shuorenhua\\references\\phrases-zh.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\shuorenhua\\references\\positive-style.md"
+            ],
+            "self_reported": {
+              "scene": "status",
+              "rewrite_level": "standard",
+              "scope": "structural",
+              "preserved": [
+                "王琳",
+                "14 天",
+                "12 人",
+                "9 人完成培训",
+                "试点记录不能证明业绩已经增长"
+              ],
+              "necessary_clarification_count": 0,
+              "proposed_questions": [],
+              "blockers": []
+            }
+          },
+          {
+            "task": "B",
+            "skill": "short-drama-screenwriter",
+            "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline-results\\B_short_drama_episode.md",
+            "exists_measured": true,
+            "bytes_measured": 2048,
+            "completed": true,
+            "dedicated_snapshot_content_reads_measured": 10,
+            "shared_instruction_reads_measured": 2,
+            "read_files": [
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\short-drama-screenwriter\\SKILL.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\short-drama-screenwriter\\references\\opening-rules.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\short-drama-screenwriter\\references\\rhythm-curve.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\short-drama-screenwriter\\references\\satisfaction-matrix.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\short-drama-screenwriter\\references\\hook-design.md"
+            ],
+            "self_reported": {
+              "episode_scope": "one shootable episode only",
+              "duration_target": "approximately 45 seconds",
+              "character_constraint": "two adult on-screen roles: 林岚 and 陈远; the father's voice exists only as a recording emitted by the prop watch",
+              "location_constraint": "all scenes are inside the watch-repair shop",
+              "necessary_clarification_count": 0,
+              "proposed_questions": [],
+              "blockers": []
+            }
+          },
+          {
+            "task": "C",
+            "skill": "h3-prompt-writing",
+            "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline-results\\C_h3_t2va_prompt.txt",
+            "exists_measured": true,
+            "bytes_measured": 673,
+            "completed": true,
+            "dedicated_snapshot_content_reads_measured": 4,
+            "shared_instruction_reads_measured": 2,
+            "read_files": [
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\h3-prompt-writing\\SKILL.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\h3-prompt-writing\\references\\base-en.txt"
+            ],
+            "self_reported": {
+              "mode": "T2VA inferred from the supplied text-only Panel with no reference asset",
+              "shot_count": 1,
+              "header_gate_checked": true,
+              "required_constraints_included": [
+                "6 seconds",
+                "16:9",
+                "24 fps",
+                "fixed camera",
+                "empty kitchen",
+                "warm early-morning light",
+                "red enamel kettle",
+                "white steam drifting left to right",
+                "no people/dialogue/readable text/logo",
+                "light boiling-water sound only"
+              ],
+              "necessary_clarification_count": 0,
+              "proposed_questions": [],
+              "blockers": []
+            }
+          },
+          {
+            "task": "D",
+            "skill": "zero-to-story",
+            "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline-results\\D_zero-to-story_storyboard_brief.md",
+            "exists_measured": true,
+            "bytes_measured": 4137,
+            "completed": true,
+            "dedicated_snapshot_content_reads_measured": 3,
+            "shared_instruction_reads_measured": 2,
+            "read_files": [
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\zero-to-story\\SKILL.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\zero-to-story\\references\\storyboard-brief.md",
+              "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\baseline\\.agents\\skills\\zero-to-story\\assets\\storyboard_brief.template.md"
+            ],
+            "self_reported": {
+              "panel_scope": "one Panel / one Clip design brief only",
+              "board_layout": "1x2 black-and-white storyboard sheet, left-to-right",
+              "camera_setups": 2,
+              "visual_generation_called": false,
+              "video_generation_called": false,
+              "execution_package_created": false,
+              "necessary_clarification_count": 0,
+              "proposed_questions": [],
+              "blockers": []
+            }
+          }
+        ],
+        "clarification_and_blocker_observations": {
+          "actual_necessary_clarification_count_measured": 0,
+          "user_facing_questions_sent_measured": 0,
+          "proposed_questions_recorded": [],
+          "blockers": [],
+          "completion_by_task": {
+            "A": true,
+            "B": true,
+            "C": true,
+            "D": true
+          },
+          "basis": "The counts above are measured from this agent's tool-call log; creative-mode inferences and scope notes are explicitly marked self_reported."
+        },
+        "tool_and_read_counts_measured": {
+          "functions_exec_invocations": 25,
+          "nested_exec_command_invocations": 33,
+          "apply_patch_invocations": 6,
+          "snapshot_content_read_operations": 27,
+          "counting_note": "Content-read count is the number of direct Get-Content operations against snapshot files in this evaluation. Tool counts are this agent's call-log counts, not host-level telemetry."
+        }
+      }
+    },
+    "current": {
+      "outputs": {
+        "A": {
+          "file": "A_shuorenhua.md",
+          "bytes": 204,
+          "sha256": "aad75355e750a832ef4ec2a2f32a349d90b40d046eb2877b79fce686dee4f2db",
+          "text": "我们会支持销售团队，全面提升协同效能。试点为期14天，由王琳负责，共有12人参加，其中9人完成培训。以上是试点记录，不能据此证明业绩已经增长。\n"
+        },
+        "B": {
+          "file": "B_short_drama_episode.md",
+          "bytes": 1609,
+          "sha256": "56c6201cdecf2a338d936914fe7096ae11787d87e9543748ac8b6f6624856855",
+          "text": "# 第1集 · 表里的道歉\n> 📍 位置：独立单集 | 情绪强度：4 | 关键词：旧表、录音、道歉\n\n## 场次一 · 修表店 · 雨夜 · 内景（约45秒）\n\n△ 0–5秒，近景。雨声敲着窗，店内只有工作台上的台灯亮着。陈远把一只旧怀表按在台面上。\n\n**陈远**（压低声音）：“林老板，这块表，只有你能打开。”\n\n**林岚**（不抬头）：“修表先排号。”\n\n△ 5–13秒，中近景。林岚伸手把怀表推回去。陈远按住表盖，露出侧面一道旧划痕。\n\n**陈远**：“表主说，看到这道划痕，你就会接。”\n\n**林岚**（手停住）：“你认识他？”\n\n**陈远**：“我只负责把表送到你手里。”\n\n△ 13–24秒，桌面特写。林岚戴上放大镜，拧开后盖，拨开卡住的齿轮。表针突然走了一格。\n\n**林岚**（冷淡）：“表没坏，里面卡了东西。”\n\n**陈远**：“那就打开。”\n\n△ 24–34秒，怀表特写转林岚侧脸。后盖弹开，里面传出一声轻响，微弱的录音随即响起。\n\n**父亲录音**（失真、断续；录音，不作为出场角色）：“岚，对不起。我把该说的话，留在这块表里。”\n\n林岚手里的镊子停在半空。\n\n△ 34–42秒，胸部近景。林岚看着怀表，呼吸收住。录音继续。\n\n**父亲录音**（录音）：“对不起，没能当面把这句话说给你听。”\n\n△ 42–45秒，林岚的手慢慢覆上表盖。\n\n**林岚**（几乎听不见）：“爸……”\n\n雨声盖住最后一声滴答，画面停在她的手和怀表上。\n"
+        },
+        "C": {
+          "file": "C_h3_prompt.txt",
+          "bytes": 720,
+          "sha256": "5495468399fe627467ec53dcf035afda01ecaa0712d6614c771020cf6627543a",
+          "text": "integrated_multimodal_description: [Shot 1] Live-action, cinematic, a locked-off wide shot frames an empty kitchen at dawn in a 16:9 composition, rendered at 24 fps as one continuous 6-second take. Warm early-morning light falls across the quiet countertop. A red enamel kettle glides slowly from the left side of the frame to the right while thin white steam rises continuously from its spout. The camera stays completely static with no cuts or reframing, and no person enters the kitchen. There is no dialogue, no readable on-screen text, no subtitle, no label, and no logo.\n\noverall_soundscape: A faint, gentle water-boiling sound from the kettle continues under the quiet kitchen room tone.\n\nnon_diegetic_music: N/A\n"
+        },
+        "D": {
+          "file": "D_storyboard_brief.md",
+          "bytes": 3817,
+          "sha256": "a3c28c7295e2f68adb3600550717e644a31a4d16d3f647cef0a99a79e06f42d6",
+          "text": "# 单 Panel 黑白分镜设计 Brief：雨夜的录音\n\n## 规格与交付边界\n\n- Panel：P001\n- 时长：6.0 秒\n- 场景：修表店内，雨夜\n- 主体：一名成年修表师\n- 核心动作：修表师打开旧怀表，听见父亲留下的录音后停住动作\n- Camera Setup：2 个，前 3 秒桌面特写，后 3 秒胸部近景\n- Storyboard Sheet：一张横向 `1x2` 黑白线稿板，按从左到右阅读\n- 本次状态：仅交设计 Brief；不生成图片、视频或执行包\n\n## 导演意图与连续性\n\n观众先看到怀表被打开，再在切换到修表师胸部近景时听见父亲录音，并明确看到正在进行的动作停住。雨声贯穿全段；录音在怀表打开的瞬间开始，并从第一个机位的末端自然承接到第二个机位。黑白线稿只用于分镜表达，不锁定成片的色彩风格。\n\n## Camera Setup\n\n| Setup | 时间 | 景别 / 机位 | 画面动作 | 视线与屏幕关系 | 运镜 | 声音与锁定末态 |\n|---|---:|---|---|---|---|---|\n| C001 | 0.0–3.0s | 桌面特写，略俯拍工作台上的旧怀表与修表师双手 | 双手固定怀表并打开表盖；在 2.8–3.0 秒完成开启 | 目标为怀表；人物面部不入画；屏幕运动无 | 固定机位 | 雨声与金属轻响；表盖完全打开，内部可见，录音在边界处开始 |\n| C002 | 3.0–6.0s | 胸部近景，正面略偏侧拍修表师 | 修表师听见录音，手中的动作停住，视线留在怀表方向 | 修表师朝向桌面怀表；视线向下并保持 | 固定机位 | 父亲录音持续，雨声仍在；手和工具停住，反应保持到 6.0 秒 |\n\n## 六 Beat 映射\n\n| Beat | 时间 | Setup | 可见 / 可听时刻 | 初态 → 末态 | 承接 |\n|---|---:|---|---|---|---|\n| B001 | 0.0–0.6s | C001 | 雨夜店内的工作台与闭合旧怀表建立 | 闭合怀表 → 双手就位 | 同镜继续 |\n| B002 | 0.6–1.8s | C001 | 修表师的手沿表盖边缘寻找开启处 | 双手未接触 → 工具与表盖接触 | 同镜继续 |\n| B003 | 1.8–3.0s | C001 | 表盖被打开，内部露出；录音在末端起声 | 闭合 → 完全打开 | 录音声音桥接至 C002 |\n| B004 | 3.0–3.8s | C002 | 机位切到胸部近景，修表师听见录音 | 动作进行中 → 注意力转向声音与怀表 | 新信息触发切镜 |\n| B005 | 3.8–5.2s | C002 | 修表工具停在原处，修表师不再继续 | 手部运动 → 手部静止 | 同镜继续 |\n| B006 | 5.2–6.0s | C002 | 修表师保持停住的反应，录音与雨声延续 | 初次反应 → 锁定停住末态 | Panel 末态 |\n\n## 黑白 Storyboard Sheet（1x2）\n\n一张横向黑白线稿板，两个等宽格位，无额外格子；板内信息按左格到右格排列。\n\n| 格位 | 画面设计 | 必须表达的控制信息 | 可见结束状态 |\n|---|---|---|---|\n| 1｜C001｜0.0–3.0s | 桌面特写：工作台中央是旧怀表，修表师双手从两侧打开表盖；窗面雨痕和台灯只用黑白明暗关系提示 | 怀表位于画面中心；开启动作从闭合开始；在格尾表盖已打开；录音从格尾起声 | 表盖完全打开，内部露出，双手仍在表边 |\n| 2｜C002｜3.0–6.0s | 胸部近景：修表师上半身与手中怀表同框，视线向下；听到录音后动作凝住 | 新机位明确展示听见录音后的反应；工具位置不跳变；雨夜店内背景保持一致 | 手和工具停住，修表师保持反应，录音与雨声未断 |\n\n## 后续控制备注（仅规划）\n\n- 若进入执行阶段，两个机位由同一张 `1x2` 分镜板按左到右顺序表达；本 Brief 不生成该板图。\n- 拟用控制方式：`video.reference_to_video`；分镜板资产策略为 `storyboard_board`，当前仅作规划记录。\n- 不写入 H3 提示词、执行包、批准 hash 或运行结果。\n"
+        }
+      },
+      "agent_self_report": {
+        "scope": "真实产物文本评估 A-D",
+        "source_requests": "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/requests.json",
+        "source_snapshot": "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed",
+        "items": {
+          "A": {
+            "output_path": "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/current-results/A_shuorenhua.md",
+            "read_files": [
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/AGENTS.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-system-prompt.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/requests.json",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-skill-routing.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/shuorenhua/SKILL.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/shuorenhua/references/rewrite-contract.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/shuorenhua/references/protected-spans.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/shuorenhua/references/positive-style.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/shuorenhua/references/operation-manual.md"
+            ],
+            "necessary_clarifications": [],
+            "proposed_questions": [],
+            "extra_actions": [
+              "按 docs/status 语域做一次事实、数字、责任人与业绩结论保真回读"
+            ],
+            "completed": true,
+            "tool_stats": {
+              "self_report": null,
+              "measured": null
+            },
+            "token_stats": {
+              "self_report": null,
+              "measured": null
+            }
+          },
+          "B": {
+            "output_path": "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/current-results/B_short_drama_episode.md",
+            "read_files": [
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/AGENTS.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-system-prompt.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/requests.json",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-skill-routing.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/short-drama-screenwriter/SKILL.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/short-drama-screenwriter/references/workflow-contract.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/short-drama-screenwriter/references/opening-rules.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/short-drama-screenwriter/references/rhythm-curve.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/short-drama-screenwriter/references/satisfaction-matrix.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/short-drama-screenwriter/references/hook-design.md"
+            ],
+            "necessary_clarifications": [],
+            "proposed_questions": [],
+            "extra_actions": [
+              "按独立单集格式保留一场、约45秒、明确反转与情绪落点；未加入下集预告或视频交接"
+            ],
+            "completed": true,
+            "tool_stats": {
+              "self_report": null,
+              "measured": null
+            },
+            "token_stats": {
+              "self_report": null,
+              "measured": null
+            }
+          },
+          "C": {
+            "output_path": "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/current-results/C_h3_prompt.txt",
+            "read_files": [
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/AGENTS.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-system-prompt.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/requests.json",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-skill-routing.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/h3-prompt-writing/SKILL.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/h3-prompt-writing/references/base-en.txt"
+            ],
+            "necessary_clarifications": [],
+            "proposed_questions": [],
+            "extra_actions": [
+              "通过 T2VA 单 Shot 头部格式检查，保留三段字段顺序；未输出 manifest、hash、QC 或执行包"
+            ],
+            "completed": true,
+            "tool_stats": {
+              "self_report": null,
+              "measured": null
+            },
+            "token_stats": {
+              "self_report": null,
+              "measured": null
+            }
+          },
+          "D": {
+            "output_path": "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/current-results/D_storyboard_brief.md",
+            "read_files": [
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/AGENTS.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-system-prompt.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/requests.json",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/docs/ai-skill-routing.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/zero-to-story/SKILL.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/zero-to-story/references/storyboard-production.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/zero-to-story/references/storyboard-brief.md",
+              "C:/Users/Administrator/AppData/Local/Temp/gpt6-ai-optimize-6h6mm9tl/reviewed/.agents/skills/zero-to-story/assets/storyboard_brief.template.md"
+            ],
+            "necessary_clarifications": [],
+            "proposed_questions": [],
+            "extra_actions": [
+              "将两个 Camera Setup 映射为六个语义 Beat 和一个横向1x2黑白板；仅记录规划控制方式，不生成视觉或运行产物"
+            ],
+            "completed": true,
+            "tool_stats": {
+              "self_report": null,
+              "measured": null
+            },
+            "token_stats": {
+              "self_report": null,
+              "measured": null
+            }
+          }
+        },
+        "global_observations": {
+          "clarifications_needed": [],
+          "blocked_items": [],
+          "additional_actions": [
+            "未读取 baseline-results、审计文件或评估结论文件",
+            "未修改真实项目文件",
+            "未调用付费 API、图像生成或视频生成"
+          ],
+          "completion": {
+            "A": true,
+            "B": true,
+            "C": true,
+            "D": true
+          },
+          "tool_stats": {
+            "self_report": null,
+            "measured": null
+          },
+          "token_stats": {
+            "self_report": null,
+            "measured": null
+          }
+        }
+      }
+    }
+  },
+  "additional": {
+    "route": {
+      "file": "video-deconstruct-report.md",
+      "bytes": 12683,
+      "sha256": "990ad55a0a94bc4b12750900d2ebe0771dfe15ef9e087aa603b1321ac7481319",
+      "text": "# 视频拆解报告 · 黑底透明玻璃杯与红色液体\n\n> 目标提示词路线：MiniMax-H3（未指定模型，按输入选择）\n>\n> 路由依据：用户直接要求“拆解和一个复刻提示词”；6 秒是 H3 单请求允许的 4–15 秒整数，且素材只有文字描述，适合一个纯文本请求。\n>\n> 分析目的：复刻视频\n> 重点维度：主体、场景、动作、镜头、光影、风格；其余维度补全\n> 分析依据：用户文字描述，未直接读取视频，未抽取关键帧\n> 原视频：无（仅有文字描述）\n\n## 一、元信息\n\n- 时长：6 秒\n- 画幅比例：未知\n- 分辨率：未知\n- 推测帧率：未知\n- 原视频推测来源模型：未知；没有视频文件或模型信息可供判断\n- 画风类别：未指定；提示词采用克制的写实产品影像方向，属于复刻设计补全\n- 推测依据：仅依据“无人物、黑色背景、透明玻璃杯置于画面中间、红色液体自上方流入、固定近景、冷白轮廓光、只有倒水声”这段描述\n\n## 二、关键帧证据\n\n- 关键帧来源：文字描述\n- 抽帧数量：0 张\n- 拼图数量：0 张\n- 覆盖时间段：不适用；没有视频文件\n- 画布证据：未生成；用户只要求文字报告，不要求媒体或画布资产\n- 密度判断：不适用；文字输入按“基于用户文字描述分析”处理，不把不存在的关键帧写成证据\n\n## 三、一句话定性\n\n黑底中心玻璃杯在冷白轮廓光下持续接收红色液体。\n\n## 四、八维度分析\n\n### 1. ✅ 角色与主体\n\n关键词标签：无人物、透明玻璃杯、红色液体、中心主体。\n\n深拆：\n\n- 主体：没有人物；画面主体是置于画面中间的透明玻璃杯，杯形、杯口直径、杯高和厚度未提供。\n- 道具：红色液体由画面上方流入玻璃杯；供液容器是否存在、是否可见、液体初始高度和最终高度均未知。\n- 视觉锚点：中心构图、透明玻璃边缘的冷白轮廓、红色液流与黑底的高反差。\n- 一致性风险：透明材质容易在黑底中丢失，液流可能穿透杯壁、偏离杯口或改变颜色；没有人物和手部连续性问题。\n\n### 2. ✅ 场景与环境\n\n关键词标签：纯黑背景、极简空间、无人物、无额外道具。\n\n深拆：\n\n- 空间设定：背景为黑色；具体是黑色棚拍背景、无穷背景还是黑色环境未说明。\n- 时间天气：未提供，不应补写日夜或天气。\n- 空间深度：玻璃杯位于画面中间；前后景层次、桌面和承托物未提供。\n- 氛围细节：未提供雾气、尘埃、反射环境或水汽；复刻时应保持背景干净，避免新增环境元素。\n\n### 3. ✅ 剧情与动作\n\n关键词标签：单一动作、上方入流、持续注入、物理接触。\n\n深拆：\n\n- 剧情核心：6 秒内，红色液体从画面上方流入中央透明玻璃杯。\n- 主动作弧线：开场保持杯子和构图；随后液流进入杯口并持续注入；流速、是否溅起、是否在片尾停止未提供。\n- 次动作/互动：液体与杯内空间的接触是唯一可推断的物理互动；液面变化和飞溅程度未知。\n- 转折点：未提供明确转折或变速点；不要虚构“突然加速”或“停止”。\n- 观众钩子：透明玻璃的边缘高光与红色液体在纯黑背景上的反差。\n\n### 4. ✅ 镜头与运镜\n\n关键词标签：固定近景、中心构图、持续观察、镜头不移动。\n\n深拆：\n\n- 景别变化：描述只给出近景；没有切换或变焦证据。\n- 机位角度：未知；提示词保持固定近景，不额外断言俯拍、仰拍或正面角度。\n- 运镜方式：固定机位；不加入推、拉、摇、移、环绕或手持抖动。\n- 构图法则：中心构图，玻璃杯稳定位于画面中间；杯口和液流须留在画面内。\n- 焦段景深：未知；复刻设计补全为能看清玻璃边缘和液流的近景焦点，避免焦点漂移。\n\n### 5. ✅ 光影与色彩\n\n关键词标签：冷白轮廓光、透明边缘高光、黑底、红色主体色。\n\n深拆：\n\n- 光源：用户只指定冷白轮廓光；光源具体位置、数量和强度未知。\n- 光质：以勾勒玻璃外轮廓和杯口为目的的冷白边缘光；不补写三点布光或可见主光。\n- 色温与色调：轮廓光冷白；背景黑色；液体红色。其余色调和 LUT 未提供。\n- 主色与辅色：黑色背景、红色液体、冷白高光；避免额外彩色反射。\n- LUT 推测：无来源，不推测具体胶片或 LUT。\n\n### 6. ✅ 风格与美学\n\n关键词标签：极简、产品影像方向、材质对比、干净留白。\n\n深拆：\n\n- 风格类型：用户未指定写实、CG 或插画；提示词采用写实透明玻璃和可控流体的复刻设计补全。\n- 参考风格：未提供导演、品牌或作品参考。\n- 材质质感：应让玻璃保持透明、薄边缘和可见折射；红色液体保持连续、具有真实流体连贯性。这是执行补全，不是已观察的视频事实。\n- 品质锚词：干净、克制、产品近景；不添加电影颗粒、霓虹或装饰化背景。\n\n### 7. ⬜ 节奏与剪辑\n\n关键词标签：单段 6 秒、连续动作、无已知切换。\n\n- 描述未提供镜头数量、切换方式或节奏曲线；复刻提示词按一镜连续保持处理，属于设计补全。\n\n### 8. ✅ 音乐与音效\n\n关键词标签：只有倒水声、无人物声音、无 BGM 证据。\n\n深拆：\n\n- BGM：用户明确说“只有倒水声”，没有 BGM 证据。\n- 音效：仅有红色液体倒入玻璃杯的倒水声；具体流速、音量和混响未提供。\n- 环境音：不补写风声、房间底噪、杯壁碰撞或其他环境声。\n- 人声：无人物，未提供对白或旁白。\n\n## 五、剧情时间线\n\n下表只记录文字描述直接支持的时间范围；提示词中的更细微时间点属于“复刻设计补全”，不当作原视频观测结果。\n\n| 时间段 | 剧情概括 | 主要画面 | 镜头/运镜 | 关键音效 |\n|---|---|---|---|---|\n| 0–6 秒 | 单一持续注入 | 黑色背景中央的透明玻璃杯，红色液体从上方流入 | 固定近景、中心构图 | 只有倒水声 |\n\n## 六、目标模型中文 Prompt\n\n### MiniMax-H3：纯文本单请求\n\n#### 1. 推荐输入模式与素材映射\n\n- 推荐输入模式：纯文本\n- 选择依据：没有参考图、视频或音频文件；仅有一段 6 秒文字描述。单请求不混用其他模式。\n- 交付边界：下面只提供可复制 H3 提示词和输入说明；不发起视频生成。\n\n| 请求 | 模式 | 素材或顺序依赖 | 映射用途 | 状态 |\n|---|---|---|---|---|\n| H3-1 | 纯文本 | 无 | 描述全部 6 秒画面、镜头和声音约束 | 可直接作为文字输入 |\n\n#### 2. H3 时长分配\n\n- 原视频时长：6 秒（来自用户描述）\n- H3 目标总时长：6 秒\n- H3 请求数量：1\n- 每个请求时长：6 秒\n- 均衡分配：单请求覆盖 0–6 秒；满足 4–15 秒整数边界\n\n#### 3. 可复制的 H3 提示词\n\n```text\n【MiniMax-H3｜输入模式：纯文本｜请求时长：6秒】\n【输出目标】6秒、单一连续镜头的极简产品近景；固定机位，画面中心保持透明玻璃杯；无剪辑、无推拉摇移、无手持抖动。\n【参考输入】无\n【证据与设计补全】\n证据：无人物；纯黑背景；透明玻璃杯置于画面中间；红色液体自上方流入；固定近景；冷白轮廓光；只有倒水声。\n复刻设计补全：把供液源留在画外，只让液流从画面上方进入；采用干净的写实透明玻璃材质和可控的连续流体表现；不添加桌面、手、瓶子或其他道具。以下细分时间点服务于可执行性，不代表原视频已有逐帧证据。\n\n【全局锁定】\n无人物、无手、无可见供液容器；纯黑且均匀的背景；透明玻璃杯稳定位于画面正中，杯体和杯口始终在近景画面内；红色液体从画面上方持续流入杯口；冷白轮廓光只用于勾勒玻璃边缘和杯口，不加入彩色霓虹或背景光污染；玻璃保持透明、边缘清晰，红色液流保持连续并遵守杯口和杯壁的物理关系。\n\n【主时间线】\n镜头1｜0.0–6.0秒，6秒｜参考：无\n初态：无人物；中央为透明玻璃杯；背景纯黑；杯中初始液体状态未指定；固定近景机位，玻璃边缘由冷白轮廓光勾勒。\n镜头行为：固定近景、中心构图、焦点稳定在杯体和液流；供液源不入镜，液流从画面上方进入杯口；整个请求不切镜、不变焦、不移动机位。\n镜头内微时间线：\n- 0.0–0.8秒：建立并保持黑底、中央玻璃杯、冷白轮廓光和固定近景构图。\n- 0.8–2.0秒：红色液流从画面上方进入，准确落向杯口；保持杯体透明和边缘高光清晰。\n- 2.0–4.5秒：液流连续注入，流线和杯口接触关系稳定；液体在杯内形成可见红色内容，避免穿透玻璃或无依据的飞溅。\n- 4.5–6.0秒：继续保持同一固定构图和连续注入状态至片尾；不突然停止、不改变景别、不加入新元素。\n尾态锁定：片尾仍为黑底中央透明玻璃杯，冷白轮廓光稳定，红色液流从上方进入；液体已进入杯内但最终液面高度保持未指定，不强行补出具体刻度。\n\n【音频】\n全片只有清晰、近距离的红色液体倒入玻璃杯的倒水声；无音乐、无对白、无旁白、无人声、无额外环境音、无杯子碰撞声。\n\n【关键负向】\n无人物、无手、无可见瓶子或其他供液容器、无额外道具、无文字、无字幕、无Logo、无水印、无镜头移动、无变焦、无焦点呼吸、无剪辑跳切、无背景渐变、无彩色霓虹、无玻璃变形、无液体穿透杯壁、无凭空飞溅、无色彩漂移、无音乐和对白。\n```\n\n#### 4. 状态账本与衔接\n\n| 请求 | 开始状态 | 结束状态 | 下一请求衔接 |\n|---|---|---|---|\n| H3-1 | 固定近景；中央透明玻璃杯；纯黑背景；冷白轮廓光；无人物和额外道具；液体初始高度未知 | 固定近景和构图保持；红色液流已进入杯内并持续到片尾；最终液面高度未知 | 无下一请求；单请求结束 |\n\n#### 5. H3 自检\n\n- 请求只使用纯文本模式：是；没有参考素材，也未虚构素材路径。\n- 请求时长为 6 秒整数，位于 4–15 秒范围：是。\n- 单镜主时间线和镜头内微时间线覆盖 0–6 秒且无缺口：是。\n- 证据与复刻设计补全已分开：是。\n- 声音内容只使用用户给出的“只有倒水声”：是。\n- 提示词未超过 7000 字符；参考素材数量为 0：是。\n- 没有提交视频生成、没有调用提供方 API、没有生成媒体：是。\n\n## 七、全片统一负面词\n\n```text\n无人物、无手、无额外道具、无可见供液容器、无文字、无字幕、无Logo、无水印、无镜头移动、无变焦、无焦点漂移、无剪辑跳切、无背景渐变、无彩色霓虹、无玻璃变形、无液体穿透杯壁、无无依据的飞溅、无色彩漂移、无音乐、无对白、无额外环境音。\n```\n\n## 八、为什么这样拆\n\n原描述只有一个 6 秒动作和一个固定近景，因此按单镜头、单请求处理，避免把描述中的一个动作拆成虚构的多镜头。中心玻璃、黑底、红色液流和冷白边缘光构成复刻的核心视觉约束；流速、液面、杯形、画幅和机位角度没有证据，提示词只做了必要的可执行补全并保留未知项。声音仅保留用户明确给出的倒水声。\n\n## 九、最终自检\n\n- 元信息完整：是；未知项已明确标注\n- 高密度关键帧达标：不适用；输入是文字描述，不是视频\n- 关键帧拼图已在画布：不适用；未生成媒体，用户只要文字报告\n- 报告已连接关键帧来源：不适用；已明确写明分析依据为文字描述\n- 目标模型分支唯一且未混用：是；仅 MiniMax-H3\n- H3：每请求 4–15 秒整数、模式唯一、素材真实、字符与数量限制合格：是\n- 提示词由报告结论翻译而来：是\n\n## 依据文件\n\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\video-deconstruct-analyzer\\SKILL.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\video-deconstruct-analyzer\\references\\core-analysis.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\video-deconstruct-analyzer\\references\\h3-prompt-grammar.md`\n",
+      "kind": "actual_text_artifact"
+    },
+    "static_boundary_review": {
+      "file": "static-rule-review.md",
+      "bytes": 10515,
+      "sha256": "91c67decab492daf9866f470441e9569837d0b0be494d1236103432d99fbbc9d",
+      "text": "# 静态规则复核（推演，不是生成验证）\n\n本文件只对指定 `reviewed` 配置快照中的规则做文字推演，不代表实际生成、ComfyUI、提供方 API、付款、发布或用户数据操作已经发生。没有调用生成/API/发布/用户数据工具，也没有修改配置或项目文件。复核范围不读取审计结论或评测结论文件。\n\n## 复核结论\n\n五个场景的规则可以按下表执行：同一包、同一完整文件字节和同一授权范围可复用批准；包哪怕只增加一个字符也必须按新包处理；提交后超时且状态未知时停止当前执行链并禁止自动重提；只有 Brief 请求时在 Brief 交付和必要检查后停止；付费视频生成保持逐 Panel 串行，独立代码审查可以并行，但不能提交第二个生成 Clip 或改写当前执行中的包。\n\n## 场景推演\n\n### 场景 1：同包、同 hash 已有批准\n\n- **下一动作（推演）**：读取最新文件，执行 `validate`，确认返回的当前完整文件字节 `package_sha256` 与已批准 hash 相同，并核对批准范围仍覆盖当前 Panel、operation 和这次执行。条件都满足时复用既有批准，进入隔离执行单元，用 `execute --approved-sha256 <同一 hash>` 提交当前 Panel；不重复打断用户取得相同批准。\n- **停止范围（推演）**：若当前包校验失败、实际完整文件 hash 不同、批准范围不一致或素材不可用，在生成提交前停止当前 Panel/当前执行链。若执行后出现生成错误、超时或最小 QC 失败，也只停止受影响的当前 Panel 链，不自动重提、不导入失败候选、不把它标为 `ACCEPT`。\n- **依据文件**：`reviewed/AGENTS.md` 的“当前执行契约”第 3、4、6、7 项；`reviewed/.agents/skills/zero-to-story/references/panel-execution.md` 的“STEP 5：每个 Panel 创建并批准一个包”与“STEP 6：逐 Panel 隔离串行”。\n\n### 场景 2：批准后包增加一字节/一个字符\n\n- **下一动作（推演）**：把包视为已变更对象，不能继续使用变更前批准。先对当前包重新 `validate`，取得新的完整文件字节 `package_sha256`，再为这个具体包和具体 hash 取得一次新批准；新批准完成前不执行生成。旧批准只覆盖原来的文件字节和范围。\n- **停止范围（推演）**：停止当前变更包对应的 Panel，范围到生成提交前；不得用“同一个包只是改了一字”或笼统“继续生成”绕过新批准。其他不受影响的包和独立审查工作不因该包暂停而自动变更。若实际新 hash 与批准 hash 不匹配，仍停在当前 Panel，不提交。\n- **依据文件**：`reviewed/AGENTS.md` 的“当前执行契约”第 4 项（完整文件字节 SHA-256、包字节变化或缺少具体对象批准时重新批准）；`reviewed/.agents/skills/zero-to-story/SKILL.md` 的“不可变项目契约”；`reviewed/.agents/skills/zero-to-story/references/panel-execution.md` 的“最小状态与版本”和“提交前执行”。\n\n### 场景 3：生成已提交，随后超时，状态未知\n\n- **下一动作（推演）**：将当前 Panel 的结果标为未决/未知，停止该执行链；不假设提供方已经成功或失败，不发起第二次提交，不自动重试，不把未知结果登记为正式 artifact，也不据此给出 `ACCEPT` 或提取真实尾帧。后续只等待新的用户指令、修正后的输入或新的精确批准包来开启受影响任务。\n- **停止范围（推演）**：停止当前 Panel 的生成链和它向后续 Panel 的衔接；不扩大为整个项目的删除或数据清理。可以继续不触碰该运行状态的独立资料读取、代码审查或静态诊断，但它们不能把未知状态转成成功、失败或许可再次付费提交。\n- **依据文件**：`reviewed/AGENTS.md` 的“当前执行契约”第 6、7 项（超时硬停止、只由调用方对实际片段给出 `ACCEPT/REJECT`）；`reviewed/.agents/skills/zero-to-story/references/panel-execution.md` 的“STEP 6：逐 Panel 隔离串行”和“停止与继续”；`reviewed/.agents/skills/zero-to-story/SKILL.md` 的“继续与停止”。\n\n### 场景 4：只有 Brief 请求\n\n- **下一动作（推演）**：只完成用户要求的 Brief 产物，例如 `storyboard_brief.md`，并做该产物所需的结构、字段和事实一致性检查。只读取 Brief 阶段需要的故事板/导演参考；不主动编译 `creative_blueprint.json`，除非用户另行要求或该 Brief 检查明确依赖它。\n- **停止范围（推演）**：Brief 交付和必要检查完成后停止本次任务；不自动继续角色卡、场景关键帧、R2V 资产、H3 handoff、execution package、LFO 生成或 assembly。没有执行包和用户请求时，不触发批准、素材 hash 或付费生成流程。\n- **依据文件**：`reviewed/.agents/skills/zero-to-story/SKILL.md` 的“何时使用”（用户只要某阶段产物时，仅完成该产物及必要检查）、“先按交付物读取”和“STEP 0：分析输入并锁定规格”；`reviewed/docs/ai-system-prompt.md` 的“分工与交付”和“停止条件”。\n\n### 场景 5：付费视频生成仍串行，但独立代码审查可并行\n\n- **下一动作（推演）**：保持单一生成队列：当前 Panel 依次经过 `validate`、精确批准、隔离 `execute`、同步等待官方 ComfyUI/comfy-cli、一次 `ACCEPT/REJECT`，完成当前 Panel 后才推进下一 Panel。付费提供方不会因为代码审查而并行提交第二个视频 Clip。与当前包、运行状态和生成提交相互独立的代码审查可以同时进行，输出审查意见或完成独立代码检查。\n- **停止范围（推演）**：若代码审查需要修改当前正在执行的包、提示词、operation、引用或运行时行为，应先停止/冻结受影响执行链，重新生成当前包的完整 hash 并取得相应批准；不能在执行期间修改包，也不能把并行审查当作第二次提交的授权。若只是独立代码审查，生成队列与审查任务分别按各自结果停止或继续。\n- **依据文件**：`reviewed/AGENTS.md` 的“当前执行契约”第 2、4、5、6 项；`reviewed/docs/ai-system-prompt.md` 的“分工与交付”；`reviewed/.agents/skills/zero-to-story/references/panel-execution.md` 的“STEP 6：逐 Panel 隔离串行”；`reviewed/docs/ai-skill-routing.md` 关于 `mmx-cli`/`mmx-h3-video` 复用既有授权和不因状态未知重提的边界。\n\n## 配置冲突扫描（只报告证据）\n\n以下判断是对 `reviewed` 快照的规则关系推演，不是运行验证，也没有改动任何文件。\n\n### 上游与 LFO 职责\n\n未发现直接冲突。`reviewed/AGENTS.md` 将上游 Creative Skills 定位为故事、角色图、黑白分镜、提示词和创作决策，将 LFO 限定为消费公共 `VideoExecutionPackage` 和素材，负责导入、后端选择和同步 ComfyUI 执行。`reviewed/.agents/skills/zero-to-story/SKILL.md` 进一步写明上游只交付故事板、公共执行包和素材，不能操作 LFO 数据库、ComfyUI 节点、模型文件或内部素材 ID。`reviewed/.agents/skills/video-deconstruct-analyzer/SKILL.md` 也把视频生成交给下游已确认的 Panel package 与 LFO，不调用提供方生成接口。三处边界方向一致。\n\n### 授权复用\n\n未发现直接冲突。`reviewed/AGENTS.md` 的规则是“同一包、同一 hash、同一授权范围直接复用批准”；`reviewed/.agents/skills/zero-to-story/references/panel-execution.md` 将批准对象明确为文件、字节和范围，并要求同一包未变更且存在可验证批准时复用。`reviewed/docs/ai-skill-routing.md` 对非交互参数也采用已有授权复用。共同限制是：范围变了、包字节变了、批准缺失或 hash 不匹配时，复用立即停止，不能用泛化的“继续”替代具体批准。\n\n### 素材与 hash 停止\n\n未发现直接冲突。`reviewed/AGENTS.md` 要求执行绑定完整文件字节 SHA-256，并把 hash 不符、素材不可用、超时和最小 QC 失败列为停止条件；`reviewed/.agents/skills/zero-to-story/SKILL.md` 和 `reviewed/.agents/skills/zero-to-story/references/panel-execution.md` 同样要求当前 Panel 停止、不盲目重试、不保留失败候选、不写恢复记录。静态上需要保持的边界是：素材或包内容任何变更都先回到校验和精确批准，不能在执行中替换引用。\n\n### shuorenhua 的无源数值保真\n\n未发现与 LFO 执行契约的直接冲突，但两者作用域必须分开。`reviewed/.agents/skills/shuorenhua/SKILL.md` 要求改写保留事实、术语、数字、责任主体和抽象层级；`reviewed/.agents/skills/shuorenhua/references/rewrite-contract.md` 的“无源引用”规则要求：`rewrite-safe` 下，完全依赖无源引用的数字、预测或结论可删除整条，不能把 `40%` 改写成“会更快”；`audit-only` 下指出缺来源并可保留原句。这里没有授权去补来源、改数字或改变主谓关系。\n\n如果 shuorenhua 被用于执行包中的提示词文本，任何实际改写都会改变包字节，因而按上面的 hash 规则成为新包，必须重新校验并重新批准；不能用“只是去 AI 味”解释为同包同 hash，也不能把无源数值规则当成生成授权。该交界是需要遵守的操作顺序，现有文件没有显示出相互覆盖或职责冲突。\n\n## 依据文件清单\n\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\AGENTS.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\docs\\ai-system-prompt.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\docs\\ai-skill-routing.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\zero-to-story\\SKILL.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\zero-to-story\\references\\panel-execution.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\video-deconstruct-analyzer\\SKILL.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\shuorenhua\\SKILL.md`\n- `C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\shuorenhua\\references\\rewrite-contract.md`\n",
+      "kind": "static_reasoning"
+    },
+    "focused_C2": {
+      "file": "prompt.txt",
+      "bytes": 806,
+      "sha256": "6e699e979a08ac03826afa168ee233c5c7814d3cc7731d4bb2bf53cf9fba7978",
+      "text": "integrated_multimodal_description: [Shot 1] Live-action, cinematic, a single continuous 6-second 16:9 shot at 24 fps holds a fixed medium-wide view of an empty kitchen in warm early-morning light. A red enamel kettle rests on the countertop and remains completely motionless for the entire shot. White steam rises from the spout, then slowly drifts toward screen right in one soft, continuous plume. The camera stays locked off with no pan, tilt, zoom, push, pull, shake, or cut. The frame contains no people, dialogue, readable text, or logos. The only audible event is the kettle's faint water-boiling sound.\n\noverall_soundscape: The sole audible sound throughout the shot is a faint water-boiling sound from the kettle. No room tone, voices, music, or other sounds are audible.\n\nnon_diegetic_music: N/A\n",
+      "kind": "actual_text_artifact",
+      "request": "请交一个已确认T2VA单Panel的完整H3提示词，6秒、16:9、24fps，单连续固定镜头；无人厨房，清晨暖光。红色搪瓷茶壶始终静止在台面上，白色蒸汽从壶嘴升起后缓慢向画面右侧飘动。无人物、对白、可读文字、Logo、音乐；唯一声音是轻微水沸声。只要提示词，不要执行包或任何附件。",
+      "agent_self_report": {
+        "read_files": [
+          "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\AGENTS.md",
+          "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\docs\\ai-system-prompt.md",
+          "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\docs\\ai-skill-routing.md",
+          "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\h3-prompt-writing\\SKILL.md",
+          "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\h3-prompt-writing\\references\\base-en.txt",
+          "C:\\Users\\Administrator\\AppData\\Local\\Temp\\gpt6-ai-optimize-6h6mm9tl\\reviewed\\.agents\\skills\\h3-prompt-writing\\references\\ref-en.txt"
+        ],
+        "proposed_questions": [],
+        "blockers": [],
+        "notes": [
+          "The supplied operation is T2VA with one continuous shot, so base-en.txt was the applicable prompt guide.",
+          "No media was generated, no paid API was called, and the real project was not modified."
+        ]
+      }
+    }
+  },
+  "limitations": [
+    "每轮一个独立子Agent批处理四项，共享轮内上下文；不是逐案例隔离的API基准。",
+    "产物文本/字节/hash为实测；提问/读取日志是Agent自报，未采集宿主token/延迟遥测。",
+    "基线Agent自报D文件名中的连字符不准确，归档以实际存在的下划线文件名为准。",
+    "只验证文字产物和规则，没有提交媒体生成、付费API或ComfyUI。",
+    "原始C存在动作主体歧义，C2是另一次明确输入的定向复测，未覆盖原始结果。"
+  ],
+  "review": {
+    "completion": "baseline和current各生成4/4文字产物，Agent均报告0次额外澄清；不等于内容全部满分。",
+    "A": "事实/数字/责任人/业绩限制保留；current仍有全面提升协同效能等概括措辞。",
+    "B": "单集/两名出镜角色/修表店/录音反转保留。baseline接过表后再要表；current拧开后盖后又弹开，均有道具连续性细节需编辑复核。45秒未实际表演计时。",
+    "C": "两轮均为H3三段文本。current把右向运动分配给茶壶并加入room tone，与评审预期有偏差。h3 Skill本轮未改，不把差异归因于入口精简。",
+    "C2": "明确茶壶静止、蒸汽右移、唯一水沸声后，独立定向复测保留这些约束。",
+    "D": "两轮均为一个6秒Panel、2个Setup、1x2黑白板Brief，无媒体或执行包；六Beat未误作六格。",
+    "route": "未指定模型的文字输入直接选一个H3分支，说明依据且不假装读取视频或抽帧。",
+    "boundaries": "5场景静态推演与契约一致；不是实际生成验证。"
+  },
+  "reviewed_skill_files": [
+    {
+      "path": ".agents/skills/short-drama-screenwriter/references/workflow-contract.md",
+      "baseline_sha256": null,
+      "reviewed_sha256": "ec0058fc20dca092edac10d459bfb18b7670db4132f63d7da32cc5e255650101"
+    },
+    {
+      "path": ".agents/skills/short-drama-screenwriter/SKILL.md",
+      "baseline_sha256": "f359471868ebe16ac5e48d85acdbcf4d17050067d0ab6b530ca111cc4567264b",
+      "reviewed_sha256": "df2248222df0eb7002b57dc09a4ef16d2d0fa9b7844b4fa905916a5b4a37cf3a"
+    },
+    {
+      "path": ".agents/skills/shuorenhua/references/rewrite-contract.md",
+      "baseline_sha256": null,
+      "reviewed_sha256": "82103a5dbfeb3f2fd87b6c6d5f8831484ee779247a133ef188a771cc2461423b"
+    },
+    {
+      "path": ".agents/skills/shuorenhua/SKILL.md",
+      "baseline_sha256": "72d195ba0d7cb73e666fb552fe7f58431a118da1ab3d6fc3a25f7cc2fc6e023d",
+      "reviewed_sha256": "e0eff70a280eb9bf3d7fedbce22a2fc796492fdb4162478663d4e77136f825ca"
+    },
+    {
+      "path": ".agents/skills/zero-to-story/references/panel-execution.md",
+      "baseline_sha256": null,
+      "reviewed_sha256": "cf3e6fb179dba5b6f9ec7194d3589801e50939da1e425ff074c1088cf05a4d51"
+    },
+    {
+      "path": ".agents/skills/zero-to-story/references/storyboard-production.md",
+      "baseline_sha256": null,
+      "reviewed_sha256": "48cbff8d2831aec1aa20b0d3431d2b6c383eaddf3639bcff15e2a6a2290c9f4b"
+    },
+    {
+      "path": ".agents/skills/zero-to-story/SKILL.md",
+      "baseline_sha256": "46eb4f905ec9badaa1829cdf602b98365a47728e26e13d4df80453e313c967a3",
+      "reviewed_sha256": "f4655c31bea587fd114a03e001f666373e63676bc3435ace8f6455ed7543b268"
+    },
+    {
+      "path": ".agents/skills/video-deconstruct-analyzer/SKILL.md",
+      "baseline_sha256": "22942ad7c737af9beb75951c29a69676ffb059c851745a9914ea24324ce810ed",
+      "reviewed_sha256": "b02490529af9a7d8c1286396c9db794c1d1a139e8aebcdf7997b220b5a4517d4"
+    },
+    {
+      "path": ".agents/skills/shuorenhua/README.md",
+      "baseline_sha256": "1097b1971e6199299d4361e6a479adc5ad4c0ffa3a8191ff426b23ca9bff16dd",
+      "reviewed_sha256": "9b2cc0118dcc8cacbd9bdb4c01eeec959688f22e6869b09f862245ab11cc83e3"
+    },
+    {
+      "path": ".agents/skills/shuorenhua/references/operation-manual.md",
+      "baseline_sha256": "e78d5385bc45ec3453075e9fbad47e0427cb984285a594243a528be90a475b28",
+      "reviewed_sha256": "378c56359aa179ed541afd1fc6f781af85c9a94714177edeaf5be3f2ef5f879f"
+    },
+    {
+      "path": ".agents/skills/shuorenhua/references/scene-guardrails.md",
+      "baseline_sha256": "1e2f824a3c50d6cea4486bbabe47b11c49b1c9efac6d7b6823b61d928b588074",
+      "reviewed_sha256": "3038a8a6e17a0a603ce452971378290e72fe498c9e85872f2a51e8bcff23f844"
+    }
+  ],
+  "checks": {
+    "pytest_passed": 117,
+    "pytest_scope": "tests/test_ai_config_validation.py tests/skills tests/skill_adapter tests/test_mimo_video_skill.py",
+    "pytest_initial_failure": "旧默认临时目录访问失败；新唯一basetemp下通过。旧.pytest_cache有1条写入警告，文档后续命令关闭缓存。",
+    "official_skill_validator_passed": 10,
+    "metadata_yaml_parsed": 9,
+    "changed_skill_links_checked": 101,
+    "changed_skill_links_missing": 0,
+    "ruff": "两个新增Python文件通过",
+    "media_generation": "未运行",
+    "concurrent_work": "出现其他并行运行时源码变更，保留；117项通过记录仅对应实际测试时的工作区，不是这些并行改动的验收。"
+  }
+}

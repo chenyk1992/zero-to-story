@@ -23,9 +23,34 @@ from .hashing import WORKFLOW_HASH_ALGORITHM, compute_workflow_hash
 @dataclass
 class ModelDependency:
     """A model file required by the workflow."""
-    role: str  # 'unet' | 'clip' | 'vae' | 'audio_vae'
+    role: str  # 'unet' | 'clip' | 'vae' | 'audio_vae' | 'vdn_checkpoint'
     filename: str
     required: bool = True
+
+
+# The VDN checkpoint is a directory bundle rather than one model file. Keep
+# every file consumed by ``ApplyVDNH3`` as a normal, model-root-relative
+# dependency so runtime compatibility checks fail closed when the bundle is
+# incomplete. These paths are relative to ComfyUI's ``models`` directory
+# (the same root used by ``model_dir`` below).
+VDN_STAGE_DMD_STEP_250_FILES: tuple[str, ...] = (
+    "vdn/stage-dmd-step-250/linear_branch/model.safetensors",
+    "vdn/stage-dmd-step-250/adapters/default/adapter_model.safetensors",
+    "vdn/stage-dmd-step-250/adapters/turbo/adapter_model.safetensors",
+    "vdn/stage-dmd-step-250/metadata.json",
+    "vdn/stage-dmd-step-250/model_spec.json",
+    "vdn/stage-dmd-step-250/adapters/default/adapter_config.json",
+    "vdn/stage-dmd-step-250/adapters/turbo/adapter_config.json",
+    "vdn/stage-dmd-step-250/linear_branch/config.json",
+)
+
+
+def _vdn_stage_dmd_step_250_dependencies() -> list[ModelDependency]:
+    """Return fresh dependency objects for the verified VDN checkpoint bundle."""
+    return [
+        ModelDependency(role="vdn_checkpoint", filename=filename)
+        for filename in VDN_STAGE_DMD_STEP_250_FILES
+    ]
 
 
 @dataclass
@@ -122,13 +147,11 @@ class WorkflowManifest:
     tags: list[str] = field(default_factory=list)
 
     # Binding & compatibility
-    binding_policy: str = "strict_title_and_class"  # 'strict_title_and_class' | 'migration_fallback'
-    production_ready: bool = False  # True only when all checks pass with no warnings
+    production_ready: bool = False  # True only when all checks pass
 
     # Validation levels (populated by validate_workflow)
     static_valid: bool = False
     runtime_compatible: bool = False
-    smoke_tested: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -183,16 +206,10 @@ class BindingReport:
     workflow_id: str
     bindings: list[dict] = field(default_factory=list)
     unresolved: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)  # migration fallback notices
     status: str = "ok"  # 'ok' | 'partial' | 'failed'
-    mode: str = "strict"  # 'strict' | 'migration'
 
     def to_dict(self) -> dict:
         return asdict(self)
-
-    @property
-    def has_warnings(self) -> bool:
-        return len(self.warnings) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -205,8 +222,11 @@ H3_FL2VA_MANIFEST = WorkflowManifest(
     family="h3_fl2va",
     workflow_mode="fl2va",
     description=(
-        "H3 First/Last-Frame-to-Video-Audio: one MiniMaxH3ImageToVideo graph; "
-        "optional first_frame and last_frame are wired at submit time."
+        "H3 VDN Stage-DMD 8-step First/Last-Frame-to-Video-Audio: one "
+        "MiniMaxH3ImageToVideo graph with ApplyVDNH3 and MiniMaxH3SigmaShift; "
+        "optional first_frame and last_frame are wired at submit time. "
+        "VDN startup timing is currently unknown and is not represented by the "
+        "resource profile."
     ),
     source_file="h3_standard_fl2va.json",
     workflow_hash="",  # computed at registration time
@@ -248,18 +268,24 @@ H3_FL2VA_MANIFEST = WorkflowManifest(
         ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
         ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
         ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
+        *_vdn_stage_dmd_step_250_dependencies(),
     ],
-    resource_profile=ResourceProfile(cold_start_sec=360.7, hot_start_sec=360.0, peak_vram_mb=0),
+    resource_profile=ResourceProfile(cold_start_sec=0.0, hot_start_sec=0.0, peak_vram_mb=0),
     generates_audio=True,
     tags=["text-to-video", "image-to-video", "first-last-frame", "audio", "fl2va", "auto-duration"],
 )
 
 H3_R2V_MANIFEST = WorkflowManifest(
     workflow_id="h3_standard_r2v",
-    version="2.0.0",
+    version="4.0.0",
     family="h3_ref2va",
     workflow_mode="r2v",
-    description="H3 Reference-to-Video (v2): adds ComfyMathExpression for auto frame-count calculation on 17k+5 grid.",
+    description=(
+        "H3 VDN Stage-DMD 8-step Reference-to-Video-Audio: ApplyVDNH3 and "
+        "MiniMaxH3SigmaShift with ComfyMathExpression frame-count calculation "
+        "on the 17k+5 grid. VDN startup timing is currently unknown and is "
+        "not represented by the resource profile."
+    ),
     source_file="h3_standard_r2v.json",
     workflow_hash="",
     frame_constraints=FrameConstraints(step=17, min_frames=5, max_frames=3600, default_frames=124, fps=24),
@@ -324,8 +350,9 @@ H3_R2V_MANIFEST = WorkflowManifest(
         ModelDependency(role="clip", filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"),
         ModelDependency(role="vae", filename="minimax_h3_video_vae_fp16.safetensors"),
         ModelDependency(role="audio_vae", filename="minimax_h3_audio_vae_fp32.safetensors"),
+        *_vdn_stage_dmd_step_250_dependencies(),
     ],
-    resource_profile=ResourceProfile(cold_start_sec=370.6, hot_start_sec=370.0, peak_vram_mb=0),
+    resource_profile=ResourceProfile(cold_start_sec=0.0, hot_start_sec=0.0, peak_vram_mb=0),
     generates_audio=True,
     tags=["reference-to-video", "audio", "ref2va", "multi-reference", "auto-duration"],
 )
@@ -560,11 +587,10 @@ class WorkflowRegistry:
         return results
 
     def register(self, workflow_id: str) -> BindingReport:
-        """Register a single workflow: load, hash, resolve bindings (strict mode).
+        """Register a workflow and resolve its stable title bindings.
 
-        Production registration always uses strict mode — no silent fallback.
-        Returns the binding report.
-        Raises FileNotFoundError if workflow file missing.
+        Returns the binding report and raises ``FileNotFoundError`` when the
+        bundled graph is missing.
         """
         if workflow_id not in KNOWN_WORKFLOWS:
             raise ValueError(f"Unknown workflow: {workflow_id}")
@@ -582,7 +608,7 @@ class WorkflowRegistry:
         # Compute hash
         manifest.workflow_hash = compute_workflow_hash(workflow)
 
-        # Resolve bindings — always strict for production
+        # Resolve bindings against the exact static graph.
         from lfo.comfy.bindings import Binding, BindingResolver
 
         bindings = [
@@ -596,11 +622,11 @@ class WorkflowRegistry:
         ]
 
         resolver = BindingResolver(workflow)
-        report = BindingReport(workflow_id=workflow_id, mode="strict")
+        report = BindingReport(workflow_id=workflow_id)
 
         for b in bindings:
             try:
-                resolved = resolver.resolve_binding(b, mode="strict", warnings=report.warnings)
+                resolved = resolver.resolve_binding(b)
                 report.bindings.append({
                     "binding_id": resolved.binding_id,
                     "node_id": resolved.resolved_node_id,
@@ -616,9 +642,7 @@ class WorkflowRegistry:
 
         report.status = "ok" if not report.unresolved else ("partial" if report.bindings else "failed")
 
-        # production_ready: only when status=ok AND no warnings
-        manifest.binding_policy = "strict_title_and_class"
-        manifest.production_ready = (report.status == "ok" and not report.warnings)
+        manifest.production_ready = report.status == "ok"
         manifest.static_valid = manifest.production_ready
 
         # Store
@@ -646,11 +670,11 @@ class WorkflowRegistry:
         Checks:
         - Workflow file exists
         - Workflow hash matches registered manifest
-        - All bindings resolve (strict mode)
-        - API format
+        - All bindings resolve using stable title + class selectors
+        - API format and complete node shape
 
         Returns {valid: bool, level: str, checks: [{name, status, message}]}
-        Level is one of: STATIC_VALID, RUNTIME_COMPATIBLE, SMOKE_TESTED
+        Level is one of: STATIC_VALID, RUNTIME_COMPATIBLE
         """
         checks = []
 
@@ -673,19 +697,39 @@ class WorkflowRegistry:
         })
 
         if not file_exists:
+            manifest.static_valid = False
+            manifest.runtime_compatible = False
+            manifest.production_ready = False
             return {"valid": False, "level": "STATIC_VALID", "checks": checks}
 
-        # 2. Hash match
-        workflow = json.loads(wf_path.read_text(encoding="utf-8"))
+        # 2. Load and validate the current graph before comparing its hash.
+        # The hash captured by register() is the immutable in-process baseline;
+        # a changed graph must invalidate the static check.
+        try:
+            workflow = json.loads(wf_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            checks.append({
+                "name": "workflow_graph",
+                "status": "fail",
+                "message": f"Cannot load workflow graph: {exc}",
+            })
+            manifest.static_valid = False
+            manifest.runtime_compatible = False
+            manifest.production_ready = False
+            return {"valid": False, "level": "STATIC_VALID", "checks": checks}
+
+        from lfo.comfy.workflow import WorkflowLoader
+
+        # 3. Hash match
         current_hash = compute_workflow_hash(workflow)
         hash_ok = current_hash == manifest.workflow_hash
         checks.append({
             "name": "hash_match",
-            "status": "pass" if hash_ok else "warn",
+            "status": "pass" if hash_ok else "fail",
             "message": "Hash unchanged" if hash_ok else "Workflow file changed since registration",
         })
 
-        # 3. Bindings resolve (strict mode)
+        # 4. Bindings resolve using stable title + class selectors.
         from lfo.comfy.bindings import Binding, BindingResolver
         bindings = [
             Binding(
@@ -697,26 +741,26 @@ class WorkflowRegistry:
             for slot in manifest.input_slots
         ]
         resolver = BindingResolver(workflow)
-        binding_warnings: list[str] = []
         binding_ok = True
         for b in bindings:
             try:
-                resolver.resolve_binding(b, mode="strict", warnings=binding_warnings)
+                resolver.resolve_binding(b)
             except Exception:
                 binding_ok = False
         checks.append({
             "name": "bindings_resolve",
             "status": "pass" if binding_ok else "fail",
-            "message": "All bindings resolve (strict)" if binding_ok else "Some bindings failed",
+            "message": "All bindings resolve" if binding_ok else "Some bindings failed",
         })
 
-        # 4. API format
-        from lfo.comfy.workflow import WorkflowLoader
-        is_api = WorkflowLoader.is_api_format(workflow)
+        # 5. API format. WorkflowLoader returns detailed shape errors; keep
+        # this as the single static graph check instead of duplicating it as
+        # a separate structure check.
+        api_errors = WorkflowLoader.validate_workflow(workflow)
         checks.append({
             "name": "api_format",
-            "status": "pass" if is_api else "fail",
-            "message": "API format" if is_api else "Not API format",
+            "status": "pass" if not api_errors else "fail",
+            "message": "API format" if not api_errors else "; ".join(api_errors),
         })
 
         all_pass = all(c["status"] == "pass" for c in checks)
@@ -724,13 +768,14 @@ class WorkflowRegistry:
         # Update manifest validation state
         manifest.static_valid = all_pass
         if all_pass:
-            manifest.production_ready = not binding_warnings
+            manifest.production_ready = True
+        else:
+            manifest.runtime_compatible = False
+            manifest.production_ready = False
 
         # Determine level
         level = "STATIC_VALID"
-        if manifest.smoke_tested:
-            level = "SMOKE_TESTED"
-        elif manifest.runtime_compatible:
+        if manifest.runtime_compatible:
             level = "RUNTIME_COMPATIBLE"
 
         return {"valid": all_pass, "level": level, "checks": checks}
@@ -747,7 +792,8 @@ class WorkflowRegistry:
         - Each bound node's class_type exists in the current ComfyUI
         - The bound input names exist on the node
         - Input types are compatible (required vs optional)
-        - Required model files exist (if model_dir provided)
+        - The VDN checkpoint bundle exists below ``model_dir`` when required
+        - Base model selectors are accepted by the installed node schemas
 
         Requires a live ComfyUI connection. Returns:
         {compatible: bool, level: str, checks: [...]}
@@ -762,6 +808,28 @@ class WorkflowRegistry:
             }
 
         manifest = self._manifests[workflow_id]
+        # Every runtime probe is authoritative for the current process. A
+        # previous success must not survive a later connection/schema/model
+        # failure.
+        manifest.runtime_compatible = False
+
+        # Runtime compatibility is meaningful only for the exact graph that
+        # passed local structure/hash/binding validation.  This prevents a
+        # live /object_info success from masking a changed or malformed graph.
+        static_result = self.validate_workflow(workflow_id)
+        if not static_result["valid"]:
+            return {
+                "compatible": False,
+                "level": static_result.get("level", "STATIC_VALID"),
+                "checks": [
+                    {
+                        "name": "static_validation",
+                        "status": "fail",
+                        "message": "Workflow static validation failed",
+                    },
+                    *static_result["checks"],
+                ],
+            }
 
         # Lazy import to avoid hard dependency
         from lfo.comfy.client import ComfyApiClient
@@ -799,6 +867,28 @@ class WorkflowRegistry:
                     "message": f"Cannot load workflow graph: {exc}",
                 }],
             }
+
+        # Validate scalar node parameters and model selectors against the
+        # installed ComfyUI schemas before running the broader class/binding
+        # checks below. This keeps doctor/preflight on the same validation
+        # path as the execution backend.
+        from lfo.comfy.validation import validate_workflow_environment
+
+        try:
+            validate_workflow_environment(workflow, object_info)
+        except ValueError as exc:
+            checks.append({
+                "name": "workflow_environment",
+                "status": "fail",
+                "message": str(exc),
+            })
+        else:
+            checks.append({
+                "name": "workflow_environment",
+                "status": "pass",
+                "message": "Workflow parameters and model selectors are compatible",
+            })
+
         graph_classes: set[str] = {
             class_type
             for node in workflow.values()
@@ -861,15 +951,42 @@ class WorkflowRegistry:
                     "message": f"Input '{slot.input_name}' exists on '{class_type}'",
                 })
 
-        # Check model dependencies
-        if model_dir:
-            import pathlib
+        # VDN is a directory bundle and must be checked against the configured
+        # ComfyUI ``models`` root. Native H3 model selectors are validated by
+        # ``validate_workflow_environment`` against /object_info because they
+        # may legitimately come from ComfyUI extra_model_paths. Keep the
+        # original file checks for non-H3 workflows such as SeedVR2.
+        vdn_dependencies = [
+            dependency
+            for dependency in manifest.model_dependencies
+            if dependency.required and dependency.role == "vdn_checkpoint"
+        ]
+        if vdn_dependencies and not model_dir:
+            checks.append({
+                "name": "model_vdn_checkpoint_root",
+                "status": "fail",
+                "message": (
+                    "VDN checkpoint bundle cannot be verified without the "
+                    "configured ComfyUI models root"
+                ),
+            })
+        elif vdn_dependencies and model_dir:
+            mdir = pathlib.Path(model_dir)
+            for dep in vdn_dependencies:
+                model_path = mdir / dep.filename
+                exists = model_path.is_file()
+                checks.append({
+                    "name": f"model_{dep.role}_{dep.filename}",
+                    "status": "pass" if exists else "fail",
+                    "message": f"Model '{dep.filename}' {'found' if exists else 'MISSING'}",
+                })
+        elif not manifest.family.startswith("h3_") and model_dir:
             mdir = pathlib.Path(model_dir)
             for dep in manifest.model_dependencies:
                 if not dep.required:
                     continue
                 model_path = mdir / dep.filename
-                exists = model_path.exists()
+                exists = model_path.is_file()
                 checks.append({
                     "name": f"model_{dep.role}",
                     "status": "pass" if exists else "fail",
@@ -880,19 +997,9 @@ class WorkflowRegistry:
 
         # Update manifest
         manifest.runtime_compatible = all_pass
-        if all_pass:
-            level = "RUNTIME_COMPATIBLE"
-            if manifest.smoke_tested:
-                level = "SMOKE_TESTED"
-        else:
-            level = "STATIC_VALID"
+        level = "RUNTIME_COMPATIBLE" if all_pass else "STATIC_VALID"
 
         return {"compatible": all_pass, "level": level, "checks": checks}
-
-    def mark_smoke_tested(self, workflow_id: str) -> None:
-        """Mark a workflow as smoke-tested (actually executed on this machine)."""
-        if workflow_id in self._manifests:
-            self._manifests[workflow_id].smoke_tested = True
 
     def export_registry(self, output_dir: str | pathlib.Path) -> None:
         """Export all manifests, capabilities, and binding reports to JSON files."""

@@ -1,6 +1,8 @@
+> **GPT-6 适配变更说明**  复审统一参考用途与 operation 的映射，去掉按数量猜模式的旧表述。方案已由当前指令或已有计划确定时直接使用本模板；只有用户要求审阅或存在关键未决事实时才停留在文档阶段。进入 LFO 前仍单独记录并核对执行包完整文件 SHA-256 的明确批准。
+
 # H3 MG 提示词模板
 
-这份模板用于生成“先审阅、后执行”的 H3 提示词文档。按项目删减字段，不要把模板当成固定镜头表。
+这份模板用于生成可审阅的 H3 提示词文档，也支持在已授权任务中直接作为执行包的创作输入。按项目删减字段，不要把模板当成固定镜头表。
 
 ## 审阅文档结构
 
@@ -31,9 +33,10 @@
 ## H3 提示词
 {可直接执行的完整提示词}
 
-## 审批记录
-- 用户确认：{明确确认原文或摘要}
-- 确认者/时间：{approval metadata}
+## 授权与执行记录
+- 创作方案授权：{当前指令、已有计划或明确确认的原文/摘要}
+- 执行包文件 hash：{validate 返回的完整文件字节 SHA-256}
+- 执行 hash 批准：{明确批准原文或调用方已有批准记录}
 ```
 
 ## H3 提示词正文顺序
@@ -53,9 +56,10 @@
 |---|---|---|
 | `pixel_ratio` | `GenerationRequirements.megapixels` | 例如 `0.4 -> 0.4`；缺省时不写入，generation 不写 width/height |
 | 交付画幅 | `OutputPolicy` | 可独立保持 `1080x1920` |
-| 视觉参考 | `assets` + `references` | 0/1/多参考分别路由 T2V/I2V/R2V |
+| 视觉参考 | `assets` + `references` | 按已确定的 operation 和参考用途绑定，不按数量猜测：无参考可选 T2V；精确首帧用 I2V、精确首尾帧用 FL2V；普通图像/视频参考用 R2V，即使只有一个 |
 | 外部口播 | audio asset + Clip audio track | 以外部音频为准，避免重复原生口播 |
 | 普通字幕 | `OutputPolicy.subtitles_mode` | 默认 `none` |
-| 用户确认 | package approval metadata | 未明确确认不得执行 |
+| 创作方案授权 | package approval metadata | 记录当前指令或已有计划；不重复询问已确定事项 |
+| 执行包文件 hash | package approval metadata | `validate` 后必须明确批准完整文件字节 SHA-256；笼统生成请求不代替该批准 |
 
-提示词审阅通过后，保留此文档作为创作侧记录；用 `lfo.skill_adapter.mg_voiceover.build_package` 将它和素材文件转换为 `lfo.video-execution.v1`，再交给 LFO CLI/runtime。
+提示词方案确定后，保留此文档作为创作侧记录；用 `lfo.skill_adapter.mg_voiceover.build_package` 将它和素材文件转换为 `lfo.video-execution.v1`，再交给 LFO CLI/runtime。用户要求审阅时先交付文档；已授权任务可直接进入包构建，但 execute 仍受精确 hash 批准约束。

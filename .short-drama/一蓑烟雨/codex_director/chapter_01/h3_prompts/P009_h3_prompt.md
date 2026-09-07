@@ -1,0 +1,31 @@
+subject_definitions:
+<Picture 1> is the exact approved final frame of P008 and the mandatory visual start of [Shot 1]: only the upper face of 19-year-old Su Shi (hat, brow, and neutral eyes) is visible above the thick wooden sill of the open study window; his mouth and chin are hidden. 17-year-old Chao'er remains below beside one intact firewood bundle. Preserve both near-adult identities, window axis, positions, costumes, warm afternoon light, and camera side at the opening.
+<Subject 1> is young Su Shi in <Picture 2>, a 19-year-old adult Chinese male with slim upright build, broad forehead, straight nose, warm bright eyes, clean-shaven face, black hair in a topknot with a simple pale crown, and a moon-white cross-collar long robe. He stays adult and intelligent, never childlike.
+<Subject 2> is young Chao'er in <Picture 3>, a 17-year-old near-adult Chinese male with mature slim working proportions, narrow sun-browned face, alert eyes, black hair in a low hemp-tied knot, patched earth-brown short robes, gray hemp trousers, and worn cloth shoes. His single tied firewood bundle remains behind him; he never becomes a child.
+<Subject 3> is Su Xun in <Picture 4>, a 47-year-old lean Chinese man with a long composed face, sharp observant eyes, a short mustache and narrow jaw beard lightly touched with gray, hair under a dark scholar cap, and a deep gray-brown cross-collar robe. His authority is quiet and practical, never explosive or sentimental.
+<Picture 5> is the approved six-cell storyboard reference for [Shot 1] through [Shot 6], defining the doorway reveal, family-history confession, three-person depth, level eyelines, exact dialogue order, and ending glance toward Su Xun without defining the final rendering medium.
+
+summary:
+[reference generation + keyframe completion] The target video is a 13-second, 9:16 live-action historical sequence beginning from the exact window state in <Picture 1>. <Subject 3> appears in the doorway and asks Chao'er's family; <Subject 2> admits he is orphaned and works for food; <Subject 1> comes into the courtyard, crouches to Chao'er's eye level, tests how long he listened, and Chao'er answers that the reading began at noon. <Picture 5> guides the six-shot progression and final glance.
+
+retention_analysis:
+<Picture 1> (exact opening state in [Shot 1]): fully_preserved - both young men's near-adult identities, the upper-face-only window relationship, Chaoer's firewood, costumes, warm light, and camera side remain stable at the first frame.
+<Subject 1> (appears in [Shot 1], [Shot 4], and [Shot 5]): fully_preserved - 19-year-old adult identity, moon-white robe, clean-shaven face, gentle curiosity, and eye-level crouch remain stable.
+<Subject 2> (appears in [Shot 1], [Shot 3], [Shot 4], [Shot 5], and [Shot 6]): fully_preserved - 17-year-old near-adult identity, mature proportions, patched clothing, firewood ownership, lowered gaze, and right-hand grip on his garment remain stable.
+<Subject 3> (appears in [Shot 2], background [Shot 4], and eyeline target [Shot 6]): fully_preserved - Su Xun's 47-year-old identity, gray-brown robe, scholar cap, controlled authority, and doorway position remain distinct from young Su Shi.
+<Picture 5> (storyboard structure for [Shot 1] through [Shot 6]): partially_preserved - shot order, doorway and window axis, three-person depth, dialogue coverage, crouching action, and final eyeline are retained while the drawings become realistic live-action imagery.
+
+detailed_description:
+Use restrained live-action 1056 Meishan realism in vertical 9:16: warm bamboo-and-old-wood palette, natural side light, real hemp and linen, mature late-teen anatomy, quiet depth, and subtle film grain. Preserve the study door on frame left and open window on frame right. One bound firewood bundle remains beside Chao'er. No book, wall, or prop contains legible or pseudo-legible text. All four Mandarin lines must preserve exact wording and speaker ownership; emotion stays small and believable.
+[Shot 1] For 00:00.000–00:01.400, reproduce <Picture 1> exactly. The tail of Su Shi's prior question fades; he keeps the eyebrow raised for a beat and then turns his eyes toward a door sound at frame left. Do not repeat the full prior line.
+[Shot 2] At 00:01.400, pan left to a level medium view as the study door opens. <Subject 3> steps only to the inner threshold with hands behind his back. Young Su Shi turns from the window; Chao'er remains seated below it. In a low, controlled middle-aged Mandarin voice Su Xun asks exactly: “哪家的？” His gaze settles on Chao'er.
+[Shot 3] At 00:02.600, cut to a level medium close-up and make a slow dolly inward. <Subject 2> withdraws both hands, sits straight, lowers his eyes, and hooks his left arm around the firewood rope while his right hand grips one fold of his own robe. In a quiet 17-year-old Mandarin voice that becomes smaller near the end, he says exactly: “……没有哪家。爹娘走得早，给镇上各家打杂换饭吃。” He ends looking at his knees.
+[Shot 4] At 00:06.800, cut to a full side view and truck gently right. <Subject 1> steps from the doorway into the courtyard and crouches in front of Chao'er until their eyes share one level. His hands rest naturally on his own knees; <Subject 3> remains standing at the rear threshold. The three form clear depth and the firewood stays behind Chao'er.
+[Shot 5] At 00:08.300, cut to a level medium two-shot and make a small dolly inward. Young Su Shi looks directly into Chao'er's eyes and, in a clear but gentle 19-year-old Mandarin voice, asks exactly: “我考考你。方才那篇，你听了多久？” Chao'er hesitates, then raises his eyes without changing age or posture.
+[Shot 6] At 00:10.900, cut to a static level close-up of Chao'er. His right hand still grips his robe edge. In a soft uncertain voice he answers exactly: “……先生晌午才开始念。” After the last syllable he turns only his eyes toward <Subject 3> at the doorway. The final frame holds that glance and garment grip, ready for P010.
+
+overall_soundscape:
+Bamboo leaves, one study-door hinge, soft cloth, one step from threshold to courtyard, a firewood-rope creak, a distant sparrow that briefly stops during Chao'er's confession, and the four exact on-screen Mandarin lines form the complete sound field. Voices remain dry and intimate with natural courtyard reflections; no extra dialogue or music appears.
+
+non_diegetic_music:
+N/A

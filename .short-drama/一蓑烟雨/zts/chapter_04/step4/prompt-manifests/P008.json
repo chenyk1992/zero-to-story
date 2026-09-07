@@ -1,0 +1,13 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P008",
+  "plan_hash": "04f978480da42a454f0a45a34fd321f1904452026ac9d376eaae0176706b43c6",
+  "prompt_hash": "54864ad12ad1088b52ee758b5092c932e2bb9c4819cd53eba6431bf10af4b650",
+  "operation": "video.image_to_video",
+  "duration_ms": 12000,
+  "prompt_path": "P008_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C013", "start_ms": 0, "end_ms": 4000}, {"id": "C014", "start_ms": 4000, "end_ms": 12000}],
+  "dialogue_events": [{"event_id": "D006", "speaker_id": "SP_SU_SHI", "text": "他是我们家的人，也是我的同窗。在这张桌上，他坐哪儿，我坐哪儿。", "start_ms": 4400, "end_ms": 10778, "allow_overlap": false}],
+  "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image", "asset_key": "boundary.P007.last_frame"}],
+  "status": "draft_for_user_confirmation"
+}

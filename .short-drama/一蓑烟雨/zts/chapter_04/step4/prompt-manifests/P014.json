@@ -1,0 +1,13 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P014",
+  "plan_hash": "ef244f2c1c1ae32923eff3ad7f39d8e5027399e5fb8f743cf5ef3a8c7d10c5aa",
+  "prompt_hash": "eaa04a9b022d5ec081e52ae805fb5cab47e758ab18424e38f1f8d27a646c3078",
+  "operation": "video.image_to_video",
+  "duration_ms": 9000,
+  "prompt_path": "P014_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C024", "start_ms": 0, "end_ms": 9000}],
+  "dialogue_events": [{"event_id": "D012", "speaker_id": "SP_SU_XUN", "text": "我先去拜会欧阳修欧阳大人。你们兄弟俩，安心备考。", "start_ms": 500, "end_ms": 5527, "allow_overlap": false}],
+  "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image", "asset_key": "boundary.P013.last_frame"}],
+  "status": "draft_for_user_confirmation"
+}

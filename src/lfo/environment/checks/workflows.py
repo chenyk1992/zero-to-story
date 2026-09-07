@@ -1,5 +1,10 @@
-"""Workflow checks — hash match, bindings, runtime compatibility."""
+"""Workflow checks backed by the live registry validation path."""
 from __future__ import annotations
+
+import pathlib
+
+from lfo.comfy.client import ComfyApiClient
+from lfo.core.workflow_registry import WorkflowRegistry
 
 from .base import (
     CheckContext,
@@ -11,102 +16,12 @@ from .base import (
 
 
 @check(
-    "workflows.hash_match",
-    severity=CheckSeverity.BLOCKER,
-    description="Do workflow files match registered hashes?",
-)
-def check_workflow_hash_match(ctx: CheckContext) -> CheckResult:
-    """Check if workflow files match registered hashes."""
-    if not ctx.required_workflow_ids:
-        return CheckResult(
-            check_id="workflows.hash_match",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.SKIPPED,
-            message="No workflows required",
-        )
-
-    if ctx.env_snapshot is None:
-        return CheckResult(
-            check_id="workflows.hash_match",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.SKIPPED,
-            message="No environment snapshot available",
-        )
-
-    workflow_hashes = ctx.env_snapshot.get("workflow_hashes", {})
-    missing = []
-    for wf_id in ctx.required_workflow_ids:
-        if wf_id not in workflow_hashes:
-            missing.append(wf_id)
-
-    if not missing:
-        return CheckResult(
-            check_id="workflows.hash_match",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.PASSED,
-            message=f"All {len(ctx.required_workflow_ids)} workflow hashes matched",
-        )
-    return CheckResult(
-        check_id="workflows.hash_match",
-        severity=CheckSeverity.BLOCKER,
-        status=CheckStatus.FAILED,
-        message=f"Workflow hash check incomplete for: {', '.join(missing)}",
-        details={"incomplete": missing},
-    )
-
-
-@check(
-    "workflows.bindings_resolvable",
-    severity=CheckSeverity.BLOCKER,
-    description="Can all node bindings be resolved?",
-)
-def check_workflow_bindings(ctx: CheckContext) -> CheckResult:
-    """Check if workflow node bindings are resolvable."""
-    if not ctx.required_workflow_ids:
-        return CheckResult(
-            check_id="workflows.bindings_resolvable",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.SKIPPED,
-            message="No workflows required",
-        )
-
-    if ctx.env_snapshot is None:
-        return CheckResult(
-            check_id="workflows.bindings_resolvable",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.SKIPPED,
-            message="No environment snapshot available",
-        )
-
-    bindings_status = ctx.env_snapshot.get("bindings_resolvable", {})
-    failed = []
-    for wf_id in ctx.required_workflow_ids:
-        if not bindings_status.get(wf_id, False):
-            failed.append(wf_id)
-
-    if not failed:
-        return CheckResult(
-            check_id="workflows.bindings_resolvable",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.PASSED,
-            message="All workflow bindings resolvable",
-        )
-    return CheckResult(
-        check_id="workflows.bindings_resolvable",
-        severity=CheckSeverity.BLOCKER,
-        status=CheckStatus.FAILED,
-        message=f"Binding resolution failed for: {', '.join(failed)}",
-        details={"failed": failed},
-    )
-
-
-@check(
     "workflows.runtime_compatible",
     severity=CheckSeverity.BLOCKER,
     description="Does /object_info confirm compatibility?",
 )
 def check_workflow_runtime_compatible(ctx: CheckContext) -> CheckResult:
-    """Check if /object_info confirms workflow compatibility."""
+    """Check each required workflow against the live ComfyUI instance."""
     if not ctx.required_workflow_ids:
         return CheckResult(
             check_id="workflows.runtime_compatible",
@@ -115,41 +30,61 @@ def check_workflow_runtime_compatible(ctx: CheckContext) -> CheckResult:
             message="No workflows required",
         )
 
-    if ctx.env_snapshot is None:
+    if ctx.machine_profile is None:
         return CheckResult(
             check_id="workflows.runtime_compatible",
             severity=CheckSeverity.BLOCKER,
             status=CheckStatus.SKIPPED,
-            message="No environment snapshot available",
+            message="No machine profile available (cannot verify runtime compatibility)",
         )
 
-    runtime_status = ctx.env_snapshot.get("runtime_compatible", {})
-    comfyui_running = ctx.env_snapshot.get("comfyui_running", False)
-
-    if not comfyui_running:
-        return CheckResult(
-            check_id="workflows.runtime_compatible",
-            severity=CheckSeverity.BLOCKER,
-            status=CheckStatus.SKIPPED,
-            message="ComfyUI not running — cannot verify runtime compatibility",
-        )
-
+    workflow_dir = pathlib.Path(__file__).resolve().parents[2] / "registry"
+    model_dir = (
+        pathlib.Path(ctx.machine_profile.comfyui.root) / "models"
+        if ctx.machine_profile.comfyui.root
+        else None
+    )
+    registry = WorkflowRegistry(workflow_dir)
+    client = ComfyApiClient(ctx.machine_profile.comfyui.base_url)
     failed = []
-    for wf_id in ctx.required_workflow_ids:
-        if not runtime_status.get(wf_id, False):
-            failed.append(wf_id)
+    details: dict[str, dict] = {}
+    for workflow_id in sorted(ctx.required_workflow_ids):
+        try:
+            registry.register(workflow_id)
+            result = registry.check_runtime_compatibility(
+                workflow_id,
+                comfy_client=client,
+                model_dir=str(model_dir) if model_dir is not None else None,
+            )
+        except Exception as exc:
+            failed.append(workflow_id)
+            details[workflow_id] = {
+                "compatible": False,
+                "error": str(exc),
+            }
+            continue
+
+        details[workflow_id] = {
+            "compatible": bool(result.get("compatible", False)),
+            "level": result.get("level", ""),
+            "checks": result.get("checks", []),
+        }
+        if not result.get("compatible", False):
+            failed.append(workflow_id)
 
     if not failed:
         return CheckResult(
             check_id="workflows.runtime_compatible",
             severity=CheckSeverity.BLOCKER,
             status=CheckStatus.PASSED,
-            message="All workflows runtime-compatible",
+            message="All workflows runtime-compatible against live ComfyUI",
+            details=details,
         )
     return CheckResult(
         check_id="workflows.runtime_compatible",
         severity=CheckSeverity.BLOCKER,
         status=CheckStatus.FAILED,
         message=f"Runtime compatibility failed for: {', '.join(failed)}",
-        details={"failed": failed},
+        details={"failed": failed, "workflows": details},
+        remediation="Start the configured ComfyUI and install the required workflow nodes/models",
     )

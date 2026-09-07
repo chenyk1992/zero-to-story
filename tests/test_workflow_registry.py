@@ -7,6 +7,7 @@ import pytest
 from lfo.comfy.workflow import WorkflowLoader
 from lfo.core.workflow_registry import (
     KNOWN_WORKFLOWS,
+    VDN_STAGE_DMD_STEP_250_FILES,
     WorkflowManifest,
     WorkflowRegistry,
     make_capability,
@@ -48,7 +49,12 @@ class TestKnownWorkflows:
         assert m.family == "h3_fl2va"
         assert m.workflow_mode == "fl2va"
         assert m.generates_audio is True
-        assert len(m.model_dependencies) == 4
+        assert m.version == "4.0.0"
+        assert "VDN" in m.description
+        assert m.resource_profile.cold_start_sec == 0.0
+        assert m.resource_profile.hot_start_sec == 0.0
+        assert "unknown" in m.description.lower()
+        assert len(m.model_dependencies) == 4 + len(VDN_STAGE_DMD_STEP_250_FILES)
         assert len(m.input_slots) >= 3
         assert "first_frame" not in {slot.binding_id for slot in m.input_slots}
 
@@ -72,6 +78,11 @@ class TestKnownWorkflows:
 
     def test_r2v_uses_ref2va_model(self):
         m = KNOWN_WORKFLOWS["h3_standard_r2v"]
+        assert m.version == "4.0.0"
+        assert "VDN" in m.description
+        assert m.resource_profile.cold_start_sec == 0.0
+        assert m.resource_profile.hot_start_sec == 0.0
+        assert "unknown" in m.description.lower()
         unet = next(d for d in m.model_dependencies if d.role == "unet")
         assert "ref2va" in unet.filename
 
@@ -214,6 +225,35 @@ class TestCapabilities:
         assert cap.produces_audio is True
 
 
+class TestVDNModelDependencies:
+    def test_vdn_bundle_is_declared_for_standard_h3_workflows_only(self):
+        standard_workflows = ("h3_standard_fl2va", "h3_standard_r2v")
+        expected = set(VDN_STAGE_DMD_STEP_250_FILES)
+
+        for workflow_id in standard_workflows:
+            dependencies = KNOWN_WORKFLOWS[workflow_id].model_dependencies
+            declared = {
+                dependency.filename
+                for dependency in dependencies
+                if dependency.role == "vdn_checkpoint"
+            }
+            assert declared == expected
+            assert all(dependency.required for dependency in dependencies if dependency.role == "vdn_checkpoint")
+
+        presenter_dependencies = KNOWN_WORKFLOWS["h3_presenter_r2v"].model_dependencies
+        assert not any(
+            dependency.filename.startswith("vdn/")
+            for dependency in presenter_dependencies
+        )
+
+    def test_vdn_bundle_paths_are_model_root_relative(self):
+        for filename in VDN_STAGE_DMD_STEP_250_FILES:
+            path = pathlib.PurePosixPath(filename)
+            assert not path.is_absolute()
+            assert ".." not in path.parts
+            assert path.parts[:2] == ("vdn", "stage-dmd-step-250")
+
+
 class TestValidation:
     def test_validate_all_pass(self, registry):
         registry.register("h3_standard_fl2va")
@@ -263,7 +303,7 @@ class TestValidation:
 
         result = reg.validate_workflow("h3_standard_fl2va")
         hash_check = next(c for c in result["checks"] if c["name"] == "hash_match")
-        assert hash_check["status"] == "warn"
+        assert hash_check["status"] == "fail"
 
     def test_validate_check_names(self, registry):
         registry.register("h3_standard_fl2va")
@@ -273,6 +313,7 @@ class TestValidation:
         assert "hash_match" in check_names
         assert "bindings_resolve" in check_names
         assert "api_format" in check_names
+        assert "workflow_structure" not in check_names
 
 
 class TestExport:

@@ -80,9 +80,6 @@ def extract_message_text(response: dict) -> str:
             elif isinstance(item, str):
                 parts.append(item)
         return "\n".join(parts)
-    reasoning = message.get("reasoning_content")
-    if isinstance(reasoning, str):
-        return reasoning
     return ""
 
 
@@ -95,7 +92,10 @@ def analyze_video(
     output: str | None = None,
     model: str = DEFAULT_MODEL,
     base_url: str | None = None,
+    thinking: str = "disabled",
 ) -> str:
+    if thinking not in {"enabled", "disabled"}:
+        raise ValueError("thinking must be 'enabled' or 'disabled'")
     api_key = os.environ.get("MIMO_API_KEY")
     if not api_key:
         raise RuntimeError("MIMO_API_KEY is not set")
@@ -126,6 +126,10 @@ def analyze_video(
         ],
         "max_completion_tokens": max_tokens,
     }
+    if model == "mimo-v2.5":
+        payload["thinking"] = {"type": thinking}
+    elif thinking == "enabled":
+        raise ValueError("Explicit thinking control is supported only for mimo-v2.5")
 
     endpoint = chat_completions_url(base_url or os.environ.get("MIMO_VIDEO_BASE_URL", DEFAULT_BASE_URL))
     request = urllib.request.Request(
@@ -147,12 +151,18 @@ def analyze_video(
 
     parsed = json.loads(body)
     result = extract_message_text(parsed)
-    if not result:
-        finish_reason = (parsed.get("choices") or [{}])[0].get("finish_reason")
-        print(
-            "Warning: MiMo video API returned empty message content"
-            + (f"; finish_reason={finish_reason}" if finish_reason else ""),
-            file=sys.stderr,
+    finish_reason = (parsed.get("choices") or [{}])[0].get("finish_reason")
+    if finish_reason == "length":
+        raise RuntimeError(
+            "MiMo video API response was truncated; finish_reason=length. "
+            "Disable thinking, shorten the prompt/video, or increase --max-tokens "
+            "before explicitly running again. No output file was written."
+        )
+    if not result.strip():
+        raise RuntimeError(
+            "MiMo video API returned no final answer"
+            + (f"; finish_reason={finish_reason}" if finish_reason else "")
+            + ". No output file was written."
         )
     if encoded_chars is not None:
         print(f"Encoded local video as Base64 chars: {encoded_chars}", file=sys.stderr)
@@ -174,6 +184,7 @@ def main() -> None:
     parser.add_argument("--max-tokens", type=int, default=1024, help="最大输出 token 数")
     parser.add_argument("--model", default=DEFAULT_MODEL, choices=["mimo-v2.5", "mimo-v2-omni"], help="模型名称")
     parser.add_argument("--base-url", default=None, help="API base URL 或完整 /chat/completions URL")
+    parser.add_argument("--thinking", default="disabled", choices=["enabled", "disabled"], help="深度思考开关；描述任务默认关闭，避免思考耗尽正文输出额度")
     parser.add_argument("--output", help="输出文件路径")
     args = parser.parse_args()
 
@@ -186,6 +197,7 @@ def main() -> None:
         output=args.output,
         model=args.model,
         base_url=args.base_url,
+        thinking=args.thinking,
     )
 
     print(result)

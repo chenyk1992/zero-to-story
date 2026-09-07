@@ -1,0 +1,9 @@
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song historical realism in vertical 9:16. Begin exactly from <Picture 1>, the completed P007 tail: Chaoer has been gently seated again, Su Shi has just denied the outsider label, and the waiter remains at the table edge. Preserve the same long-table arrangement, one shared rice pot, four personal bowls, one vegetable dish, warm oil-lamp light, and all identities; the previous line is finished and must not be repeated.
+
+The first setup tilts down with small amplitude toward the tabletop. Su Shi uses the single shared rice pot to serve one bowl for himself and one for Chaoer, then places a portion from the single vegetable dish into their bowls. The action is deliberate and public; do not create a second pot, duplicate plates, or have Chaoer leave. At 00:04.000, the shot cuts to a fixed medium two-shot on Su Shi and Chaoer while the waiter and the other family members remain within the table geography. Su Shi looks directly at the waiter and says exactly once from 00:04.400 to 00:10.778 in a steady youthful male voice (S1): <d>[Chinese] 他是我们家的人，也是我的同窗。在这张桌上，他坐哪儿，我坐哪儿。</d> His lips sync only to this line. Chaoer stays seated beside him, startled and visibly moved without crying loudly; the waiter takes a small half-step back and does not speak. Su Zhe watches quietly. End with the shared food visibly distributed, Chaoer's bowl in front of him, and the public family claim complete. No modern cutlery, no readable text, no extra food set, no subtitles or watermark.
+
+overall_soundscape: The rice ladle scrapes the shared pot, ceramic bowls touch the rough wood, and a small serving of vegetables lands softly. Sleeves and stools shift under the clear single speech; the inn remains warm and quiet without extra dialogue or modern sounds.
+
+non_diegetic_music: N/A

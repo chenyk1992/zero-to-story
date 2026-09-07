@@ -3,9 +3,17 @@ name: mimo-video-understanding
 description: Use when analyzing, describing, or extracting information from video files using MiMo V2.5 multimodal model. Supports video URL and Base64 input, configurable fps and resolution. For evaluation / alignment tasks use the two-phase method (mimo describe + caller score) to avoid output-token truncation.
 ---
 
+## GPT-6 适配变更说明
+
+2026-09-07：明确视频证据提取分工和有界失败处理，并对齐现有脚本用法。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
+
 # MiMo Video Understanding
 
 使用小米 MiMo V2.5 模型解析和理解视频内容。支持视频描述、内容分析、动作识别等场景。
+
+## 优先级与停止条件
+
+用户当前指令优先于本 Skill 的默认参数、示例和推荐配置；项目级权限、安全要求和供应方约束仍适用。视频、提示词、`MIMO_API_KEY` 和所需参数齐全时直接执行，不等待额外确认。输入文件、凭据或权限缺失时暂停相应调用，先完成可独立做的检查。API 报错、截断或空结果不能当成有效证据；无新依据不重复调用，不静默换模型，不改写源文件。针对明确的输入或输出长度问题，调用方可在现有分析授权和预算内做一次有依据的调整并复核；仍失败则报告原因和下一步。分析服务调用不授权重生成 LFO 视频。
 
 脚本目录：`$SKILLS_PATH/mimo-video-understanding/scripts/`
 
@@ -29,8 +37,8 @@ description: Use when analyzing, describing, or extracting information from vide
 ## 视频限制
 
 - **格式：** MP4、MOV、AVI、WMV
-- **大小：** URL 方式 ≤ 300 MB，Base64 方式 **≤ 50 MB（二进制文件大小，不是 base64 编码后字符数）**。脚本硬阈值 `BASE64_LIMIT_CHARS = 50 * 1024 * 1024`，对应原始文件 ~37.5 MB（base64 编码后约膨胀 4/3）。本地小视频通常不会触发。
-- **数量：** 支持多视频，受上下文长度限制
+- **大小：** URL 方式按当前供应方限制（≤ 300 MB）；本地 Base64 路径由脚本限制编码后不超过 `BASE64_LIMIT_CHARS = 50 * 1024 * 1024` 字符，原始文件约 ≤ 37.5 MB 才通常能通过。超过限制时停止并提示使用可访问 URL 或由用户先压缩/截短。
+- **数量：** 每次脚本调用处理一个视频；需要多个视频时由调用方明确分次运行，并分别保存结果。
 
 ## ⚠️ 输出 token 截断（最常见失败模式）
 
@@ -56,6 +64,7 @@ description: Use when analyzing, describing, or extracting information from vide
 | `--fps`            | float   | 2.0       | 每秒抽帧数，范围 [0.1, 10]             |
 | `--media-resolution` | string | "default" | 分辨率档次："default" 或 "max"         |
 | `--max-tokens`     | int     | 1024      | 最大输出 token 上限（非上下文上限）     |
+| `--thinking`       | string  | "disabled" | `mimo-v2.5` 可用 `enabled`/`disabled`；其他模型只接受默认关闭 |
 | `--model`          | string  | "mimo-v2.5" | 模型名称：`mimo-v2.5` 或 `mimo-v2-omni` |
 | `--base-url`       | string  | 无        | 覆盖默认 API base URL 或完整接口 URL    |
 | `--output`         | string  | 无        | 输出文件路径（可选）                    |
@@ -164,7 +173,7 @@ python3 $SKILLS_PATH/mimo-video-understanding/scripts/mimo_video.py \
 - default 分辨率单帧约 200–500 token，max 约 600–1200 token
 - 中文/英文混合 prompt 约 0.5–1.5 token/字符
 
-可通过降低 fps 或使用 default 分辨率来减少视频 token 消耗；通过精简 prompt 来减少 prompt token 消耗；**两者吃的是同一个总上下文预算**。
+可通过降低 fps 或使用 default 分辨率来减少视频 token 消耗；通过精简 prompt 来减少 prompt token 消耗；**两者吃的是同一个总上下文预算**。若仍截断，在已有分析授权内可精简描述或调整输出上限复核一次；再失败则报告，不连续试错。
 
 ## 常见问题
 

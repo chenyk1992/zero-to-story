@@ -1,0 +1,16 @@
+{
+  "schema": "h3.prompt-manifest.v1",
+  "clip_id": "P011",
+  "plan_hash": "60e1a6643394e6a3353b2695079f1607ab81fbbbf7730b52adb0b1b1727c86b6",
+  "prompt_hash": "6f54c59a133999b67ce0dbc413090d538f2c9d365bb1e64e9a52c3f89df0a3fb",
+  "operation": "video.image_to_video",
+  "duration_ms": 12000,
+  "prompt_path": "P011_h3_prompt_v01.md",
+  "setup_windows": [{"id": "C019", "start_ms": 0, "end_ms": 12000}],
+  "dialogue_events": [
+    {"event_id": "D008", "speaker_id": "SP_SU_ZHE", "text": "还有什么？", "start_ms": 600, "end_ms": 1609, "allow_overlap": false},
+    {"event_id": "D009", "speaker_id": "SP_SU_XUN", "text": "人心。考场上的文章只考三天——考官心里的文章，写一辈子。", "start_ms": 1900, "end_ms": 7611, "allow_overlap": false}
+  ],
+  "references": [{"label": "Picture 1", "slot": "first_frame", "media_type": "image", "asset_key": "boundary.P010.last_frame"}],
+  "status": "draft_for_user_confirmation"
+}

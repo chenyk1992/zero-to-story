@@ -6,6 +6,7 @@ import pytest
 
 from lfo.backends.comfy_h3 import (
     H3_BACKEND_ID,
+    H3_BACKEND_REVISION,
     H3_MAX_DURATION_MS,
     H3_PRESENTER_BACKEND_ID,
     ComfyH3Config,
@@ -14,6 +15,7 @@ from lfo.backends.comfy_h3 import (
 )
 from lfo.comfy.cli import ComfyCliOutput, ComfyCliRunResult
 from lfo.comfy.exceptions import ComfyCliTimeoutError, LfoComfyError
+from lfo.comfy.workflow import WorkflowLoader
 
 
 class FakeClient:
@@ -22,6 +24,25 @@ class FakeClient:
         self.uploaded: list[pathlib.Path] = []
         self.uploaded_files: list[pathlib.Path] = []
         self.interrupt_calls = 0
+
+    def get_object_info(self) -> dict:
+        info: dict = {
+            kind: {"input": {"required": {}}}
+            for kind in ("LoadImage", "LoadVideo", "GetVideoComponents", "LoadAudio")
+        }
+        for name in ("h3_standard_fl2va", "h3_standard_r2v", "h3_presenter_r2v"):
+            path = ComfyH3Config().workflow_dir / f"{name}.json"
+            for node in WorkflowLoader.load(path).values():
+                fields = info.setdefault(node["class_type"], {"input": {"required": {}}})
+                for name, value in node["inputs"].items():
+                    kind = (
+                        "BOOLEAN" if isinstance(value, bool) else
+                        "INT" if isinstance(value, int) else
+                        "FLOAT" if isinstance(value, float) else
+                        "STRING" if isinstance(value, str) else "ANY"
+                    )
+                    fields["input"]["required"][name] = [kind, {}]
+        return info
 
     def upload_image(self, path: pathlib.Path) -> dict:
         self.uploaded.append(path)
@@ -99,7 +120,7 @@ class TimeoutRunner:
 
 def test_build_h3_backend_registry_uses_bundled_workflows() -> None:
     registry = build_h3_backend_registry()
-    manifest = registry.get(H3_BACKEND_ID, "3.0.0")
+    manifest = registry.get(H3_BACKEND_ID, H3_BACKEND_REVISION)
     assert manifest is not None
     assert "video.reference_to_video" in manifest.operations
     assert "video.first_last_frame" in manifest.operations
@@ -141,7 +162,7 @@ def test_select_workflow_forces_virtual_presenter_workflow() -> None:
 def test_presenter_capability_is_independent() -> None:
     registry = build_h3_backend_registry()
     presenter = registry.get(H3_PRESENTER_BACKEND_ID, "3.0.0")
-    standard = registry.get(H3_BACKEND_ID, "3.0.0")
+    standard = registry.get(H3_BACKEND_ID, H3_BACKEND_REVISION)
     assert presenter is not None
     assert standard is not None
     assert presenter.operations == ["video.virtual_presenter"]
@@ -208,11 +229,12 @@ def test_prepare_r2v_uses_only_declared_reference_slots(
     assert all(f"ref_images.ref_image_{index}" in generator_inputs for index in range(reference_count))
     for index in range(reference_count, 3):
         assert f"ref_images.ref_image_{index}" not in generator_inputs
+        assert str(6 + index) not in workflow
     for index in range(3, reference_count):
         node_id = generator_inputs[f"ref_images.ref_image_{index}"][0]
         assert workflow[node_id]["class_type"] == "LoadImage"
         assert workflow[node_id]["inputs"]["image"] == expected_uploaded[index]
-    assert workflow["14"]["inputs"]["steps"] == 20
+    assert workflow["14"]["inputs"]["steps"] == 8
     assert workflow["15"]["inputs"]["noise_seed"] == 42
 
 
@@ -308,6 +330,7 @@ def test_prepare_presenter_uses_materialized_typed_slots(
     workflow, uploaded = handler._prepare_workflow(
         "h3_presenter_r2v",
         {
+            "operation": "video.virtual_presenter",
             "prompt": "Picture 1 speaks with Video 1 while Audio 1 is heard",
             "duration_ms": 5_000,
             "resolved_references": [
@@ -1172,6 +1195,7 @@ def test_prepare_presenter_rejects_fake_first_frame_guarantee(
         handler._prepare_workflow(
             "h3_presenter_r2v",
             {
+                "operation": "video.virtual_presenter",
                 "prompt": "Presenter",
                 "resolved_references": [
                     {

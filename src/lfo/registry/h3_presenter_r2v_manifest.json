@@ -5,7 +5,7 @@
   "workflow_mode": "r2v",
   "description": "H3 virtual-presenter Reference-to-Video-Audio workflow with explicit materialized image, video and audio reference slots.",
   "source_file": "h3_presenter_r2v.json",
-  "workflow_hash": "29bde6ab623df46903421447be36ab7c3893ff6870c1912132993b31ae540bda",
+  "workflow_hash": "2048141ee40563ec29d68847da0ea88b3bfe7f72b86e23b1f09e6e4b6e7ac187",
   "workflow_hash_algorithm": "lfo-wfj1-sha256-v1",
   "frame_constraints": {
     "step": 17,
@@ -93,9 +93,7 @@
     "ref2va",
     "auto-duration"
   ],
-  "binding_policy": "strict_title_and_class",
   "production_ready": true,
   "static_valid": true,
-  "runtime_compatible": true,
-  "smoke_tested": false
+  "runtime_compatible": false
 }

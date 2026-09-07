@@ -1,0 +1,9 @@
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song historical realism in vertical 9:16. Begin exactly from <Picture 1>, the completed P018 tail: only Su Shi on the LEFT and Su Zhe on the RIGHT remain in the deep-night inn hall; both small table oil lamps are lit, one blank sheet lies centered, and Su Shi's RIGHT hand holds a brush hovering above the paper without touching it. Preserve the exact faces, robes, lamp ownership, table, paper, inkstone, empty background, and poised brush. This first frame is a completed boundary state; do not replay the time cut, laying of paper, grinding ink, or lifting of the brush.
+
+Hold a fixed medium two-shot on the same frontal axis. Su Shi keeps the brush suspended and studies the blank paper. From 00:00.500 to 00:04.211 he turns his eyes, then only slightly his face, toward Su Zhe and asks exactly once in a quiet thoughtful youthful male voice (S1): <d>[Chinese] 辙儿，你说——文章写得好，能改变什么？</d> His lips match only this line and the brush remains above the blank paper. Leave a short audible stillness after the question. Su Zhe lifts his eyes toward his brother by the end of the clip, but does not answer in this Panel; both lamps remain lit and no hand reaches either flame. The camera does not cut, zoom, or tilt, and the paper stays blank. End with Su Shi's question hanging between the two lamps, Su Zhe looking up, and the exact two-lamp state ready for P020. No subtitles, readable writing, extra speech, or fade.
+
+overall_soundscape: Quiet deep-night inn tone, small lamp flames, paper and sleeve stillness, and restrained breathing surround the single spoken question. No crowd returns, no writing touches the paper, and no extra voice or modern sound is present.
+
+non_diegetic_music: N/A

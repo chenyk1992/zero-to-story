@@ -3,12 +3,22 @@ name: h3-prompt-writing
 description: Write one complete MiniMax H3 video-generation prompt for a single approved Panel in T2VA, I2VA, FL2VA, or Ref2VA form supported by the current LFO contract. Use when composing the required H3 sections, aligning keyframes and timing, or defining reference labels; return only the prompt text, with no manifest, lock, hash, retry or QC sidecar.
 ---
 
+## GPT-6 适配变更说明
+
+2026-09-07：完整单 Panel 输入直接交付提示词；只报告真正缺失或矛盾的执行条件。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
+
 # H3 Prompt Writing
+
+## Priority and stop conditions
+
+The current user instruction is authoritative over this Skill's defaults. When the user or upstream handoff supplies the operation, timing, references and dialogue needed for one Panel, write and return the prompt directly without another confirmation round. Project-level LFO contracts, platform permissions and safety boundaries still apply; user priority does not authorize unsupported modes or fabricated assets.
+
+Stop after one concise incompatibility report when a required mode, asset, field, timing value or reference mapping is missing or contradictory. Do not silently redesign the Panel, invent a reference, emit an unusable prompt or retry the same inputs. Continue only when the user or upstream caller supplies a concrete correction or new approved input.
 
 ## Workflow
 
-1. Identify the input mode: T2VA, I2VA, FL2VA, or full-reference Ref2VA. Last-frame-only L2VA is not an executable LFO mode; stop and ask the upstream plan to choose a supported operation instead of emitting an unusable prompt.
-2. When a zero-to-story director plan is supplied, treat its operation, Camera Setup sequence, timing and pacing as fixed input. Do not independently redesign the scene.
+1. Identify the input mode: T2VA, I2VA, FL2VA, or full-reference Ref2VA. Last-frame-only L2VA is not an executable LFO mode; stop with a concise incompatibility report naming the supported correction instead of emitting an unusable prompt or repeating a confirmation request.
+2. When a zero-to-story director plan or current user specification is supplied, treat its operation, Camera Setup sequence, timing and pacing as fixed input. Do not independently redesign the scene unless the user explicitly asks for that change.
 3. For base text/keyframe modes, read references/base-en.txt. For full-reference mode, read references/ref-en.txt.
 4. Preserve the exact field names, section order, labels and timing notation required by the selected guide.
 5. Run a mandatory shot-header format gate before returning: the first header must be `[Shot 1]` followed directly by descriptive prose. `[Shot 1] At ...`, `[Shot 1] From ...`, `[Shot 1] 00:...` and any first-shot time range are invalid and must be rewritten. Every later shot header must use `[Shot N] At <approved-cut-time>, ...`.
@@ -27,7 +37,7 @@ Use integrated_multimodal_description, overall_soundscape and non_diegetic_music
 
 The upstream creative plan is authoritative for dramatic pacing, operation, Camera Setup count, cut points, camera position, axis side, subject facing, gaze target, screen direction and visual anchors. Treat an approved variable-grid storyboard board as one ordered planning reference. For a zero-to-story handoff, preserve its locked `rowsxcolumns` layout of 2–6 cells and row-major cell mapping, but do not create a separate reference image or H3 [Shot N] for each cell. Emit one [Shot N] for each actual Camera Setup, preserving same-setup development inside one shot.
 
-Use approved character and scene text anchors whenever the selected mode needs stable visual detail. Do not invent a second identity or environment description. If a required anchor is absent, report the incompatibility to zero-to-story instead of silently deleting a reference or changing the mode.
+Use approved character and scene text anchors whenever the selected mode needs stable visual detail. Do not invent a second identity or environment description. If a required anchor is absent, report the incompatibility to the caller instead of silently deleting a reference or changing the mode; if all required anchors are present, continue directly.
 
 ## Continuity handoff constraints
 
@@ -37,7 +47,7 @@ Validate the operation against the approved director intent and actual shot rela
 - Exact first and last frame together: use FL2VA (video.first_last_frame) and describe one forward path between those keyframes.
 - When the approved operation is Ref2VA/R2V (video.reference_to_video), consume its variable-grid storyboard board, other full references or intentional hard-cut plan without changing the mode. The whole storyboard board is one ordinary reference image; it may guide ordered viewpoints, identity, composition or state, but it is not an exact video first-frame lock.
 
-The operation recommendation is made upstream. This Skill only checks that the selected mode can consume the supplied assets and writes the corresponding H3 form. If it cannot, stop with a concise incompatibility report.
+The current user or upstream plan chooses the operation. This Skill checks that the selected mode can consume the supplied assets and writes the corresponding H3 form. If it cannot, stop with a concise incompatibility report.
 
 The supplied timing is authoritative. Do not stretch, compress, reorder, merge or invent dialogue/action windows. Preserve the approved duration and Camera Setup boundaries. For P002 and later, the upstream plan's boundary Beat is zero-duration context, not necessarily a storyboard cell. If the approved cell mapping includes that boundary state, it adds no shot, action, dialogue or duration; if it does not, do not invent a replacement cell. For a continuous handoff, the first effective shot must advance from the completed pose, gaze, screen direction and prop state. For an approved hard cut or new scene, begin with the first current-Panel Setup instead of inserting or replaying the prior boundary state. Keep one transition ownership per boundary so adjacent clips do not repeat the same closing action.
 

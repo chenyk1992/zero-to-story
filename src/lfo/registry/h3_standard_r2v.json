@@ -95,16 +95,16 @@
   "13": {
     "class_type": "KSamplerSelect",
     "inputs": {
-      "sampler_name": "res_multistep"
+      "sampler_name": "euler"
     }
   },
   "14": {
     "class_type": "BasicScheduler",
     "inputs": {
       "scheduler": "simple",
-      "steps": 20,
+      "steps": 8,
       "denoise": 1.0,
-      "model": ["1", 0]
+      "model": ["31", 0]
     }
   },
   "15": {
@@ -116,7 +116,7 @@
   "16": {
     "class_type": "BasicGuider",
     "inputs": {
-      "model": ["1", 0],
+      "model": ["31", 0],
       "conditioning": ["12", 0]
     }
   },
@@ -160,7 +160,31 @@
       "video": ["20", 0],
       "filename_prefix": "video/test_r2v",
       "format": "mp4",
-      "codec": "h264"
+      "format.codec": "h264"
+    }
+  },
+  "30": {
+    "_meta": {"title": "LFO.Acceleration"},
+    "class_type": "ApplyVDNH3",
+    "inputs": {
+      "model": ["1", 0],
+      "vdn_checkpoint": "stage-dmd-step-250",
+      "apply_turbo_adapter": true,
+      "strength": 1.0,
+      "lora_mode": "merge",
+      "branch_weights": "stream",
+      "retain_buffers": "off",
+      "verbose": true,
+      "attention_backend": "grouped"
+    }
+  },
+  "31": {
+    "_meta": {"title": "LFO.SigmaShift"},
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": ["30", 0],
+      "shift_video": 12.0,
+      "shift_audio": 3.0
     }
   }
 }

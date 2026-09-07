@@ -1,0 +1,48 @@
+{
+  "adaptation_note": "GPT-6 适配变更说明：第三轮复审的实际文字样本，原样保留首次遗漏及一次定向复测；这是评估数据，不是日常工作指令。",
+  "date": "2026-09-07",
+  "method": "两个独立子 Agent 分别只接收相同任务和指定配置文件入口；未提供预期答案、前次输出或修改理由。主 Agent 根据可观察成稿检查；不代表统计性能、稳定性或媒体生成验收。",
+  "task": "用 shuorenhua 去 AI 味，原文三句的数量和顺序必须保留，保留全部具体信息、人名、数字；只给成稿，不加说明。原文：这不仅仅是一次培训，更是张岚负责的14天试点。共有12人参加，其中9人完成培训。研究表明，这类培训能让业绩提升40%。",
+  "runs": [
+    {
+      "id": "rereview_behavior",
+      "config_sha256": {
+        ".agents/skills/shuorenhua/SKILL.md": "0f0bc7a8e1300e9d7250a3460ba38eaa4110793426c5c46facc5681fa944e0d3",
+        ".agents/skills/shuorenhua/references/rewrite-contract.md": "4c400302d3b350fbc61d8eff6c43b3935c1261dd6ecdb6ed5f3a0435b57d5abd"
+      },
+      "raw_output": "这次既是一次培训，也是张岚负责的14天试点。共有12人参加，其中9人完成培训。研究表明，这类培训能让业绩提升40%。",
+      "observations": {
+        "sentence_count": 3,
+        "order_preserved": true,
+        "training_and_pilot_preserved": true,
+        "person_and_numbers_preserved": true,
+        "source_gap_explicit": false,
+        "extra_question_or_report_in_output": false
+      },
+      "result": "部分通过：保真和句数满足；无源研究仍写成已证实语气。"
+    },
+    {
+      "id": "rereview_behavior_followup",
+      "config_sha256": {
+        ".agents/skills/shuorenhua/SKILL.md": "0f0bc7a8e1300e9d7250a3460ba38eaa4110793426c5c46facc5681fa944e0d3",
+        ".agents/skills/shuorenhua/references/rewrite-contract.md": "f5bb64164586cb4715cc2686eaf8d25a6a2c497f079fc2bd33d1fb4e7b48e872"
+      },
+      "raw_output": "这是一次培训，也是张岚负责的14天试点。共有12人参加，其中9人完成了培训。有研究声称，这类培训能让业绩提升40%，但未提供出处。",
+      "observations": {
+        "sentence_count": 3,
+        "order_preserved": true,
+        "training_and_pilot_preserved": true,
+        "person_and_numbers_preserved": true,
+        "source_gap_explicit": true,
+        "extra_question_or_report_in_output": false
+      },
+      "result": "本样本通过：具体信息及三句保留，来源缺口在原句内表达。"
+    }
+  ],
+  "intervention": "在 rewrite-contract.md 说明 audit-only 且只交成稿时，来源缺口写入原句，不附报告、不增加句数；其余样本事实和任务不变。",
+  "limits": [
+    "两次单样本，不能推断总体成功率或因果收益。",
+    "未执行媒体生成、上传、付费 API 或生产 LFO 流程。",
+    "此前评估的实际语义偏差及原始结果未改写。"
+  ]
+}

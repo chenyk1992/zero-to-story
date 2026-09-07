@@ -1,0 +1,29 @@
+subject_definitions:
+<Picture 1> is the exact approved final frame of P010 and the mandatory visual start of [Shot 1]: young Su Shi and young Chao'er have just closed a natural right-hand handshake beside the firewood, Chao'er is beginning to rise, and Su Xun's back remains in the study doorway. Preserve hands, positions, ages, clothing, warm dusk light, and camera side at the opening.
+<Subject 1> is young Su Shi in <Picture 2>, a 19-year-old adult Chinese male with slim upright build, broad forehead, straight nose, warm eyes, clean-shaven face, black topknot with pale crown, and moon-white cross-collar robe. He is kind and decisive; his smile fades into complete seriousness for the lesson.
+<Subject 2> is young Chao'er in <Picture 3>, a 17-year-old near-adult Chinese male with mature slim working proportions, narrow sun-browned face, hemp-tied low knot, patched earth-brown short robes, gray hemp trousers, and worn cloth shoes. He is newly included in the household, never a child. His right hand receives and then holds one single old calligraphy brush.
+<Picture 4> is the approved six-cell storyboard reference for [Shot 1] through [Shot 6], defining the handshake-to-brush match cut, old brush handoff, blank paper, question, serious answer, and first brush contact without defining the final rendering medium.
+
+summary:
+[reference generation + keyframe completion] The target video is a 15-second, 9:16 live-action historical sequence beginning from the exact family-handshake state in <Picture 1>. The right-hand clasp completes and match-cuts to a dusk study table, where young Su Shi places one real old calligraphy brush into Chao'er's open right palm. He teaches the first lesson, Chao'er asks whether literacy matters for a rough laborer, and Su Shi answers exactly: “饭管你一天。字，管你一辈子。” The brush finally touches a clean paper tracking area. <Picture 4> guides the six-shot progression.
+
+retention_analysis:
+<Picture 1> (exact opening state in [Shot 1]): fully_preserved - right-hand handshake, rising motion, two young identities, firewood position, Su Xun doorway silhouette, warm dusk light, and camera side remain continuous at the first frame.
+<Subject 1> (appears throughout): fully_preserved - 19-year-old adult identity, moon-white robe, clean-shaven face, right-hand ownership, and transition from warm smile to earnest teaching remain stable.
+<Subject 2> (appears throughout): fully_preserved - 17-year-old near-adult identity, mature proportions, patched clothing, right-hand ownership, and respectful learning posture remain stable.
+<Picture 4> (storyboard structure for [Shot 1] through [Shot 6]): partially_preserved - its match cut, prop handoff, blank paper, eye-line, dialogue order, and final brush contact are retained while the drawings become realistic live-action imagery.
+
+detailed_description:
+Use restrained live-action 1056 Meishan realism in vertical 9:16: warm dusk side light, bamboo shadow, old wood, real hemp and paper, natural mature late-teen anatomy, shallow depth, and subtle film grain. The only writing instrument is one traditional tapered calligraphy brush with dark bristles and a worn wooden handle; it must never become a pencil, chalk, pen, baton, or bare stick. The paper remains blank in generated frames with a clean flat tracking area reserved for later “天地” compositing. No book or surface contains legible or pseudo-legible text.
+[Shot 1] For 00:00.000–00:03.900, reproduce <Picture 1> exactly. Su Shi completes pulling Chao'er to his feet; both right hands remain joined for one full beat. Su Xun's doorway silhouette stays in the rear. Su Shi's natural smile is allowed only during this family-acceptance line and never later in the lesson.
+[Shot 2] At 00:03.900, use a precise match cut from the joined right hands to the same hand direction over a dusk study table. Su Shi's right hand places one old calligraphy brush horizontally into Chao'er's open right palm; they share the brush for one breath, then Su Shi releases. The brush stays intact and fully visible; no object morphs.
+[Shot 3] At 00:05.300, cut to a side medium two-shot inside the study. Chao'er kneels properly near the table, brush held in his right hand with bristles pointed down and away from his face. Su Shi points with his left index finger to one clean blank paper area without touching it and says exactly: “第一课。这两个字，念‘天地’。” The paper must show no generated letters.
+[Shot 4] At 00:07.600, cut to a level medium close-up of Chao'er. He cradles the same brush with both hands below chest height, shoulders cautious, and looks up. In a hesitant near-adult Mandarin voice he asks exactly: “先生，我是粗使人，认字……有用吗？” His brush remains far from his face and clothes; no modern hand sign appears.
+[Shot 5] At 00:10.200, cut to a level medium close-up of Su Shi with warm dusk light on half his clean-shaven face. His earlier smile disappears completely; he leans slightly forward until their eyes share one level and, with quiet, serious exact Mandarin, says: “饭管你一天。字，管你一辈子。” He does not laugh, wink, or exaggerate. Chao'er listens still.
+[Shot 6] At 00:13.000, tilt down to an extreme close-up of Chao'er's right hand, the single brush, blank paper, and a small plain inkstone. His breath steadies. The bristles lower slowly and touch the clean tracking area once at 00:14.300; hold contact to 00:15.000. No generated writing appears, and the final frame preserves brush ownership for P012.
+
+overall_soundscape:
+Dusk bamboo leaves, handshake cloth, one firewood shift, a soft study-door ambience, brush wood touching palm, inkstone ceramic, paper breath, the three exact dialogue beats, Chao'er's quiet question, Su Shi's serious answer, and the first brush-on-paper contact form the complete sound field. No music, applause, or extra speech.
+
+non_diegetic_music:
+N/A

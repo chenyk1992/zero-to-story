@@ -34,28 +34,13 @@ class WorkflowLoader:
         return data
 
     @staticmethod
-    def is_api_format(workflow: dict) -> bool:
+    def is_api_format(workflow: object) -> bool:
         """Return ``True`` if *workflow* is in ComfyUI API format.
 
-        API format: numeric string keys, each value has a ``class_type`` field.
-        UI format has additional metadata and different structure.
+        API format uses numeric string node IDs and a complete node shape. UI
+        format has additional metadata and a different structure.
         """
-        if not workflow:
-            return False
-        sample = list(workflow.items())[:5]
-        for key, val in sample:
-            if not isinstance(key, str) or not key.isdigit():
-                return False
-            if not isinstance(val, dict) or "class_type" not in val:
-                return False
-        return True
-
-    @staticmethod
-    def get_node(workflow: dict, node_id: str) -> dict:
-        """Return the node data for *node_id*."""
-        if node_id not in workflow:
-            raise KeyError(f"Node '{node_id}' not found in workflow")
-        return workflow[node_id]
+        return not WorkflowLoader._shape_errors(workflow)
 
     @staticmethod
     def find_nodes_by_class(workflow: dict, class_type: str) -> list[tuple[str, dict]]:
@@ -67,39 +52,43 @@ class WorkflowLoader:
         return results
 
     @staticmethod
-    def find_node_by_title(workflow: dict, title: str) -> tuple[str, dict] | None:
-        """Find a node by its ``_meta.title`` field.
-
-        Returns ``(node_id, node_data)`` or ``None``.
-        """
-        for node_id, node_data in workflow.items():
-            if isinstance(node_data, dict):
-                meta = node_data.get("_meta", {})
-                if meta.get("title") == title:
-                    return (node_id, node_data)
-        return None
-
-    @staticmethod
-    def validate_workflow(workflow: dict) -> list[str]:
+    def validate_workflow(workflow: object) -> list[str]:
         """Validate the workflow structure.
 
         Returns a list of error strings (empty = valid).
         """
-        errors: list[str] = []
+        return WorkflowLoader._shape_errors(workflow)
+
+    @staticmethod
+    def _shape_errors(workflow: object) -> list[str]:
+        """Return structural errors shared by format detection and validation."""
         if not isinstance(workflow, dict):
             return ["Workflow must be a dict"]
-
         if not workflow:
-            errors.append("Workflow is empty")
-            return errors
+            return ["Workflow is empty"]
 
+        errors: list[str] = []
         for node_id, node_data in workflow.items():
+            if not isinstance(node_id, str) or not node_id.isdigit():
+                errors.append(f"Node '{node_id}': expected a numeric string ID")
             if not isinstance(node_data, dict):
                 errors.append(f"Node '{node_id}': expected dict, got {type(node_data).__name__}")
                 continue
-            if "class_type" not in node_data:
-                errors.append(f"Node '{node_id}': missing 'class_type'")
-            if "inputs" not in node_data:
-                errors.append(f"Node '{node_id}': missing 'inputs' dict")
 
+            class_type = node_data.get("class_type")
+            if not isinstance(class_type, str) or not class_type:
+                if "class_type" not in node_data:
+                    errors.append(f"Node '{node_id}': missing 'class_type'")
+                else:
+                    errors.append(f"Node '{node_id}': 'class_type' must be a non-empty string")
+
+            inputs = node_data.get("inputs")
+            if not isinstance(inputs, dict):
+                if "inputs" not in node_data:
+                    errors.append(f"Node '{node_id}': missing 'inputs' dict")
+                else:
+                    errors.append(
+                        f"Node '{node_id}': 'inputs' must be a dict, "
+                        f"got {type(inputs).__name__}"
+                    )
         return errors

@@ -1,0 +1,359 @@
+{
+  "schema": "zero-to-story.creative-blueprint.v1",
+  "project": {
+    "title": "《一蓑烟雨》第三章·唤鱼池",
+    "scope": "第3集完整短片：池畔题名、竹径初见、兄弟托底、婚礼及进京钩子",
+    "target_duration_s": 160.0
+  },
+  "source": {
+    "canonical": ".short-drama/一蓑烟雨/episodes/ep003.md",
+    "conflicts": [
+      {
+        "id": "SRC-001",
+        "question": "原文第123行‘两年后’与同场‘明年春闱’、下一章立即进京应试及前章时间线冲突。",
+        "resolution": "按用户明确确认改为‘数月后’，只改时间字幕，不改婚礼、信件、对白或事件顺序。",
+        "status": "resolved"
+      },
+      {
+        "id": "SRC-002",
+        "question": "真实历史婚期与系列当前采用的1056年戏剧时间线并不完全一致。",
+        "resolution": "本章不新增精确年份字幕，以系列内部连续性为准；历史差异不交给生成模型解释。",
+        "status": "resolved"
+      },
+      {
+        "id": "SRC-003",
+        "question": "多张题笺都可能形成生成式伪文字，但剧情只需要两张关键笺准确同题。",
+        "resolution": "仅苏轼与王弗两张题笺使用确定性后期显示‘唤鱼池’，其他题名只用对白表达，纸面保持不可读。",
+        "status": "resolved"
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": "S001",
+      "order": 1,
+      "purpose": "让苏轼的才华通过观察和可见结果成立，并用王弗同题把婚姻线引入。",
+      "turn": "三次击掌唤来群鱼后，王方揭晓王弗也题‘唤鱼池’。",
+      "next_obligation": "下一场必须让苏轼与王弗直接照面，并说明她看见的不是才思快而是安静观察。",
+      "location": "青神中岩唤鱼池畔与水榭，同日午后，薄云微风",
+      "cast": ["wang_fang", "su_shi", "qian_weng", "maid", "literati_group"],
+      "entry_state": {"continuity": "S001-00：无名池、文会尚未开题，王方中央站立，苏轼左末座看水。"},
+      "exit_state": {"continuity": "S001-12：王方已公开同题题笺，满座轰动，苏轼独自凝望字迹。"},
+      "bridge_from_previous": null
+    },
+    {
+      "id": "S002",
+      "order": 2,
+      "purpose": "从公共才名转入私人相知，让王弗以独立观察定义苏轼的‘稳’。",
+      "turn": "王弗指出只有苏轼先安静看了半炷香的水。",
+      "next_obligation": "下一场必须把敢说真话的锋芒交给兄弟关系承担。",
+      "location": "中岩池边竹径，同日稍后，斑驳日光",
+      "cast": ["wang_fu", "su_shi", "maid"],
+      "entry_state": {"continuity": "S002-00：竹径初见，王弗左、苏轼右相向站定，丫鬟在后景。"},
+      "exit_state": {"continuity": "S002-06：苏轼承认王弗是第一个说他安静的人，两人保持克制对视。"},
+      "bridge_from_previous": {
+        "type": "causal_spatial_cut",
+        "description": "由苏轼凝望王弗题笺硬切到同日池边竹径的首次照面；题笺留在文会，不带入新场。"
+      }
+    },
+    {
+      "id": "S003",
+      "order": 3,
+      "purpose": "用苏辙的承诺把苏轼的文章锋芒变成兄弟共同承担。",
+      "turn": "苏辙从劝稳转为‘你只管说真话，锅我来背’。",
+      "next_obligation": "下一场必须兑现婚姻、家庭同行与进京决定。",
+      "location": "眉山苏家书房，当夜，双烛低照度",
+      "cast": ["su_shi", "su_zhe"],
+      "entry_state": {"continuity": "S003-00：兄弟对案夜读，苏辙持笔圈点，苏轼看策论。"},
+      "exit_state": {"continuity": "S003-04：兄弟两手叠起，承诺完成，双人影子投在墙上。"},
+      "bridge_from_previous": {
+        "type": "time_space_cut",
+        "description": "竹径同日白天结束后硬切当夜书房；流水与琴音在前场收住，笔尖和烛芯在本场起声。"
+      }
+    },
+    {
+      "id": "S004",
+      "order": 4,
+      "purpose": "完成婚姻、时间推进、进京动机、巢儿归属和程夫人病兆钩子。",
+      "turn": "数月后春闱信抵达，苏洵明确宣布父子四人进京。",
+      "next_obligation": "下一章必须兑现父子四人出川、巢儿挑书箱和抵京应试。",
+      "location": "眉山苏家院落，婚礼日跳到数月后白天并延续至夕阳",
+      "cast": ["su_shi", "wang_fu", "su_zhe", "chaoer", "cheng_furen", "su_xun", "wedding_guests"],
+      "entry_state": {"continuity": "S004-00：婚礼日苏家院落红绸满院，新人即将礼成，家人宾客在场。"},
+      "exit_state": {"continuity": "S004-09：苏轼北望后，程夫人在廊下再次轻咳，三个年轻人背向她且无人回头。"},
+      "bridge_from_previous": {
+        "type": "causal_time_cut",
+        "description": "兄弟叠手的承诺硬切到婚礼；P012单Clip内完成仪式、母亲初咳和‘数月后’时间跳切。"
+      }
+    }
+  ],
+  "panels": [
+    {
+      "id": "P001",
+      "order": 1,
+      "scene_id": "S001",
+      "duration_s": 10.0,
+      "shot_ids": ["C001", "C002"],
+      "coverage_ids": ["EV001", "EV002"],
+      "entry_state": {"continuity": "S001-00：无名池、文会尚未开题，王方中央站立，苏轼左末座看水。"},
+      "exit_state": {"continuity": "S001-02：王方已说完规则，文士开始挥毫，钱翁正要侧看苏轼。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P002从钱翁转身讥讽开始，不重复王方规则。"}
+    },
+    {
+      "id": "P002",
+      "order": 2,
+      "scene_id": "S001",
+      "duration_s": 12.0,
+      "shot_ids": ["C003", "C004"],
+      "coverage_ids": ["EV003", "EV004"],
+      "entry_state": {"continuity": "S001-02：王方已说完规则，文士开始挥毫，钱翁正要侧看苏轼。"},
+      "exit_state": {"continuity": "S001-04：苏轼未回应讥讽仍看水，多张不可读题笺已准备呈上。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P003直接从文士甲报题开始，不重演钱翁讥讽。"}
+    },
+    {
+      "id": "P003",
+      "order": 3,
+      "scene_id": "S001",
+      "duration_s": 10.0,
+      "shot_ids": ["C005", "C006"],
+      "coverage_ids": ["EV005", "EV006"],
+      "entry_state": {"continuity": "S001-04：苏轼未回应讥讽仍看水，多张不可读题笺已准备呈上。"},
+      "exit_state": {"continuity": "S001-06：钱翁刚报出聚宝塘并举笺，众人将笑未笑。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P004拥有笑声爆发与苏轼反击，P003不提前完成哄笑。"}
+    },
+    {
+      "id": "P004",
+      "order": 4,
+      "scene_id": "S001",
+      "duration_s": 12.0,
+      "shot_ids": ["C007", "C008"],
+      "coverage_ids": ["EV007", "EV008"],
+      "entry_state": {"continuity": "S001-06：钱翁刚报出聚宝塘并举笺，众人将笑未笑。"},
+      "exit_state": {"continuity": "S001-08：苏轼已写完唤鱼池并说完请看，双手抬起但尚未击掌。"},
+      "transition_to_next": {"ownership": "next", "bridge": "三次击掌全部归P005，P004只锁定抬手待击状态。"}
+    },
+    {
+      "id": "P005",
+      "order": 5,
+      "scene_id": "S001",
+      "duration_s": 10.0,
+      "shot_ids": ["C009", "C010"],
+      "coverage_ids": ["EV009", "EV010"],
+      "entry_state": {"continuity": "S001-08：苏轼已写完唤鱼池并说完请看，双手抬起但尚未击掌。"},
+      "exit_state": {"continuity": "S001-10：三掌后鱼群已聚，青衣丫鬟已站定并双手托着一张题笺。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P006从王方接笺开始，不重复丫鬟入场或传话。"}
+    },
+    {
+      "id": "P006",
+      "order": 6,
+      "scene_id": "S001",
+      "duration_s": 12.0,
+      "shot_ids": ["C011", "C012"],
+      "coverage_ids": ["EV011", "EV012"],
+      "entry_state": {"continuity": "S001-10：三掌后鱼群已聚，青衣丫鬟已站定并双手托着一张题笺。"},
+      "exit_state": {"continuity": "S001-12：王方已公开同题题笺，满座轰动，苏轼独自凝望字迹。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P007硬切到竹径初见，题笺与水榭位置不带入。"}
+    },
+    {
+      "id": "P007",
+      "order": 7,
+      "scene_id": "S002",
+      "duration_s": 11.0,
+      "shot_ids": ["C013", "C014"],
+      "coverage_ids": ["EV013", "EV014"],
+      "entry_state": {"continuity": "S002-00：竹径初见，王弗左、苏轼右相向站定，丫鬟在后景。"},
+      "exit_state": {"continuity": "S002-02：苏轼已完成鱼乐反问，王弗停顿后笑起，两人位置未变。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P008从王弗收笑敛衽开始，不重演初见与鱼乐问答。"}
+    },
+    {
+      "id": "P008",
+      "order": 8,
+      "scene_id": "S002",
+      "duration_s": 10.0,
+      "shot_ids": ["C015", "C016"],
+      "coverage_ids": ["EV015", "EV016"],
+      "entry_state": {"continuity": "S002-02：苏轼已完成鱼乐反问，王弗停顿后笑起，两人位置未变。"},
+      "exit_state": {"continuity": "S002-04：苏轼已追问缘由，王弗视线转向池水并准备回答。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P009从王弗已看向池水的状态直接解释，不重复追问。"}
+    },
+    {
+      "id": "P009",
+      "order": 9,
+      "scene_id": "S002",
+      "duration_s": 13.0,
+      "shot_ids": ["C017", "C018"],
+      "coverage_ids": ["EV017", "EV018"],
+      "entry_state": {"continuity": "S002-04：苏轼已追问缘由，王弗视线转向池水并准备回答。"},
+      "exit_state": {"continuity": "S002-06：苏轼承认王弗是第一个说他安静的人，两人保持克制对视。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P010硬切到当夜书房，竹径琴音在P009内部收止。"}
+    },
+    {
+      "id": "P010",
+      "order": 10,
+      "scene_id": "S003",
+      "duration_s": 11.0,
+      "shot_ids": ["C019", "C020"],
+      "coverage_ids": ["EV019", "EV020"],
+      "entry_state": {"continuity": "S003-00：兄弟对案夜读，苏辙持笔圈点，苏轼看策论。"},
+      "exit_state": {"continuity": "S003-02：苏轼已反问稳妥能否写出千古文章，手停纸边，兄弟对视。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P011从苏辙放下毛笔开始，不重复苏轼反问。"}
+    },
+    {
+      "id": "P011",
+      "order": 11,
+      "scene_id": "S003",
+      "duration_s": 10.0,
+      "shot_ids": ["C021", "C022"],
+      "coverage_ids": ["EV021", "EV022"],
+      "entry_state": {"continuity": "S003-02：苏轼已反问稳妥能否写出千古文章，手停纸边，兄弟对视。"},
+      "exit_state": {"continuity": "S003-04：兄弟两手叠起，承诺完成，双人影子投在墙上。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P012硬切到婚礼，不复演叠手或把书房道具带入院落。"}
+    },
+    {
+      "id": "P012",
+      "order": 12,
+      "scene_id": "S004",
+      "duration_s": 6.0,
+      "shot_ids": ["C023", "C024"],
+      "coverage_ids": ["EV023", "EV024"],
+      "entry_state": {"continuity": "S004-00：婚礼日苏家院落红绸满院，新人即将礼成，家人宾客在场。"},
+      "exit_state": {"continuity": "S004-02：程夫人婚礼轻咳已被苏洵扶住，时间卡切到数月后，喜绸已撤。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P013从数月后素净院落让苏洵持信入场，不重播婚礼或时间卡。"}
+    },
+    {
+      "id": "P013",
+      "order": 13,
+      "scene_id": "S004",
+      "duration_s": 10.0,
+      "shot_ids": ["C025", "C026"],
+      "coverage_ids": ["EV025", "EV026"],
+      "entry_state": {"continuity": "S004-02：程夫人婚礼轻咳已被苏洵扶住，时间卡切到数月后，喜绸已撤。"},
+      "exit_state": {"continuity": "S004-04：苏洵已宣布春闱，巢儿从石桌取起唯一信件并开始读。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P014从巢儿已起读的状态继续，不再次抢信。"}
+    },
+    {
+      "id": "P014",
+      "order": 14,
+      "scene_id": "S004",
+      "duration_s": 11.0,
+      "shot_ids": ["C027", "C028"],
+      "coverage_ids": ["EV027", "EV028"],
+      "entry_state": {"continuity": "S004-04：苏洵已宣布春闱，巢儿从石桌取起唯一信件并开始读。"},
+      "exit_state": {"continuity": "S004-06：苏洵已决定父子四人进京，巢儿左手持信、右手指向自己鼻子。"},
+      "transition_to_next": {"ownership": "next", "bridge": "P015从指鼻后的直接提问开始，不重演四人宣告。"}
+    },
+    {
+      "id": "P015",
+      "order": 15,
+      "scene_id": "S004",
+      "duration_s": 12.0,
+      "shot_ids": ["C029", "C030", "C031"],
+      "coverage_ids": ["EV029", "EV030", "EV031"],
+      "entry_state": {"continuity": "S004-06：苏洵已决定父子四人进京，巢儿左手持信、右手指向自己鼻子。"},
+      "exit_state": {"continuity": "S004-09：苏轼北望后，程夫人在廊下再次轻咳，三个年轻人背向她且无人回头。"},
+      "transition_to_next": null
+    }
+  ],
+  "coverage": [
+    {"id":"EV001","order":1,"priority":"must_show","source_refs":["ep003.md:9"],"event":"建立中岩清池、水榭和文会人物位置。","visible_proof":"清澈池水、可见游鱼、水榭文士、中央王方和左末座苏轼同框。","before_state":{"continuity":"S001-00：无名池、文会尚未开题，王方中央站立，苏轼左末座看水。"},"after_state":{"continuity":"S001-01：池畔空间与人物位置已清楚，王方准备开口。"},"scene_id":"S001","panel_id":"P001","shot_id":"C001"},
+    {"id":"EV002","order":2,"priority":"must_explain","source_refs":["ep003.md:11-12"],"event":"王方宣布无名池题名规则。","visible_proof":"王方完整说出规则，众文士随后提笔。","before_state":{"continuity":"S001-01：池畔空间与人物位置已清楚，王方准备开口。"},"after_state":{"continuity":"S001-02：王方已说完规则，文士开始挥毫，钱翁正要侧看苏轼。"},"scene_id":"S001","panel_id":"P001","shot_id":"C002"},
+    {"id":"EV003","order":3,"priority":"must_explain","source_refs":["ep003.md:14-17"],"event":"钱翁以家底轻慢苏轼。","visible_proof":"钱翁斜睨苏轼并完整讥讽，苏轼后景可见。","before_state":{"continuity":"S001-02：王方已说完规则，文士开始挥毫，钱翁正要侧看苏轼。"},"after_state":{"continuity":"S001-03：钱翁讥讽完等待反应，苏轼仍侧对他看水。"},"scene_id":"S001","panel_id":"P002","shot_id":"C003"},
+    {"id":"EV004","order":4,"priority":"must_show","source_refs":["ep003.md:19"],"event":"苏轼不受挑衅，继续观察池水。","visible_proof":"苏轼不回头，视线跟随游鱼，题笺从身后递过。","before_state":{"continuity":"S001-03：钱翁讥讽完等待反应，苏轼仍侧对他看水。"},"after_state":{"continuity":"S001-04：苏轼未回应讥讽仍看水，多张不可读题笺已准备呈上。"},"scene_id":"S001","panel_id":"P002","shot_id":"C004"},
+    {"id":"EV005","order":5,"priority":"must_explain","source_refs":["ep003.md:21-25"],"event":"藏鱼渊被王方否定。","visible_proof":"文士甲报题，王方摇头说明鱼不应是死物。","before_state":{"continuity":"S001-04：苏轼未回应讥讽仍看水，多张不可读题笺已准备呈上。"},"after_state":{"continuity":"S001-05：第一题已退回，文士乙和钱翁准备继续呈题。"},"scene_id":"S001","panel_id":"P003","shot_id":"C005"},
+    {"id":"EV006","order":6,"priority":"must_explain","source_refs":["ep003.md:27-31"],"event":"跃龙潭与聚宝塘依次报出。","visible_proof":"文士乙与钱翁按顺序报题，钱翁得意举笺。","before_state":{"continuity":"S001-05：第一题已退回，文士乙和钱翁准备继续呈题。"},"after_state":{"continuity":"S001-06：钱翁刚报出聚宝塘并举笺，众人将笑未笑。"},"scene_id":"S001","panel_id":"P003","shot_id":"C006"},
+    {"id":"EV007","order":7,"priority":"must_explain","source_refs":["ep003.md:33-38"],"event":"众人哄笑，苏轼用账本反击钱翁。","visible_proof":"群笑、苏轼完整台词与钱翁涨红脸连续可见。","before_state":{"continuity":"S001-06：钱翁刚报出聚宝塘并举笺，众人将笑未笑。"},"after_state":{"continuity":"S001-07：钱翁已涨红脸，苏轼获得话语权并转向案上笔墨。"},"scene_id":"S001","panel_id":"P004","shot_id":"C007"},
+    {"id":"EV008","order":8,"priority":"must_show","source_refs":["ep003.md:40-43"],"event":"苏轼写下并说出唤鱼池。","visible_proof":"悬腕落笔、准确题字和完整台词后，他抬手准备击掌。","before_state":{"continuity":"S001-07：钱翁已涨红脸，苏轼获得话语权并转向案上笔墨。"},"after_state":{"continuity":"S001-08：苏轼已写完唤鱼池并说完请看，双手抬起但尚未击掌。"},"scene_id":"S001","panel_id":"P004","shot_id":"C008"},
+    {"id":"EV009","order":9,"priority":"must_show","source_refs":["ep003.md:45-47"],"event":"三次击掌唤来群鱼。","visible_proof":"恰好三次掌声后涟漪扩散，鱼群由散到聚并跳跃。","before_state":{"continuity":"S001-08：苏轼已写完唤鱼池并说完请看，双手抬起但尚未击掌。"},"after_state":{"continuity":"S001-09：三次击掌已完成，鱼群聚到栏下，全场由静转喝彩。"},"scene_id":"S001","panel_id":"P005","shot_id":"C009"},
+    {"id":"EV010","order":10,"priority":"must_explain","source_refs":["ep003.md:49-52"],"event":"丫鬟携王弗题笺来到文会。","visible_proof":"青衣丫鬟沿碎石路入画，只托一张笺并完整传话。","before_state":{"continuity":"S001-09：三次击掌已完成，鱼群聚到栏下，全场由静转喝彩。"},"after_state":{"continuity":"S001-10：三掌后鱼群已聚，青衣丫鬟已站定并双手托着一张题笺。"},"scene_id":"S001","panel_id":"P005","shot_id":"C010"},
+    {"id":"EV011","order":11,"priority":"must_explain","source_refs":["ep003.md:54-57"],"event":"王方揭晓王弗也题唤鱼池。","visible_proof":"王方展笺、看见准确三字并完整宣告双璧姻缘。","before_state":{"continuity":"S001-10：三掌后鱼群已聚，青衣丫鬟已站定并双手托着一张题笺。"},"after_state":{"continuity":"S001-11：王方已举起第二张唤鱼池题笺并说完缘分宣告。"},"scene_id":"S001","panel_id":"P006","shot_id":"C011"},
+    {"id":"EV012","order":12,"priority":"must_show","source_refs":["ep003.md:59"],"event":"满座轰动，苏轼独自怔住。","visible_proof":"人群起身喧哗而苏轼静止凝望题笺。","before_state":{"continuity":"S001-11：王方已举起第二张唤鱼池题笺并说完缘分宣告。"},"after_state":{"continuity":"S001-12：王方已公开同题题笺，满座轰动，苏轼独自凝望字迹。"},"scene_id":"S001","panel_id":"P006","shot_id":"C012"},
+    {"id":"EV013","order":13,"priority":"must_explain","source_refs":["ep003.md:65-70"],"event":"竹径初见，王弗先问鱼快乐不快乐。","visible_proof":"两人相向站定，王弗主动完整提问。","before_state":{"continuity":"S002-00：竹径初见，王弗左、苏轼右相向站定，丫鬟在后景。"},"after_state":{"continuity":"S002-01：王弗已问完鱼乐，苏轼笑着准备拱手回应。"},"scene_id":"S002","panel_id":"P007","shot_id":"C013"},
+    {"id":"EV014","order":14,"priority":"must_explain","source_refs":["ep003.md:72-75"],"event":"苏轼以反问回应，王弗被噎后笑起。","visible_proof":"拱手、完整台词和王弗先停顿后笑连续可见。","before_state":{"continuity":"S002-01：王弗已问完鱼乐，苏轼笑着准备拱手回应。"},"after_state":{"continuity":"S002-02：苏轼已完成鱼乐反问，王弗停顿后笑起，两人位置未变。"},"scene_id":"S002","panel_id":"P007","shot_id":"C014"},
+    {"id":"EV015","order":15,"priority":"must_explain","source_refs":["ep003.md:77-78"],"event":"王弗认为苏轼稳而不只是快。","visible_proof":"王弗敛衽并认真完整说出评价，苏轼笑意开始收。","before_state":{"continuity":"S002-02：苏轼已完成鱼乐反问，王弗停顿后笑起，两人位置未变。"},"after_state":{"continuity":"S002-03：王弗已称苏轼稳，苏轼意外并收住部分笑意。"},"scene_id":"S002","panel_id":"P008","shot_id":"C015"},
+    {"id":"EV016","order":16,"priority":"must_explain","source_refs":["ep003.md:80-81"],"event":"苏轼追问王弗为何这样判断。","visible_proof":"苏轼直视王弗并完整问出缘由。","before_state":{"continuity":"S002-03：王弗已称苏轼稳，苏轼意外并收住部分笑意。"},"after_state":{"continuity":"S002-04：苏轼已追问缘由，王弗视线转向池水并准备回答。"},"scene_id":"S002","panel_id":"P008","shot_id":"C016"},
+    {"id":"EV017","order":17,"priority":"must_explain","source_refs":["ep003.md:83-84"],"event":"王弗解释苏轼先安静看水。","visible_proof":"王弗先看池水方向再回望，逐字说完观察。","before_state":{"continuity":"S002-04：苏轼已追问缘由，王弗视线转向池水并准备回答。"},"after_state":{"continuity":"S002-05：王弗已说出安静看水的观察，苏轼嬉笑完全收起。"},"scene_id":"S002","panel_id":"P009","shot_id":"C017"},
+    {"id":"EV018","order":18,"priority":"must_explain","source_refs":["ep003.md:86-89"],"event":"苏轼承认她是第一个说自己安静的人。","visible_proof":"他认真注视王弗、完整说话并留出安静对视。","before_state":{"continuity":"S002-05：王弗已说出安静看水的观察，苏轼嬉笑完全收起。"},"after_state":{"continuity":"S002-06：苏轼承认王弗是第一个说他安静的人，两人保持克制对视。"},"scene_id":"S002","panel_id":"P009","shot_id":"C018"},
+    {"id":"EV019","order":19,"priority":"must_explain","source_refs":["ep003.md:97-100"],"event":"苏辙圈出策论风险并劝稳妥。","visible_proof":"双烛书案、圈文动作与苏辙完整台词。","before_state":{"continuity":"S003-00：兄弟对案夜读，苏辙持笔圈点，苏轼看策论。"},"after_state":{"continuity":"S003-01：策论风险处已圈出，苏辙劝完稳妥，毛笔仍在手。"},"scene_id":"S003","panel_id":"P010","shot_id":"C019"},
+    {"id":"EV020","order":20,"priority":"must_explain","source_refs":["ep003.md:102-103"],"event":"苏轼拒绝以稳妥换文章。","visible_proof":"苏轼轻敲桌面一次并完整反问。","before_state":{"continuity":"S003-01：策论风险处已圈出，苏辙劝完稳妥，毛笔仍在手。"},"after_state":{"continuity":"S003-02：苏轼已反问稳妥能否写出千古文章，手停纸边，兄弟对视。"},"scene_id":"S003","panel_id":"P010","shot_id":"C020"},
+    {"id":"EV021","order":21,"priority":"must_explain","source_refs":["ep003.md:105-106"],"event":"苏辙承诺哥哥只管说真话，锅由自己背。","visible_proof":"苏辙放下笔、抬眼微笑并完整说出承诺。","before_state":{"continuity":"S003-02：苏轼已反问稳妥能否写出千古文章，手停纸边，兄弟对视。"},"after_state":{"continuity":"S003-03：苏辙已放下毛笔并完成背锅承诺，苏轼郑重起来。"},"scene_id":"S003","panel_id":"P011","shot_id":"C021"},
+    {"id":"EV022","order":22,"priority":"must_show","source_refs":["ep003.md:108-113"],"event":"苏轼回应并以叠手锁定兄弟关系。","visible_proof":"按肩、完整回答、两手叠起和双人墙影。","before_state":{"continuity":"S003-03：苏辙已放下毛笔并完成背锅承诺，苏轼郑重起来。"},"after_state":{"continuity":"S003-04：兄弟两手叠起，承诺完成，双人影子投在墙上。"},"scene_id":"S003","panel_id":"P011","shot_id":"C022"},
+    {"id":"EV023","order":23,"priority":"must_show","source_refs":["ep003.md:121"],"event":"苏轼与王弗的北宋婚礼礼成。","visible_proof":"新人身份正确、宋式婚礼、拜堂完成、鞭炮和宾客可见。","before_state":{"continuity":"S004-00：婚礼日苏家院落红绸满院，新人即将礼成，家人宾客在场。"},"after_state":{"continuity":"S004-01：苏轼与王弗已拜堂礼成，鞭炮响起，程夫人在廊下拭泪。"},"scene_id":"S004","panel_id":"P012","shot_id":"C023"},
+    {"id":"EV024","order":24,"priority":"must_show","source_refs":["ep003.md:121-123","用户确认：两年后改为数月后"],"event":"程夫人第一次轻咳，单Clip内跳到数月后。","visible_proof":"她轻咳被苏洵扶住，随后准确时间卡和撤去喜绸的同院落出现。","before_state":{"continuity":"S004-01：苏轼与王弗已拜堂礼成，鞭炮响起，程夫人在廊下拭泪。"},"after_state":{"continuity":"S004-02：程夫人婚礼轻咳已被苏洵扶住，时间卡切到数月后，喜绸已撤。"},"scene_id":"S004","panel_id":"P012","shot_id":"C024"},
+    {"id":"EV025","order":25,"priority":"must_show","source_refs":["ep003.md:125"],"event":"数月后苏洵持信入院并拍上石桌。","visible_proof":"喜绸已撤，苏洵只持一封信入院并完成拍桌。","before_state":{"continuity":"S004-02：程夫人婚礼轻咳已被苏洵扶住，时间卡切到数月后，喜绸已撤。"},"after_state":{"continuity":"S004-03：苏洵已把唯一信件拍在石桌，苏轼苏辙巢儿已转头。"},"scene_id":"S004","panel_id":"P013","shot_id":"C025"},
+    {"id":"EV026","order":26,"priority":"must_explain","source_refs":["ep003.md:127-130"],"event":"苏洵宣布春闱，巢儿取信。","visible_proof":"苏洵完整说出消息，巢儿从石桌拿起同一封信。","before_state":{"continuity":"S004-03：苏洵已把唯一信件拍在石桌，苏轼苏辙巢儿已转头。"},"after_state":{"continuity":"S004-04：苏洵已宣布春闱，巢儿从石桌取起唯一信件并开始读。"},"scene_id":"S004","panel_id":"P013","shot_id":"C026"},
+    {"id":"EV027","order":27,"priority":"must_explain","source_refs":["ep003.md:132-133"],"event":"巢儿通读信件并读出三苏名望。","visible_proof":"巢儿双手持信、按原文结巴但正确读完。","before_state":{"continuity":"S004-04：苏洵已宣布春闱，巢儿从石桌取起唯一信件并开始读。"},"after_state":{"continuity":"S004-05：巢儿已读完三苏名望，仍双手持信，三名年轻人振奋。"},"scene_id":"S004","panel_id":"P014","shot_id":"C027"},
+    {"id":"EV028","order":28,"priority":"must_explain","source_refs":["ep003.md:135-138"],"event":"苏洵宣布父子四人进京。","visible_proof":"苏洵大手一挥、完整台词、三名年轻人同框，巢儿指自己。","before_state":{"continuity":"S004-05：巢儿已读完三苏名望，仍双手持信，三名年轻人振奋。"},"after_state":{"continuity":"S004-06：苏洵已决定父子四人进京，巢儿左手持信、右手指向自己鼻子。"},"scene_id":"S004","panel_id":"P014","shot_id":"C028"},
+    {"id":"EV029","order":29,"priority":"must_explain","source_refs":["ep003.md:140-144"],"event":"巢儿确认自己被包括，苏轼以书箱玩笑接纳。","visible_proof":"两句对白按顺序，苏轼轻揽巢儿，巢儿从惊讶转笑。","before_state":{"continuity":"S004-06：苏洵已决定父子四人进京，巢儿左手持信、右手指向自己鼻子。"},"after_state":{"continuity":"S004-07：苏轼已用书箱玩笑确认巢儿同行，巢儿被揽住并笑起。"},"scene_id":"S004","panel_id":"P015","shot_id":"C029"},
+    {"id":"EV030","order":30,"priority":"must_show","source_refs":["ep003.md:146"],"event":"苏轼在夕阳中北望。","visible_proof":"苏轼独立院中面向北方，眼中映火烧云。","before_state":{"continuity":"S004-07：苏轼已用书箱玩笑确认巢儿同行，巢儿被揽住并笑起。"},"after_state":{"continuity":"S004-08：苏轼已独立院中北望，三名年轻人背向左后廊下。"},"scene_id":"S004","panel_id":"P015","shot_id":"C030"},
+    {"id":"EV031","order":31,"priority":"must_show","source_refs":["ep003.md:148-150"],"event":"程夫人再次轻咳且无人回头。","visible_proof":"她在廊下压抑咳嗽，三个年轻人背向她，没人转身。","before_state":{"continuity":"S004-08：苏轼已独立院中北望，三名年轻人背向左后廊下。"},"after_state":{"continuity":"S004-09：苏轼北望后，程夫人在廊下再次轻咳，三个年轻人背向她且无人回头。"},"scene_id":"S004","panel_id":"P015","shot_id":"C031"}
+  ],
+  "dialogue": [
+    {"id":"D001","order":1,"speaker":"王方","text":"此池无名已久。今日请诸位为它赐个名字——取得好者，老夫奉为上宾。","coverage_id":"EV002","shot_id":"C002"},
+    {"id":"D002","order":2,"speaker":"钱翁","text":"听闻苏家小郎也有意一试？啧。书香是书香，可惜家底薄了些——取名这种雅事，讲究个气度。","coverage_id":"EV003","shot_id":"C003"},
+    {"id":"D003","order":3,"speaker":"文士甲","text":"藏鱼渊！","coverage_id":"EV005","shot_id":"C005"},
+    {"id":"D004","order":4,"speaker":"王方","text":"鱼在渊中是死物。再想想。","coverage_id":"EV005","shot_id":"C005"},
+    {"id":"D005","order":5,"speaker":"文士乙","text":"跃龙潭！","coverage_id":"EV006","shot_id":"C006"},
+    {"id":"D006","order":6,"speaker":"钱翁","text":"老夫题的是——聚宝塘！","coverage_id":"EV006","shot_id":"C006"},
+    {"id":"D007","order":7,"speaker":"苏轼","text":"钱翁，您这不是给鱼取名，是给自己家账本取名。","coverage_id":"EV007","shot_id":"C007"},
+    {"id":"D008","order":8,"speaker":"苏轼","text":"就叫——唤鱼池。方才我拍手为号，诸位请看。","coverage_id":"EV008","shot_id":"C008"},
+    {"id":"D009","order":9,"speaker":"丫鬟","text":"我家小姐在闺中也题了一个名字，老爷请过目。","coverage_id":"EV010","shot_id":"C010"},
+    {"id":"D010","order":10,"speaker":"王方","text":"诸位请看——小姐题的是‘唤鱼池’！不谋而合，韵成双璧！此乃天定的缘分呐！","coverage_id":"EV011","shot_id":"C011"},
+    {"id":"D011","order":11,"speaker":"王弗","text":"苏公子既懂得鱼，想必也知道——鱼快乐不快乐？","coverage_id":"EV013","shot_id":"C013"},
+    {"id":"D012","order":12,"speaker":"苏轼","text":"小姐又不是我，怎么知道我不知道鱼的快乐？","coverage_id":"EV014","shot_id":"C014"},
+    {"id":"D013","order":13,"speaker":"王弗","text":"今日满座都在夸苏公子快——才思快，口齿快。只有我觉得，苏公子稳。","coverage_id":"EV015","shot_id":"C015"},
+    {"id":"D014","order":14,"speaker":"苏轼","text":"哦？此话怎讲？","coverage_id":"EV016","shot_id":"C016"},
+    {"id":"D015","order":15,"speaker":"王弗","text":"拍手唤鱼，人人都会。肯先安安静静看半炷香的水的，只有你一个。","coverage_id":"EV017","shot_id":"C017"},
+    {"id":"D016","order":16,"speaker":"苏轼","text":"……满城都说我聪明。你是第一个说我安静的。","coverage_id":"EV018","shot_id":"C018"},
+    {"id":"D017","order":17,"speaker":"苏辙","text":"这段议论险了。科场之上，稳妥些。","coverage_id":"EV019","shot_id":"C019"},
+    {"id":"D018","order":18,"speaker":"苏轼","text":"文章千古事，稳妥能稳出千古文章？","coverage_id":"EV020","shot_id":"C020"},
+    {"id":"D019","order":19,"speaker":"苏辙","text":"罢了。哥——你只管说真话。锅，我来背。","coverage_id":"EV021","shot_id":"C021"},
+    {"id":"D020","order":20,"speaker":"苏轼","text":"有你在身后，我什么都敢写。","coverage_id":"EV022","shot_id":"C022"},
+    {"id":"D021","order":21,"speaker":"苏洵","text":"汴京来的！明年春闱，朝廷开恩科！","coverage_id":"EV026","shot_id":"C026"},
+    {"id":"D022","order":22,"speaker":"巢儿","text":"三苏之名，蜀中皆闻——此番进京，必、必然……必然名动公卿！","coverage_id":"EV027","shot_id":"C027"},
+    {"id":"D023","order":23,"speaker":"苏洵","text":"收拾行装。我们父子四人——去京城！","coverage_id":"EV028","shot_id":"C028"},
+    {"id":"D024","order":24,"speaker":"巢儿","text":"四人？还有我一个？","coverage_id":"EV029","shot_id":"C029"},
+    {"id":"D025","order":25,"speaker":"苏轼","text":"不然呢？我的书箱谁挑？","coverage_id":"EV029","shot_id":"C029"}
+  ],
+  "generation": {
+    "limits": {
+      "reference_slots": 3,
+      "max_critical_characters": 2,
+      "max_actions": 1,
+      "max_camera_moves": 1,
+      "max_dialogue_lines": 2
+    },
+    "shots": [
+      {"id":"C001","order":1,"scene_id":"S001","panel_id":"P001","coverage_ids":["EV001"],"dialogue_ids":[],"critical_characters":["wang_fang","su_shi"],"reference_keys":["character.wang_fang","character.su_shi","board.P001"],"actions":["建立池畔文会空间"],"camera_moves":["dolly in"],"purpose":"交代池、水榭和主要人物位置。","state_before":{"continuity":"S001-00：无名池、文会尚未开题，王方中央站立，苏轼左末座看水。"},"state_after":{"continuity":"S001-01：池畔空间与人物位置已清楚，王方准备开口。"},"text_strategy":"none","post_asset":null},
+      {"id":"C002","order":2,"scene_id":"S001","panel_id":"P001","coverage_ids":["EV002"],"dialogue_ids":["D001"],"critical_characters":["wang_fang"],"reference_keys":["character.wang_fang","board.P001"],"actions":["王方宣布题名规则"],"camera_moves":["fixed"],"purpose":"启动文会竞题。","state_before":{"continuity":"S001-01：池畔空间与人物位置已清楚，王方准备开口。"},"state_after":{"continuity":"S001-02：王方已说完规则，文士开始挥毫，钱翁正要侧看苏轼。"},"text_strategy":"none","post_asset":null},
+      {"id":"C003","order":3,"scene_id":"S001","panel_id":"P002","coverage_ids":["EV003"],"dialogue_ids":["D002"],"critical_characters":["qian_weng","su_shi"],"reference_keys":["tail.P001.accepted"],"actions":["钱翁当众讥讽苏轼"],"camera_moves":["dolly in"],"purpose":"把门第压力指向苏轼。","state_before":{"continuity":"S001-02：王方已说完规则，文士开始挥毫，钱翁正要侧看苏轼。"},"state_after":{"continuity":"S001-03：钱翁讥讽完等待反应，苏轼仍侧对他看水。"},"text_strategy":"none","post_asset":null},
+      {"id":"C004","order":4,"scene_id":"S001","panel_id":"P002","coverage_ids":["EV004"],"dialogue_ids":[],"critical_characters":["su_shi"],"reference_keys":["tail.P001.accepted"],"actions":["苏轼无视挑衅观察游鱼"],"camera_moves":["fixed"],"purpose":"用行动证明他先观察而非抢答。","state_before":{"continuity":"S001-03：钱翁讥讽完等待反应，苏轼仍侧对他看水。"},"state_after":{"continuity":"S001-04：苏轼未回应讥讽仍看水，多张不可读题笺已准备呈上。"},"text_strategy":"none","post_asset":null},
+      {"id":"C005","order":5,"scene_id":"S001","panel_id":"P003","coverage_ids":["EV005"],"dialogue_ids":["D003","D004"],"critical_characters":["literati_a","wang_fang"],"reference_keys":["tail.P002.accepted"],"actions":["第一题被王方否定"],"camera_moves":["fixed"],"purpose":"建立取名标准不是华丽而是有生命。","state_before":{"continuity":"S001-04：苏轼未回应讥讽仍看水，多张不可读题笺已准备呈上。"},"state_after":{"continuity":"S001-05：第一题已退回，文士乙和钱翁准备继续呈题。"},"text_strategy":"none","post_asset":null},
+      {"id":"C006","order":6,"scene_id":"S001","panel_id":"P003","coverage_ids":["EV006"],"dialogue_ids":["D005","D006"],"critical_characters":["literati_b","qian_weng"],"reference_keys":["tail.P002.accepted"],"actions":["第二组题名依次呈上"],"camera_moves":["fixed"],"purpose":"以聚宝塘制造喜剧破口。","state_before":{"continuity":"S001-05：第一题已退回，文士乙和钱翁准备继续呈题。"},"state_after":{"continuity":"S001-06：钱翁刚报出聚宝塘并举笺，众人将笑未笑。"},"text_strategy":"none","post_asset":null},
+      {"id":"C007","order":7,"scene_id":"S001","panel_id":"P004","coverage_ids":["EV007"],"dialogue_ids":["D007"],"critical_characters":["su_shi","qian_weng"],"reference_keys":["tail.P003.accepted"],"actions":["苏轼用账本笑话反击"],"camera_moves":["fixed"],"purpose":"释放压力并让苏轼取得中心。","state_before":{"continuity":"S001-06：钱翁刚报出聚宝塘并举笺，众人将笑未笑。"},"state_after":{"continuity":"S001-07：钱翁已涨红脸，苏轼获得话语权并转向案上笔墨。"},"text_strategy":"none","post_asset":null},
+      {"id":"C008","order":8,"scene_id":"S001","panel_id":"P004","coverage_ids":["EV008"],"dialogue_ids":["D008"],"critical_characters":["su_shi"],"reference_keys":["tail.P003.accepted"],"actions":["苏轼落笔题名"],"camera_moves":["dolly in"],"purpose":"提出唤鱼池并准备可见验证。","state_before":{"continuity":"S001-07：钱翁已涨红脸，苏轼获得话语权并转向案上笔墨。"},"state_after":{"continuity":"S001-08：苏轼已写完唤鱼池并说完请看，双手抬起但尚未击掌。"},"text_strategy":"post","post_asset":"POST-001"},
+      {"id":"C009","order":9,"scene_id":"S001","panel_id":"P005","coverage_ids":["EV009"],"dialogue_ids":[],"critical_characters":["su_shi"],"reference_keys":["tail.P004.accepted"],"actions":["三次击掌使鱼群聚来"],"camera_moves":["tilt down"],"purpose":"把题名从语言变成可见因果。","state_before":{"continuity":"S001-08：苏轼已写完唤鱼池并说完请看，双手抬起但尚未击掌。"},"state_after":{"continuity":"S001-09：三次击掌已完成，鱼群聚到栏下，全场由静转喝彩。"},"text_strategy":"none","post_asset":null},
+      {"id":"C010","order":10,"scene_id":"S001","panel_id":"P005","coverage_ids":["EV010"],"dialogue_ids":["D009"],"critical_characters":["maid","wang_fang"],"reference_keys":["tail.P004.accepted"],"actions":["丫鬟递入第二张题笺"],"camera_moves":["truck left"],"purpose":"让王弗以缺席人物的作品进入。","state_before":{"continuity":"S001-09：三次击掌已完成，鱼群聚到栏下，全场由静转喝彩。"},"state_after":{"continuity":"S001-10：三掌后鱼群已聚，青衣丫鬟已站定并双手托着一张题笺。"},"text_strategy":"none","post_asset":null},
+      {"id":"C011","order":11,"scene_id":"S001","panel_id":"P006","coverage_ids":["EV011"],"dialogue_ids":["D010"],"critical_characters":["wang_fang"],"reference_keys":["tail.P005.accepted"],"actions":["王方展开题笺揭晓同题"],"camera_moves":["dolly in"],"purpose":"公开双璧和姻缘信息。","state_before":{"continuity":"S001-10：三掌后鱼群已聚，青衣丫鬟已站定并双手托着一张题笺。"},"state_after":{"continuity":"S001-11：王方已举起第二张唤鱼池题笺并说完缘分宣告。"},"text_strategy":"post","post_asset":"POST-001"},
+      {"id":"C012","order":12,"scene_id":"S001","panel_id":"P006","coverage_ids":["EV012"],"dialogue_ids":[],"critical_characters":["su_shi"],"reference_keys":["tail.P005.accepted"],"actions":["苏轼在喧哗中凝望题笺"],"camera_moves":["pedestal up"],"purpose":"把公共喝彩转成私人吸引。","state_before":{"continuity":"S001-11：王方已举起第二张唤鱼池题笺并说完缘分宣告。"},"state_after":{"continuity":"S001-12：王方已公开同题题笺，满座轰动，苏轼独自凝望字迹。"},"text_strategy":"none","post_asset":null},
+      {"id":"C013","order":13,"scene_id":"S002","panel_id":"P007","coverage_ids":["EV013"],"dialogue_ids":["D011"],"critical_characters":["wang_fu","su_shi"],"reference_keys":["character.wang_fu","character.su_shi","board.P007"],"actions":["王弗主动问鱼乐"],"camera_moves":["dolly in"],"purpose":"建立初见空间和王弗主动性。","state_before":{"continuity":"S002-00：竹径初见，王弗左、苏轼右相向站定，丫鬟在后景。"},"state_after":{"continuity":"S002-01：王弗已问完鱼乐，苏轼笑着准备拱手回应。"},"text_strategy":"none","post_asset":null},
+      {"id":"C014","order":14,"scene_id":"S002","panel_id":"P007","coverage_ids":["EV014"],"dialogue_ids":["D012"],"critical_characters":["wang_fu","su_shi"],"reference_keys":["character.wang_fu","character.su_shi","board.P007"],"actions":["苏轼反问并拱手"],"camera_moves":["fixed"],"purpose":"建立两人的智性默契。","state_before":{"continuity":"S002-01：王弗已问完鱼乐，苏轼笑着准备拱手回应。"},"state_after":{"continuity":"S002-02：苏轼已完成鱼乐反问，王弗停顿后笑起，两人位置未变。"},"text_strategy":"none","post_asset":null},
+      {"id":"C015","order":15,"scene_id":"S002","panel_id":"P008","coverage_ids":["EV015"],"dialogue_ids":["D013"],"critical_characters":["wang_fu","su_shi"],"reference_keys":["tail.P007.accepted"],"actions":["王弗称苏轼稳"],"camera_moves":["fixed"],"purpose":"提供不同于众人的人物判断。","state_before":{"continuity":"S002-02：苏轼已完成鱼乐反问，王弗停顿后笑起，两人位置未变。"},"state_after":{"continuity":"S002-03：王弗已称苏轼稳，苏轼意外并收住部分笑意。"},"text_strategy":"none","post_asset":null},
+      {"id":"C016","order":16,"scene_id":"S002","panel_id":"P008","coverage_ids":["EV016"],"dialogue_ids":["D014"],"critical_characters":["su_shi"],"reference_keys":["tail.P007.accepted"],"actions":["苏轼追问理由"],"camera_moves":["dolly in"],"purpose":"把评价推进到观察依据。","state_before":{"continuity":"S002-03：王弗已称苏轼稳，苏轼意外并收住部分笑意。"},"state_after":{"continuity":"S002-04：苏轼已追问缘由，王弗视线转向池水并准备回答。"},"text_strategy":"none","post_asset":null},
+      {"id":"C017","order":17,"scene_id":"S002","panel_id":"P009","coverage_ids":["EV017"],"dialogue_ids":["D015"],"critical_characters":["wang_fu","su_shi"],"reference_keys":["tail.P008.accepted"],"actions":["王弗解释安静看水"],"camera_moves":["fixed"],"purpose":"让王弗的理解有可观察依据。","state_before":{"continuity":"S002-04：苏轼已追问缘由，王弗视线转向池水并准备回答。"},"state_after":{"continuity":"S002-05：王弗已说出安静看水的观察，苏轼嬉笑完全收起。"},"text_strategy":"none","post_asset":null},
+      {"id":"C018","order":18,"scene_id":"S002","panel_id":"P009","coverage_ids":["EV018"],"dialogue_ids":["D016"],"critical_characters":["wang_fu","su_shi"],"reference_keys":["tail.P008.accepted"],"actions":["苏轼承认被王弗看见"],"camera_moves":["dolly out"],"purpose":"完成两人的第一次真正相知。","state_before":{"continuity":"S002-05：王弗已说出安静看水的观察，苏轼嬉笑完全收起。"},"state_after":{"continuity":"S002-06：苏轼承认王弗是第一个说他安静的人，两人保持克制对视。"},"text_strategy":"none","post_asset":null},
+      {"id":"C019","order":19,"scene_id":"S003","panel_id":"P010","coverage_ids":["EV019"],"dialogue_ids":["D017"],"critical_characters":["su_zhe","su_shi"],"reference_keys":["character.su_zhe","character.su_shi","board.P010"],"actions":["苏辙圈文并示警"],"camera_moves":["fixed"],"purpose":"把文章风险具体落到策论。","state_before":{"continuity":"S003-00：兄弟对案夜读，苏辙持笔圈点，苏轼看策论。"},"state_after":{"continuity":"S003-01：策论风险处已圈出，苏辙劝完稳妥，毛笔仍在手。"},"text_strategy":"none","post_asset":null},
+      {"id":"C020","order":20,"scene_id":"S003","panel_id":"P010","coverage_ids":["EV020"],"dialogue_ids":["D018"],"critical_characters":["su_shi"],"reference_keys":["character.su_zhe","character.su_shi","board.P010"],"actions":["苏轼敲桌反驳稳妥"],"camera_moves":["dolly in"],"purpose":"明确苏轼对文章与真话的坚持。","state_before":{"continuity":"S003-01：策论风险处已圈出，苏辙劝完稳妥，毛笔仍在手。"},"state_after":{"continuity":"S003-02：苏轼已反问稳妥能否写出千古文章，手停纸边，兄弟对视。"},"text_strategy":"none","post_asset":null},
+      {"id":"C021","order":21,"scene_id":"S003","panel_id":"P011","coverage_ids":["EV021"],"dialogue_ids":["D019"],"critical_characters":["su_zhe","su_shi"],"reference_keys":["tail.P010.accepted"],"actions":["苏辙放笔承诺托底"],"camera_moves":["fixed"],"purpose":"把观点冲突转成兄弟支持。","state_before":{"continuity":"S003-02：苏轼已反问稳妥能否写出千古文章，手停纸边，兄弟对视。"},"state_after":{"continuity":"S003-03：苏辙已放下毛笔并完成背锅承诺，苏轼郑重起来。"},"text_strategy":"none","post_asset":null},
+      {"id":"C022","order":22,"scene_id":"S003","panel_id":"P011","coverage_ids":["EV022"],"dialogue_ids":["D020"],"critical_characters":["su_shi","su_zhe"],"reference_keys":["tail.P010.accepted"],"actions":["苏轼回应并与弟弟叠手"],"camera_moves":["tilt down"],"purpose":"用可见手势锁定兄弟联盟。","state_before":{"continuity":"S003-03：苏辙已放下毛笔并完成背锅承诺，苏轼郑重起来。"},"state_after":{"continuity":"S003-04：兄弟两手叠起，承诺完成，双人影子投在墙上。"},"text_strategy":"none","post_asset":null},
+      {"id":"C023","order":23,"scene_id":"S004","panel_id":"P012","coverage_ids":["EV023"],"dialogue_ids":[],"critical_characters":["su_shi","wang_fu"],"reference_keys":["character.su_shi","character.wang_fu","board.P012"],"actions":["新人完成北宋拜堂"],"camera_moves":["fixed"],"purpose":"短促兑现婚姻关系。","state_before":{"continuity":"S004-00：婚礼日苏家院落红绸满院，新人即将礼成，家人宾客在场。"},"state_after":{"continuity":"S004-01：苏轼与王弗已拜堂礼成，鞭炮响起，程夫人在廊下拭泪。"},"text_strategy":"none","post_asset":null},
+      {"id":"C024","order":24,"scene_id":"S004","panel_id":"P012","coverage_ids":["EV024"],"dialogue_ids":[],"critical_characters":["cheng_furen","su_xun"],"reference_keys":["character.cheng_furen","character.su_xun","board.P012"],"actions":["程夫人轻咳后跳到数月后"],"camera_moves":["fixed"],"purpose":"埋病兆并完成用户确认的时间推进。","state_before":{"continuity":"S004-01：苏轼与王弗已拜堂礼成，鞭炮响起，程夫人在廊下拭泪。"},"state_after":{"continuity":"S004-02：程夫人婚礼轻咳已被苏洵扶住，时间卡切到数月后，喜绸已撤。"},"text_strategy":"post","post_asset":"POST-002"},
+      {"id":"C025","order":25,"scene_id":"S004","panel_id":"P013","coverage_ids":["EV025"],"dialogue_ids":[],"critical_characters":["su_xun","chaoer"],"reference_keys":["tail.P012.accepted"],"actions":["苏洵持信入院并拍桌"],"camera_moves":["truck left + handheld shake"],"purpose":"用动作引爆春闱消息。","state_before":{"continuity":"S004-02：程夫人婚礼轻咳已被苏洵扶住，时间卡切到数月后，喜绸已撤。"},"state_after":{"continuity":"S004-03：苏洵已把唯一信件拍在石桌，苏轼苏辙巢儿已转头。"},"text_strategy":"none","post_asset":null},
+      {"id":"C026","order":26,"scene_id":"S004","panel_id":"P013","coverage_ids":["EV026"],"dialogue_ids":["D021"],"critical_characters":["su_xun","chaoer"],"reference_keys":["tail.P012.accepted"],"actions":["苏洵宣布春闱并让巢儿取信"],"camera_moves":["fixed"],"purpose":"明确进京机会并完成信件交接。","state_before":{"continuity":"S004-03：苏洵已把唯一信件拍在石桌，苏轼苏辙巢儿已转头。"},"state_after":{"continuity":"S004-04：苏洵已宣布春闱，巢儿从石桌取起唯一信件并开始读。"},"text_strategy":"none","post_asset":null},
+      {"id":"C027","order":27,"scene_id":"S004","panel_id":"P014","coverage_ids":["EV027"],"dialogue_ids":["D022"],"critical_characters":["chaoer","su_shi"],"reference_keys":["tail.P013.accepted"],"actions":["巢儿通读信件"],"camera_moves":["dolly in"],"purpose":"兑现巢儿识字成长并传达三苏名望。","state_before":{"continuity":"S004-04：苏洵已宣布春闱，巢儿从石桌取起唯一信件并开始读。"},"state_after":{"continuity":"S004-05：巢儿已读完三苏名望，仍双手持信，三名年轻人振奋。"},"text_strategy":"none","post_asset":null},
+      {"id":"C028","order":28,"scene_id":"S004","panel_id":"P014","coverage_ids":["EV028"],"dialogue_ids":["D023"],"critical_characters":["su_xun","chaoer"],"reference_keys":["tail.P013.accepted"],"actions":["苏洵决定父子四人进京"],"camera_moves":["fixed"],"purpose":"把机会变成四人同行决定。","state_before":{"continuity":"S004-05：巢儿已读完三苏名望，仍双手持信，三名年轻人振奋。"},"state_after":{"continuity":"S004-06：苏洵已决定父子四人进京，巢儿左手持信、右手指向自己鼻子。"},"text_strategy":"none","post_asset":null},
+      {"id":"C029","order":29,"scene_id":"S004","panel_id":"P015","coverage_ids":["EV029"],"dialogue_ids":["D024","D025"],"critical_characters":["chaoer","su_shi"],"reference_keys":["tail.P014.accepted"],"actions":["苏轼以书箱玩笑确认巢儿同行"],"camera_moves":["fixed"],"purpose":"公开兑现巢儿的家人归属。","state_before":{"continuity":"S004-06：苏洵已决定父子四人进京，巢儿左手持信、右手指向自己鼻子。"},"state_after":{"continuity":"S004-07：苏轼已用书箱玩笑确认巢儿同行，巢儿被揽住并笑起。"},"text_strategy":"none","post_asset":null},
+      {"id":"C030","order":30,"scene_id":"S004","panel_id":"P015","coverage_ids":["EV030"],"dialogue_ids":[],"critical_characters":["su_shi"],"reference_keys":["tail.P014.accepted"],"actions":["苏轼在夕阳中北望"],"camera_moves":["dolly out"],"purpose":"把抱负方向指向汴京。","state_before":{"continuity":"S004-07：苏轼已用书箱玩笑确认巢儿同行，巢儿被揽住并笑起。"},"state_after":{"continuity":"S004-08：苏轼已独立院中北望，三名年轻人背向左后廊下。"},"text_strategy":"none","post_asset":null},
+      {"id":"C031","order":31,"scene_id":"S004","panel_id":"P015","coverage_ids":["EV031"],"dialogue_ids":[],"critical_characters":["cheng_furen"],"reference_keys":["tail.P014.accepted"],"actions":["程夫人无人察觉地轻咳"],"camera_moves":["fixed"],"purpose":"落下无法补回的遗憾钩子。","state_before":{"continuity":"S004-08：苏轼已独立院中北望，三名年轻人背向左后廊下。"},"state_after":{"continuity":"S004-09：苏轼北望后，程夫人在廊下再次轻咳，三个年轻人背向她且无人回头。"},"text_strategy":"none","post_asset":null}
+    ]
+  }
+}

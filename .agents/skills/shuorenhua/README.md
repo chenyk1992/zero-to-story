@@ -1,3 +1,7 @@
+<!-- GPT-6 适配变更说明
+2026-09-07：将 bounded 长文的纯空话处理改为授权内直接删除；删除理由只在审计有用时附上，不把清单或等待确认变成默认流程。保留事实、数字关系和 in-place 的整句边界；无源论断按所选模式处理。
+-->
+
 <h1 align="center">说人话：中文 AI 味清理 skill</h1>
 
 <p align="center">
@@ -45,7 +49,7 @@
 | 技术状态同步 | 保住事实、版本、命令、报错和责任归属，压低套话 |
 | README / release note | 第一屏说清这是什么、给谁用；变更、验证和限制列全 |
 | 论坛帖 / issue 回复 | 像维护者在认真沟通，不像客服公告或营销稿 |
-| 中文长文 | 句内清理保住节奏，整句空话列「建议删除」清单交你确认，不让长文越改越短 |
+| 中文长文 | 句内清理保住节奏；用户授权改写时直接删纯空话，按需记录删除理由，不让长文越改越短 |
 
 ## 改成什么样
 
@@ -110,7 +114,7 @@ release note 的读者要的是变更清单，不是发布宣言。上面这条�
 /plugin install shuorenhua@shuorenhua
 ```
 
-装好后在对话里说「把这段去 AI 味」就会命中。手动安装（cp / 软链跟随更新）见 [install/claude-code.md](install/claude-code.md)。
+装好后在对话里说「把这段去 AI 味」就会命中。本项目已启用此 Skill，无需再次安装；Claude Code 手动安装指南未随此本地副本提供。
 
 **Codex** — clone 后单次使用：
 
@@ -200,7 +204,7 @@ Cursor、OpenClaw 和自建 agent 见[安装](#安装)。
 | scope | 删整句吗 | 适用 |
 |-------|----------|------|
 | `structural` | 自由删并重排 | 短文、明确要重写 |
-| `bounded`（长文默认） | 整句空话列成「建议删除（待确认）」清单，删多少你拍板 | `public-writing` 长文 |
+| `bounded`（长文默认） | 用户授权改写时直接删仅由空话组成的整句；不并句、不重排、不删实句或承担节奏的重复。需要审计时再列原句和理由，不等待确认 | `public-writing` 长文 |
 | `in-place` | 一句都不删，只句内降调 | 明确要求「完全原样」 |
 
 三档的取舍过程见 [#4](https://github.com/MrGeDiao/shuorenhua/issues/4)，`structural` 缩水不可控的双模型对照实跑见 [evals/results-v1.8.6.md](evals/results-v1.8.6.md)。后续各版的 scope 回归结果登记在 [evals/run-manifest.md](evals/run-manifest.md)。最近一轮是合并版 v2.3.0 的新增 8 条 + 第一阶段 11 条影响面回归（[evals/results-v2.3.0.md](evals/results-v2.3.0.md) §9）：Codex `gpt-5.6-sol` 与 Claude `opus` 独立盲改写、双向交叉判分，硬约束失败 0、SNF 误杀 0，无 `❌`。SF-55 在两模型上都留有较淡的抽象隐喻，按 L2 风格警告记录，不阻塞发布。
@@ -227,7 +231,7 @@ Cursor、OpenClaw 和自建 agent 见[安装](#安装)。
 | 场景样本 | 20 | 整段样本按自然、保真、可直接发三项评分，长文加 `长度节奏` |
 | Scene Packs | 8 | README / release note / forum post / issue reply 的正反样本 |
 | Long-form In-place | 4 | 长文保长度场景，检查字数留存、句数对齐和关键转场 |
-| Bounded | 3 | 长文整句空话进删除清单，但不误删实句和节奏句 |
+| Bounded | 3 | 长文纯空话整句可直接删除；按需记录理由，不误删实句、歧义数字或节奏句 |
 
 怎么算及格：v2.1.0 起发布门槛分三层（判据单源：[evals/benchmark-tiers.md](evals/benchmark-tiers.md)）：
 
@@ -257,10 +261,10 @@ v2.2.0 起，改写输出落盘后先用零依赖硬判脚本 `python3 automatio
 | 平台 | 文档 |
 |------|------|
 | Codex | [install/codex.md](install/codex.md) |
-| Claude Code | [install/claude-code.md](install/claude-code.md) |
-| Cursor / Windsurf | [install/cursor.md](install/cursor.md) |
+| Claude Code | 本地副本未包含该宿主的安装指南 |
+| Cursor / Windsurf | 本地副本未包含该宿主的安装指南 |
 | OpenClaw | [install/openclaw.md](install/openclaw.md) |
-| ChatGPT / Custom GPT | [install/chatgpt.md](install/chatgpt.md) |
+| ChatGPT / Custom GPT | 本地副本未包含该宿主的安装指南 |
 
 核心只需要 `SKILL.md` 一个文件（lite）；长期项目、公开文本和需要误杀防护的场景，建议带上 `references/` 完整包（full）。
 
@@ -302,13 +306,13 @@ Claude Code: `/plugin marketplace add MrGeDiao/shuorenhua`, then `/plugin instal
 
 欢迎提交新的评测样本、边界案例、真实问题案例、改写前后样本和误杀防护。
 
-如果你遇到“改完还是像 AI”的具体文本，可以用 [bad case 模板](.github/ISSUE_TEMPLATE/bad-case.md) 提交。请先脱敏，不要贴未授权私聊全文、密钥、内部链接或真实个人身份信息。也可以直接贴到[征集 issue](https://github.com/MrGeDiao/shuorenhua/issues/5)。
+如果你遇到“改完还是像 AI”的具体文本，可以记录原文、任务要求、改写结果和具体误杀点，供后续复核。请先脱敏，不要贴未授权私聊全文、密钥、内部链接或真实个人身份信息。也可以直接贴到[征集 issue](https://github.com/MrGeDiao/shuorenhua/issues/5)。
 
 在提交新词之前，先想一件事：
 
 > 这是一个“新模式”，还是只是“现有模式的变体”？
 
-详细规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+本地样本与规则入库流程见 [automation/intake.md](automation/intake.md)，仅在明确的维护任务中使用。
 
 ## 相关项目
 

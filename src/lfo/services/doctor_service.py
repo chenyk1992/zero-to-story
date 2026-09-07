@@ -34,8 +34,6 @@ from lfo.environment.checks.tools import (
     check_python,
 )
 from lfo.environment.checks.workflows import (
-    check_workflow_bindings,
-    check_workflow_hash_match,
     check_workflow_runtime_compatible,
 )
 
@@ -61,9 +59,8 @@ def register_all_checks(runner: CheckRunner) -> None:
     runner.register(check_models_present)
     runner.register(check_models_hash_verified)
 
-    # Workflows
-    runner.register(check_workflow_hash_match)
-    runner.register(check_workflow_bindings)
+    # Workflows: static graph, bindings, live node schemas, and model files
+    # are checked together by the registry-backed runtime check.
     runner.register(check_workflow_runtime_compatible)
 
     # Tools
