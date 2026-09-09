@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from lfo.backends.capabilities import CapabilityManifest
+from lfo.backends.comfy_h3 import build_h3_backend_registry
 from lfo.backends.registry import BackendRegistry
 from lfo.contracts.assets import (
     AssetSource,
@@ -70,6 +71,22 @@ def _make_package(clips: list[ClipSpec] | None = None) -> VideoExecutionPackage:
 
 
 class TestMaterialize:
+    def test_sampling_is_materialized_and_affects_hash(self) -> None:
+        clip = _make_clip()
+        clip.generation.requirements = GenerationRequirements(
+            sampler_profile="native", steps=16,
+        )
+        registry = build_h3_backend_registry()
+        first = materialize("run-1", _make_package([clip]), "pkghash", registry)
+        assert first.clips[0].sampler_profile == "native"
+        assert first.clips[0].steps == 16
+        clip.generation.requirements.steps = 20
+        second = materialize("run-1", _make_package([clip]), "pkghash", registry)
+        assert first.materialization_hash != second.materialization_hash
+        # The registry templates stay unchanged; bound values are locked in
+        # the materialization hash, not the aggregate backend template hash.
+        assert first.clips[0].workflow_hash == second.clips[0].workflow_hash
+
     def test_basic_materialization(self) -> None:
         pkg = _make_package()
         result = materialize("run-1", pkg, "pkghash", _h3_registry())

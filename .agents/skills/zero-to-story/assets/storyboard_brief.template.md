@@ -1,5 +1,7 @@
 # 故事板概要 — [项目标题]
 
+共同的角色、Panel ready、实际末态/音频验收和授权规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本模板只提供故事板记录结构。
+
 ## 流程状态
 
 | 阶段 | 状态 | 确认依据 |
@@ -16,16 +18,21 @@
 - 类型：[剧情短片/预告片/MV/广告/竖屏短剧]
 - 目标总时长：[精确秒数]
 - Panel / Clip 数：[N / N，两者相等]
-- STEP 3 资产数：[按计划填写：storyboard_board N 张（每个 R2V Panel 1 张） / scene_keyframe N / last_frame N / none N]
+- STEP 3 资产数：[按计划填写：storyboard_board N 张（选择分镜板的 R2V Panel 每个 1 张） / reference_assets N / scene_keyframe N / last_frame N / none N]
 - Camera Setup 总数：[由全章节奏与实际切镜决定]
 - 目标画幅：[W:H]
+- 项目生成参数：[用户选择的 megapixels；sampler_profile（vdn_turbo / native）与 steps；选择依据及适用范围。最迟首包前补齐，后续 Panel 继承；不要从输出尺寸或仅凭步数猜测模式。]
 - Medium Lock：[成片媒介及排除项]
 - Style Brief：[用简短导演阐述说明本章视点、情绪转折，以及色彩、光线、质感、镜头和声音如何服务它]
 - 声音原则：[对白、环境声、动作声、空间声、静默和音乐策略]
 - 字幕策略：[无 / 外挂 / 烧录 / 两者；锁定对白为单一内容来源，统一样式与安全区，按实际发声定时；烧录只在最终时间线进行]
-- Panel 接受检查：[按 Skill 的 video-qc.md 检查身份、关键动作因果、声音、片段后期和相邻衔接；一次 ACCEPT/REJECT]
+- Panel 接受检查：[按 Skill 的 video-qc.md 查看实际文件，记录实际末态和实际音频证据，检查身份、关键动作因果、片段后期和相邻衔接；一次 ACCEPT/REJECT]
 
 > `creative_blueprint.json` 与本文件在 STEP 1 同步编译并预检。它是机器可读索引，不新增用户审批节点；两者冲突时以本文件为准并重新编译。
+
+## Panel ready
+
+Panel 的自身事实、时长、Camera Setup、operation、提示词输入、必要资产、生成参数、音频/对白要求、后期责任、输出位置和授权齐全后即可标记 ready。依赖上一 Panel 的 Panel 还要等待上一段实际 `ACCEPT` 和需要的真实尾帧；独立 Panel 不等待其他 Panel 的资产或整章完成。
 
 ## Panel 时长表
 
@@ -53,6 +60,14 @@
 | 事件 ID | 优先级 | 原文出处 | 剧情事件 | 可见证据 | 事件前状态 | 事件后状态 | Scene | Panel | Setup | 对白 ID |
 |---|---|---|---|---|---|---|---|---|---|---|
 | EV001 | must_show | [文件:行号] | [必须发生的事件] | [观众看到什么才算完成] | [状态] | [状态] | S001 | P001 | C001 | D001 |
+
+## 可检查的视觉要求与后期分工
+
+把会影响生成或验收的要求写成可观察事实；不确定的内容写“未知”，不要让模型猜测。每个 Panel/Setup 只列当前真正需要的项目。
+
+| Panel / Setup | 数量 | 相对大小 | 身份锚点 | 物体形状 | 必须可见部分 | 接触关系 | 精确文字 | 生成或后期责任 |
+|---|---|---|---|---|---|---|---|---|
+| P001 / C001 | [数量] | [相对谁更大/小；画面占比] | [角色或物体身份特征] | [形状与可辨识轮廓] | [必须看到的部位/结果] | [谁与谁如何接触或不接触] | [逐字文字或无] | [生成 / 后期 / 无] |
 
 ## 场景状态链
 
@@ -136,10 +151,10 @@
 
 | Panel | Operation | Board layout (`rowsxcolumns`) | STEP 3 资产策略 | 精确首帧来源 | 精确尾帧来源 | Runtime inputs | Planning only | 连续 / 硬切 | 选择理由 |
 |---|---|---|---|---|---|---|---|---|---|
-| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | [R2V 先锁定，如 `1x2` / `2x2` / `2x3`；格数 2–6；非 R2V 写“无”] | `none` / `storyboard_board` / `scene_keyframe` / `last_frame` | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key；R2V 默认仅 `storyboard_board.<panel>`，必要时再加非分镜引用] | [仅规划审阅、不传入的 key] | [连续/硬切] | [一句话] |
+| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | [采用分镜板的 R2V 填 `1x2` / `2x2` / `2x3`；格数 2–6；普通参考或非 R2V 写“无”] | `none` / `storyboard_board` / `reference_assets` / `scene_keyframe` / `last_frame` | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key；R2V 按策略列出分镜板或普通参考] | [仅规划审阅、不传入的 key] | [连续/硬切] | [一句话] |
 
-> 先按控制需求选 operation，再决定 STEP 3 资产；不得因为已有分镜板就选 R2V。R2V 必须在 STEP 1 先锁定一个 `rowsxcolumns` 布局（行数 × 列数为 2–6），并把它写入 `storyboard_layout`；STEP 3 只调用一次图片生成，直接输出一张准确网格、准确格数、按从左到右再从上到下排列的自包含黑白分镜板，不生成独立分镜帧、不后期拼接。资产 key 为 `storyboard_board.<panel>`，H3 只接收这一张板；`runtime_input_keys` 默认只放这一张板，必要时才追加角色卡等非分镜引用。
-> `none` 不调用图片模型，`storyboard_board` 只与 R2V 配合，`last_frame` 只与 FL2V 配合。板内格位按顺序映射选定的 Beat、Setup 和每格唯一新增信息；六个 Beat 仍是语义映射，不等于固定格数。I2V 只传首帧，FL2V 只传首帧和尾帧，`Planning only` 素材默认不生成且禁止进入视频模型。
+> 先按控制需求选 operation，再决定 STEP 3 资产；不得因为已有分镜板就选 R2V。选择 `storyboard_board` 的 R2V 才在 STEP 1 锁定一个 `rowsxcolumns` 布局（行数 × 列数为 2–6），并把它写入 `storyboard_layout`；STEP 3 只调用一次图片生成，直接输出一张准确网格、准确格数、按从左到右再从上到下排列的自包含黑白分镜板，不生成独立分镜帧、不后期拼接。资产 key 为 `storyboard_board.<panel>`，H3 只接收这一张板；`reference_assets` 选择已明确用途的普通参考，各占一个 typed fixed 槽位，不强制分镜板。
+> `none` 不调用图片模型，`storyboard_board` 只与 R2V 配合，`reference_assets` 只与普通参考 R2V 配合，`last_frame` 只与 FL2V 配合。板内格位按顺序映射选定的 Beat、Setup 和每格唯一新增信息；六个 Beat 仍是语义映射，不等于固定格数。I2V 只传首帧，FL2V 只传首帧和尾帧，`Planning only` 素材默认不生成且禁止进入视频模型。
 
 ## Panel 映射表
 

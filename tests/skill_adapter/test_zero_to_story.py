@@ -306,6 +306,45 @@ class TestAdaptPanelFirst:
         assert package.output.width == 1080
         assert package.output.height == 1920
 
+    def test_project_sampling_choice_is_inherited_by_panel(self) -> None:
+        creative = {
+            "project": {"project_id": "sampling-inherit-001"},
+            "assets": [],
+            "user_constraints": {
+                "sampler_profile": "vdn_turbo",
+                "steps": 8,
+            },
+            "panels": [{
+                "panel_id": "panel-001",
+                "prompt_text": "A quiet room.",
+                "generation": {"operation": "video.text_to_video"},
+            }],
+        }
+        package = adapt(creative)
+        requirements = package.clips[0].generation.requirements
+        assert requirements.sampler_profile == "vdn_turbo"
+        assert requirements.steps == 8
+
+    def test_panel_sampling_choice_cannot_conflict_with_project(self) -> None:
+        creative = {
+            "project": {"project_id": "sampling-conflict-001"},
+            "assets": [],
+            "user_constraints": {
+                "sampler_profile": "vdn_turbo",
+                "steps": 8,
+            },
+            "panels": [{
+                "panel_id": "panel-001",
+                "prompt_text": "A quiet room.",
+                "generation": {
+                    "operation": "video.text_to_video",
+                    "requirements": {"sampler_profile": "native", "steps": 16},
+                },
+            }],
+        }
+        with pytest.raises(ValueError, match="conflicts with project"):
+            adapt(creative)
+
     def test_panel_source_context_and_extensions_are_preserved(self) -> None:
         creative = {
             "project": {"project_id": "panel-extension-001"},

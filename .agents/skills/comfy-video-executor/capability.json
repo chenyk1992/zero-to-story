@@ -1,0 +1,97 @@
+{
+  "id": "comfy",
+  "label": "ComfyUI",
+  "node_types": ["video"],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": ["comfy", "ffprobe"],
+  "models": [
+    {"id": "h3", "label": "MiniMax H3"}
+  ],
+  "modes": [
+    {"id": "t2v", "label": "文生视频"},
+    {"id": "i2v", "label": "图生视频"},
+    {"id": "fl2v", "label": "首尾帧生视频"},
+    {"id": "r2v", "label": "参考素材生视频"}
+  ],
+  "fields": [
+    {
+      "key": "duration",
+      "label": "时长（秒）",
+      "type": "number",
+      "group": "specs",
+      "min": 0.2,
+      "max": 15,
+      "required": true
+    },
+    {
+      "key": "aspect_ratio",
+      "label": "画幅比例",
+      "type": "select",
+      "group": "specs",
+      "options": [
+        {"value": "1:1", "label": "1:1"},
+        {"value": "2:3", "label": "2:3"},
+        {"value": "3:2", "label": "3:2"},
+        {"value": "3:4", "label": "3:4"},
+        {"value": "4:3", "label": "4:3"},
+        {"value": "9:16", "label": "9:16"},
+        {"value": "16:9", "label": "16:9"},
+        {"value": "21:9", "label": "21:9"}
+      ],
+      "required": true
+    },
+    {
+      "key": "megapixels",
+      "label": "生成像素预算（MP）",
+      "type": "number",
+      "group": "specs",
+      "required": true
+    },
+    {
+      "key": "sampler_profile",
+      "label": "采样配置",
+      "type": "select",
+      "group": "advanced",
+      "options": [
+        {"value": "native", "label": "原生"},
+        {"value": "vdn_turbo", "label": "VDN Turbo"}
+      ],
+      "required": true
+    },
+    {
+      "key": "steps",
+      "label": "采样步数",
+      "type": "number",
+      "group": "advanced",
+      "min": 8,
+      "required": true
+    },
+    {
+      "key": "seed",
+      "label": "随机种子",
+      "type": "number",
+      "group": "advanced",
+      "required": false
+    },
+    {
+      "key": "fps",
+      "label": "帧率",
+      "type": "number",
+      "group": "advanced",
+      "options": [{"value": 24, "label": "24 fps"}],
+      "required": false
+    },
+    {
+      "key": "reference_image_size",
+      "label": "参考图尺寸",
+      "type": "select",
+      "group": "advanced",
+      "options": [
+        {"value": "match", "label": "匹配"},
+        {"value": "max", "label": "最大"}
+      ],
+      "required": false
+    }
+  ]
+}

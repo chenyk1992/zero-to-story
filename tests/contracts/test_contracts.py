@@ -285,6 +285,27 @@ class TestGenerationRequirements:
         with pytest.raises(TypeError, match="native_audio"):
             GenerationRequirements.from_dict({"native_audio": 123}, "$")
 
+    def test_sampling_profile_and_steps_round_trip(self):
+        requirements = GenerationRequirements.from_dict(
+            {"sampler_profile": "native", "steps": 16}, "$"
+        )
+        assert requirements.sampler_profile == "native"
+        assert requirements.steps == 16
+        assert requirements.to_dict()["sampler_profile"] == "native"
+        assert requirements.to_dict()["steps"] == 16
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"sampler_profile": "native"},
+            {"steps": 16},
+            {"sampler_profile": "native", "steps": 7},
+        ],
+    )
+    def test_sampling_fields_are_a_validated_pair(self, payload):
+        with pytest.raises((TypeError, ValueError), match="sampler_profile|steps"):
+            GenerationRequirements.from_dict(payload, "$")
+
 
 # ---------------------------------------------------------------------------
 # GenerationSpec

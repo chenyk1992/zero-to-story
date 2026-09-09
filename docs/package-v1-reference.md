@@ -1,5 +1,7 @@
 # Video Execution Package v1（单 Panel）
 
+角色、Panel ready、实际末态/音频验收和授权复用遵守[项目共享生产规则](ai-system-prompt.md)；本文只定义 package CLI 的公共字段和边界。
+
 `lfo.video-execution.v1` 是创作 Skill 与 LFO 之间的唯一公共边界。Skill 决定故事、镜头、视觉资产、H3 提示词和用户审批；LFO 只执行已确认的一个 Panel/Clip。
 
 当前版本是 breaking redesign：新执行不兼容旧 `shots[]`、旧 Panel-only 入口、旧 lock/retry/recovery 语义，也不提供迁移层。
@@ -55,6 +57,8 @@ LFO 在 `validate` 阶段拒绝空包和包含多个生成 Clip 的包。一个�
     "requirements": {
       "aspect_ratio": "9:16",
       "megapixels": 0.4,
+      "sampler_profile": "vdn_turbo",
+      "steps": 8,
       "fps": 24
     },
     "references": [
@@ -92,6 +96,21 @@ LFO 在 `validate` 阶段拒绝空包和包含多个生成 Clip 的包。一个�
 
 Reference 的 `binding.slot` 必须与最终 H3 `<Picture N>`、`<Video N>`、`<Audio N>` 标签一致。R2V 使用 `placement: "fixed"` 和明确槽位；若已批准计划把整张分镜板列为模型引用，它作为一张图片只占一个槽位，板内格子不拆分。未列为模型引用的分镜板仍只是 planning 资产，且分镜板的存在不会自动选择 R2V。
 
+### 采样模式与动态步数
+
+所有创作调用方通过 `generation.requirements.sampler_profile` 与 `steps` 成对声明采样选择；LFO 不负责向用户提问，也不从一个步数推断是否启用加速。
+
+| sampler_profile | steps | 执行路径 |
+| --- | --- | --- |
+| `vdn_turbo` | 必须为整数 `8` | VDN Turbo 的独立工作流，euler / simple；只支持标准 H3 operation |
+| `native` | 整数且 ≥ 8，例如 8、16、20、24 | 不接入 VDN / SigmaShift 的原生工作流，res_multistep / simple；支持标准 H3 与 virtual_presenter |
+
+只提供其中一个字段、未知模式、非整数步数、小于 8，或 `vdn_turbo` 搭配非 8 步，均在提交前拒绝。显式选择的模式不会因环境缺失而自动换成另一模式；原生图不依赖 VDN 插件及 bundle。模式选择与 `operation` 正交：切换 native 不改变首尾帧或 typed reference 约定。
+
+为保持已有包的执行语义，成对省略时，标准 H3 仍采用原来的 VDN Turbo 8 步，virtual_presenter 仍为原生 20 步。纯 passthrough 不做采样，不应声明这两个字段。旧包默认值不是新项目的用户授权。
+
+在创作流程中，像素预算、模式和步数在首个视频包前让用户选择一次，再持久化到项目规格；zero-to-story 使用蓝图顶层 `user_constraints`，逐 Panel 继承到公共 requirements。适配器拒绝与项目采样选择冲突的 Panel 覆盖，用户明确变更后才能更新项目规格并重新形成包。LFO 使用包中的值完成工作流选择、步数绑定及执行结果记录，不接受执行时临时覆盖。更改任一字段会改变包 hash，受影响包需新 revision 和精确批准。具体 VDN 开关含义见 [H3 采样模式说明](h3-vdn8.md)。
+
 ### 可选 SeedVR2 放大
 
 需要在当前生成 Clip 通过 H3 后再做一次放大时，只显式写入：
@@ -114,6 +133,8 @@ Reference 的 `binding.slot` 必须与最终 H3 `<Picture N>`、`<Video N>`、`<
 
 ## 批准与 package hash 锁
 
+人工确认与技术哈希锁是两层：调用方可依据用户明确授予的项目内修订包持续授权，在完成新包、validate 及范围核对后直接绑定当前 hash，无需用户逐次回复。授权范围与原话保存在创作侧现有项目记录，不能把笼统“继续”当成持续授权；也不能扩大范围、略过校验或将模型自批伪装成用户逐包审阅。后文“用户确认”在这种情况下指已覆盖本次修订的明确授权，运行时仍只接收精确 hash，不新增免校验开关。
+
 运行 `validate` 后，LFO 在成功结果中返回完整 `execution-package.json` 的完整文件字节 SHA-256（`package_sha256`）。用户确认该值后将它传给 `execute --approved-sha256`。执行开始前 LFO 重新计算并比对：
 
 - 一致：继续当前 Panel 的执行；
@@ -129,7 +150,9 @@ package 文件中的素材引用或声明 hash、提示词、时长、operation�
 validate → execute（一次同步 H3；显式开启时再一次 SeedVR2）→ 最小 QC → ACCEPT/REJECT
 ```
 
-`execute` 只处理当前 Clip，调用配置的官方 ComfyUI/comfy-cli 并等待结果。它返回生成视频或错误；调用方再执行最小 QC，决定 `ACCEPT`/`REJECT`，并在 `ACCEPT` 后按下游需要从实际视频提取真实尾帧。公开协议不包含自动重试或失败候选；调用方不读取或维护恢复记录，底层运行记录不改变这一交接边界。
+`execute` 只处理当前 Clip，调用配置的官方 ComfyUI/comfy-cli 并等待结果。它返回生成视频或错误；执行单元必须查看实际视频，记录实际末态和实际音频证据，再作一次 `ACCEPT`/`REJECT` 判断。证据不足时先做一次本地复核，仍不清楚就停止；不能用元数据、轨道存在或不确定的 ASR 代替证据。只有 `ACCEPT` 后才按下游需要从实际视频提取真实尾帧。公开协议不包含自动重试或失败候选；调用方不读取或维护恢复记录，底层运行记录不改变这一交接边界。
+
+Canvas 和 package CLI 的 Comfy 提交共用项目的机器范围提交占用和持久回执；package 运行时不能绕过这个低层占用直接并发提交。诊断入口见[CLI 指南](cli-guide.md)和 `python -m lfo.comfy.admission`。
 
 `plan` 可用于诊断，但不参与批准，也不是必经步骤。最终 assembly package 同样需要 `validate` 和完整文件字节 SHA-256 批准；其中一个或多个 Clip 必须全部是 `video.passthrough`，只执行确定性媒体组装，不调用生成模型。即使项目只有一个 Panel，也使用单 Clip passthrough assembly 应用最终配音、字幕和输出策略。
 

@@ -1,0 +1,17 @@
+{
+  "id": "mmx",
+  "label": "MiniMax / mmx",
+  "skill": "mmx-h3-video",
+  "node_types": ["video"],
+  "execution": "agent",
+  "requires_tools": ["terminal"],
+  "requires_executables": ["mmx"],
+  "models": [{"id": "MiniMax-H3", "label": "MiniMax H3"}],
+  "modes": [{"id": "t2v", "label": "文生视频"}, {"id": "i2v", "label": "图生视频"}, {"id": "fl2v", "label": "首尾帧生视频"}, {"id": "r2v", "label": "参考素材生视频"}],
+  "fields": [
+    {"key": "duration", "label": "时长（秒）", "type": "number", "group": "specs", "min": 4, "max": 15, "integer": true, "required": true},
+    {"key": "aspect_ratio", "label": "画幅比例", "type": "select", "group": "specs", "required": true,
+      "options": [{"value": "adaptive", "label": "自适应"}, {"value": "21:9", "label": "21:9"}, {"value": "16:9", "label": "16:9"}, {"value": "4:3", "label": "4:3"}, {"value": "1:1", "label": "1:1"}, {"value": "3:4", "label": "3:4"}, {"value": "9:16", "label": "9:16"}]}
+  ],
+  "handoff": "复用当前已有 mmx-h3-video Skill，指定所选 MiniMax-H3 模型并完整传递固定提示词、时长、比例与素材用途。不重新优化定稿提示词，不通过通用 mmx Skill 再次提交。认证和接口约束由已有 Skill 处理；缺能力或凭据则停止，不自动安装。"
+}

@@ -1,0 +1,8 @@
+# This MCP server applies only to this project. Start it from the project root.
+sandbox_mode = "workspace-write"
+model_verbosity = "medium"
+[mcp_servers.story_canvas]
+command = ".venv/Scripts/python.exe"
+args = ["-m", "lfo.canvas", "mcp"]
+startup_timeout_sec = 15
+tool_timeout_sec = 180

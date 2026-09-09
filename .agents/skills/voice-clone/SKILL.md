@@ -7,11 +7,9 @@ description: |
 allowed-tools: [read, exec_command]
 ---
 
-## GPT-6 适配变更说明
-
-2026-09-07：复用说话人授权，本地准备与上传克隆分开，不重复固定问卷。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
-
 # 本地 MiniMax 音色克隆
+
+遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 只处理用户明确授权的音频克隆工作单元；它不承担故事、视频生成、内容 `ACCEPT` 或监控代理。
 
 本技能在本地执行 MiniMax 官方的两段式音色复刻流程：
 

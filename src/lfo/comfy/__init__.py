@@ -20,8 +20,6 @@ from .exceptions import (
     OutputUnstableError,
     WorkflowFormatError,
 )
-from .monitor import ComfyMonitor
-from .recovery import RecoveryManager, RecoveryResult
 from .runtime import ComfyRuntimeManager, InstanceFingerprint, MachineProfile
 from .submit import PromptSubmitter, SubmitResult
 from .workflow import WorkflowLoader
@@ -48,16 +46,11 @@ __all__ = [
     # submit
     "PromptSubmitter",
     "SubmitResult",
-    # monitor
-    "ComfyMonitor",
     # collect
     "ComfyOutputCollector",
     "MediaInfo",
     "AssetRecord",
     "CollectResult",
-    # recovery
-    "RecoveryManager",
-    "RecoveryResult",
     # exceptions
     "LfoComfyError",
     "ComfyCliTimeoutError",

@@ -7,6 +7,7 @@ be supplied by an ASR/diarization adapter (or MiMo evidence); an inconclusive
 analysis is reported for review instead of becoming an automatic storyboard
 failure.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -15,10 +16,25 @@ import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from lfo.media._ffmpeg import probe
+
+
+class AudioAcceptanceReadiness(StrEnum):
+    """What an audio report says about downstream acceptance review.
+
+    ``passed`` remains a technical/reporting result for compatibility.  A
+    report can pass while its speech analysis is inconclusive, so callers
+    should use this explicit state when deciding whether a clip can be
+    adopted without another listening check.
+    """
+
+    READY = "ready"
+    REVIEW_REQUIRED = "review_required"
+    REJECTED = "rejected"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,11 +85,11 @@ class AudioAcceptanceContract:
                     continue
                 events.append(
                     SpeechEventExpectation(
-                        event_id=event_id,
-                        speaker_id=speaker_id,
-                        text=text,
-                        start_ms=start_ms,
-                        end_ms=end_ms,
+                        event_id=cast(str, event_id),
+                        speaker_id=cast(str, speaker_id),
+                        text=cast(str, text),
+                        start_ms=cast(int, start_ms),
+                        end_ms=cast(int, end_ms),
                         allow_overlap=bool(item.get("allow_overlap", False)),
                     )
                 )
@@ -83,7 +99,7 @@ class AudioAcceptanceContract:
             # omitted key keeps the conservative default.  Treating both as
             # the default would make it impossible for a project to opt out
             # of a metric while retaining transcript/timing checks.
-            candidate = value[key] if key in value else default
+            candidate = value.get(key, default)
             if candidate is None:
                 return None
             if isinstance(candidate, bool) or not isinstance(candidate, int | float):
@@ -128,6 +144,34 @@ class AudioQCReport:
     @property
     def failures(self) -> list[AudioQCRuleResult]:
         return [result for result in self.results if not result.passed]
+
+    @property
+    def acceptance_readiness(self) -> AudioAcceptanceReadiness:
+        """Return an explicit adoption state without collapsing uncertainty.
+
+        An inconclusive speech analysis is reviewable evidence when the
+        technical report passed; it is not converted into a rejection.  The
+        caller that owns the accepted output still decides whether the
+        required listening review is sufficient.
+        """
+        if not self.passed:
+            if self.failures and all(rule.rule.startswith("speech_") for rule in self.failures):
+                # Analyzer mismatches need listening review, not automatic rejection.
+                return AudioAcceptanceReadiness.REVIEW_REQUIRED
+            return AudioAcceptanceReadiness.REJECTED
+        if self.inconclusive:
+            return AudioAcceptanceReadiness.REVIEW_REQUIRED
+        return AudioAcceptanceReadiness.READY
+
+    @property
+    def ready_for_acceptance(self) -> bool:
+        """Whether no additional audio review is indicated by this report."""
+        return self.acceptance_readiness is AudioAcceptanceReadiness.READY
+
+    @property
+    def requires_review(self) -> bool:
+        """Whether the report passed but still needs an audio review."""
+        return self.acceptance_readiness is AudioAcceptanceReadiness.REVIEW_REQUIRED
 
 
 class AudioQualityQC:
@@ -245,7 +289,11 @@ class AudioQualityQC:
         results: list[AudioQCRuleResult],
     ) -> None:
         actual_value = analysis.get("speech_events", [])
-        actual = [item for item in actual_value if isinstance(item, Mapping)] if isinstance(actual_value, list) else []
+        actual = (
+            [item for item in actual_value if isinstance(item, Mapping)]
+            if isinstance(actual_value, list)
+            else []
+        )
         actual_by_id = {
             str(item.get("event_id")): item
             for item in actual
@@ -267,21 +315,44 @@ class AudioQualityQC:
             actual_text = str(observed.get("text", ""))
             similarity = _text_similarity(expected.text, actual_text)
             speaker_ok = observed.get("speaker_id") in (None, expected.speaker_id)
-            start_ok = _within_tolerance(observed.get("start_ms"), expected.start_ms, policy.timing_tolerance_ms)
-            end_ok = _within_tolerance(observed.get("end_ms"), expected.end_ms, policy.timing_tolerance_ms)
-            passed = similarity >= policy.transcript_similarity and speaker_ok and start_ok and end_ok
+            start_ok = _within_tolerance(
+                observed.get("start_ms"), expected.start_ms, policy.timing_tolerance_ms
+            )
+            end_ok = _within_tolerance(
+                observed.get("end_ms"), expected.end_ms, policy.timing_tolerance_ms
+            )
+            passed = (
+                similarity >= policy.transcript_similarity and speaker_ok and start_ok and end_ok
+            )
             results.append(
                 AudioQCRuleResult(
                     f"speech_event:{expected.event_id}",
                     passed,
-                    "speech text, speaker or timing differs from the locked contract" if not passed else "",
-                    {"speaker_id": expected.speaker_id, "text": expected.text, "start_ms": expected.start_ms, "end_ms": expected.end_ms},
-                    {"speaker_id": observed.get("speaker_id"), "text": actual_text, "start_ms": observed.get("start_ms"), "end_ms": observed.get("end_ms"), "similarity": similarity},
+                    "speech text, speaker or timing differs from the locked contract"
+                    if not passed
+                    else "",
+                    {
+                        "speaker_id": expected.speaker_id,
+                        "text": expected.text,
+                        "start_ms": expected.start_ms,
+                        "end_ms": expected.end_ms,
+                    },
+                    {
+                        "speaker_id": observed.get("speaker_id"),
+                        "text": actual_text,
+                        "start_ms": observed.get("start_ms"),
+                        "end_ms": observed.get("end_ms"),
+                        "similarity": similarity,
+                    },
                 )
             )
 
         ordered = sorted(
-            (item for item in actual if isinstance(item.get("start_ms"), int) and isinstance(item.get("end_ms"), int)),
+            (
+                item
+                for item in actual
+                if isinstance(item.get("start_ms"), int) and isinstance(item.get("end_ms"), int)
+            ),
             key=lambda item: int(item["start_ms"]),
         )
         for previous, current in itertools.pairwise(ordered):
@@ -311,7 +382,11 @@ def _number(value: object) -> float | None:
 
 
 def _within_tolerance(value: object, expected: int, tolerance: int) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and abs(value - expected) <= tolerance
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and abs(value - expected) <= tolerance
+    )
 
 
 def _text_similarity(expected: str, actual: str) -> float:
@@ -329,6 +404,7 @@ def _normalize_text(value: str) -> str:
 
 __all__ = [
     "AudioAcceptanceContract",
+    "AudioAcceptanceReadiness",
     "AudioQCReport",
     "AudioQCRuleResult",
     "AudioQualityQC",

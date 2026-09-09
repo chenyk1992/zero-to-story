@@ -1,5 +1,7 @@
 # Local Windows ComfyUI profile
 
+共同的角色、Panel ready、能力选择和实际验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只记录本机 Comfy 环境，不定义新的审批或恢复流程。
+
 本文只记录本机环境和单 Panel 执行前检查。机器路径、模型和凭据不进入 package，也不写入提示词。
 
 相关工作流说明：
@@ -58,6 +60,8 @@ python -m lfo.cli.main preflight --machine-id local-windows
 ```
 
 `doctor` 和 `preflight` 默认检查当前机器的 `comfy`、`ffmpeg`、`ffprobe` 以及 ComfyUI 可达性；不需要手写 `--tool-ids`。失败结果包含检查 ID、失败原因和可执行的修复提示。检查通过后，同步运行当前 Panel 的隔离执行单元，并在 `validate`/`execute` 上继续传入 `--machine-id local-windows`。Runtime 会把 profile 中的 ComfyUI 地址、`comfy` 可执行文件和可选输出根目录传给实际执行器。LFO 不启动并行任务，不在 ComfyUI 失败后自动重试；环境问题修复后由调用方重新执行当前 Panel。
+
+Canvas 和 package CLI 共用机器范围的 Comfy 提交占用和持久提交回执。需要诊断时运行 `python -m lfo.comfy.admission`；`--reconcile <request-id>` 只读取原始 Comfy `/history`，不重新提交。状态目录由应用数据目录或 `LFO_VIDEO_STATE` 决定。
 
 ```powershell
 python -m lfo.cli.main validate path/to/panel-P001.execution-package.json --machine-id local-windows

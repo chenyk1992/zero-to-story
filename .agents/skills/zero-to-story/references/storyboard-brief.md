@@ -1,6 +1,6 @@
-> GPT-6 适配变更说明：故事板检查是创作输入的可逆整理；用户已授权且信息足够时直接完成定点取舍与一次预检。只有缺少关键事实、生成/批准 hash、ACCEPT/REJECT 或最终 QC 才阻断交付；不把状态展示变成重复确认。
-
 # 故事板文档结构与填充规则
+
+共同的角色、Panel ready、实际验收和授权规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文只规定故事板字段、导演检查和 Panel 映射。
 
 ## 目录
 
@@ -22,7 +22,7 @@
 - `1 Panel = 1 条 Clip`。每个 Panel 都在文档中保留 Beat 1–6 六个有序语义时刻；它们不是固定六格图像。R2V 分镜板只选其中有控制价值的 2–6 个时刻，并在 STEP 1 单独锁定网格布局。
 - P001 的六个 Beat 都是有效内容；P002 起 Beat 1 复用上一 Panel 最后一个 Beat 的已完成状态，只作为零时长边界锚点，Beat 2–6 是当前 Panel 的新内容。
 - Camera Setup 才是实际摄影镜头和 H3 `[Shot N]` 的来源。相邻 Beat 可以属于同一个 Setup；只有 Setup 改变才产生 cut。Panel 和 Clip 数相等；R2V 的分镜板布局以及其他关键帧由逐 Panel 资产计划决定。
-- 先根据精确首尾帧和参考控制需求锁定 operation，再决定 STEP 3 资产。R2V 必须同时选择一张分镜板的 `storyboard_layout`；分镜板的存在不是 R2V 的选择依据，也不能传入 I2V 或 FL2V。
+- 先根据精确首尾帧和参考控制需求锁定 operation，再决定 STEP 3 资产。R2V 可选择 `storyboard_board` 或 `reference_assets`；只有选择分镜板时才同时锁定 `storyboard_layout`。分镜板的存在不是 R2V 的选择依据，也不能传入 I2V 或 FL2V。
 - Beat 记录创作意图；Setup 记录实际机位和剪辑边界；两者都不在本文档内预写 H3 字段或引用标签。
 
 ### 跨 Panel 边界契约
@@ -39,7 +39,7 @@
 
 ## 导演创作检查
 
-主 Agent 作为章节导演，在生成资产前，用以下问题检查整章及关键戏一次。把结论融入现有字段，不另建导演报告、评分表或审批节点；这些是选择拍法的依据，不是要求每镜填满六项。
+主会话作为章节导演，在生成资产前，用以下问题检查整章及关键戏一次。把结论融入现有字段，不另建导演报告、评分表或审批节点；这些是选择拍法的依据，不是要求每镜填满六项。
 
 - **信息与视点：**观众和人物各自已经知道什么？本场新增什么认识、保留什么悬念？把信息差写入“场景目的 / 戏剧目标”，避免误把人物揭晓当作观众第一次获知。关键结果须有观众能辨识的证据，不靠尚未建立的道具位置约定让观众猜；不要求展示形成过程，不等于可以删去结果信息。
 - **表演动机：**人物想达到什么目的，受到什么刺激，如何理解并回应？写入“表演锚点”和当前 Beat；动作、视线、停顿要有作用，不为显得自然而堆叠微表情，不擅改已锁定对白。
@@ -108,12 +108,13 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 | Panel | Operation | STEP 3 资产策略 | R2V 分镜布局 | 精确首帧来源 | 精确尾帧来源 | Runtime inputs | Planning only | 连续/硬切 | 选择理由 |
 |---|---|---|---|---|---|---|---|---|---|
-| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | `none` / `storyboard_board` / `scene_keyframe` / `last_frame` | [`1x2` / `2x2` / `2x3` 等；非 R2V 为无] | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key] | [仅用于审阅、不传入的 key] | [连续/硬切] | [一句话] |
+| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | `none` / `storyboard_board` / `reference_assets` / `scene_keyframe` / `last_frame` | [`1x2` / `2x2` / `2x3` 等；无分镜板时为无] | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key] | [仅用于审阅、不传入的 key] | [连续/硬切] | [一句话] |
 
 `visual_asset_policy` 只描述 STEP 3 需要补齐的资产：
 
 - `none`：不调用图片模型；用于 T2V，或等待上一 Clip 通过版真实尾帧的连续 I2V。
 - `storyboard_board`：R2V 在 STEP 1 先确定 `rowsxcolumns` 布局，格数为 2–6；STEP 3 一次生成或复用一张完整黑白分镜板，不逐格生成，不后期拼接。
+- `reference_assets`：R2V 复用已明确用途的普通参考，各自占一个 typed fixed 槽位；不强制分镜板，不声称精确首帧锁。
 - `scene_keyframe`：生成或复用一张彩色场景/首帧关键帧，用于新场景 I2V。
 - `last_frame`：为 FL2V 生成一张精确目标尾帧；首帧通常来自上一 Clip 的通过版真实尾帧。
 
@@ -122,9 +123,13 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - `T2V`：没有精确帧或不可替代的身份参考，适合空镜、氛围、一次性环境和弱身份远景；必须使用需要的角色/场景文本锚点。
 - `I2V`：需要从上一真实尾帧或批准彩色关键帧准确起步；首帧应已包含必须一致的主要人物和场景。
 - `FL2V`：首尾状态都必须准确，且主体是单条连续运动路径。
-- `R2V`：强一致性、多状态参考或明确进入新机位的硬切；必须预先锁定一张自包含黑白分镜板的布局，普通参考不能声称是精确首帧。
+- `R2V`：强一致性、多状态参考或明确进入新机位的硬切；可用一张自包含黑白分镜板或用途明确的普通参考，不能声称普通参考是精确首帧。
 
-蓝图中 `runtime_input_keys` 必须等于该 Panel 所有 Setup `reference_keys` 的有序并集，且与 `planning_only_asset_keys` 不重叠。I2V 只能有唯一 `first_frame_source`；FL2V 只能依次有 `first_frame_source` 和 `last_frame_source`；T2V 不带视觉引用；R2V 必须恰有一个当前 Panel 的 `storyboard_board.<panel>` 分镜板 key，作为一张图片和一个 fixed reference。生成分镜板时使用的角色卡、场景图和板内格子不自动再次加入 H3；只有另有不可替代用途的非分镜参考才可显式追加。若模式与素材能力冲突，退回故事板修正，不让提示词阶段静默换模式或丢弃参考。
+蓝图中 `runtime_input_keys` 必须等于该 Panel 所有 Setup `reference_keys` 的有序并集，且与 `planning_only_asset_keys` 不重叠。I2V 只能有唯一 `first_frame_source`；FL2V 只能依次有 `first_frame_source` 和 `last_frame_source`；T2V 不带视觉引用；R2V 至少要有当前 Panel 明确规划的 typed reference：选择 `storyboard_board` 时恰有一个 `storyboard_board.<panel>` 分镜板 key，选择 `reference_assets` 时使用已列出的普通参考。生成分镜板时使用的角色卡、场景图和板内格子不自动再次加入 H3；只有另有不可替代用途的非分镜参考才可显式追加。若模式与素材能力冲突，退回故事板修正，不让提示词阶段静默换模式或丢弃参考。
+
+### Panel ready
+
+Panel 的自身事实、时长、Setup、operation、提示词输入、必要资产、采样参数、音频或对白要求、后期责任、输出位置和授权齐全后即可标记 ready。只依赖上一 Panel 的 Panel 必须等待真实 `ACCEPT` 和所需尾帧；独立 Panel 不等待其他 Panel 的资产或全章完成。
 
 ## Panel 映射
 
@@ -134,7 +139,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 ## Panel 接受检查
 
-每个 Panel 由调用方按 [最小视频接受检查](video-qc.md) 登记一次 ACCEPT/REJECT，覆盖实际身份、关键动作因果、声音、后期和相邻衔接。该文档也统一规定替换片段的接缝检查和最终交付检查，不在本文件重复维护标准。轻微、不影响故事的差异不升级为评分或自动重试。
+每个 Panel 由执行单元按 [最小视频接受检查](video-qc.md) 查看实际文件，登记一次 `ACCEPT/REJECT`，覆盖实际身份、关键动作因果、实际末态、实际音频证据、后期和相邻衔接。该文档也统一规定替换片段的接缝检查和最终交付检查，不在本文件重复维护标准。轻微、不影响故事的差异不升级为评分或自动重试。
 
 ## 节奏与时长
 
@@ -144,7 +149,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 ## 连续性与交付检查
 
-- [ ] Panel = Clip；每 Panel 恰好六个有序语义 Beat，Beat 到 Camera Setup 的映射完整；每个 R2V Panel 已在 STEP 1 锁定 `storyboard_layout`，且只有一张对应分镜板。
+- [ ] Panel = Clip；每 Panel 恰好六个有序语义 Beat，Beat 到 Camera Setup 的映射完整；每个采用 `storyboard_board` 的 R2V Panel 已在 STEP 1 锁定 `storyboard_layout`，且只有一张对应分镜板。
 - [ ] 每个 Beat 有可见时刻、空间、动作、逐字对白、声音、所属 Setup 和末态；每个 Setup 有机位、轴线侧、人物朝向、目标/视线、屏幕运动、运镜和前镜关系。
 - [ ] P002 起 Beat 1 边界锚点为 0 秒，其余有效 Setup 的独占时间合计等于 Panel 时长；所有 Panel 时长合计等于目标总时长。
 - [ ] 关键戏已完成导演创作检查；每次 cut 和主要运镜有信息、空间、视点、时间、情绪或反应依据，没有因 Beat 数量机械补动作、切镜或平均分配时长。
@@ -156,7 +161,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - [ ] 原文冲突已解决；所有 `must_show` / `must_explain` 事件均有唯一镜头落点、原文出处、可见证据和前后状态。
 - [ ] 每场的入场/转折/离场/下一场义务已写明；同场状态逐镜交接，换场有因果、时间、空间或声音桥接。
 - [ ] `creative_blueprint.json` 已由最新故事板同步编译并通过低成本静态预检；没有把超载动作、对白或参考图留给 H3 猜测。
-- [ ] `generation.panel_plans` 与 Panel 一一对应且顺序相同；operation 先于资产选择，R2V 的 `storyboard_layout`、唯一 `storyboard_board.<panel>` 与格子映射完整，I2V/FL2V 不引用分镜板，`planning_only_asset_keys` 不进入模型。
+- [ ] `generation.panel_plans` 与 Panel 一一对应且顺序相同；operation 先于资产选择，采用分镜板的 R2V 才要求 `storyboard_layout`、唯一 `storyboard_board.<panel>` 与格子映射，普通参考按 `reference_assets` 列出，I2V/FL2V 不引用分镜板，`planning_only_asset_keys` 不进入模型。
 - [ ] 台词字幕与场景内文字分别确定制作责任；可读文字、号码、地址、聊天内容和复杂 UI 已登记为 H3 创作输入或明确的确定性后期资产，不把后期补字留给运行时猜测。
 - [ ] Medium Lock、Style Brief、角色锚点和场景锚点无冲突。
 

@@ -74,6 +74,8 @@ def _workflow(workflow_id: str) -> dict[str, Any]:
     filename = {
         "h3_standard_fl2va": "h3_standard_fl2va.json",
         "h3_standard_r2v": "h3_standard_r2v.json",
+        "h3_native_fl2va": "h3_native_fl2va.json",
+        "h3_native_r2v": "h3_native_r2v.json",
         "h3_presenter_r2v": "h3_presenter_r2v.json",
     }[workflow_id]
     return json.loads((REGISTRY / filename).read_text(encoding="utf-8"))
@@ -673,6 +675,7 @@ def test_vdn8_execute_records_timing_workflow_hash_and_sampling_metadata(
     sampling = artifact["sampling"]
     assert isinstance(sampling, dict)
     assert sampling["steps"] == 8
+    assert sampling["sampler_profile"] == "vdn_turbo"
     assert sampling["sampler_name"] == "euler"
     assert sampling["scheduler"] == "simple"
     assert sampling["denoise"] == 1.0
@@ -860,3 +863,37 @@ def test_presenter_keeps_native_20_steps_and_preserves_audio_link(
     audio_link = create_video["inputs"]["audio"]
     assert isinstance(audio_link, list)
     assert workflow[str(audio_link[0])]["class_type"] == "VAEDecodeAudio"
+
+
+@pytest.mark.parametrize("steps", [8, 16, 20, 37])
+def test_native_fl2va_uses_explicit_steps_without_vdn_nodes(
+    tmp_path: pathlib.Path,
+    steps: int,
+) -> None:
+    image = tmp_path / "first.png"
+    image.write_bytes(b"image")
+    native_workflow = _workflow("h3_native_fl2va")
+    object_info = _object_info_for(native_workflow)
+    # A native request must not require the optional VDN node bundle.
+    object_info.pop("ApplyVDNH3", None)
+    object_info.pop("MiniMaxH3SigmaShift", None)
+    handler, client = _handler(
+        tmp_path,
+        "h3_native_fl2va",
+        object_info=object_info,
+    )
+    workflow, uploaded = handler._prepare_workflow(
+        "h3_native_fl2va",
+        _i2v_metadata(image, sampler_profile="native", steps=steps),
+        output_prefix="lfo/run/task/attempt/video",
+    )
+    assert uploaded == ["lfo-input/first.png"]
+    assert client.uploaded == [image.resolve()]
+    assert not client.uploaded_files
+    assert not _nodes(workflow, "ApplyVDNH3")
+    assert not _nodes(workflow, "MiniMaxH3SigmaShift")
+    assert _node(workflow, "KSamplerSelect")["inputs"]["sampler_name"] == "res_multistep"
+    scheduler = _node(workflow, "BasicScheduler")
+    assert scheduler["inputs"]["scheduler"] == "simple"
+    assert scheduler["inputs"]["steps"] == steps
+    assert scheduler["inputs"]["model"] == ["1", 0]

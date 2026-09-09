@@ -434,7 +434,7 @@ def test_non_board_policy_rejects_layout_and_storyboard_board_key() -> None:
     assert "must be 'storyboard_board' when storyboard_board keys are used" in messages
 
 
-def test_r2v_requires_storyboard_board_policy() -> None:
+def test_r2v_requires_explicit_reference_policy() -> None:
     blueprint = _valid_blueprint()
     plan = blueprint["generation"]["panel_plans"][0]
     plan["visual_asset_policy"] = "none"
@@ -445,7 +445,51 @@ def test_r2v_requires_storyboard_board_policy() -> None:
     issues = MODULE.validate_blueprint(blueprint)
     messages = "\n".join(issue.format() for issue in issues)
 
-    assert "must be 'storyboard_board' for reference-to-video" in messages
+    assert "must be 'storyboard_board' or 'reference_assets' for reference-to-video" in messages
+
+
+def _configure_reference_assets() -> dict[str, Any]:
+    blueprint = _valid_blueprint()
+    plan = blueprint["generation"]["panel_plans"][0]
+    keys = ["scene.opening", "character.teacher"]
+    plan.update(visual_asset_policy="reference_assets", storyboard_layout=None,
+                runtime_input_keys=keys)
+    blueprint["generation"]["shots"][0]["reference_keys"] = keys
+    return blueprint
+
+
+def test_r2v_accepts_scene_and_identity_references_without_board() -> None:
+    assert MODULE.validate_blueprint(_configure_reference_assets()) == []
+
+
+def test_reference_assets_cannot_claim_exact_first_frame() -> None:
+    blueprint = _configure_reference_assets()
+    blueprint["generation"]["panel_plans"][0]["first_frame_source"] = "scene.opening"
+    assert any("cannot declare exact frame sources" in issue.message
+               for issue in MODULE.validate_blueprint(blueprint))
+
+
+def test_reference_assets_requires_nonempty_references() -> None:
+    blueprint = _configure_reference_assets()
+    blueprint["generation"]["panel_plans"][0]["runtime_input_keys"] = []
+    blueprint["generation"]["shots"][0]["reference_keys"] = []
+    assert any("must contain at least one fixed reference" in issue.message
+               for issue in MODULE.validate_blueprint(blueprint))
+
+
+def test_reference_assets_rejects_board_layout() -> None:
+    blueprint = _configure_reference_assets()
+    blueprint["generation"]["panel_plans"][0]["storyboard_layout"] = "2x2"
+    assert any("must be null or omitted" in issue.message
+               for issue in MODULE.validate_blueprint(blueprint))
+
+
+def test_reference_assets_cannot_be_used_as_i2v_extra_inputs() -> None:
+    blueprint = _configure_reference_assets()
+    plan = blueprint["generation"]["panel_plans"][0]
+    plan.update(operation="video.image_to_video", first_frame_source="scene.opening")
+    issues = MODULE.validate_blueprint(blueprint)
+    assert any("accepts only its first_frame_source" in issue.message for issue in issues)
 
 
 def test_r2v_requires_exactly_one_current_panel_board_key() -> None:

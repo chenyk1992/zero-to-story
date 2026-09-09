@@ -5,7 +5,6 @@ from lfo.execution.dag import TaskGraph, TaskNode
 from lfo.execution.handlers import default_fake_registry
 from lfo.execution.materializer import MaterializedRun
 from lfo.execution.runtime import Runtime
-from lfo.execution.states import AttemptState
 
 
 def _make_graph() -> TaskGraph:
@@ -24,53 +23,6 @@ def _make_runtime() -> Runtime:
 
 
 class TestRecovery:
-    def test_crash_between_submitted_and_running_no_double_submit(self) -> None:
-        """After crash, reconcile must not create a duplicate attempt."""
-        from lfo.execution.recovery import (
-            AttemptRecord,
-            BackendStatus,
-            reconcile_unknown_attempt,
-        )
-
-        # Simulate: attempt was submitted but no provider_job_id (crash before
-        # backend confirmed). Recovery should allow retry.
-        attempt = AttemptRecord(
-            attempt_id="att-1",
-            task_id="task-A",
-            status=AttemptState.UNKNOWN.value,
-            provider_job_id=None,
-        )
-        decision = reconcile_unknown_attempt(attempt, lambda _: BackendStatus(exists=False))
-        assert decision.action == "retry"
-        assert "never submitted" in decision.reason
-
-        # Simulate: backend has no record of the job
-        attempt2 = AttemptRecord(
-            attempt_id="att-2",
-            task_id="task-B",
-            status=AttemptState.UNKNOWN.value,
-            provider_job_id="job-123",
-        )
-        decision2 = reconcile_unknown_attempt(
-            attempt2,
-            lambda _: BackendStatus(exists=False, completed=False),
-        )
-        assert decision2.action == "retry"
-
-        # Simulate: backend shows it completed successfully — reuse result
-        decision3 = reconcile_unknown_attempt(
-            attempt2,
-            lambda _: BackendStatus(exists=True, completed=True, succeeded=True),
-        )
-        assert decision3.action == "reuse"
-
-        # Simulate: backend shows it completed with failure
-        decision4 = reconcile_unknown_attempt(
-            attempt2,
-            lambda _: BackendStatus(exists=True, completed=True, succeeded=False),
-        )
-        assert decision4.action == "mark_failed"
-
     def test_reset_retryable_advances(self) -> None:
         """Reset retryable tasks and re-tick should advance."""
         rt = _make_runtime()

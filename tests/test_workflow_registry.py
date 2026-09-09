@@ -26,6 +26,9 @@ def workflow_dir(tmp_path):
     (dst / seedvr2.name).write_text(seedvr2.read_text(encoding="utf-8"), encoding="utf-8")
     presenter = pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / "h3_presenter_r2v.json"
     (dst / presenter.name).write_text(presenter.read_text(encoding="utf-8"), encoding="utf-8")
+    for native_name in ("h3_native_fl2va.json", "h3_native_r2v.json"):
+        native = pathlib.Path(__file__).parents[1] / "src" / "lfo" / "registry" / native_name
+        (dst / native.name).write_text(native.read_text(encoding="utf-8"), encoding="utf-8")
     return dst
 
 
@@ -37,9 +40,11 @@ def registry(workflow_dir):
 
 class TestKnownWorkflows:
     def test_four_workflows_defined(self):
-        assert len(KNOWN_WORKFLOWS) == 4
+        assert len(KNOWN_WORKFLOWS) == 6
         assert "h3_standard_fl2va" in KNOWN_WORKFLOWS
         assert "h3_standard_r2v" in KNOWN_WORKFLOWS
+        assert "h3_native_fl2va" in KNOWN_WORKFLOWS
+        assert "h3_native_r2v" in KNOWN_WORKFLOWS
         assert "h3_presenter_r2v" in KNOWN_WORKFLOWS
         assert "seedvr2_upscale" in KNOWN_WORKFLOWS
 
@@ -128,7 +133,7 @@ class TestRegistration:
     def test_register_all(self, registry):
         results = registry.register_all()
         assert all(v == "ok" for v in results.values())
-        assert len(registry.list_workflows()) == 4
+        assert len(registry.list_workflows()) == 6
 
     def test_register_single(self, registry):
         report = registry.register("h3_standard_fl2va")

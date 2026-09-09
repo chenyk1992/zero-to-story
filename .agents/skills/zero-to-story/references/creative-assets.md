@@ -1,5 +1,7 @@
 # 角色与视觉控制资产规范
 
+共同的角色、Panel ready、资产依赖和实际验收规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文只规定角色和视觉控制资产的选择与检查。
+
 ## 目录
 
 - [角色设定图](#角色设定图)
@@ -55,16 +57,17 @@ STEP 1 先在 `storyboard_brief.md` 和 `creative_blueprint.json` 中锁定每�
 |---|---|---|---|
 | `none` | 不调用图片模型；使用文本或等待上一 Clip 真实尾帧 | T2V、同场接力 I2V | 由 `runtime_input_keys` 显式决定 |
 | `storyboard_board` | 按 STEP 1 锁定的布局一次生成或复用一张自包含黑白分镜板 | R2V | 以 `storyboard_board.<panel>` 作为一个 fixed reference |
+| `reference_assets` | 复用已明确选择、各有用途的普通视觉参考，如开场构图和人物正面 | R2V | 各占独立 typed fixed槽位；不视作精确首帧、不强制分镜板 |
 | `scene_keyframe` | 生成或复用一张与成片画幅一致的彩色场景/首帧关键帧 | 新场景 I2V | I2V 时它必须是唯一精确首帧 |
 | `last_frame` | 生成一张与成片画幅一致的目标尾帧 | FL2V | 与精确首帧成对传入，不附加分镜板 |
 
-`runtime_input_keys` 是会真正传给视频模型的最小素材集。`planning_only_asset_keys` 只供导演审阅、历史对照或人工说明，默认不在 STEP 3 物化，禁止绑定为 H3/LFO 参考。R2V 的分镜板即使复用已有文件，也必须在 STEP 1 以 `storyboard_board` 和明确布局重新纳入当前计划；它不能反向决定 operation。
+`runtime_input_keys` 是会真正传给视频模型的最小素材集。`planning_only_asset_keys` 只供导演审阅、历史对照或人工说明，默认不在 STEP 3 物化，禁止绑定为 H3/LFO 参考。R2V 可以选择 `storyboard_board` 或 `reference_assets`；若选择分镜板，必须在 STEP 1 以 `storyboard_board` 和明确布局重新纳入当前计划。资产不能反向决定 operation。
 
 ## R2V 自包含可变网格分镜板
 
 ### STEP 1 锁定布局
 
-每个 R2V Panel 在生成任何图片前就必须写明 `visual_asset_policy: "storyboard_board"` 和 `storyboard_layout`。布局使用规范的 `rowsxcolumns` 小写字符串，例如 `1x2`、`2x2`、`2x3`；行数乘列数必须为 2–6。这里描述的是分镜板网格，不替代成片的 `aspect_ratio`。
+只有选择 `visual_asset_policy: "storyboard_board"` 的 R2V Panel 才需要在生成图片前写明 `storyboard_layout`。布局使用规范的 `rowsxcolumns` 小写字符串，例如 `1x2`、`2x2`、`2x3`；行数乘列数必须为 2–6。选择 `reference_assets` 时不强制生成分镜板；这里描述的是分镜板网格，不替代成片的 `aspect_ratio`。
 
 每个 Panel 只有一个 `storyboard_board.<panel>` asset key 和一张图片。STEP 3 直接按锁定布局生成整张分镜板，不先生成单格图片，不下载后拼接，也不把单格作为额外 H3 引用。板内格子固定按从左到右、从上到下读取；`storyboard_brief.md` 和图片提示词写清每格对应的 Beat、Camera Setup 与控制用途。
 
@@ -122,7 +125,7 @@ STEP 1 先在 `storyboard_brief.md` 和 `creative_blueprint.json` 中锁定每�
 - 同一 R2V Panel 的整张分镜板是一个原子任务，板内格子不拆分、不并行、不单独 QC；
 - 失败只阻断依赖它的后续资产，不触发自动重试；由调用方修正提示词、参考组合或资产计划后再决定是否重新生成。
 
-全部运行时必要资产确认后再进入 H3 提示词和执行包阶段。视频 Panel 的真实尾帧接力仍严格串行，不属于本节并行范围。
+当前 Panel 自己所需的运行时资产确认后即可进入 H3 提示词和执行包阶段；其他独立 Panel 的资产不构成全局阻塞。视频 Panel 的真实尾帧接力仍严格串行，不属于本节并行范围。
 
 ## 跨镜头与跨帧连续性
 
@@ -145,7 +148,7 @@ STEP 1 先在 `storyboard_brief.md` 和 `creative_blueprint.json` 中锁定每�
 
 ## 视觉可用性检查与提示词诊断
 
-资产生成后只做一次简洁检查，确认它能承担蓝图中的用途：
+资产生成后只做一次简洁检查，确认它能承担蓝图中的用途。资产可用不等于视频内容 `ACCEPT`；视频仍须按共享规则查看实际末态和实际音频证据：
 
 - 角色卡：角色身份、服饰/关键道具、全身视图和画风可用，且没有明显伪文字或额外角色。
 - R2V 分镜板：行列和格数与 `storyboard_layout` 一致，阅读顺序明确；每格能表达计划中的构图、人物关系、关键动作或道具状态，格子之间没有会误导视频的身份或状态冲突。

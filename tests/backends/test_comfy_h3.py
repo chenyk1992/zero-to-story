@@ -30,7 +30,13 @@ class FakeClient:
             kind: {"input": {"required": {}}}
             for kind in ("LoadImage", "LoadVideo", "GetVideoComponents", "LoadAudio")
         }
-        for name in ("h3_standard_fl2va", "h3_standard_r2v", "h3_presenter_r2v"):
+        for name in (
+            "h3_standard_fl2va",
+            "h3_standard_r2v",
+            "h3_native_fl2va",
+            "h3_native_r2v",
+            "h3_presenter_r2v",
+        ):
             path = ComfyH3Config().workflow_dir / f"{name}.json"
             for node in WorkflowLoader.load(path).values():
                 fields = info.setdefault(node["class_type"], {"input": {"required": {}}})
@@ -131,7 +137,28 @@ def test_build_h3_backend_registry_uses_bundled_workflows() -> None:
     assert manifest.duration_constraints["max_ms"] == H3_MAX_DURATION_MS == 15_000
     assert "seedvr2_3b_int8_convrot.safetensors" not in manifest.required_models
     assert "seedvr2_upscale" not in manifest.extensions["workflow_ids"]
-    assert manifest.extensions["workflow_ids"] == ["h3_standard_fl2va", "h3_standard_r2v"]
+    assert manifest.extensions["workflow_ids"] == [
+        "h3_native_fl2va",
+        "h3_native_r2v",
+        "h3_standard_fl2va",
+        "h3_standard_r2v",
+    ]
+    assert manifest.extensions["sampling_profiles"] == {
+        "native": {"min_steps": 8},
+        "vdn_turbo": {"allowed_steps": [8]},
+    }
+    dependencies = manifest.extensions["sampling_dependencies"]
+    native = dependencies["native"]
+    turbo = dependencies["vdn_turbo"]
+    assert "ApplyVDNH3" not in manifest.required_nodes
+    assert "MiniMaxH3SigmaShift" not in manifest.required_nodes
+    assert "ApplyVDNH3" not in native["required_nodes"]
+    assert "MiniMaxH3SigmaShift" not in native["required_nodes"]
+    assert not any("vdn/" in model for model in manifest.required_models)
+    assert not any("vdn/" in model for model in native["required_models"])
+    assert "ApplyVDNH3" in turbo["required_nodes"]
+    assert "MiniMaxH3SigmaShift" in turbo["required_nodes"]
+    assert any("vdn/" in model for model in turbo["required_models"])
 
 
 def test_select_workflow_by_operation() -> None:
@@ -147,6 +174,21 @@ def test_select_workflow_by_operation() -> None:
     assert ComfyH3VideoHandler._select_workflow(
         {"operation": "video.reference_to_video"}
     ) == "h3_standard_r2v"
+
+
+@pytest.mark.parametrize(
+    ("operation", "expected"),
+    [
+        ("video.text_to_video", "h3_native_fl2va"),
+        ("video.image_to_video", "h3_native_fl2va"),
+        ("video.first_last_frame", "h3_native_fl2va"),
+        ("video.reference_to_video", "h3_native_r2v"),
+    ],
+)
+def test_selects_native_workflow_for_explicit_profile(operation: str, expected: str) -> None:
+    assert ComfyH3VideoHandler._select_workflow(
+        {"operation": operation, "sampler_profile": "native", "steps": 16}
+    ) == expected
 
 
 def test_select_workflow_forces_virtual_presenter_workflow() -> None:

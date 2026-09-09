@@ -1,5 +1,7 @@
 # Creative Skill 适配器指南
 
+共同的角色、Panel ready、实际验收、音频证据和授权规则见[项目共享生产规则](ai-system-prompt.md)。本指南只描述旧 package CLI 的适配边界。
+
 Creative Skill 负责创作，LFO 负责执行。适配器的职责是把一个已经确认的 Panel 转成一个只含一个 Clip 的 `lfo.video-execution.v1` package；适配器不得调用 ComfyUI、操作 LFO 数据库或拼接内部节点 ID。
 
 ## 交付顺序
@@ -10,7 +12,7 @@ Creative Skill 负责创作，LFO 负责执行。适配器的职责是把一个�
 4. 让 operation、真实首帧/尾帧和引用槽位与已批准的 H3 标签一致。
 5. 写出当前 Panel 的 package，确保 `clips` 恰好一个元素。所有 Panel package 和最终 assembly package 都直接放在同一个 `workspace/projects/<project_id>/` 项目根目录，用唯一文件名（例如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要放入 Panel 子目录，否则前一 Run 的 `outputs/<run_id>/...` 无法用包内相对 URI 稳定引用。
 6. 运行 `validate`，由其返回完整 package 文件的精确文件字节 `package_sha256`。
-7. 用户确认该 hash 后，启动当前 Panel 的隔离执行单元；`plan` 只在需要时诊断。
+7. 核对用户明确的项目授权：持续授权覆盖当前修订时直接绑定当前 hash，否则取得该 hash 的确认；随后启动当前 Panel 的隔离执行单元。`plan` 只在需要时诊断。
 
 适配器不为历史 `shots[]`、旧 Panel CLI 或旧 lock/retry/recovery 语义提供转换层。需要重做时重新生成当前 Panel 的 package；不自动改写或重试。
 
@@ -65,7 +67,7 @@ machine_id（有已保存机器配置时）
 tail_frame_output_path（仅下游需要时；调用方的 ffmpeg 提取目标，不传给 LFO）
 ```
 
-LFO 只处理当前 Panel，回传生成视频或错误。调用方随后做最小 QC，决定 `ACCEPT`/`REJECT`，并在 `ACCEPT` 后按需提取真实尾帧，再写入下一包的相对素材 URI；失败即停。单次执行不读取完整故事历史，不改变 package，也不并行启动下一个 Panel。
+LFO 只处理当前 Panel，回传生成视频或错误。执行单元查看实际输出，记录实际末态和实际音频证据，再决定一次 `ACCEPT`/`REJECT`；证据不足时先复核，仍不清楚就停止。仅在 `ACCEPT` 后按需提取真实尾帧，再写入下一包的相对素材 URI；失败即停。单次执行不读取完整故事历史，不改变 package，也不并行启动下一个 Panel。
 
 ## 适配器测试
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -182,6 +183,65 @@ def clip_local_to_global_cues(
         SubtitleCue(cue.start_ms + clip_start_ms, cue.end_ms + clip_start_ms, cue.text)
         for cue in trim_cues(cues, source_in_ms, source_out_ms)
     ]
+
+
+def map_cues_over_kept_intervals(
+    cues: Sequence[SubtitleCue],
+    kept_intervals: Sequence[tuple[int, int]],
+) -> list[SubtitleCue]:
+    """Map source-local cues onto a timeline made from kept source ranges.
+
+    Each interval is a half-open ``(start_ms, end_ms)`` source range.  A cue
+    that crosses a removed range is split into one cue per kept intersection;
+    this keeps subtitle timing attached to the same source audio and video
+    instead of displaying text during a removed pause.  The caller supplies
+    the ranges after deciding what is safe to remove.  This helper performs
+    no silence or speech detection.
+    """
+    normalized: list[tuple[int, int]] = []
+    for index, interval in enumerate(kept_intervals, 1):
+        if len(interval) != 2:
+            raise ValueError(f"Kept interval {index} must contain start and end")
+        start_ms, end_ms = interval
+        if (
+            isinstance(start_ms, bool)
+            or isinstance(end_ms, bool)
+            or not isinstance(start_ms, int)
+            or not isinstance(end_ms, int)
+            or start_ms < 0
+            or end_ms <= start_ms
+        ):
+            raise ValueError(f"Kept interval {index} has an invalid time range")
+        if normalized and start_ms < normalized[-1][1]:
+            raise ValueError("Kept intervals must be sorted and non-overlapping")
+        normalized.append((start_ms, end_ms))
+
+    for index, cue in enumerate(cues, 1):
+        if cue.start_ms < 0 or cue.end_ms <= cue.start_ms:
+            raise ValueError(f"Cue {index}: invalid time range")
+
+    mapped: list[SubtitleCue] = []
+    output_start = 0
+    for source_start, source_end in normalized:
+        interval_duration = source_end - source_start
+        for cue in cues:
+            start = max(cue.start_ms, source_start)
+            end = min(cue.end_ms, source_end)
+            if end <= start:
+                continue
+            mapped.append(
+                SubtitleCue(
+                    output_start + start - source_start,
+                    output_start + end - source_start,
+                    cue.text,
+                )
+            )
+        output_start += interval_duration
+    return sorted(mapped, key=lambda cue: (cue.start_ms, cue.end_ms))
+
+
+# A concise alias for callers that already have a generic edit mapping.
+map_cues_to_kept_intervals = map_cues_over_kept_intervals
 
 
 class SubtitleRenderer:

@@ -1,5 +1,7 @@
 # Backend Manifest 指南
 
+共同的角色、Panel ready、能力选择和实际验收规则见[项目共享生产规则](ai-system-prompt.md)。本指南只描述 package CLI 的后端能力声明。
+
 Backend Manifest 是 LFO 在单 Panel 执行前读取的能力声明。它只描述“当前 operation 能否执行”和工作流如何绑定，不包含故事、角色或镜头决策。
 
 ## Manifest 必须声明
@@ -18,7 +20,7 @@ Backend Manifest 是 LFO 在单 Panel 执行前读取的能力声明。它只描
 
 工作流 JSON 放在 `src/lfo/registry/`，可变输入使用稳定的 `_meta.title` 和 class type 绑定。ComfyUI 官方 comfy-cli/本地服务负责真正的节点执行；LFO 对当前 Panel 的 H3 工作流只提交一次并同步等待。package 显式开启 SeedVR2 时，放大是另一个仅提交一次的确定步骤，不做 OOM 后备选重提交。
 
-执行成功必须返回当前 Panel 的可用视频文件；随后由调用方执行最小 QC、决定 `ACCEPT`，并按需提取真实末帧。执行失败直接返回 `ERROR`；公开交接不包含 provider job 恢复、重试预算、lease、heartbeat 或后台任务，调用方不读取或维护恢复记录。
+执行成功必须返回当前 Panel 的可用视频文件；执行单元查看实际结果，记录实际末态和实际音频证据，再作一次 `ACCEPT`/`REJECT` 判断，并在 `ACCEPT` 后按需提取真实末帧。执行失败直接返回 `ERROR`；公开交接不包含 provider job 恢复、重试预算、lease、heartbeat 或后台任务，调用方不读取或维护恢复记录。证据不足时不能强行接受。
 
 ## 检查顺序
 

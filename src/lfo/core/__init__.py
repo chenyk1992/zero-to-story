@@ -1,4 +1,4 @@
-"""LFO Core — deterministic hashing, state machine, SQLite runtime, recovery."""
+"""LFO Core — deterministic serialization, hashing, SQLite schema, and state transitions."""
 from .canonical import (
     LFO_CJ1_DUPLICATE_KEY,
     LFO_CJ1_ERROR,
@@ -19,35 +19,6 @@ from .hashing import (
     compute_idempotency_key,
     compute_params_hash,
     compute_workflow_hash,
-)
-from .invalidation import (
-    get_active_invalidations,
-    invalidate_upstream,
-    resolve_invalidation,
-)
-from .recovery import (
-    recover_project,
-    recover_uncertain_journal,
-)
-from .runtime import (
-    _log_event,
-    create_asset,
-    create_attempt,
-    create_journal_entry,
-    create_task,
-    get_assets_by_task,
-    get_attempt,
-    get_attempts_by_task,
-    get_events,
-    get_journal,
-    get_journal_by_attempt,
-    get_project_state,
-    get_task,
-    get_tasks_by_project,
-    promote_task_to_ready,
-    transition_journal,
-    update_task_hashes,
-    update_task_status,
 )
 from .state_machine import (
     TASK_ACTIVE_STATES,
@@ -119,31 +90,6 @@ __all__ = [
     "OutputSpec",
     "KNOWN_WORKFLOWS",
     "make_capability",
-    # runtime
-    "create_task",
-    "get_task",
-    "get_tasks_by_project",
-    "update_task_status",
-    "update_task_hashes",
-    "promote_task_to_ready",
-    "create_attempt",
-    "get_attempt",
-    "get_attempts_by_task",
-    "create_journal_entry",
-    "transition_journal",
-    "get_journal",
-    "get_journal_by_attempt",
-    "create_asset",
-    "get_assets_by_task",
-    "get_project_state",
-    "get_events",
-    # recovery
-    "recover_project",
-    "recover_uncertain_journal",
-    # invalidation
-    "invalidate_upstream",
-    "resolve_invalidation",
-    "get_active_invalidations",
     # exceptions
     "LFO_CJ1_ERROR",
     "LFO_CJ1_FLOAT_FORBIDDEN",

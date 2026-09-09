@@ -34,6 +34,8 @@ def isolate_process_state(monkeypatch, tmp_path):
     # that instantiate PipelineService without an explicit output_dir)
     # don't pollute the real ``<repo>/workspace/`` tree.
     monkeypatch.setenv("LFO_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setenv("LFO_VIDEO_STATE", str(tmp_path / "video-state"))
+    monkeypatch.setenv("LFO_CANVAS_DATA", str(tmp_path / "canvas-state"))
 
     # Reset module-level caches in config_resolver (if any)
     from lfo.config import config_resolver

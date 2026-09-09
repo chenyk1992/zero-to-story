@@ -131,6 +131,31 @@ def select_backend(
     )
 
 
+def validate_sampling_requirements(
+    operation: str,
+    requirements: dict[str, Any],
+    registry: BackendRegistry,
+) -> None:
+    """Validate an explicit sampling choice without resolving media assets.
+
+    ``VideoRuntime.validate`` uses this small capability-only check so an
+    unsupported profile or step count is reported before planning or a
+    ComfyUI submission.  Legacy packages with both fields absent intentionally
+    pass through to the handler's historical workflow defaults.
+    """
+    profile = requirements.get("sampler_profile")
+    steps = requirements.get("steps")
+    if profile is None and steps is None:
+        return
+    rejections: list[RejectionReason] = []
+    for cap in registry.query_by_operation(operation):
+        rejection = _check_sampling_candidate(cap, requirements)
+        if rejection is None:
+            return
+        rejections.append(rejection)
+    raise SelectionFailure(operation=operation, rejections=rejections)
+
+
 def _check_candidate(
     cap: CapabilityManifest,
     requirements: dict[str, Any],
@@ -253,6 +278,76 @@ def _check_candidate(
             reason="seed_unsupported",
         )
 
+    sampling_rejection = _check_sampling_candidate(cap, requirements)
+    if sampling_rejection is not None:
+        return sampling_rejection
+
+    return None
+
+
+def _check_sampling_candidate(
+    cap: CapabilityManifest,
+    requirements: dict[str, Any],
+) -> RejectionReason | None:
+    """Check a backend's declared sampler profiles and step constraints."""
+    profile = requirements.get("sampler_profile")
+    steps = requirements.get("steps")
+    if profile is None and steps is None:
+        return None
+    if profile is None or steps is None:
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="sampling_fields_incomplete",
+            detail="sampler_profile and steps must be provided together",
+        )
+    if not isinstance(profile, str) or not profile.strip():
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="unsupported_sampler_profile",
+            detail="sampler_profile must be a non-empty string",
+        )
+    if isinstance(steps, bool) or not isinstance(steps, int):
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="invalid_sampling_steps",
+            detail="steps must be an integer",
+        )
+    profiles = cap.extensions.get("sampling_profiles", {})
+    profile_spec = profiles.get(profile) if isinstance(profiles, dict) else None
+    if not isinstance(profile_spec, dict):
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="unsupported_sampler_profile",
+            detail=profile,
+        )
+    minimum = profile_spec.get("min_steps")
+    if isinstance(minimum, int) and steps < minimum:
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="sampling_steps_too_small",
+            detail=f"{steps} < min {minimum} for {profile}",
+        )
+    maximum = profile_spec.get("max_steps")
+    if isinstance(maximum, int) and steps > maximum:
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="sampling_steps_too_large",
+            detail=f"{steps} > max {maximum} for {profile}",
+        )
+    allowed = profile_spec.get("allowed_steps")
+    if isinstance(allowed, list) and steps not in allowed:
+        return RejectionReason(
+            backend_id=cap.backend_id,
+            revision=cap.revision,
+            reason="unsupported_sampling_steps",
+            detail=f"{steps} not in {allowed} for {profile}",
+        )
     return None
 
 

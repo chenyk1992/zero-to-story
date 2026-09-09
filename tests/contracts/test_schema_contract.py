@@ -227,3 +227,22 @@ def test_schema_declares_strict_upscale_extension() -> None:
     assert "upscale" in _definition(schema, "ClipSpec")["properties"]["extensions"][
         "properties"
     ]
+
+
+def test_schema_sampling_pair_allows_only_absent_or_complete_values() -> None:
+    requirements = _definition(_schema(), "GenerationRequirements")
+    absent, selected = requirements["oneOf"]
+    # No required keys in the absent branch: omission or explicit null mean
+    # the same thing to the Python parser. A non-null half-pair cannot match.
+    assert "required" not in absent
+    assert absent["properties"] == {
+        "sampler_profile": {"type": "null"},
+        "steps": {"type": "null"},
+    }
+    assert set(selected["required"]) == {"sampler_profile", "steps"}
+    assert selected["properties"]["steps"] == {"type": "integer"}
+    profile = selected["properties"]["sampler_profile"]
+    assert profile["type"] == "string"
+    assert re.search(profile["pattern"], "native")
+    assert not re.search(profile["pattern"], "   ")
+    assert requirements["properties"]["steps"]["minimum"] == 8

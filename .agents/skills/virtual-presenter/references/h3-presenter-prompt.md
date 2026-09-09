@@ -51,7 +51,7 @@
 
 Presenter Plan 确认后，按 Shot/Panel 顺序逐条执行；每个 Panel 使用一个只含当前 Clip 的 execution package。首个 Panel 省略 `ref_video_0`；之后只引用同画幅上一条 `ACCEPT` 片的真实输出，不引用失败或被拒绝的片。
 
-当前 Panel 完成后由调用方做一次最小 `ACCEPT`/`REJECT` 判断；校验或执行失败记为 `ERROR`。下一条 Presenter Panel 使用当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考。只有其他下游 operation 明确需要精确首帧时，才从实际输出提取真实末帧并绑定。`REJECT` 或 `ERROR` 立即停止，不自动重试、不生成候选列表；需要重做时重新构建当前 Panel package 并重新批准文件 hash。
+当前 Panel 完成后由调用方做一次最小 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE` 判断；校验或执行失败记为 `ERROR`。下一条 Presenter Panel 使用当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考。只有其他下游 operation 明确需要精确首帧时，才从实际输出提取真实末帧并绑定。`REJECT`、`INCONCLUSIVE` 或 `ERROR` 立即暂停受影响接力，不自动重试、不生成候选列表；需要重做时重新构建当前 Panel package 并核对授权。
 
 ## 可执行性检查
 

@@ -3,11 +3,9 @@ name: h3-prompt-writing
 description: Write one complete MiniMax H3 video-generation prompt for a single approved Panel in T2VA, I2VA, FL2VA, or Ref2VA form supported by the current LFO contract. Use when composing the required H3 sections, aligning keyframes and timing, or defining reference labels; return only the prompt text, with no manifest, lock, hash, retry or QC sidecar.
 ---
 
-## GPT-6 适配变更说明
-
-2026-09-07：完整单 Panel 输入直接交付提示词；只报告真正缺失或矛盾的执行条件。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
-
 # H3 Prompt Writing
+
+遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 只完成一个已确认 Panel 的提示词工作单元，不执行生成、不做内容 `ACCEPT`、不建立监控代理；下游必须依据实际视频和实际音频证据验收。
 
 ## Priority and stop conditions
 

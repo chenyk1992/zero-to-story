@@ -3,15 +3,11 @@ name: mg-voiceover-animation-generator
 description: 把产品、界面、功能或抽象主题做成 MG 动画，支持口播稿、音频、产品图、截图和无参考概念。交付 MG 创作方案、H3 提示词及按需的 LFO 包；用于 MG 动画、口播转 MG、产品动效讲解和 H3 MG，不因泛泛的 H3 提示词或数字人口播请求触发。
 ---
 
-## GPT-6 适配变更说明
-
-2026-09-07：按当前交付目标复用创作授权，消除固定开场问卷和逐阶段停顿。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
-
 # MG 口播动画生成器 Skill
 
-当用户要制作产品、界面、功能说明、发布展示或抽象主题的 MG 口播动画时使用。本 Skill 负责创作，不是视频运行时：负责文案、产品/视觉素材、风格与语义映射、H3 提示词和用户确认；LFO 负责后端选择，并同步调用官方 ComfyUI/comfy-cli 生成当前 Panel 的 Clip。调用方负责最小语义 QC、真实尾帧登记与后续 Panel 的衔接。
+当用户要制作产品、界面、功能说明、发布展示或抽象主题的 MG 口播动画时使用。本 Skill 先遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)，负责文案、产品/视觉素材、风格与语义映射、H3 提示词和创作决定；执行子代理使用用户在当前宿主配置的子代理模型与推理档位完成一个冻结 Panel 工作单元，不复制主会话设置或写死型号。执行单元查看实际输出，记录实际末态和实际音频证据，作出 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE`，再按实际依赖准备后续 Panel。
 
-唯一公共边界是 `lfo.video-execution.v1` 执行包与素材文件。创作方案确定后（可以来自当前指令、已有计划或先前有效确认），调用 `lfo.skill_adapter.mg_voiceover.build_package` 形成只含当前 Panel 的单 Clip 执行包，再交给 LFO CLI/runtime 按 `validate -> execute --approved-sha256 <PACKAGE_SHA256>` 处理；`plan` 仅为可选诊断。Runtime 同步等待官方 comfy-cli 完成并返回生成文件路径；调用方给出 `ACCEPT` 或 `REJECT`，失败即停，需要重做时由调用方显式生成/确认新的执行包。`status`、`retry`、`review`、`export` 不属于本 Skill 的生产交接协议。Skill 不直接操作 ComfyUI、数据库或视频提供方编排。
+创作方案确定后按已选择的入口交接：画布使用 [canvas-workspace](../canvas-workspace/SKILL.md) 的固定快照、单次提交和实际媒体回填，不要求执行包、包 hash 或 assembly 包。只有明确选择 LFO package CLI 时，才调用 `lfo.skill_adapter.mg_voiceover.build_package` 并走 `validate → execute --approved-sha256`。两条入口都由执行适配层调用提供方；本 Skill 不直接操作 ComfyUI、数据库或视频提供方编排。
 
 风格不预设为固定菜单。根据输入、参考素材和口播语义选择一个主风格、0-2 个辅助视觉模块及核心结构；只有多个方向都成立且结果差异显著时才询问选择。真实对象必须保真，虚构概念可以原创但不得冒充真实品牌。
 
@@ -28,16 +24,21 @@ description: 把产品、界面、功能或抽象主题做成 MG 动画，支持
 2. 补齐决策：优先复用当前指令和已有计划；信息足够时直接采用合理默认值。只有缺少真实对象保真所需的参考图、虚构/真实属性会改变结果，或无口播会改变交付物时才提出最少的定向问题。
 3. 分析文案与素材，选择主风格、辅助模块、核心结构、画面关键词和保真约束；产品图若由 Skill 生成，先作为素材文件审阅。
 4. 按需读取参考资料，写成可审阅的 Markdown 文档；环境有文档或画布展示能力时可同步展示，但不能依赖某个旧 Hub 工具。文档结构见 [H3 提示词模板](references/h3-mg-prompt-template.md)。
-5. 如果用户要求审阅或方案仍有未决创作选择，先交付可审阅文档；如果当前指令或已有计划已确定方案且信息足够，直接进入执行包准备。不要把“先给我做出来”误解为省略必要的真实素材、授权或 hash 边界。
-6. 用户修改时更新文档和受影响的创作素材；不重复询问已经确定的事项。方案确定后显式确定 `generation_operation`，再调用 `lfo.skill_adapter.mg_voiceover.build_package`，把 H3 提示词、素材文件、审批信息和输出策略写入一个只含当前 Panel 的 `lfo.video-execution.v1` 单 Clip 包。每个 Panel 包和最终 assembly 包都直接写在 `workspace/projects/<project_id>/` 项目根目录，使用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要为 Panel 建子目录；素材只放该项目已有且用途明确的语义目录，不在 `workspace/` 根部创建 workspace 临时目录。
-7. 将当前 Panel 的执行包和素材文件交给 LFO。先运行 `validate`，使用其返回的 `package_sha256`。若该完整文件 hash 已有可验证的用户批准，或调用方提供了同一未变更包的用户批准记录，则复用该批准；否则在执行前只请求/记录这一个精确 hash 的批准，再按真实 CLI 执行：
+5. 如果用户要求审阅或方案仍有未决创作选择，先交付可审阅文档；如果当前指令或已有计划已确定方案且信息足够，直接准备所选入口的执行输入。真实素材、授权和当前入口的输入检查仍须齐全。
+6. 用户修改时更新文档和受影响的创作素材；不重复询问已经确定的事项。明确当前 Panel 的 operation、提示词、素材用途、参数、音频/后期责任和验收要求。画布任务把这些输入交给 `canvas-workspace`，领取固定快照并回填实际结果；外部口播和准确文字按计划在后期落实。请求状态未知时核对原请求，不重新提交。完成画布交接后不执行下面的 package CLI 步骤。
 
-   ```text
-   python -m lfo.cli.main validate panel-P001.execution-package.json
-   python -m lfo.cli.main execute panel-P001.execution-package.json --approved-sha256 <PACKAGE_SHA256>
-   ```
+### 仅在明确选择 package CLI 时
 
-   `PACKAGE_SHA256` 必须逐字使用 `validate` 返回的完整 package 文件字节 SHA-256；任何包内容变化都要重新 `validate` 和批准。`execute` 会同步调用官方 `comfy-cli` 并等待完成；命令返回生成文件路径后，由调用方做最小语义判断并给出 `ACCEPT` 或 `REJECT`。若下一 Panel 的批准 `operation` 确实需要精确首帧，且当前 Clip 已 `ACCEPT`，才从实际输出提取真实末帧并绑定到下一包；R2V 可按已确定的连续性计划使用完整 `ACCEPT` 视频作为普通参考，不把普通参考冒充精确首帧；T2V/硬切无需尾帧。全部 Panel 完成后，调用 `lfo.skill_adapter.mg_voiceover.build_assembly_package` 构造全 `video.passthrough` 的 assembly package，并对该包单独执行 `validate`、批准返回的 hash、再 `execute` 一次完成最终组装；本 Skill 默认只有一条连续 Clip 时，也使用单 Clip assembly 应用最终口播音频和输出策略。ComfyUI、素材或最小 QC 失败都立即停止，不在本 Skill 中自动重试或维护恢复记录。
+调用 `lfo.skill_adapter.mg_voiceover.build_package`，把当前 Panel 的 H3 提示词、素材、授权和输出策略写入一个 `lfo.video-execution.v1` 单 Clip 包。每个 Panel 包和最终 assembly 包都直接写在 `workspace/projects/<project_id>/` 项目根目录，使用唯一文件名，不为包建子目录；素材放项目内用途明确的目录。
+
+将当前包和素材交给 LFO。先运行 `validate`，使用其返回的 `package_sha256`。核对该完整文件 hash 的已有批准或适用持续授权；只有未覆盖时，才请求一次精确 hash 批准：
+
+```text
+python -m lfo.cli.main validate panel-P001.execution-package.json
+python -m lfo.cli.main execute panel-P001.execution-package.json --approved-sha256 <PACKAGE_SHA256>
+```
+
+`PACKAGE_SHA256` 必须逐字使用 `validate` 返回的完整 package 文件字节 SHA-256；任何包内容变化都要重新 `validate` 并核对授权。`execute` 同步调用官方 `comfy-cli`；返回后执行单元查看实际文件，记录实际末态和音频证据，作出 `ACCEPT`、`REJECT` 或 `INCONCLUSIVE`。只有下一 Panel 确需精确首帧且当前 Clip 已 `ACCEPT` 时才提取真实末帧；普通 R2V 可按计划引用完整接受视频，T2V/硬切无需尾帧。全部 Panel 接受后，用 `build_assembly_package` 构造全 `video.passthrough` 包，独立校验、核对授权并执行一次，落实最终口播和输出策略；单 Clip 也如此。执行失败、拒绝或证据不足时暂停受影响任务，不自动重提。
 
 ## 输入规则
 
@@ -74,7 +75,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 动画，支持
 
 `references/seedance-omni-reference-prompt.md` 仅为历史 Seedance 兼容资料，属于 legacy optional；它不属于当前 H3/LFO canonical flow，也不能改变本 Skill 的执行边界。
 
-## 执行包不变量
+## 执行包不变量（仅 package CLI）
 
 - **参考路由**：`generation_operation` 必须由当前指令或已确定的创作方案显式给出，适配器不按参考数量猜测。无参考可选 T2V；只有被明确确认是精确首帧的单张图片才可选 I2V 并绑定 `placement="first"`；精确首尾帧选 FL2V；普通身份、构图、风格图片或视频参考选 R2V，并使用类型匹配的 fixed slot。素材都以文件和引用元数据进入执行包。
 - **连续性**：默认生成一个连续 Clip，不拆多段、不生成静态分镜再合成；只有用户明确要求多条成片时才创建多个独立执行包。
@@ -82,7 +83,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 动画，支持
 - **口播音频**：有外部口播音频时，在生成包中登记音频素材/音轨，并在 ACCEPT 后由 passthrough assembly 实际替换音频；没有外部音频时允许 H3 原生音频并由 assembly 保留。两条路径都要在 H3 提示词和执行包中写明。
 - **字幕**：普通字幕默认 `subtitles_mode="none"`。MG 画面中的关键词、按钮、标题和动态字形是设计元素，不等于字幕；只有用户明确要字幕时才改变输出策略并提供字幕内容。
 - **素材治理**：每个产品图、参考图和外部音频都要有 `review`、`provenance`，并通过参考位或音轨绑定到 Clip；Skill 生成的产品图也按普通素材文件处理，不绕过执行包边界。
-- **审批**：执行包记录当前指令或已有计划对创作方案的授权来源；如果方案没有被确定，先补齐该事实。进入 LFO execute 前仍必须核对当前完整文件字节 SHA-256 的明确批准；不能用笼统生成请求代替尚不存在包的 hash 批准。
+- **授权**：执行包记录当前指令或已有计划对创作方案的授权来源；如果方案没有被确定，先补齐该事实。进入 LFO execute 前仍必须核对当前完整文件字节 SHA-256 的明确批准或适用的持续授权；不能用笼统生成请求代替尚不存在包的 hash 授权。
 
 
 ## 风格组合规则
@@ -169,8 +170,8 @@ description: 把产品、界面、功能或抽象主题做成 MG 动画，支持
 
 - 将完整 H3 提示词写成可审阅的 Markdown 文档，建议命名为「产品名/主题 + MG 口播动画生成器提示词」。
 - 文档必须包含制作摘要、真实/虚构属性、输入素材、时长、比例、像素比、风格、核心结构、口播/音频路径、字幕策略和可直接用于 H3 的完整提示词。
-- 方案未确定或用户要求先审阅时只更新文档和创作素材；方案已由当前指令或已有计划确定时，可直接创建执行包。
-- 用户修改时更新文档并使受影响的包失效；不重复确认未受影响的事项。确定后的文档连同素材和授权信息交给 `build_package`。
+- 方案未确定或用户要求先审阅时只更新文档和创作素材；方案已确定时，按所选入口准备画布输入或执行包。
+- 用户修改时更新文档及受影响的执行输入；已提交任务仍使用原固定输入。确定后的文档连同素材、授权和验收要求交给所选入口，不重复确认未受影响的事项。
 
 ## 默认音频提示
 
@@ -178,7 +179,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 动画，支持
 
 ## H3 生成规则
 
-- 默认让 H3 提示词描述一个完整连续 MG 动画；真正的生成由 LFO 在执行包 hash 校验后负责。
+- 默认让 H3 提示词描述一个完整连续 MG 动画；真正的生成由所选入口的执行适配层负责。
 - 默认不生成静态分镜图，不拆多段，不做多段合成。
 - 如果口播过长，先建议用户缩短或确认是否拆成多条 MG 口播动画；不要擅自拆多段。
 - 默认不添加普通底部字幕；画面文字只作为关键词、短句、步骤标签、数据标签、UI 标签、产品发布片标题或品牌短语。
@@ -187,7 +188,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 动画，支持
 
 ## 禁止事项
 
-- 不要在创作方案未确定、真实素材/授权缺失或精确执行包 hash 未获批准时生成最终 MG 动画或执行 LFO Run。
+- 创作方案、真实素材或授权缺失时不生成最终 MG 动画。package CLI 还须核对当前精确文件 hash 的明确批准或适用持续授权。
 - 不要把需要用户作出的真实边界决定藏在默认值里；已有有效确认或当前指令已明确的创作选择直接复用，不重复提问。
 - 不要沿用旧流程中的“静态分镜图确认 → 多段 MG 动画片段 → 合成”链路。
 - 不要把整段口播做成底部字幕。

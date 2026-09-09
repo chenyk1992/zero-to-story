@@ -1,0 +1,13 @@
+{
+  "id": "codex-imagegen",
+  "label": "Codex 内置生图",
+  "skill": "imagegen",
+  "node_types": ["image"],
+  "execution": "agent",
+  "requires_tools": ["image_gen"],
+  "resource": {"key": "image:codex-imagegen", "capacity": 2},
+  "models": [{"id": "image_gen", "label": "Codex 内置图像生成"}],
+  "modes": [{"id": "create", "label": "生成图片"}, {"id": "edit", "label": "参考图片编辑"}],
+  "fields": [{"key": "aspect_ratio", "label": "画幅偏好", "type": "text", "group": "specs", "required": false}],
+  "handoff": "使用当前宿主已有 imagegen Skill 和 image_gen 工具。保留确认提示词，将画幅作为用户偏好交接，不承诺工具原生支持精确尺寸。edit 模式先查看引用图片再编辑。返回实际本地图片路径，由画布服务复制和登记；不替换为其他图片 API。"
+}

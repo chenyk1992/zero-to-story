@@ -32,7 +32,9 @@ VALID_VIDEO_OPERATIONS = {
     "video.first_last_frame",
     "video.reference_to_video",
 }
-VALID_VISUAL_ASSET_POLICIES = {"none", "storyboard_board", "scene_keyframe", "last_frame"}
+VALID_VISUAL_ASSET_POLICIES = {
+    "none", "storyboard_board", "reference_assets", "scene_keyframe", "last_frame"
+}
 STORYBOARD_BOARD_KEY_RE = re.compile(r"^storyboard_board\.(?P<panel_id>[^.]+)$")
 STORYBOARD_LAYOUT_RE = re.compile(
     r"^(?P<rows>[1-9]\d*)x(?P<columns>[1-9]\d*)$"
@@ -806,11 +808,11 @@ def _validate_panel_plans(
                 issues.append(
                     Issue(f"{path}.runtime_input_keys", "must contain at least one fixed reference")
                 )
-            if policy != "storyboard_board":
+            if policy not in {"storyboard_board", "reference_assets"}:
                 issues.append(
                     Issue(
                         f"{path}.visual_asset_policy",
-                        "must be 'storyboard_board' for reference-to-video",
+                        "must be 'storyboard_board' or 'reference_assets' for reference-to-video",
                     )
                 )
 

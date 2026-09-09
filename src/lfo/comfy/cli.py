@@ -1,4 +1,5 @@
 """Thin synchronous adapter for the official ``comfy`` CLI."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from .admission import VideoSubmissionGuard
 from .exceptions import ComfyCliTimeoutError, LfoComfyError
 
 
@@ -56,6 +58,19 @@ class ComfyCliRunner:
         base_url: str,
         timeout_seconds: float,
     ) -> ComfyCliRunResult:
+        with VideoSubmissionGuard(base_url) as guard:
+            return self._run_workflow(
+                workflow, base_url=base_url, timeout_seconds=timeout_seconds, guard=guard
+            )
+
+    def _run_workflow(
+        self,
+        workflow: dict[str, Any],
+        *,
+        base_url: str,
+        timeout_seconds: float,
+        guard: VideoSubmissionGuard,
+    ) -> ComfyCliRunResult:
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
@@ -91,6 +106,7 @@ class ComfyCliRunner:
                 "--json",
             ]
             try:
+                guard.submitted()
                 completed = self._process_runner(
                     command,
                     capture_output=True,
@@ -101,18 +117,38 @@ class ComfyCliRunner:
                     timeout=process_timeout_seconds,
                 )
             except subprocess.TimeoutExpired as exc:
+                prompt_id = None
+                partial = exc.stdout or ""
+                if isinstance(partial, bytes):
+                    partial = partial.decode("utf-8", errors="replace")
+                for line in partial.splitlines():
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(event, dict):
+                        prompt_id = _prompt_id_from_envelope(event) or prompt_id
+                if prompt_id:
+                    guard.submitted(prompt_id)
                 raise ComfyCliTimeoutError(
                     "comfy-cli exceeded its hard wall-clock limit "
-                    f"of {process_timeout_seconds:g} seconds"
+                    f"of {process_timeout_seconds:g} seconds",
+                    prompt_id=prompt_id,
                 ) from exc
             except FileNotFoundError as exc:
+                guard.finished()
                 raise LfoComfyError(
                     "comfy-cli executable was not found; install it and ensure 'comfy' is on PATH"
                 ) from exc
             except OSError as exc:
+                guard.finished()
                 raise LfoComfyError(f"could not start comfy-cli: {exc}") from exc
 
         events = _parse_events(completed.stdout)
+        for event in events:
+            task_id = _prompt_id_from_envelope(event)
+            if task_id:
+                guard.submitted(task_id)
         envelope = next(
             (event for event in reversed(events) if event.get("type") == "envelope"),
             None,
@@ -121,6 +157,8 @@ class ComfyCliRunner:
             detail = completed.stderr.strip() or "missing terminal JSON envelope"
             raise LfoComfyError(f"comfy-cli did not return a terminal result: {detail}")
         data = envelope.get("data")
+        if isinstance(data, dict) and data.get("status") in {"completed", "failed", "error"}:
+            guard.finished()
         if isinstance(data, dict) and _is_timeout_status(data.get("status")):
             raise ComfyCliTimeoutError(
                 "comfy-cli workflow timed out",
@@ -137,9 +175,7 @@ class ComfyCliRunner:
                         prompt_id=_prompt_id_from_envelope(envelope),
                     )
                 raise LfoComfyError(f"comfy-cli {code}: {message}")
-            raise LfoComfyError(
-                f"comfy-cli failed with exit code {completed.returncode}"
-            )
+            raise LfoComfyError(f"comfy-cli failed with exit code {completed.returncode}")
 
         validation_warnings = [
             event.get("validation_warnings")
@@ -181,8 +217,10 @@ def _is_timeout_error(code: str, message: str) -> bool:
     """Recognize an explicit timeout error reported by ``comfy run``."""
     normalized_code = code.strip().lower().replace("-", "_").replace(" ", "_")
     normalized_message = message.strip().lower()
-    return "timeout" in normalized_code or "timed_out" in normalized_code or (
-        "timed out" in normalized_message
+    return (
+        "timeout" in normalized_code
+        or "timed_out" in normalized_code
+        or ("timed out" in normalized_message)
     )
 
 
@@ -227,9 +265,7 @@ def _parse_events(stdout: str) -> list[dict[str, Any]]:
     return events
 
 
-def _outputs_from_events(
-    events: list[dict[str, Any]], *, prompt_id: str
-) -> list[ComfyCliOutput]:
+def _outputs_from_events(events: list[dict[str, Any]], *, prompt_id: str) -> list[ComfyCliOutput]:
     """Collect only executed outputs belonging to the completed prompt."""
     outputs: list[ComfyCliOutput] = []
     seen: set[tuple[str, str, str]] = set()
@@ -288,9 +324,7 @@ def _outputs_from_urls(value: object) -> list[ComfyCliOutput]:
             continue
         local_path = pathlib.Path(item)
         if local_path.is_file():
-            outputs.append(
-                ComfyCliOutput(filename=str(local_path.resolve()), file_type="absolute")
-            )
+            outputs.append(ComfyCliOutput(filename=str(local_path.resolve()), file_type="absolute"))
     return outputs
 
 

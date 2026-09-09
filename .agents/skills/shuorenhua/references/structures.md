@@ -1,7 +1,3 @@
-## GPT-6 适配变更说明
-
-2026-09-07：将节奏检查中的合并、拆分和句式调整绑定到当前 scope；`structural` 才可做句子层面的合并或拆分，`bounded` / `in-place` 保留各自的句段边界。其余结构识别与专业保护规则保持不变。
-
 # 结构反模式（跨语言）
 
 > 本文件是解释、示例与操作细则；入口与 scope 合同以 `SKILL.md` 和 `references/rewrite-contract.md` 为准，两处表述不一致时遵循后者的模式与 scope 边界。

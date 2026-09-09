@@ -12,6 +12,7 @@ import pytest
 import lfo.application.video_runtime as video_runtime_module
 from lfo.application.video_runtime import VideoRuntime, _comfy_h3_config
 from lfo.backends.capabilities import CapabilityManifest
+from lfo.backends.comfy_h3 import build_h3_backend_registry
 from lfo.backends.passthrough import PASSTHROUGH_BACKEND_ID, PASSTHROUGH_BACKEND_REVISION
 from lfo.backends.registry import BackendRegistry
 from lfo.backends.video_router import VideoTaskRouter
@@ -115,6 +116,29 @@ def _package_with_asset(
 
 
 class TestVideoRuntime:
+    @pytest.mark.parametrize(
+        ("profile", "steps", "valid"),
+        [("native", 16, True), ("native", 37, True), ("vdn_turbo", 8, True),
+         ("vdn_turbo", 16, False), ("unknown", 8, False), ("native", None, False)],
+    )
+    def test_sampling_is_validated_before_generation(
+        self, tmp_path: pathlib.Path, profile: str, steps: int | None, valid: bool,
+    ) -> None:
+        runtime = _runtime(tmp_path, build_h3_backend_registry())
+        path = _package_json(tmp_path)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["clips"][0]["generation"]["requirements"] = {
+            "sampler_profile": profile, "steps": steps,
+        }
+        path.write_text(json.dumps(data), encoding="utf-8")
+        assert runtime.validate(path).valid is valid
+        plan = runtime.plan(path)
+        assert (plan.error is None) is valid
+        if valid:
+            assert plan.clip_plans[0]["sampler_profile"] == profile
+            assert plan.clip_plans[0]["steps"] == steps
+        assert not (tmp_path / "workspace").exists()
+
     def test_default_production_video_registry_and_router(self, tmp_path: pathlib.Path) -> None:
         runtime = VideoRuntime(workspace_root=tmp_path / "workspace")
         assert isinstance(runtime.handlers.get("video.generate"), VideoTaskRouter)

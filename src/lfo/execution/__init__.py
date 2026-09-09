@@ -542,22 +542,6 @@ class ExecutionStore:
             )
             return cursor.rowcount == 1
 
-    def update_task_retry_count(self, task_id: str, retry_count: int) -> bool:
-        """Persist the attempt budget consumed by one task.
-
-        Retry count is kept outside the opaque metadata column because it is
-        part of scheduler state and must survive a process restart.
-        """
-        if not isinstance(retry_count, int) or isinstance(retry_count, bool) or retry_count < 0:
-            raise ValueError("retry_count must be an integer >= 0")
-        with self.transaction() as conn:
-            cursor = conn.execute(
-                """UPDATE tasks SET retry_count=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                   WHERE task_id=?""",
-                (retry_count, task_id),
-            )
-            return cursor.rowcount == 1
-
     def list_tasks(self, run_id: str) -> list[dict[str, object]]:
         rows = self.connect().execute(
             "SELECT * FROM tasks WHERE run_id = ? ORDER BY created_at, task_id", (run_id,)
@@ -677,66 +661,6 @@ class ExecutionStore:
                    WHERE lease_id=? AND released=0""", (lease_id,),
             )
             return cursor.rowcount == 1
-
-    def recover_interrupted_tasks(self, run_id: str) -> list[str]:
-        """Recover RUNNING tasks that no longer have a live worker lease.
-
-        A live lease protects a task owned by another process.  Once the lease
-        is absent or expired, the task is safe to retry after an interrupted
-        local process, and any non-terminal attempt is closed for auditability.
-        """
-        recovered: list[str] = []
-        with self.transaction() as conn:
-            rows = conn.execute(
-                "SELECT task_id FROM tasks WHERE run_id=? AND status='RUNNING'",
-                (run_id,),
-            ).fetchall()
-            for row in rows:
-                task_id = str(row["task_id"])
-                live_lease = conn.execute(
-                    """SELECT 1 FROM task_leases
-                       WHERE task_id=? AND released=0
-                         AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                       LIMIT 1""",
-                    (task_id,),
-                ).fetchone()
-                if live_lease is not None:
-                    continue
-
-                reason = "recovered interrupted task without a live worker lease"
-                attempt = conn.execute(
-                    """SELECT attempt_id, status FROM attempts
-                       WHERE task_id=? ORDER BY created_at DESC LIMIT 1""",
-                    (task_id,),
-                ).fetchone()
-                if attempt is not None and attempt["status"] not in {"SUCCEEDED", "FAILED"}:
-                    conn.execute(
-                        """UPDATE attempts SET status='FAILED', error=?,
-                           updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                           WHERE attempt_id=?""",
-                        (reason, attempt["attempt_id"]),
-                    )
-                    self._journal(
-                        conn, "attempt", str(attempt["attempt_id"]),
-                        str(attempt["status"]), "FAILED", reason,
-                    )
-                cursor = conn.execute(
-                    """UPDATE tasks SET status='FAILED_RETRYABLE', error=?,
-                       updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                       WHERE task_id=? AND status='RUNNING'""",
-                    (reason, task_id),
-                )
-                if cursor.rowcount != 1:
-                    continue
-                self._journal(conn, "task", task_id, "RUNNING", "FAILED_RETRYABLE", reason)
-                conn.execute(
-                    """UPDATE task_leases SET released=1,
-                       released_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                       WHERE task_id=? AND released=0""",
-                    (task_id,),
-                )
-                recovered.append(task_id)
-        return recovered
 
     def record_artifact(self, *, artifact_id: str, task_id: str, artifact_type: str,
                         attempt_id: str | None = None, file_path: str | None = None,

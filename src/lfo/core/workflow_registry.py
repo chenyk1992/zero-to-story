@@ -13,6 +13,7 @@ import copy
 import json
 import pathlib
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from .hashing import WORKFLOW_HASH_ALGORITHM, compute_workflow_hash
 
@@ -131,6 +132,10 @@ class WorkflowManifest:
     # Constraints
     frame_constraints: FrameConstraints = field(default_factory=FrameConstraints)
     resolution_constraints: ResolutionConstraints = field(default_factory=ResolutionConstraints)
+    # Sampling is explicit for new packages. ``None`` preserves the legacy
+    # workflow default when reading an older package or manifest.
+    sampling_profile: str | None = None
+    sampling_steps: dict[str, Any] = field(default_factory=dict)
 
     # Input / output
     input_slots: list[InputSlot] = field(default_factory=list)
@@ -236,6 +241,8 @@ H3_FL2VA_MANIFEST = WorkflowManifest(
         width_multiple=32, height_multiple=32,
         default_width=864, default_height=480,
     ),
+    sampling_profile="vdn_turbo",
+    sampling_steps={"allowed_steps": [8]},
     input_slots=[
         InputSlot(
             binding_id="prompt",
@@ -294,6 +301,8 @@ H3_R2V_MANIFEST = WorkflowManifest(
         width_multiple=32, height_multiple=32,
         default_width=864, default_height=480,
     ),
+    sampling_profile="vdn_turbo",
+    sampling_steps={"allowed_steps": [8]},
     input_slots=[
         InputSlot(
             binding_id="prompt",
@@ -357,6 +366,48 @@ H3_R2V_MANIFEST = WorkflowManifest(
     tags=["reference-to-video", "audio", "ref2va", "multi-reference", "auto-duration"],
 )
 
+# Native H3 graphs deliberately do not pass through ApplyVDNH3 or
+# MiniMaxH3SigmaShift. Keep them as separate manifests/files so a native
+# request never relies on the VDN bundle being installed or on runtime graph
+# surgery that could accidentally leave an acceleration node connected.
+H3_NATIVE_FL2VA_MANIFEST = copy.deepcopy(H3_FL2VA_MANIFEST)
+H3_NATIVE_FL2VA_MANIFEST.workflow_id = "h3_native_fl2va"
+H3_NATIVE_FL2VA_MANIFEST.version = "1.0.0"
+H3_NATIVE_FL2VA_MANIFEST.family = "h3_fl2va_native"
+H3_NATIVE_FL2VA_MANIFEST.description = (
+    "Native H3 First/Last-Frame-to-Video-Audio graph with configurable "
+    "native sampler steps and no VDN acceleration nodes."
+)
+H3_NATIVE_FL2VA_MANIFEST.source_file = "h3_native_fl2va.json"
+H3_NATIVE_FL2VA_MANIFEST.workflow_hash = ""
+H3_NATIVE_FL2VA_MANIFEST.sampling_profile = "native"
+H3_NATIVE_FL2VA_MANIFEST.sampling_steps = {"min_steps": 8}
+H3_NATIVE_FL2VA_MANIFEST.model_dependencies = [
+    dependency
+    for dependency in H3_NATIVE_FL2VA_MANIFEST.model_dependencies
+    if dependency.role != "vdn_checkpoint"
+]
+H3_NATIVE_FL2VA_MANIFEST.tags = [*H3_NATIVE_FL2VA_MANIFEST.tags, "native"]
+
+H3_NATIVE_R2V_MANIFEST = copy.deepcopy(H3_R2V_MANIFEST)
+H3_NATIVE_R2V_MANIFEST.workflow_id = "h3_native_r2v"
+H3_NATIVE_R2V_MANIFEST.version = "1.0.0"
+H3_NATIVE_R2V_MANIFEST.family = "h3_ref2va_native"
+H3_NATIVE_R2V_MANIFEST.description = (
+    "Native H3 Reference-to-Video-Audio graph with configurable native "
+    "sampler steps and no VDN acceleration nodes."
+)
+H3_NATIVE_R2V_MANIFEST.source_file = "h3_native_r2v.json"
+H3_NATIVE_R2V_MANIFEST.workflow_hash = ""
+H3_NATIVE_R2V_MANIFEST.sampling_profile = "native"
+H3_NATIVE_R2V_MANIFEST.sampling_steps = {"min_steps": 8}
+H3_NATIVE_R2V_MANIFEST.model_dependencies = [
+    dependency
+    for dependency in H3_NATIVE_R2V_MANIFEST.model_dependencies
+    if dependency.role != "vdn_checkpoint"
+]
+H3_NATIVE_R2V_MANIFEST.tags = [*H3_NATIVE_R2V_MANIFEST.tags, "native"]
+
 H3_PRESENTER_R2V_MANIFEST = WorkflowManifest(
     workflow_id="h3_presenter_r2v",
     version="3.0.0",
@@ -381,6 +432,8 @@ H3_PRESENTER_R2V_MANIFEST = WorkflowManifest(
         default_width=864,
         default_height=480,
     ),
+    sampling_profile="native",
+    sampling_steps={"min_steps": 8},
     input_slots=[
         InputSlot(
             binding_id="prompt",
@@ -498,6 +551,8 @@ SEEDVR2_UPSCALE_MANIFEST = WorkflowManifest(
 KNOWN_WORKFLOWS = {
     "h3_standard_fl2va": H3_FL2VA_MANIFEST,
     "h3_standard_r2v": H3_R2V_MANIFEST,
+    "h3_native_fl2va": H3_NATIVE_FL2VA_MANIFEST,
+    "h3_native_r2v": H3_NATIVE_R2V_MANIFEST,
     "h3_presenter_r2v": H3_PRESENTER_R2V_MANIFEST,
     "seedvr2_upscale": SEEDVR2_UPSCALE_MANIFEST,
 }

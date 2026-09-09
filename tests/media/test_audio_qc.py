@@ -5,25 +5,40 @@ from __future__ import annotations
 from pathlib import Path
 
 from lfo.media import audio_qc
-from lfo.media.audio_qc import AudioAcceptanceContract, AudioQualityQC
+from lfo.media.audio_qc import (
+    AudioAcceptanceContract,
+    AudioAcceptanceReadiness,
+    AudioQualityQC,
+)
+
+
+def test_transcription_difference_requires_listening_instead_of_automatic_rejection():
+    from lfo.media.audio_qc import AudioQCReport, AudioQCRuleResult
+
+    report = AudioQCReport(passed=False, results=[AudioQCRuleResult("speech_event:line-1", False)])
+    assert report.requires_review
+    assert not report.ready_for_acceptance
 
 
 def _contract() -> AudioAcceptanceContract:
-    return AudioAcceptanceContract.from_dict(
-        {
-            "schema": "lfo.audio_acceptance.v1",
-            "require_audio": True,
-            "speech_events": [
-                {
-                    "event_id": "D001",
-                    "speaker_id": "S1",
-                    "text": "你好。",
-                    "start_ms": 1000,
-                    "end_ms": 1800,
-                }
-            ],
-        }
-    ) or AudioAcceptanceContract()
+    return (
+        AudioAcceptanceContract.from_dict(
+            {
+                "schema": "lfo.audio_acceptance.v1",
+                "require_audio": True,
+                "speech_events": [
+                    {
+                        "event_id": "D001",
+                        "speaker_id": "S1",
+                        "text": "你好。",
+                        "start_ms": 1000,
+                        "end_ms": 1800,
+                    }
+                ],
+            }
+        )
+        or AudioAcceptanceContract()
+    )
 
 
 def test_audio_stream_and_speech_evidence_pass(monkeypatch, tmp_path: Path) -> None:
@@ -91,6 +106,24 @@ def test_inconclusive_analysis_is_reviewable_not_an_automatic_failure(
     assert report.inconclusive
 
 
+def test_inconclusive_report_exposes_review_readiness_without_rejection(
+    monkeypatch, tmp_path: Path
+) -> None:
+    path = tmp_path / "clip.mp4"
+    path.write_bytes(b"fixture")
+    monkeypatch.setattr(audio_qc, "probe", lambda _path: {"has_audio": True})
+    report = AudioQualityQC().check(
+        path,
+        _contract(),
+        analysis={"status": "INCONCLUSIVE"},
+    )
+
+    assert report.passed
+    assert report.acceptance_readiness is AudioAcceptanceReadiness.REVIEW_REQUIRED
+    assert not report.ready_for_acceptance
+    assert report.requires_review
+
+
 def test_missing_required_audio_fails(monkeypatch, tmp_path: Path) -> None:
     path = tmp_path / "clip.mp4"
     path.write_bytes(b"fixture")
@@ -152,8 +185,20 @@ def test_overlap_allowed_by_current_event(monkeypatch, tmp_path: Path) -> None:
         contract,
         analysis={
             "speech_events": [
-                {"event_id": "D001", "speaker_id": "S1", "text": "甲", "start_ms": 0, "end_ms": 500},
-                {"event_id": "D002", "speaker_id": "S2", "text": "乙", "start_ms": 400, "end_ms": 800},
+                {
+                    "event_id": "D001",
+                    "speaker_id": "S1",
+                    "text": "甲",
+                    "start_ms": 0,
+                    "end_ms": 500,
+                },
+                {
+                    "event_id": "D002",
+                    "speaker_id": "S2",
+                    "text": "乙",
+                    "start_ms": 400,
+                    "end_ms": 800,
+                },
             ]
         },
     )

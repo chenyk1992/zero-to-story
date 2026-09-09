@@ -242,6 +242,21 @@
     "GenerationRequirements": {
       "type": "object",
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "sampler_profile": { "type": "null" },
+            "steps": { "type": "null" }
+          }
+        },
+        {
+          "required": ["sampler_profile", "steps"],
+          "properties": {
+            "sampler_profile": { "type": "string", "pattern": "\\S" },
+            "steps": { "type": "integer" }
+          }
+        }
+      ],
       "properties": {
         "aspect_ratio": { "type": ["string", "null"], "default": null },
         "megapixels": {
@@ -279,6 +294,16 @@
         "reference_image_size": {
           "type": ["string", "null"],
           "enum": ["match", "max", null],
+          "default": null
+        },
+        "sampler_profile": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null
+        },
+        "steps": {
+          "type": ["integer", "null"],
+          "minimum": 8,
           "default": null
         }
       }

@@ -1,0 +1,60 @@
+{
+  "description": "项目画布接续检查；仅影响通过 canvas_continuation_configure 明确绑定当前会话的生产计划。不会提交媒体或授予权限。",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "story_canvas",
+            "tool": "canvas_continuation_hook",
+            "input": {"session_id": "${session_id}", "event": "SessionStart"},
+            "timeout": 5,
+            "statusMessage": "读取本任务的生产交接状态"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "story_canvas",
+            "tool": "canvas_continuation_hook",
+            "input": {"session_id": "${session_id}", "event": "SubagentStop", "agent_id": "${agent_id}", "turn_id": "${turn_id}"},
+            "timeout": 5,
+            "statusMessage": "记录执行单元结果待交接"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "story_canvas",
+            "tool": "canvas_continuation_hook",
+            "input": {"session_id": "${session_id}", "event": "Stop", "turn_id": "${turn_id}"},
+            "timeout": 5,
+            "statusMessage": "检查结果交接和下一步是否已处理"
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/.venv/bin/python\" \"$(git rev-parse --show-toplevel)/.agents/skills/canvas-workspace/scripts/continuation_interrupt.py\"",
+            "commandWindows": "powershell.exe -NoProfile -NonInteractive -Command \"$taskRoot = git rev-parse --show-toplevel; if ($LASTEXITCODE -ne 0) { exit 1 }; & (Join-Path $taskRoot '.venv/Scripts/python.exe') (Join-Path $taskRoot '.agents/skills/canvas-workspace/scripts/continuation_interrupt.py')\"",
+            "timeout": 3,
+            "statusMessage": "暂停本任务的生产接续"
+          }
+        ]
+      }
+    ]
+  }
+}

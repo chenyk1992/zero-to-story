@@ -1,5 +1,7 @@
 # H3 工作流约定
 
+共同的角色、Panel ready、输入冻结和实际末态/音频验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只描述 H3 registry 与绑定约定。
+
 LFO 的 H3 工作流以 `src/lfo/registry/` 中的 JSON 为唯一配置来源。JSON
 负责声明模型文件、VAE、提示词和引用输入、分辨率、帧数、采样器、调度器、
 步数以及输出链路。Python 运行时不复制这些值，也不通过节点编号推断
@@ -19,7 +21,8 @@ Python 运行时只做四件事：
 4. 从本次 ComfyUI 结果中复制唯一明确的视频到 RunArtifactLayout，并记录
    `prepared_workflow_hash`、采样参数、`provider_elapsed_seconds`、
    `handler_elapsed_seconds`、媒体流和最小 QC 结果。生成失败或结果不唯一
-   时停止当前 Panel，不自动换工作流重提。
+   时停止当前 Panel，不自动换工作流重提。工作流技术成功不代表内容
+   `ACCEPT`；执行单元必须依据实际视频记录实际末态和实际音频证据。
 
 工作流的模型名、采样参数和输出节点必须留在 JSON；绑定代码依赖标题、
 节点类型和公开输入名称。替换 registry JSON 后沿用现有的 workflow hash、manifest、
@@ -34,6 +37,8 @@ registry JSON，并完整保留这些模板已有的 operation 映射、T2V/FL2V
 
 工作流变更不改变 `VideoExecutionPackage` 公共字段。仍按现有的
 `validate` → `execute --approved-sha256` 和 workflow hash 契约执行。
+
+Canvas Comfy 与 package CLI 共用低层提交占用和持久提交回执；工作流绑定代码不能绕过该占用或自行并发提交。回执诊断由 `python -m lfo.comfy.admission` 提供，核实原任务只读取原始 Comfy `/history`，不重新提交。
 
 ## ComfyUI 工作流编码
 

@@ -1,0 +1,10 @@
+{
+  "id": "seedance",
+  "label": "Seedance 2.5",
+  "node_types": ["video"],
+  "execution": "unavailable",
+  "reason": "尚未接入所选服务的执行 Skill",
+  "models": [],
+  "modes": [],
+  "fields": []
+}

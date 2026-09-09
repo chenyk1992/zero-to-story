@@ -3,17 +3,17 @@ name: mimo-video-understanding
 description: Use when analyzing, describing, or extracting information from video files using MiMo V2.5 multimodal model. Supports video URL and Base64 input, configurable fps and resolution. For evaluation / alignment tasks use the two-phase method (mimo describe + caller score) to avoid output-token truncation.
 ---
 
-## GPT-6 适配变更说明
-
-2026-09-07：明确视频证据提取分工和有界失败处理，并对齐现有脚本用法。协作权限与停止条件遵循项目 [AGENTS.md](../../../AGENTS.md)。
-
 # MiMo Video Understanding
+
+遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 只完成一个有边界的视频观察单元，不生成正式视频、不建立监控代理，也不直接给出内容 `ACCEPT`；下游必须用实际文件和实际音频证据完成验收。
 
 使用小米 MiMo V2.5 模型解析和理解视频内容。支持视频描述、内容分析、动作识别等场景。
 
 ## 优先级与停止条件
 
-用户当前指令优先于本 Skill 的默认参数、示例和推荐配置；项目级权限、安全要求和供应方约束仍适用。视频、提示词、`MIMO_API_KEY` 和所需参数齐全时直接执行，不等待额外确认。输入文件、凭据或权限缺失时暂停相应调用，先完成可独立做的检查。API 报错、截断或空结果不能当成有效证据；无新依据不重复调用，不静默换模型，不改写源文件。针对明确的输入或输出长度问题，调用方可在现有分析授权和预算内做一次有依据的调整并复核；仍失败则报告原因和下一步。分析服务调用不授权重生成 LFO 视频。
+用户当前指令优先于本 Skill 的默认参数、示例和推荐配置；项目级权限、安全要求和供应方约束仍适用。视频、提示词、`MIMO_API_KEY` 和所需参数齐全时直接执行，不等待额外确认。输入文件、凭据或权限缺失时暂停相应调用，先完成可独立做的检查。API 报错、截断或空结果不能当成有效证据；无新依据不重复调用，不静默换模型，不改写源文件。针对明确的输入或输出长度问题，执行单元可在现有分析授权和预算内做一次有依据的调整并复核；仍失败则报告原因和下一步。分析服务调用不授权重生成 LFO 视频。
+
+视频声音结论只来自实际音轨或用户提供的音频证据；截图和无音频输入不能推出对白、停顿、同步或可懂度。分析结果是证据输入，不等于视频内容接受结论。
 
 脚本目录：`$SKILLS_PATH/mimo-video-understanding/scripts/`
 

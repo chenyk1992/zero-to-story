@@ -172,6 +172,11 @@ class GenerationRequirements:
     fps: int | None = None
     native_audio: str | None = None
     reference_image_size: str | None = None
+    # Provider sampling is an explicit project-level choice.  Both fields
+    # remain nullable so packages written before the sampling profile was
+    # introduced keep their historical backend defaults.
+    sampler_profile: str | None = None
+    steps: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], path: str) -> GenerationRequirements:
@@ -188,6 +193,8 @@ class GenerationRequirements:
                 "fps",
                 "native_audio",
                 "reference_image_size",
+                "sampler_profile",
+                "steps",
             },
         )
         aspect_ratio = data.get("aspect_ratio")
@@ -231,6 +238,23 @@ class GenerationRequirements:
         reference_image_size = data.get("reference_image_size")
         if reference_image_size is not None and reference_image_size not in {"match", "max"}:
             raise ValueError(f"{path}.reference_image_size: expected 'match' or 'max'")
+        sampler_profile = data.get("sampler_profile")
+        if sampler_profile is not None:
+            if not isinstance(sampler_profile, str) or not sampler_profile.strip():
+                raise ValueError(
+                    f"{path}.sampler_profile: expected a non-empty string or null"
+                )
+            sampler_profile = sampler_profile.strip()
+        steps = data.get("steps")
+        if steps is not None:
+            if not isinstance(steps, int) or isinstance(steps, bool):
+                raise TypeError(f"{path}.steps: expected integer or null")
+            if steps < 8:
+                raise ValueError(f"{path}.steps: must be at least 8")
+        if (sampler_profile is None) != (steps is None):
+            raise ValueError(
+                f"{path}.sampler_profile and {path}.steps must be provided together"
+            )
         return cls(
             aspect_ratio=aspect_ratio,
             megapixels=megapixels_value,
@@ -239,6 +263,8 @@ class GenerationRequirements:
             fps=fps,
             native_audio=native_audio,
             reference_image_size=reference_image_size,
+            sampler_profile=sampler_profile,
+            steps=steps,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -257,6 +283,10 @@ class GenerationRequirements:
             d["native_audio"] = self.native_audio
         if self.reference_image_size is not None:
             d["reference_image_size"] = self.reference_image_size
+        if self.sampler_profile is not None:
+            d["sampler_profile"] = self.sampler_profile
+        if self.steps is not None:
+            d["steps"] = self.steps
         return d
 
 

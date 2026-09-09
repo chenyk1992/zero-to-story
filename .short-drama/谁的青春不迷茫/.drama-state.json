@@ -1,0 +1,23 @@
+{
+  "currentStep": "writing",
+  "genre": ["青春", "校园", "甜虐"],
+  "audience": "Z 世代学生党、怀念高考的上班族",
+  "tone": "青春热血 + 情感细腻 + 兄弟情义",
+  "totalEpisodes": 10,
+  "completedEpisodes": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "bridgedEpisodes": [],
+  "language": "zh",
+  "mode": "domestic",
+  "dramaTitle": "谁的青春不迷茫",
+  "endingType": "开放式",
+  "frame": "9:16",
+  "platform": "抖音/快手/视频号",
+  "singleEpisodeDuration": "3-5 分钟",
+  "completedAt": "2026-09-08",
+  "nextSteps": [
+    "可继续 /桥接 N 生成 handoff 包给 zero-to-story 出视频",
+    "可继续 /自检 N 做合规与质量检查",
+    "可继续 /导出 合并为完整剧本",
+    "可继续第二季 / 外传 / 电影版"
+  ]
+}

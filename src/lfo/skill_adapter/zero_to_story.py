@@ -274,6 +274,18 @@ def _panel_to_clip(
     requirement_data = generation_data.get("requirements", {})
     if not isinstance(requirement_data, dict):
         raise ValueError(f"panel {panel_id!r}.generation.requirements must be an object")
+    # A project-level sampling choice is inherited by every Panel.  A Panel
+    # may repeat the same pair for readability, but it cannot silently select
+    # a different profile or step count.
+    for sampling_key in ("sampler_profile", "steps"):
+        project_value = getattr(requirements, sampling_key)
+        if sampling_key in requirement_data and project_value is not None:
+            panel_value = requirement_data[sampling_key]
+            if panel_value != project_value:
+                raise ValueError(
+                    f"panel {panel_id!r}.generation.requirements.{sampling_key} "
+                    f"conflicts with project user_constraints.{sampling_key}"
+                )
     resolved_requirements = _canvas_requirements(
         requirements.to_dict() | requirement_data,
         f"$.panels[{sequence - 1}].generation.requirements",
@@ -375,6 +387,8 @@ def _adapt_panels(creative: dict[str, Any]) -> VideoExecutionPackage:
             "megapixels": custom.get("megapixels", custom.get("pixel_ratio")),
             "fps": output.fps,
             "native_audio": "allowed",
+            "sampler_profile": custom.get("sampler_profile"),
+            "steps": custom.get("steps"),
         },
         "$.generation.requirements",
     )

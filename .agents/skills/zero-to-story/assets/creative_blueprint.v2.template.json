@@ -9,6 +9,11 @@
     "canonical": "[原文文件或 handoff]",
     "conflicts": []
   },
+  "user_constraints": {
+    "megapixels": null,
+    "sampler_profile": null,
+    "steps": null
+  },
   "scenes": [
     {
       "id": "S001",

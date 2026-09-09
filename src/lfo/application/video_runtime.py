@@ -20,6 +20,7 @@ from lfo.backends.passthrough import (
     build_passthrough_capability,
 )
 from lfo.backends.registry import BackendRegistry
+from lfo.backends.selector import SelectionFailure, validate_sampling_requirements
 from lfo.backends.video_router import VideoTaskRouter, build_video_backend_registry
 from lfo.config.config_resolver import ResolvedConfig, resolve_config
 from lfo.contracts.package import VideoExecutionPackage, validate_package
@@ -167,6 +168,21 @@ class VideoRuntime:
         if result.ok:
             try:
                 package = VideoExecutionPackage.from_dict(data)
+                for index, clip in enumerate(package.clips):
+                    try:
+                        validate_sampling_requirements(
+                            clip.generation.operation,
+                            clip.generation.requirements.to_dict(),
+                            self.registry,
+                        )
+                    except SelectionFailure as exc:
+                        errors.append(
+                            _error(
+                                f"$.clips[{index}].generation.requirements",
+                                str(exc),
+                                "unsupported_sampling",
+                            )
+                        )
                 errors.extend(self._validate_asset_sources(package_path, package))
                 try:
                     RunArtifactLayout.from_package(
@@ -536,6 +552,8 @@ class VideoRuntime:
                 "megapixels": clip.megapixels,
                 "width": clip.width,
                 "height": clip.height,
+                "sampler_profile": clip.sampler_profile,
+                "steps": clip.steps,
                 "dropped_references": clip.dropped_references,
             }
             for clip in snapshot.clips

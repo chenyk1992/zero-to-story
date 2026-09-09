@@ -36,6 +36,8 @@ H3_PRESENTER_BACKEND_ID = "comfyui.h3-presenter"
 H3_PRESENTER_BACKEND_REVISION = "3.0.0"
 H3_FL2VA_WORKFLOW_ID = "h3_standard_fl2va"
 H3_R2V_WORKFLOW_ID = "h3_standard_r2v"
+H3_NATIVE_FL2VA_WORKFLOW_ID = "h3_native_fl2va"
+H3_NATIVE_R2V_WORKFLOW_ID = "h3_native_r2v"
 H3_MAX_REFERENCE_IMAGES = 9
 H3_MAX_REFERENCE_VIDEOS = 3
 H3_MAX_REFERENCE_AUDIO = 3
@@ -86,8 +88,8 @@ def build_h3_backend_registry(
 
     root = pathlib.Path(workflow_dir) if workflow_dir is not None else ComfyH3Config().workflow_dir
     workflow_hashes: list[str] = []
-    required_models: set[str] = set()
-    required_nodes: set[str] = set().union(*H3_REFERENCE_NODE_CLASSES.values())
+    profile_models: dict[str, set[str]] = {}
+    profile_nodes: dict[str, set[str]] = {}
     h3_workflow_ids: list[str] = []
     for manifest in KNOWN_WORKFLOWS.values():
         if not manifest.family.startswith("h3_") or manifest.workflow_id == "h3_presenter_r2v":
@@ -98,8 +100,22 @@ def build_h3_backend_registry(
         if errors:
             raise ValueError(f"Invalid bundled workflow {manifest.source_file}: {'; '.join(errors)}")
         workflow_hashes.append(compute_workflow_hash(workflow))
-        required_models.update(dep.filename for dep in manifest.model_dependencies if dep.required)
-        required_nodes.update(node["class_type"] for node in workflow.values())
+        profile = manifest.sampling_profile
+        if profile is None:
+            raise ValueError(f"Bundled H3 workflow {manifest.workflow_id} has no sampling profile")
+        profile_models.setdefault(profile, set()).update(
+            dep.filename for dep in manifest.model_dependencies if dep.required
+        )
+        profile_nodes.setdefault(profile, set()).update(
+            {node["class_type"] for node in workflow.values()}
+            | set().union(*H3_REFERENCE_NODE_CLASSES.values())
+        )
+
+    # Only unconditional dependencies belong in the backend-wide manifest.
+    # Profile-specific requirements remain discoverable without making a
+    # native-only installation appear to require the optional VDN bundle.
+    required_models = set.intersection(*profile_models.values())
+    required_nodes = set.intersection(*profile_nodes.values())
 
     aggregate_hash = hashlib.sha256("\n".join(sorted(workflow_hashes)).encode("utf-8")).hexdigest()
     registry = BackendRegistry()
@@ -133,7 +149,20 @@ def build_h3_backend_registry(
             required_models=sorted(required_models),
             required_nodes=sorted(required_nodes),
             output_signature={"media_type": "video", "container": "mp4", "codec": "h264"},
-            extensions={"workflow_ids": sorted(h3_workflow_ids)},
+            extensions={
+                "workflow_ids": sorted(h3_workflow_ids),
+                "sampling_profiles": {
+                    "native": {"min_steps": 8},
+                    "vdn_turbo": {"allowed_steps": [8]},
+                },
+                "sampling_dependencies": {
+                    profile: {
+                        "required_models": sorted(profile_models[profile]),
+                        "required_nodes": sorted(profile_nodes[profile]),
+                    }
+                    for profile in sorted(profile_models)
+                },
+            },
         )
     )
     presenter = KNOWN_WORKFLOWS["h3_presenter_r2v"]
@@ -176,7 +205,10 @@ def build_h3_backend_registry(
                 | set().union(*H3_REFERENCE_NODE_CLASSES.values())
             ),
             output_signature={"media_type": "video", "container": "mp4", "codec": "h264"},
-            extensions={"workflow_ids": [presenter.workflow_id]},
+            extensions={
+                "workflow_ids": [presenter.workflow_id],
+                "sampling_profiles": {"native": {"min_steps": 8}},
+            },
         )
     )
     return registry
@@ -244,7 +276,10 @@ class ComfyH3VideoHandler(TaskHandler):
                     "provider_job_id": prompt_id,
                     "workflow_id": workflow_id,
                     "prepared_workflow_hash": compute_workflow_hash(workflow),
-                    "sampling": self._sampling_parameters(workflow),
+                    "sampling": self._sampling_parameters(
+                        workflow,
+                        sampler_profile=_effective_sampling_profile(metadata, workflow_id),
+                    ),
                     "provider_elapsed_seconds": round(provider_elapsed, 3),
                     "handler_elapsed_seconds": round(time.monotonic() - started, 3),
                     "uploaded_references": uploaded,
@@ -294,12 +329,17 @@ class ComfyH3VideoHandler(TaskHandler):
     def _select_workflow(metadata: dict[str, Any]) -> str:
         explicit = metadata.get("workflow_id")
         operation = metadata.get("operation")
-        if operation == "video.virtual_presenter":
-            if explicit is not None and str(explicit) != "h3_presenter_r2v":
-                raise ValueError(
-                    "video.virtual_presenter is fixed to h3_presenter_r2v"
-                )
-            return "h3_presenter_r2v"
+        profile = _requested_sampling_profile(metadata)
+        if operation == "video.virtual_presenter" and profile == "vdn_turbo":
+            raise ValueError(
+                "video.virtual_presenter supports only the native sampler profile"
+            )
+        if (
+            operation == "video.virtual_presenter"
+            and explicit is not None
+            and str(explicit) != "h3_presenter_r2v"
+        ):
+            raise ValueError("video.virtual_presenter is fixed to h3_presenter_r2v")
         if explicit is not None:
             requested = str(explicit)
             manifest = KNOWN_WORKFLOWS.get(requested)
@@ -307,7 +347,7 @@ class ComfyH3VideoHandler(TaskHandler):
                 raise ValueError(f"Unknown H3 workflow_id: {explicit}")
             if not isinstance(operation, str) or not operation:
                 raise ValueError("video.generate metadata.operation is required")
-            expected = _workflow_for_operation(operation)
+            expected = _workflow_for_operation(operation, profile)
             if requested != expected:
                 raise ValueError(
                     f"H3 workflow {requested!r} does not implement operation {operation!r}; "
@@ -317,7 +357,7 @@ class ComfyH3VideoHandler(TaskHandler):
 
         if not isinstance(operation, str):
             raise ValueError("video.generate metadata.operation is required")
-        return _workflow_for_operation(operation)
+        return _workflow_for_operation(operation, profile)
 
     def _prepare_workflow(
         self,
@@ -327,12 +367,12 @@ class ComfyH3VideoHandler(TaskHandler):
         output_prefix: str,
     ) -> tuple[dict[str, Any], list[str]]:
         """Validate and bind one request, then upload its references serially."""
-        _reject_sampling_override(metadata)
         _reject_pixel_dimensions(metadata)
         operation = metadata.get("operation")
         if not isinstance(operation, str) or not operation:
             raise ValueError("video.generate metadata.operation is required")
-        if _workflow_for_operation(operation) != workflow_id:
+        profile = _effective_sampling_profile(metadata, workflow_id)
+        if _workflow_for_operation(operation, _requested_sampling_profile(metadata)) != workflow_id:
             raise ValueError(
                 f"H3 workflow {workflow_id!r} does not implement operation {operation!r}"
             )
@@ -377,7 +417,12 @@ class ComfyH3VideoHandler(TaskHandler):
         self._apply_megapixels(prepared, metadata.get("megapixels"))
         self._apply_seed(prepared, metadata.get("seed"))
         self._apply_fps(prepared, metadata.get("fps"))
-        self._check_workflow_environment(prepared, reference_media_types=media_types)
+        _apply_sampling_profile(prepared, profile, metadata.get("steps"))
+        self._check_workflow_environment(
+            prepared,
+            reference_media_types=media_types,
+            sampler_profile=profile,
+        )
 
         uploaded = [
             self._upload_reference(path, media_type)
@@ -605,10 +650,14 @@ class ComfyH3VideoHandler(TaskHandler):
         nodes[0][1].setdefault("inputs", {})["megapixels"] = megapixels_value
 
     def _check_workflow_environment(
-        self, workflow: dict[str, Any], *, reference_media_types: list[str],
+        self,
+        workflow: dict[str, Any],
+        *,
+        reference_media_types: list[str],
+        sampler_profile: str,
     ) -> None:
         """Include the loaders that this request will add after reference upload."""
-        self._sampling_parameters(workflow)
+        self._sampling_parameters(workflow, sampler_profile=sampler_profile)
         reference_nodes: set[str] = set().union(*(
             H3_REFERENCE_NODE_CLASSES[kind] for kind in reference_media_types
         ))
@@ -617,7 +666,9 @@ class ComfyH3VideoHandler(TaskHandler):
         )
 
     @staticmethod
-    def _sampling_parameters(workflow: dict[str, Any]) -> dict[str, Any]:
+    def _sampling_parameters(
+        workflow: dict[str, Any], *, sampler_profile: str | None = None,
+    ) -> dict[str, Any]:
         """Read effective sampling settings from the graph, never override them."""
         parameters: dict[str, Any] = {}
         for class_type in ("BasicScheduler", "KSamplerSelect"):
@@ -631,6 +682,8 @@ class ComfyH3VideoHandler(TaskHandler):
         steps = parameters.get("steps")
         if isinstance(steps, bool) or not isinstance(steps, int) or steps < 8:
             raise ValueError("H3 workflow steps must be an integer of at least 8")
+        if sampler_profile is not None:
+            parameters["sampler_profile"] = sampler_profile
         for class_type, key in (("ApplyVDNH3", "vdn"), ("MiniMaxH3SigmaShift", "sigma_shift")):
             nodes = WorkflowLoader.find_nodes_by_class(workflow, class_type)
             if nodes:
@@ -676,18 +729,95 @@ def _reject_pixel_dimensions(metadata: dict[str, Any]) -> None:
         )
 
 
-def _reject_sampling_override(metadata: dict[str, Any]) -> None:
-    if "steps" in metadata:
-        raise ValueError("H3 steps are defined by the workflow JSON; metadata.steps is unsupported")
+def _requested_sampling_profile(metadata: dict[str, Any]) -> str | None:
+    """Validate and return a request's explicit profile, if present."""
+    profile = metadata.get("sampler_profile")
+    steps = metadata.get("steps")
+    if profile is None and steps is None:
+        return None
+    if profile is None or steps is None:
+        raise ValueError("sampler_profile and steps must be provided together")
+    if not isinstance(profile, str) or not profile.strip():
+        raise ValueError("sampler_profile must be a non-empty string")
+    if profile not in {"native", "vdn_turbo"}:
+        raise ValueError(f"Unsupported H3 sampler_profile: {profile!r}")
+    if isinstance(steps, bool) or not isinstance(steps, int) or steps < 8:
+        raise ValueError("H3 steps must be an integer of at least 8")
+    if profile == "vdn_turbo" and steps != 8:
+        raise ValueError("vdn_turbo supports exactly 8 steps")
+    return profile
 
 
-def _workflow_for_operation(operation: str) -> str:
+def _effective_sampling_profile(metadata: dict[str, Any], workflow_id: str) -> str:
+    """Resolve explicit profile or preserve the historical graph default."""
+    requested = _requested_sampling_profile(metadata)
+    if requested is not None:
+        return requested
+    # Existing standard packages point at the bundled VDN8 graph. Presenter
+    # has always been native and retains its graph's 20-step default.
+    return "native" if workflow_id == "h3_presenter_r2v" else "vdn_turbo"
+
+
+def _apply_sampling_profile(
+    workflow: dict[str, Any],
+    sampler_profile: str,
+    requested_steps: object,
+) -> None:
+    """Apply only the explicitly supported dynamic sampling change."""
+    scheduler_nodes = WorkflowLoader.find_nodes_by_class(workflow, "BasicScheduler")
+    if len(scheduler_nodes) != 1:
+        raise ValueError(f"Expected one BasicScheduler node, found {len(scheduler_nodes)}")
+    scheduler_inputs = scheduler_nodes[0][1].setdefault("inputs", {})
+    if sampler_profile == "native":
+        if WorkflowLoader.find_nodes_by_class(workflow, "ApplyVDNH3"):
+            raise ValueError("native sampler workflow must not contain ApplyVDNH3")
+        if WorkflowLoader.find_nodes_by_class(workflow, "MiniMaxH3SigmaShift"):
+            raise ValueError("native sampler workflow must not contain MiniMaxH3SigmaShift")
+        sampler_nodes = WorkflowLoader.find_nodes_by_class(workflow, "KSamplerSelect")
+        if len(sampler_nodes) != 1:
+            raise ValueError(f"Expected one KSamplerSelect node, found {len(sampler_nodes)}")
+        if sampler_nodes[0][1].setdefault("inputs", {}).get("sampler_name") != "res_multistep":
+            raise ValueError("native sampler workflow must use res_multistep")
+        if scheduler_inputs.get("scheduler") != "simple":
+            raise ValueError("native sampler workflow must use the simple scheduler")
+        if requested_steps is not None:
+            if isinstance(requested_steps, bool) or not isinstance(requested_steps, int):
+                raise TypeError("steps must be an integer")
+            if requested_steps < 8:
+                raise ValueError("native steps must be an integer of at least 8")
+            scheduler_inputs["steps"] = requested_steps
+        return
+    if sampler_profile == "vdn_turbo":
+        if requested_steps is not None and requested_steps != 8:
+            raise ValueError("vdn_turbo supports exactly 8 steps")
+        if not WorkflowLoader.find_nodes_by_class(workflow, "ApplyVDNH3"):
+            raise ValueError("vdn_turbo workflow requires ApplyVDNH3")
+        if not WorkflowLoader.find_nodes_by_class(workflow, "MiniMaxH3SigmaShift"):
+            raise ValueError("vdn_turbo workflow requires MiniMaxH3SigmaShift")
+        if scheduler_inputs.get("steps") != 8:
+            raise ValueError("vdn_turbo workflow must use exactly 8 steps")
+        return
+    raise ValueError(f"Unsupported H3 sampler_profile: {sampler_profile!r}")
+
+
+def _workflow_for_operation(operation: str, sampler_profile: str | None = None) -> str:
+    if sampler_profile not in {None, "native", "vdn_turbo"}:
+        raise ValueError(f"Unsupported H3 sampler_profile: {sampler_profile!r}")
+    if operation == "video.virtual_presenter":
+        if sampler_profile == "vdn_turbo":
+            raise ValueError(
+                "video.virtual_presenter supports only the native sampler profile"
+            )
+        return "h3_presenter_r2v"
+    if sampler_profile == "native":
+        if operation in H3_FL2VA_OPERATIONS:
+            return H3_NATIVE_FL2VA_WORKFLOW_ID
+        if operation == "video.reference_to_video":
+            return H3_NATIVE_R2V_WORKFLOW_ID
     if operation in H3_FL2VA_OPERATIONS:
         return H3_FL2VA_WORKFLOW_ID
     if operation == "video.reference_to_video":
         return H3_R2V_WORKFLOW_ID
-    if operation == "video.virtual_presenter":
-        return "h3_presenter_r2v"
     raise ValueError(f"Unsupported H3 operation: {operation!r}")
 
 

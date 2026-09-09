@@ -1,6 +1,6 @@
-> **GPT-6 适配变更说明**  当前指令或已有 Presenter Plan 授权可直接进入包构建，不重复确认同一创作方案。LFO 运行前仍必须核对并取得当前执行包完整文件 SHA-256 的明确批准；笼统生成请求不代替尚不存在包的 hash 批准。单 Panel、串行、真实尾帧、失败即停和不盲目重试规则继续由根 `AGENTS.md` 统一约束。
-
 # LFO Handoff
+
+共同的角色、Panel ready、实际末态/音频验收和授权规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文件只描述数字人口播的 package 适配字段；仓库接口发生变化时以实现和测试为准。
 
 ## 边界
 
@@ -46,23 +46,23 @@ shot plan 至少提供 project、inputs、output、shots 和 approval；当前 s
 
 1. 读取 resolved references，核对 `ref_image_0/1/2`、`ref_audio_0`、需要时的 `ref_video_0` 与 `<Picture 1/2/3>`、`<Audio 1>`、`<Video 1>`；
 2. 运行 `python -m lfo.cli.main validate <panel-execution-package.json>`，取得结果中的 `package_sha256`；
-3. 若该完整文件 hash 尚无明确批准，由用户批准该 exact file SHA-256；同一未变更包可复用既有批准；
+3. 若该完整文件 hash 没有明确批准或适用的持续授权，由用户批准该 exact file SHA-256；同一未变更包可复用既有批准；
 4. `plan` 只在需要查看后端、工作流或引用诊断时运行，不是执行前置条件；
 5. 启动当前 Panel 的隔离执行单元，运行 `python -m lfo.cli.main execute <panel-execution-package.json> --approved-sha256 <package_sha256>`，同步等待官方 ComfyUI `comfy-cli` 完成。
 
-每个 Panel 都必须独立 `validate`，使用其返回的 `package_sha256` 完成或核对批准，并由 `execute` 重新核对自己的文件 hash；不使用跨 Panel 的预检或锁文件。执行包未获用户批准、hash 不一致或引用不完整时立即停止。
+每个 Panel 都必须独立 `validate`，使用其返回的 `package_sha256` 完成或核对授权，并由 `execute` 重新核对自己的文件 hash；不使用跨 Panel 的预检或锁文件。执行包未获用户批准或适用持续授权、hash 不一致或引用不完整时立即停止。
 
 ## Panel 串行执行
 
-Presenter Plan 获得当前指令或已有确认授权后，按 Shot/Panel 顺序逐个构建、validate、取得并核对 `package_sha256` 批准、执行。每个 Panel 建立一个独立的短生命周期执行单元；前一个同步完成并返回结果后，才启动下一个。执行输入只包含当前 Panel 的 package 路径、批准 hash、输出位置和可选的上一条完整 `ACCEPT` 视频 URI；具体运行机制由宿主工具自行决定。
+Presenter Plan 获得当前指令或已有确认授权后，按 Shot/Panel 构建、validate、核对 `package_sha256` 授权并执行。每个 Panel 建立一个独立的短生命周期执行单元；视频提交保持串行，独立 Panel 可以先准备，只有存在连续性依赖时才等待前一 Panel 的实际 `ACCEPT`。执行输入只包含当前 Panel 的 package 路径、批准 hash、输出位置和可选的上一条完整 `ACCEPT` 视频 URI；具体运行机制由宿主工具自行决定。
 
-调用方对当前输出只做最小可播放与明显内容错误检查，QC 决策只有 `ACCEPT` 或 `REJECT`；校验或执行失败记为 `ERROR`。下一条 Presenter Panel 将当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考。只有其他下游 operation 明确需要精确首帧时，才从实际输出提取真实末帧并绑定。`ERROR` 或 `REJECT` 立即停止，不自动重试、不把失败输出加入 accepted 列表；需要重做时重新构建当前 Panel package 并重新批准其 hash。
+执行单元查看当前实际输出，记录实际末态和实际音频证据，再作一次 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE`；校验或执行失败记为 `ERROR`。下一条 Presenter Panel 将当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考。只有其他下游 operation 明确需要精确首帧时，才从实际输出提取真实末帧并绑定。`ERROR`、`REJECT` 或 `INCONCLUSIVE` 立即暂停受影响接力，不自动重试、不把失败输出加入 accepted 列表；需要重做时重新构建当前 Panel package 并重新核对授权。
 
 ## Assembly package
 
 全部 Panel 都 `ACCEPT` 后才调用 `build_assembly_package(plan, accepted_clips, *, package_revision=1)`。目标画幅、输出策略、字幕和 `project_id` 已写在 `plan` 中；`accepted_clips` 只提供已接受片段的 `shot_id`、`sequence`、`duration_ms`、package-relative `uri` 及可选字幕覆盖。不要让组装器重新生成语义镜头，也不要把未接受或被拒绝的片段混入清单。
 
-最终视频后端固定为 `video.passthrough`：片段顺序、每段时长、音频/字幕时间线和输出目录交给 LFO Runtime 的公共契约。Assembly package 也要独立运行 `validate`，取得其返回的 `package_sha256`，若该 hash 尚无明确批准则由用户批准该完整文件字节 SHA-256；同一未变更包可复用既有批准。随后再运行 `python -m lfo.cli.main execute <assembly-package.json> --approved-sha256 <package_sha256>` 一次。其 accepted video URI、音频和字幕 URI 都相对同一项目根目录下的 assembly 文件；最终输出必须遵守 LFO 的项目 Run artifact layout；Skill 不在 workspace 根目录创建 runs 或 exports。
+最终视频后端固定为 `video.passthrough`：片段顺序、每段时长、音频/字幕时间线和输出目录交给 LFO Runtime 的公共契约。Assembly package 也要独立运行 `validate`，取得其返回的 `package_sha256`，若该 hash 没有明确批准或适用的持续授权则由用户批准该完整文件字节 SHA-256；同一未变更包可复用既有批准。随后再运行 `python -m lfo.cli.main execute <assembly-package.json> --approved-sha256 <package_sha256>` 一次。其 accepted video URI、音频和字幕 URI 都相对同一项目根目录下的 assembly 文件；最终输出必须遵守 LFO 的项目 Run artifact layout；Skill 不在 workspace 根目录创建 runs 或 exports。
 
 ## 接口假设与故障处理
 
@@ -72,6 +72,4 @@ Presenter Plan 获得当前指令或已有确认授权后，按 Shot/Panel 顺�
 
 - 立即停止当前 Panel，不执行下一 Panel 或最终组装；
 - 不把失败输出作为 accepted，也不自动重试、自动修改提示词或维护恢复记录；
-- 需要重做时，由调用方明确重新构建当前 Panel package，并重新取得用户批准的文件 hash。
-
-
+- 需要重做时，由调用方明确重新构建当前 Panel package，并核对已有授权是否覆盖新的文件 hash；没有覆盖时才取得新的明确批准。

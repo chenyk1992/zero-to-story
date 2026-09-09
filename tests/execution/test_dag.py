@@ -66,6 +66,15 @@ def _make_run(
 
 
 class TestBuildDag:
+    def test_sampling_choice_reaches_generation_task(self) -> None:
+        clip = _make_clip()
+        clip.sampler_profile = "native"
+        clip.steps = 16
+        graph = build_dag(_make_run([clip]))
+        generate = next(task for task in graph.tasks if task.task_type == TASK_VIDEO_GENERATE)
+        assert generate.metadata["sampler_profile"] == "native"
+        assert generate.metadata["steps"] == 16
+
     def test_single_clip(self) -> None:
         run = _make_run([_make_clip()])
         graph = build_dag(run)
