@@ -21,7 +21,6 @@ from .exceptions import (
     WorkflowFormatError,
 )
 from .runtime import ComfyRuntimeManager, InstanceFingerprint, MachineProfile
-from .submit import PromptSubmitter, SubmitResult
 from .workflow import WorkflowLoader
 
 __all__ = [
@@ -43,9 +42,6 @@ __all__ = [
     # bindings
     "Binding",
     "BindingResolver",
-    # submit
-    "PromptSubmitter",
-    "SubmitResult",
     # collect
     "ComfyOutputCollector",
     "MediaInfo",

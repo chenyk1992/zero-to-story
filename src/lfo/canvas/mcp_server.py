@@ -283,6 +283,17 @@ def create_mcp(settings: CanvasSettings):
         )
 
     @mcp.tool()
+    def canvas_handoff_recovery(
+        run_id: str, reason: str, expected_updated_at: str
+    ) -> dict[str, Any]:
+        """显式交接丢失的恢复claim。需具体原因及最新run.updated_at；仅可恢复且已领取未解决时换新令牌，旧令牌失效，追加审计，不重生成。"""
+        return client.request(
+            "POST",
+            f"/api/runs/{run_id}/handoff-recovery",
+            {"reason": reason, "expected_updated_at": expected_updated_at},
+        )
+
+    @mcp.tool()
     def canvas_claim_recovery(run_id: str, reason: str) -> dict[str, Any]:
         """原接手方不可用时，独占核实一个 unknown 请求。只取得核实令牌，不能重新生成。"""
         return client.request("POST", f"/api/runs/{run_id}/claim-recovery", {"reason": reason})
@@ -313,6 +324,41 @@ def create_mcp(settings: CanvasSettings):
     def canvas_claim_review(run_id: str) -> dict[str, Any]:
         """独占领取已成功产物的内容审查，取得审片令牌。普通画布组件不强制调用。"""
         return client.request("POST", f"/api/runs/{run_id}/claim-review", {})
+
+    @mcp.tool()
+    def canvas_reopen_review(run_id: str, reason: str, expected_updated_at: str) -> dict[str, Any]:
+        """仅重开已完成的 INCONCLUSIVE 审查。需具体原因和最新 run.updated_at；保留旧结论历史，返回新独占令牌，旧令牌失效。不会重新生成。"""
+        return client.request(
+            "POST",
+            f"/api/runs/{run_id}/reopen-review",
+            {"reason": reason, "expected_updated_at": expected_updated_at},
+        )
+
+    @mcp.tool()
+    def canvas_review_derived(
+        run_id: str,
+        reason: str,
+        expected_updated_at: str,
+        decision: str,
+        output_path: str,
+        evidence: list[str],
+        end_state: dict[str, Any] | None = None,
+        unverified: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """一次审查已 REJECT 视频的新后期派生，只有 ACCEPT/REJECT。需具体原因和最新 updated_at；新文件在原 run 目录且不同路径、不同内容，实际完整解码。旧拒绝与原媒体保留，未完成审片不可抢占；不生成，不需 claim 令牌。"""
+        return client.request(
+            "POST",
+            f"/api/runs/{run_id}/review-derived",
+            {
+                "reason": reason,
+                "expected_updated_at": expected_updated_at,
+                "decision": decision,
+                "output_path": output_path,
+                "evidence": evidence,
+                "end_state": end_state,
+                "unverified": unverified,
+            },
+        )
 
     @mcp.tool()
     def canvas_review(

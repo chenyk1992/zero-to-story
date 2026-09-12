@@ -62,6 +62,8 @@
 
 ## 状态与异常核实
 
+恢复领取令牌丢失时，先读取最新完整 run，再用 `canvas_handoff_recovery(run_id, reason, expected_updated_at)`（HTTP `POST /api/runs/{id}/handoff-recovery`）明确交接原因并原样提交 `updated_at`。仅当前可恢复、已有 recovery claim 且未解决的运行可交接；CAS 竞争只允许一次成功，返回 `{run_id, owner_token}`。新令牌用于原 `reconcile` 接口，旧恢复令牌立即失效。原领取原因和时间随 `recovery_handoff` 追加到 evidence，事件中不含令牌；原生成状态、媒体、远端编号及占用不变。它不会重新提交任务，也不放宽原恢复证据要求；`reconcile.evidence` 必须是对象，包含 `request_id`、`remote_status`、`source`、`reason`。未领取应使用 `claim-recovery`，已解决或不可恢复的终态不允许交接。
+
 | 信息 | 字段与含义 |
 |---|---|
 | 执行结果 | `queued` / `pending_agent` / `running` / `succeeded` / `failed` / `unknown` / `cancelled` |
@@ -108,6 +110,12 @@ Comfy 的机器级提交回执位于应用数据目录 `zero-to-story/video/`，
 故事审查分开视觉和音频证据。关键剧情遗漏、身份/物理关系错误、对白缺失和主体遮挡需要修复；不影响剧情和连续性的自然动作差异可说明后采用。看不清、听不清或 ASR 有歧义时记为 `INCONCLUSIVE` 并局部复核，不把分析器说明当作台词。
 
 有采用要求时，完成必要后期后，通过 `canvas_claim_review` 取得审片令牌，再用 `canvas_review` 记录结论、实际文件、证据、实际末态及 `unverified`。`ACCEPT` 不能带关键未核实项。文件摘要由服务计算。不要把生成成功直接视为采用。
+
+已完成的 `INCONCLUSIVE` 可用 `canvas_reopen_review(run_id, reason, expected_updated_at)`（HTTP `POST /api/runs/{id}/reopen-review`）显式重开：先读取最新 run，把 `updated_at` 原样传入并写明具体复核原因。服务以 CAS 检查版本，竞争只允许一次成功；返回新的独占 `owner_token`，旧令牌失效。完整旧 review、原 reviewed_at、重开原因和时间保存在 run 的 `review_history` 中，新轮当前 review 清空。未完成的审查占用不抢占，`ACCEPT`/`REJECT` 不允许重开。新轮可绑定本 run 输出目录内已核验的实际派生文件，继续由服务计算 SHA-256；原媒体和生成记录保留，不重生成。
+
+已完成 `REJECT` 的视频若有实际后期修复，用 `canvas_review_derived`（HTTP `POST /api/runs/{id}/review-derived`）一次登记新派生的最终审片。正文为 `reason`、最新 `expected_updated_at`、`decision`（仅 `ACCEPT` 或 `REJECT`）、`output_path`、非空 `evidence`，可附 `end_state`、`unverified`；`ACCEPT` 仍不允许关键未核实项。此入口不需要 claim 或令牌，只允许 `succeeded` 且当前完整 `REJECT`，不抢占未完成审查，也不修改原审片入口的终态规则。
+
+派生必须位于原 run 输出目录，路径及 SHA-256 均不同于历次被拒绝文件，也不能覆盖原生成输出；改名但同内容不算新派生。服务验证被拒绝源文件仍完整，校验派生元数据并完整解码视频及音轨，确认文件在检查期间未变化后，在确认锁和事务 CAS 内将旧 review、原审片时间、具体原因及新文件绑定写入已有 `review_history`，原子登记新 review。当前 review 绑定新文件，旧媒体、生成 snapshot、outputs 和 provider ID 均保留；不会新建生成请求、重新生成或自动替换画布草稿。旧版本并发请求失败后须重新读取，不能无依据反复提交。
 
 需要连续性时，在连线上指定 `source_run_id` 和 `require_accept: true`，绑定已采用的具体运行。实际末态记录人物位置、朝向、姿态、物品、接触和已完成动作，只写可观察事实。需要精确尾帧时，接受后从实际采用版本提取，调用 `canvas_import_media` 取得文件引用与 `sha256`，保存为该视频的 `derived_outputs`，记录 `source_run_id`，通过 `output:<id>` 连接下一镜。已在工作区中的文件会原位引用。普通连线仍可读取最近成功结果。
 

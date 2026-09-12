@@ -248,6 +248,8 @@ class CanvasHandler(BaseHTTPRequestHandler):
                         segments[2], body["version"], body["graph"], name=body.get("name")
                     )
                 )
+            elif method == "DELETE":
+                self._json(service.store.delete_canvas(segments[2]))
             else:
                 self._not_found()
         elif len(segments) == 4 and segments[:2] == ["api", "canvases"] and segments[3] == "runs":
@@ -299,6 +301,8 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 self._json(service.complete_agent(segments[2], **body))
             elif segments[3] == "reconcile":
                 self._json(service.reconcile_run(segments[2], **body))
+            elif segments[3] == "handoff-recovery":
+                self._json(service.handoff_recovery(segments[2], **body))
             elif segments[3] == "claim-recovery":
                 token = service.store.claim_recovery(segments[2], **body)
                 service._notify()
@@ -316,6 +320,10 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 token = service.store.claim_review(segments[2], body.get("owner_token"))
                 service._notify()
                 self._json({"run_id": segments[2], "owner_token": token})
+            elif segments[3] == "reopen-review":
+                self._json(service.reopen_review(segments[2], **body))
+            elif segments[3] == "review-derived":
+                self._json(service.review_derived(segments[2], **body))
             elif segments[3] == "review":
                 self._json(service.review_output(segments[2], **body))
             elif segments[3] == "cancel":
@@ -421,6 +429,7 @@ class CanvasHandler(BaseHTTPRequestHandler):
     do_GET = _handle
     do_POST = _handle
     do_PUT = _handle
+    do_DELETE = _handle
 
 
 def serve(settings: CanvasSettings) -> None:

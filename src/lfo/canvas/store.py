@@ -318,6 +318,45 @@ class CanvasStore:
         assert updated is not None
         return self._canvas_from_row(updated)
 
+    def delete_canvas(self, canvas_id: str) -> dict[str, Any]:
+        """Delete one canvas and every run that belongs to it.
+
+        Refuses while any run of that canvas is still live (``queued``,
+        ``running`` or awaiting a hand-off), because dropping the row would
+        orphan a resource slot that the admission lock cannot then reconcile.
+        """
+
+        with self._lock, self._transaction():
+            row = (
+                self._conn()
+                .execute("SELECT id, name FROM canvases WHERE id = ?", (canvas_id,))
+                .fetchone()
+            )
+            if row is None:
+                raise CanvasNotFoundError(canvas_id)
+            live = [
+                item["id"]
+                for item in self._conn()
+                .execute(
+                    "SELECT id, status FROM node_runs WHERE canvas_id = ?",
+                    (canvas_id,),
+                )
+                .fetchall()
+                if item["status"] not in _TERMINAL_STATUSES
+            ]
+            if live:
+                raise RunStateError(
+                    f"画布仍有 {len(live)} 个未结束的运行，不能删除："
+                    + ", ".join(live[:5])
+                )
+            self._conn().execute("DELETE FROM node_runs WHERE canvas_id = ?", (canvas_id,))
+            self._conn().execute(
+                "DELETE FROM run_events WHERE canvas_id = ?", (canvas_id,)
+            )
+            self._conn().execute("DELETE FROM continuations WHERE canvas_id = ?", (canvas_id,))
+            self._conn().execute("DELETE FROM canvases WHERE id = ?", (canvas_id,))
+        return {"id": canvas_id, "name": row["name"], "deleted": True}
+
     def get_run_by_request(self, request_id: str) -> dict[str, Any] | None:
         request_id = _require_request_id(request_id)
         with self._lock:
@@ -652,6 +691,57 @@ class CanvasStore:
             self._emit_event(updated, "run.recovery_claimed", {"recovery_claimed": True}, now)
         return token
 
+    def handoff_recovery(self, run_id: str, reason: str, expected_updated_at: str) -> str:
+        """Replace a lost recovery claim using an explicit versioned handoff."""
+
+        for name, value in (("reason", reason), ("expected_updated_at", expected_updated_at)):
+            if not isinstance(value, str) or not value.strip():
+                raise CanvasStoreError(
+                    f"recovery handoff requires non-empty {name}",
+                    code="recovery_handoff_input",
+                    status=400,
+                )
+        with self._lock, self._transaction():
+            row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise RunNotFoundError(run_id)
+            if row["updated_at"] != expected_updated_at:
+                raise RunStateError("run changed; read it again", code="recovery_handoff_conflict")
+            if row["recovery_resolved_at"] is not None:
+                raise RunStateError("recovery is already resolved", code="run_terminal")
+            if not _is_recoverable_row(row):
+                raise RunStateError("run has no bounded recovery path", code="run_not_recoverable")
+            if row["recovery_token"] is None or row["recovery_claimed_at"] is None:
+                raise RunStateError("claim recovery first", code="recovery_not_claimed")
+            now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+            evidence = _append_evidence(
+                _load(row["evidence"], "evidence"),
+                {
+                    "kind": "recovery_handoff",
+                    "reason": reason.strip(),
+                    "previous_claimed_at": row["recovery_claimed_at"],
+                    "previous_reason": row["recovery_reason"],
+                },
+                "reconcile",
+                now,
+            )
+            token = uuid4().hex
+            cursor = self._conn().execute(
+                "UPDATE node_runs SET recovery_token = ?, recovery_reason = ?, "
+                "recovery_claimed_at = ?, evidence = ?, updated_at = ? "
+                "WHERE id = ? AND updated_at = ? AND recovery_token IS NOT NULL "
+                "AND recovery_resolved_at IS NULL",
+                (token, reason.strip(), now, _dump(evidence), now, run_id, expected_updated_at),
+            )
+            if cursor.rowcount != 1:
+                raise RunStateError("run changed; read it again", code="recovery_handoff_conflict")
+            updated = (
+                self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            )
+            assert updated is not None
+            self._emit_event(updated, "run.recovery_handoff", {"reason": reason.strip()}, now)
+        return token
+
     def reconcile_run(
         self,
         run_id: str,
@@ -984,6 +1074,162 @@ class CanvasStore:
             self._emit_event(updated, "review.claimed", {"review_claimed": True}, now)
         return token
 
+    def reopen_review(self, run_id: str, reason: str, expected_updated_at: str) -> str:
+        """Archive an inconclusive review and atomically own a new review round."""
+
+        for name, value in (("reason", reason), ("expected_updated_at", expected_updated_at)):
+            if not isinstance(value, str) or not value.strip():
+                raise CanvasStoreError(
+                    f"reopen review requires non-empty {name}",
+                    code="review_reopen_input",
+                    status=400,
+                )
+        with self._lock, self._transaction():
+            row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise RunNotFoundError(run_id)
+            if row["updated_at"] != expected_updated_at:
+                raise RunStateError("run changed; read it again", code="review_reopen_conflict")
+            previous = None if row["review"] is None else _load(row["review"], "review")
+            if row["status"] != "succeeded" or previous is None:
+                raise RunStateError(
+                    "only completed inconclusive reviews can be reopened", code="review_not_ready"
+                )
+            if _review_decision(previous) != "INCONCLUSIVE":
+                raise RunStateError("terminal reviews cannot be reopened", code="review_terminal")
+            now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+            history = _load(row["review_history"], "review_history")
+            history.append(
+                {
+                    "review": previous,
+                    "reviewed_at": row["reviewed_at"],
+                    "reason": reason.strip(),
+                    "reopened_at": now,
+                }
+            )
+            token = uuid4().hex
+            cursor = self._conn().execute(
+                "UPDATE node_runs SET review = NULL, reviewed_at = NULL, "
+                "review_history = ?, review_owner_token = ?, updated_at = ? "
+                "WHERE id = ? AND updated_at = ?",
+                (_dump(history), token, now, run_id, expected_updated_at),
+            )
+            if cursor.rowcount != 1:
+                raise RunStateError("run changed; read it again", code="review_reopen_conflict")
+            updated = (
+                self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            )
+            assert updated is not None
+            self._emit_event(updated, "review.reopened", {"reason": reason.strip()}, now)
+        return token
+
+    def review_derived(
+        self,
+        run_id: str,
+        reason: str,
+        expected_updated_at: str,
+        review: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically review a new file while retaining every rejected binding.
+
+        The service validates the actual media before calling this method.
+        This one-shot operation never exposes an unfinished review claim.
+        """
+        for name, value in (("reason", reason), ("expected_updated_at", expected_updated_at)):
+            if not isinstance(value, str) or not value.strip():
+                raise CanvasStoreError(
+                    f"derived review requires non-empty {name}",
+                    code="review_derived_input",
+                    status=400,
+                )
+        normalized = _validate_review(review)
+        if _review_decision(normalized) not in {"ACCEPT", "REJECT"}:
+            raise CanvasStoreError(
+                "derived review requires a final ACCEPT or REJECT",
+                code="review_derived_decision",
+                status=400,
+            )
+        with self._lock, self._transaction():
+            row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise RunNotFoundError(run_id)
+            if row["updated_at"] != expected_updated_at:
+                raise RunStateError("run changed; read it again", code="review_derived_conflict")
+            previous = None if row["review"] is None else _load(row["review"], "review")
+            if (
+                row["status"] != "succeeded"
+                or previous is None
+                or _review_decision(previous) != "REJECT"
+                or row["reviewed_at"] is None
+            ):
+                raise RunStateError(
+                    "derived review requires a completed REJECT", code="review_derived_not_ready"
+                )
+            if _load(row["snapshot"], "snapshot").get("node_type") != "video":
+                raise RunStateError(
+                    "derived review currently supports video", code="review_derived_type"
+                )
+            history = _load(row["review_history"], "review_history")
+            path, digest = _review_binding(normalized)
+            assert path is not None and digest is not None
+            rejected = [previous] + [
+                item["review"] for item in history if _review_decision(item["review"]) == "REJECT"
+            ]
+            if any(
+                Path(path).resolve() == Path(item["output_path"]).resolve()
+                or digest.lower() == item["output_sha256"].lower()
+                for item in rejected
+            ) or any(
+                Path(path).resolve() == Path(item["path"]).resolve()
+                for item in _load(row["outputs"], "outputs")
+            ):
+                raise RunStateError(
+                    "a rejected or original output cannot be relabeled as derived",
+                    code="review_derived_same_output",
+                )
+            now = datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+            history.append(
+                {
+                    "review": previous,
+                    "reviewed_at": row["reviewed_at"],
+                    "reason": reason.strip(),
+                    "derived_reviewed_at": now,
+                    "derived_output_path": path,
+                    "derived_output_sha256": digest,
+                }
+            )
+            cursor = self._conn().execute(
+                "UPDATE node_runs SET review = ?, reviewed_at = ?, review_history = ?, "
+                "review_owner_token = ?, updated_at = ? WHERE id = ? AND updated_at = ?",
+                (
+                    _dump(normalized),
+                    now,
+                    _dump(history),
+                    uuid4().hex,
+                    now,
+                    run_id,
+                    expected_updated_at,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RunStateError("run changed; read it again", code="review_derived_conflict")
+            updated = (
+                self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            )
+            assert updated is not None
+            self._emit_event(
+                updated,
+                "review.derived_recorded",
+                {
+                    "reason": reason.strip(),
+                    "decision": normalized["decision"],
+                    "output_path": path,
+                    "output_sha256": digest,
+                },
+                now,
+            )
+        return self._run_from_row(updated)
+
     def review_run(
         self,
         run_id: str,
@@ -1022,7 +1268,7 @@ class CanvasStore:
                 if previous_decision in {"ACCEPT", "REJECT"}:
                     if _canonical_json(previous) == _canonical_json(normalized_review):
                         review_owner = row["review_owner_token"]
-                        if review_owner != owner_token and row["owner_token"] != owner_token:
+                        if review_owner != owner_token:
                             raise CanvasStoreError(
                                 "a review owner is required to read back this review",
                                 code="review_owner_required",
@@ -1959,6 +2205,7 @@ class CanvasStore:
             ("review", "TEXT"),
             ("review_owner_token", "TEXT"),
             ("reviewed_at", "TEXT"),
+            ("review_history", "TEXT NOT NULL DEFAULT '[]'"),
             ("recovery_token", "TEXT"),
             ("recovery_reason", "TEXT"),
             ("recovery_claimed_at", "TEXT"),
@@ -2087,6 +2334,7 @@ class CanvasStore:
             "review": review,
             "review_owner_token": row["review_owner_token"],
             "reviewed_at": row["reviewed_at"],
+            "review_history": _load(row["review_history"], "review_history"),
             "recovery_token": row["recovery_token"],
             "recovery_reason": row["recovery_reason"],
             "recovery_claimed_at": row["recovery_claimed_at"],

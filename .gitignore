@@ -65,3 +65,12 @@ tmp_*.txt
 
 # Throwaway storyboard image at the repo root
 /storyboard-bw-*.jpg
+
+# Throwaway scratch dir at the repo root (one-off debug, log dumps, prompt drafts)
+TEMP/
+
+# Per-project novel/storyboard/user data — analogue to workspace/, never committed
+.short-drama/
+
+# Host workbench memory — runtime state, not part of the repo
+.workbuddy/

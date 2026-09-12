@@ -28,7 +28,7 @@ from lfo.canvas.graph import CanvasError, resolve_snapshot
 from lfo.canvas.media import CanvasMedia, creative_snapshot
 from lfo.canvas.settings import CanvasSettings
 from lfo.canvas.store import CanvasStore, ContinuationRevisionError
-from lfo.media._ffmpeg import probe
+from lfo.media._ffmpeg import probe, run_command
 
 
 class CanvasService:
@@ -276,6 +276,14 @@ class CanvasService:
             )
             self._notify()
             return self._public_run(updated)
+
+    def handoff_recovery(
+        self, run_id: str, reason: str, expected_updated_at: str
+    ) -> dict[str, Any]:
+        with self._confirm_lock:
+            token = self.store.handoff_recovery(run_id, reason, expected_updated_at)
+        self._notify()
+        return {"run_id": run_id, "owner_token": token}
 
     def reconcile_run(
         self,
@@ -666,6 +674,126 @@ class CanvasService:
             provider_task_id=self._provider_task_id(run, provider_task_id),
             evidence=evidence,
         )
+        self._notify()
+        return self._public_run(result)
+
+    def reopen_review(self, run_id: str, reason: str, expected_updated_at: str) -> dict[str, Any]:
+        token = self.store.reopen_review(run_id, reason, expected_updated_at)
+        self._notify()
+        return {"run_id": run_id, "owner_token": token}
+
+    def review_derived(
+        self,
+        run_id: str,
+        reason: str,
+        expected_updated_at: str,
+        decision: str,
+        output_path: str,
+        evidence: list[str],
+        end_state: dict[str, Any] | None = None,
+        unverified: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Review one actual video derivation without rewriting its rejected source."""
+        with self._confirm_lock:
+            run = self.store.get_run(run_id)
+            previous = run.get("review")
+            if run["updated_at"] != expected_updated_at:
+                raise CanvasError(
+                    "run changed; read it again", code="review_derived_conflict", status=409
+                )
+            if (
+                run["status"] != "succeeded"
+                or not previous
+                or previous.get("decision") != "REJECT"
+                or not run.get("reviewed_at")
+            ):
+                raise CanvasError(
+                    "derived review requires a completed REJECT",
+                    code="review_derived_not_ready",
+                    status=409,
+                )
+            if run["snapshot"]["node_type"] != "video":
+                raise ValueError("派生审片当前仅支持视频")
+            path = self.media.resolve(output_path)
+            if not path.is_relative_to(
+                self.settings.output_dir(run["canvas_id"], run_id).resolve()
+            ):
+                raise ValueError("派生审片必须绑定本次运行目录中的新文件")
+            if self.media.asset(path)["kind"] != "video":
+                raise ValueError("派生审片产物必须是视频")
+
+            def digest_file(source: Path) -> str:
+                with source.open("rb") as stream:
+                    return hashlib.file_digest(stream, "sha256").hexdigest()
+
+            rejected = [previous] + [
+                item["review"]
+                for item in run["review_history"]
+                if item["review"].get("decision") == "REJECT"
+            ]
+            for item in rejected:
+                source = self.media.resolve(item["output_path"])
+                if digest_file(source) != item["output_sha256"]:
+                    raise ValueError("被拒绝的源文件发生变化，必须保留原媒体")
+            before = path.stat()
+            digest = digest_file(path)
+            if any(
+                path == Path(item["output_path"]).resolve() or digest == item["output_sha256"]
+                for item in rejected
+            ) or any(path == Path(item["path"]).resolve() for item in run["outputs"]):
+                raise ValueError("必须提供不同路径和内容的新派生，不能重新标记被拒绝的原片")
+            self._verify_video_output(str(path))
+            # Probe alone can succeed on a header whose frame payload is corrupt.
+            decoded = run_command(
+                [
+                    "ffmpeg",
+                    "-v",
+                    "error",
+                    "-xerror",
+                    "-i",
+                    str(path),
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "0:a?",
+                    "-progress",
+                    "pipe:1",
+                    "-nostats",
+                    "-f",
+                    "null",
+                    "-",
+                ],
+                timeout_s=120,
+            )
+            if not any(
+                line.startswith("frame=")
+                and line.partition("=")[2].strip().isdigit()
+                and int(line.partition("=")[2]) > 0
+                for line in decoded.stdout.splitlines()
+            ):
+                raise ValueError("派生视频未解码出有效画面")
+            after = path.stat()
+            if (before.st_size, before.st_mtime_ns) != (
+                after.st_size,
+                after.st_mtime_ns,
+            ) or digest_file(path) != digest:
+                raise ValueError("派生文件在审片登记期间发生变化")
+            for item in rejected:
+                if digest_file(self.media.resolve(item["output_path"])) != item["output_sha256"]:
+                    raise ValueError("被拒绝的源文件在审片登记期间发生变化")
+            result = self.store.review_derived(
+                run_id,
+                reason,
+                expected_updated_at,
+                dict(
+                    decision=decision,
+                    output_path=str(path),
+                    output_sha256=digest,
+                    evidence=evidence,
+                    end_state=end_state or {},
+                    unverified=unverified or [],
+                ),
+            )
         self._notify()
         return self._public_run(result)
 

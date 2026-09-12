@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -414,11 +416,201 @@ def test_events_and_summary_do_not_leak_tokens_or_prompt(production, tmp_path):
     assert service.events(after=cursor, wait_seconds=0)["events"] == []
 
 
+def test_reopen_review_archives_and_adopts_derived_output(production, tmp_path):
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    old_token = service.store.claim_review(run["id"])
+    original = Path(run["outputs"][0]["path"])
+    reviewed = service.review_output(
+        run["id"],
+        old_token,
+        "INCONCLUSIVE",
+        str(original),
+        ["audio unclear"],
+        end_state={"position": "standing"},
+        unverified=["audio"],
+    )
+    reopened = service.reopen_review(
+        run["id"], "Reviewed derived audio repair", reviewed["updated_at"]
+    )
+    token = reopened["owner_token"]
+    assert token != old_token
+    current = service._public_run(service.store.get_run(run["id"]))
+    assert current["review"] is None and current["reviewed_at"] is None
+    assert current["review_history"][0]["review"] == reviewed["review"]
+    assert current["review_history"][0]["reviewed_at"] == reviewed["reviewed_at"]
+    assert "owner_token" not in str(current["review_history"])
+    with pytest.raises(CanvasError):
+        service.store.claim_review(run["id"])
+    with pytest.raises(CanvasError):
+        service.review_output(run["id"], old_token, "ACCEPT", str(original), ["checked"])
+    with pytest.raises(ValueError):
+        service.review_output(run["id"], token, "ACCEPT", str(tmp_path / "result.png"), ["checked"])
+    with pytest.raises(ValueError):
+        service.review_output(
+            run["id"], token, "ACCEPT", str(original.parent / "missing.png"), ["checked"]
+        )
+    derived = original.with_name("derived.png")
+    derived.write_bytes(b"reviewed derived output")
+    accepted = service.review_output(
+        run["id"], token, "ACCEPT", str(derived), ["checked actual file"]
+    )
+    assert accepted["review"]["output_sha256"] == hashlib.sha256(derived.read_bytes()).hexdigest()
+    assert accepted["review"]["output_path"] == str(derived)
+    assert accepted["outputs"] == run["outputs"]
+    assert original.read_bytes() == b"test image"
+    with pytest.raises(CanvasError):
+        service.review_output(run["id"], old_token, "ACCEPT", str(derived), ["checked actual file"])
+    from lfo.canvas.store import CanvasStore
+
+    with CanvasStore(service.store.db_path) as other:
+        assert other.get_run(run["id"])["review_history"] == current["review_history"]
+
+
+@pytest.mark.parametrize("decision", [None, "ACCEPT", "REJECT"])
+def test_reopen_review_does_not_steal_unfinished_or_terminal(production, tmp_path, decision):
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    token = service.store.claim_review(run["id"])
+    if decision:
+        service.review_output(run["id"], token, decision, run["outputs"][0]["path"], ["checked"])
+    before = service.store.get_run(run["id"])
+    with pytest.raises(CanvasError):
+        service.reopen_review(run["id"], "Recheck local result", before["updated_at"])
+    assert service.store.get_run(run["id"]) == before
+
+
+def test_reopen_review_cas_has_single_winner_and_requires_reason(production, tmp_path):
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    token = service.store.claim_review(run["id"])
+    reviewed = service.review_output(
+        run["id"], token, "INCONCLUSIVE", run["outputs"][0]["path"], ["unclear"]
+    )
+    for reason, version in [(" ", reviewed["updated_at"]), ("Recheck", ""), ("Recheck", "stale")]:
+        with pytest.raises(CanvasError):
+            service.reopen_review(run["id"], reason, version)
+    from lfo.canvas.store import CanvasStore
+
+    def attempt(_):
+        with CanvasStore(service.store.db_path) as other:
+            try:
+                return other.reopen_review(
+                    run["id"], "Additional evidence now available", reviewed["updated_at"]
+                )
+            except CanvasError:
+                return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(attempt, range(2)))
+    assert sum(result is not None for result in results) == 1
+    current = service.store.get_run(run["id"])
+    assert len(current["review_history"]) == 1
+    assert current["review_owner_token"] in results
+    with pytest.raises(CanvasError):
+        service.reopen_review(run["id"], "Cannot steal unfinished new round", current["updated_at"])
+
+
 def test_missing_provider_never_silently_selects_native_image_tool(production):
     service, canvas = production
     canvas["graph"]["nodes"][0]["data"].pop("provider")
     with pytest.raises(ValueError, match="请选择"):
         resolve_snapshot(canvas, "one")
+
+
+def test_recovery_handoff_after_bad_proof_keeps_audit_and_invalidates_token(production):
+    service, canvas = production
+    run = confirm(service, canvas)
+    owner = service.claim_agent(run["id"], ["image_gen"])["owner_token"]
+    service.complete_agent(run["id"], owner, status="unknown", error="pre-submit import failure")
+    old = service.store.claim_recovery(run["id"], "Verify no submission occurred")
+    proof = {
+        "request_id": run["request_id"],
+        "remote_status": "failed",
+        "source": "operator_confirmation",
+        "reason": "Pre-submit failure verified",
+    }
+    with pytest.raises(CanvasError):
+        service.reconcile_run(run["id"], old, "failed", [proof])
+    before = service.store.get_run(run["id"])
+    response = service.handoff_recovery(
+        run["id"], "Previous recovery token lost", before["updated_at"]
+    )
+    token = response["owner_token"]
+    assert token != old
+    current = service.store.get_run(run["id"])
+    for field in ("status", "outputs", "error", "provider_task_id", "owner_token", "resource_key"):
+        assert current[field] == before[field]
+    assert current["evidence"][:-1] == before["evidence"]
+    audit = current["evidence"][-1]
+    assert audit["kind"] == "recovery_handoff"
+    assert audit["previous_reason"] == before["recovery_reason"]
+    assert audit["previous_claimed_at"] == before["recovery_claimed_at"]
+    assert old not in str(service._public_run(current))
+    assert token not in str(service.events(wait_seconds=0))
+    with pytest.raises(CanvasError):
+        service.reconcile_run(run["id"], old, "failed", proof)
+    done = service.reconcile_run(run["id"], token, "failed", proof)
+    assert done["status"] == "failed" and done["recovery_resolved_at"]
+    with pytest.raises(CanvasError):
+        service.handoff_recovery(run["id"], "Cannot reopen resolved recovery", done["updated_at"])
+    from lfo.canvas.store import CanvasStore
+
+    with CanvasStore(service.store.db_path) as reopened:
+        assert audit in reopened.get_run(run["id"])["evidence"]
+
+
+@pytest.mark.parametrize(
+    "status", ["pending_agent", "running", "succeeded", "failed", "cancelled", "unknown"]
+)
+def test_recovery_handoff_rejects_unclaimed_and_unrecoverable(production, status):
+    service, canvas = production
+    run = confirm(service, canvas)
+    if status != "pending_agent":
+        service.store.claim_run(run["id"], "execution-owner")
+        if status != "running":
+            service.store.update_run(run["id"], status=status)
+    before = service.store.get_run(run["id"])
+    with pytest.raises(CanvasError):
+        service.handoff_recovery(run["id"], "Lost claim", before["updated_at"])
+    assert service.store.get_run(run["id"]) == before
+
+
+@pytest.mark.parametrize("status", ["unknown", "failed"])
+def test_recovery_handoff_cas_single_winner(production, status):
+    from threading import Barrier
+
+    from lfo.canvas.store import CanvasStore
+
+    service, canvas = production
+    run = confirm(service, canvas)
+    service.store.claim_run(run["id"], "execution-owner")
+    service.store.update_run(
+        run["id"], status=status, stage="collection", evidence={"remote_finished": True}
+    )
+    service.store.claim_recovery(run["id"], "Original result verification")
+    before = service.store.get_run(run["id"])
+    for reason, version in [(" ", before["updated_at"]), ("Recheck", ""), ("Recheck", "stale")]:
+        with pytest.raises(CanvasError):
+            service.handoff_recovery(run["id"], reason, version)
+    barrier = Barrier(2)
+
+    def attempt(_):
+        with CanvasStore(service.store.db_path) as other:
+            barrier.wait(timeout=5)
+            try:
+                return other.handoff_recovery(
+                    run["id"], "Lost recovery claimant", before["updated_at"]
+                )
+            except CanvasError:
+                return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(attempt, range(2)))
+    assert sum(token is not None for token in results) == 1
+    current = service.store.get_run(run["id"])
+    assert current["recovery_token"] in results
+    assert len(current["evidence"]) == len(before["evidence"]) + 1
 
 
 def test_invalid_second_file_does_not_leave_first_file_copied(production, tmp_path):

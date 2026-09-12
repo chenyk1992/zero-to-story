@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("open", help="后台启动或找到当前项目画布")
     commands.add_parser("mcp", help="通过 STDIO 提供项目画布工具")
     call = commands.add_parser("call", help="调用与页面共用的 API；正文从 JSON 文件读取")
-    call.add_argument("method", choices=["GET", "POST", "PUT"])
+    call.add_argument("method", choices=["GET", "POST", "PUT", "DELETE"])
     call.add_argument("path")
     call.add_argument("--body-file", type=Path)
     args = parser.parse_args(argv)
