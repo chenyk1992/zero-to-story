@@ -29,10 +29,8 @@ artifacts/
 .pytest_cache/
 .cron-lock
 
-# User workspace — never committed. The system (code + templates) lives
-# in this repo; the workspace is where novels, storyboards, and run
-# outputs live. See workspace/README.md.
-workspace/
+# Local workflow outputs and test data; keep out of Git.
+/workspace/
 
 # Node
 node_modules/
@@ -44,21 +42,19 @@ Thumbs.db
 # Local secrets / env
 .env
 .env.local
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.git.source/
+*.log
 
 # Agent scratch
 .superpowers/
 
 .codex-mimo/
 pipeline_run.log
-
-# Throwaway debug scripts (created during one-off investigations, not part of the toolkit).
-# Add a real script under scripts/ with a meaningful name when it graduates from debugging.
-scripts/check_*.py
-scripts/clear_*.py
-scripts/fix_*.py
-scripts/test_*.py
-scripts/trace_*.py
-scripts/update_*.py
 
 # Temporary prompt / scratch text files at the repo root
 tmp_*.txt
@@ -70,7 +66,11 @@ tmp_*.txt
 TEMP/
 
 # Per-project novel/storyboard/user data — analogue to workspace/, never committed
-.short-drama/
+/.short-drama/
 
 # Host workbench memory — runtime state, not part of the repo
 .workbuddy/
+
+# Legacy local runtime databases
+/db/
+.ruff_cache/

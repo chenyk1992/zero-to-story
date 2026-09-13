@@ -1,9 +1,0 @@
-For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song realism, vertical 9:16. Begin exactly from <Picture 1>, the completed tail of P002: the four travelers remain in single file on the wet Jianmen walkway, Su Shi has already lifted his gaze toward the cliff but has not spoken, and Chaoer still carries the unique book chest at the rear. Preserve the same faces, robes, fog, cliff axis, uphill screen direction, and injured right shoe. The boundary is already complete; do not replay Su Xun's poetry or make the family stop.
-
-At once, the fixed camera holds Su Shi on the left side of the walkway as he steadies one palm against the damp cliff and breathes through the climb. His warm, youthful male voice (S1) delivers exactly once from 00:00.500 to 00:03.407, bright with restrained excitement: <d>[Chinese] 爹，那我们现在是站在诗里了！</d> His lips sync only to this line, then close. He keeps one hand on the rock and does not step out of the established order. At 00:05.000, the shot cuts to a small-amplitude slow dolly in along the same axis toward Su Zhe and Chaoer. Su Zhe turns back, notices the torn right shoe and the weight of the single chest, and extends one hand toward Chaoer's shoulder/forward end of the carrying pole without touching it. Chaoer keeps both hands on his load, does not release the chest, and the pole has not yet been taken. End with Su Zhe's hand extended but not contacting, Chaoer still last, and the family still moving uphill. No duplicate chest, no fall, no new speaker, no text.
-
-overall_soundscape: Wind and fog continue around the cliff, with a palm rubbing wet stone, controlled breath, rope strain, and measured plank footsteps. The one youthful line carries a brief natural echo; sleeves and the carrying pole shift softly while no one else speaks.
-
-non_diegetic_music: N/A

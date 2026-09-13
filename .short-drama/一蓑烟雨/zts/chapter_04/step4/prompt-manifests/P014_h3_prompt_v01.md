@@ -1,9 +1,0 @@
-For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song historical realism in vertical 9:16. Begin exactly from <Picture 1>, the completed P013 tail: Chaoer stands on the LEFT and Su Shi on the RIGHT, both facing the depth of Kaifeng after Su Shi's ambition line has ended. Preserve the city-gate threshold, bright gray daylight, family identities, clothing, and the left/right axis. The previous dialogue is complete; do not repeat it.
-
-The fixed camera keeps the two younger men in the background as Su Xun steps into the shared foreground axis, straightens his dark brown robe, and draws one single folded recommendation letter from inside his robe. He holds it briefly where the others can see the plain paper but never reveals readable writing or duplicates the letter. From 00:00.500 to 00:05.527, the mature father voice (S1) says exactly once, calm and practical: <d>[Chinese] 我先去拜会欧阳修欧阳大人。你们兄弟俩，安心备考。</d> His lips sync only to this line. As the sentence finishes, he folds the same letter and returns it to his chest, keeping ownership of it; Su Shi and Su Zhe turn their attention from the city toward him while Chaoer remains on the LEFT. No one changes the city-facing positions, no paper is handed to another person, and no new task is spoken. End with the unique letter back in Su Xun's robe, the four ready to enter the city, and the daylight hard cut prepared for the evening inn. No readable writing, subtitles, watermark, or modern accessories.
-
-overall_soundscape: City-gate carts, footsteps, distant river and market calls continue beneath robe fabric, one paper fold, and the father's single line. The recommendation letter makes only a soft paper rustle; no extra voice or modern sound is heard.
-
-non_diegetic_music: N/A

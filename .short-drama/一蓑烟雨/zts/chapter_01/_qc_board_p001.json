@@ -1,8 +1,0 @@
-{
-  "image_info": [
-    {
-      "url": "https://matrix-internal-cn.oss-cn-shanghai.aliyuncs.com/user_file_upload_tmp%2F2026-08-25%2Fda8ebc62-d93d-4296-be41-78b469bc6b97.jpg?x-oss-credential=LTAI5tKjcNxbSxktvpFqdYgH%2F20260825%2Fcn-shanghai%2Foss%2Faliyun_v4_request&x-oss-date=20260825T125447Z&x-oss-expires=3600&x-oss-signature=74321190d146fa3de183c9197b880d4bc726a7e73cd8b8fc733d28776fdcc2f5&x-oss-signature-version=OSS4-HMAC-SHA256",
-      "prompt": "这是一张 2×3 六格黑白分镜板，逐项 YES/NO 检查：1) 是否恰好 2 行 × 3 列共 6 个等大画格，无标题区/额外格/并格/跨格 2) 是否黑白灰铅笔线稿风格（无彩色、无写实渲染、非精致漫画）3) 是否存在任何可读文字/数字/标签/对白气泡/箭头/速度线/动作残影 4) 左上格是否为大远景府衙门前仪仗与人群的定场（圣旨处应为空白）5) 上中格是否为跪地人物被取走物品、右上格是否有矩形木枷扣肩特写 6) 左下格是否为一人踮脚张望被长枪斜挡、下中格是否为两人被交叉长枪拦住推挤、右下格是否为台阶上戴官帽官员俯视 7) 六格人物是否为简单线框人偶（无五官细节、无服装纹理）"
-    }
-  ]
-}

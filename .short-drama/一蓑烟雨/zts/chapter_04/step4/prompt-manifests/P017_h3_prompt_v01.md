@@ -1,9 +1,0 @@
-For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song realism in vertical 9:16. Start exactly from <Picture 1>, the completed P016 tail: the right-rear warning has ended, the neighboring voices are subdued, and Su Shi is already turned toward the RIGHT-side Su Zhe at their left-front table. Preserve the same inn axis, warm lamps, blank papers, brush materials, clothing, and quiet crowd; do not replay candidate B's “慎言”.
-
-The camera dollies in with small amplitude at slow speed toward the brothers. Su Shi keeps his body seated and leans only slightly toward Su Zhe, lowering his voice. From 00:00.500 to 00:04.758 he asks exactly once in a curious youthful male voice (S1): <d>[Chinese] 王安石……能写出万言书的，是个什么样的人？</d> His lips sync only to this line. At 00:08.000, the shot cuts to a fixed closer two-shot on the same side. Su Zhe, the gray-robed near-adult, begins gathering his brush, inkstone, and paper with quiet, practical motions. From 00:08.400 to 00:10.640 he answers exactly once in a calm restrained male voice (S2): <d>[Chinese] 哥，先想想明天的题吧。</d> His lips match only this sentence. Su Shi remains thoughtful, his gaze drifting past the room after the answer; Su Zhe lowers his head to continue collecting the writing tools. End with no crowd speech, no lamp change, no writing on the papers, and the brothers' positions ready for the deep-night time cut. No subtitles, readable text, or modern objects.
-
-overall_soundscape: Low candidate-room ambience, a few suppressed murmurs, brush and inkstone handling, paper rustle, and fabric movement continue around the two clean dialogue events. The room never becomes silent or noisy; no music or extra voice is added.
-
-non_diegetic_music: N/A

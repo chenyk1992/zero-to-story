@@ -1,9 +1,0 @@
-For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song realism, vertical 9:16. Start exactly from <Picture 1>, the completed P006 tail: Chaoer is half-standing beside the mountain inn table with his bowl still on the wood, the waiter has just finished the insult and remains near the table, and Su Shi is ready to intervene. Preserve the four-person seating order, shared rice pot and bowl count, warm oil lamps, adult proportions, and restrained performance. Do not replay the insult or let Chaoer leave the room.
-
-Immediately, the fixed camera holds the same side. Su Shi reaches across only enough to place one calm hand on Chaoer's shoulder and guides him back into the same seat; the touch is firm but gentle, never a shove. Chaoer's hips return to the stool, knees bend, and he stays beside Su Shi. At 00:03.000, the camera cuts to a slow small-amplitude dolly in favoring Su Shi's composed face and the waiter opposite him. Su Shi raises his eyes and says exactly once from 00:03.400 to 00:04.631, in a quiet youthful male voice (S1): <d>[Chinese] 他不是挑夫。</d> His lips match only this line; the waiter does not answer. Keep Chaoer seated and still, eyes lowered but listening, while Su Zhe and Su Xun remain in their original seats. The end state is a settled table: Su Shi owns the gaze, Chaoer is safely seated, and the waiter has been forced to pause without any physical escalation. No character changes seats, no extra hand, no duplicated dishes, no subtitles or readable signs.
-
-overall_soundscape: A stool scrapes lightly as Chaoer sits back, followed by sleeve movement and the soft touch of a hand on cloth. Oil-lamp hiss, ceramic room tone, and a short quiet after Su Shi's single sentence fill the inn; no impact or additional speech occurs.
-
-non_diegetic_music: N/A

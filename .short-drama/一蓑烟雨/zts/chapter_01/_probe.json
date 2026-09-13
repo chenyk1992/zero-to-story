@@ -1,3 +1,0 @@
-{
-  "function": "if (Test-Path 'E:/ideaProjects/zero-to-story/.short-drama/一蓑烟雨/zts/chapter_01/assets/board_P010.jpg') { 'EXISTS' } else { 'MISSING' }"
-}

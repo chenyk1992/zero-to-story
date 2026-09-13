@@ -1,9 +1,0 @@
-For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
-
-integrated_multimodal_description: [Shot 1] Live-action, cinematic Northern Song historical realism in vertical 9:16. Begin exactly from <Picture 1>, the completed P015 tail: candidate A has finished the Wang Anshi rumor and is looking around from the right-rear table; Su Shi and Su Zhe remain seated at the left-front table with blank papers and brushes. Preserve the crowded inn, warm lamps, rough timber, faces, robes, and left-front/right-rear axis. This boundary is complete; do not repeat candidate A's line or add a new establishing shot.
-
-Hold a fixed composition on the same axis. Candidate B, another 25-to-30-year-old scholar at the right-rear table, first scans the hall and lowers one hand in a quieting gesture. From 00:00.600 to 00:05.422 he says exactly once in a hushed adult male voice (S1): <d>[Chinese] 嘘，慎言！变法的事，可不是我们这些人该议论的……</d> His lips match only this line; the trailing pause is audible but no extra words follow. The neighboring voices fall to a lower murmur. Su Shi turns his head and eyes toward the RIGHT side, then toward his brother Su Zhe, without standing or leaving the left-front seat; his interest is controlled, not comic. Su Zhe keeps arranging his writing materials and notices the turn only at the end. The camera remains static, preserving the two tables in depth and the warm-to-dark falloff. End with candidate B's warning complete, the right-rear conversation quieted, and Su Shi already oriented toward Su Zhe for P017. No repeated Wang Anshi speech, no readable papers, subtitles, watermark, or modern objects.
-
-overall_soundscape: Candidate-table murmurs lower after a hand gesture, with brush taps, paper slide, oil-lamp hiss, and restrained fabric movement continuing across the room. Candidate B's single hushed line is clear; no one else speaks or laughs.
-
-non_diegetic_music: N/A
