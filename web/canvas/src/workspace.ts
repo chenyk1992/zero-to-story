@@ -59,7 +59,7 @@ export const DEFAULT_WORKSPACE: WorkspaceMeta = { story: '', chapter: '', summar
 export const CATEGORY_LABELS: Record<string, string> = {
   character: '角色参考',
   storyboard: '故事板',
-  board: '黑白分镜',
+  board: '电影画面分镜板',
   image: '图片',
   video: '视频',
   document: '文档',
@@ -69,7 +69,7 @@ export const CATEGORY_OPTIONS = [
   { value: '', label: '未分类' },
   { value: 'character', label: '角色参考' },
   { value: 'storyboard', label: '故事板' },
-  { value: 'board', label: '黑白分镜' },
+  { value: 'board', label: '电影画面分镜板' },
   { value: 'image', label: '图片' },
   { value: 'video', label: '视频' },
   { value: 'document', label: '文档' },

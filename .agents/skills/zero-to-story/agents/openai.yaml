@@ -1,5 +1,5 @@
 # GPT-6 适配变更说明：已授权且输入充分时直接推进；保留 R2V 单板、六 Beat 语义映射、Panel 串行和 Canvas 固定快照边界。
 interface:
   display_name: "从零故事分镜"
-  short_description: "完成故事板、可变网格黑白分镜板与逐 Panel Canvas 交接"
-  default_prompt: "使用 $zero-to-story 直接把我的故事整理成 Camera Setup、六 Beat 语义映射、角色资产和逐 Panel 视觉资产路由；在用户已授权的交付范围内且输入充分时直接推进，只有缺少无法安全推断的关键创作事实或当前 Canvas 能力所需输入时才暂停。对需要 R2V 的 Panel，STEP 1 先确定一个 rowsxcolumns 网格布局（2–6 格，如 1x2、2x2、2x3），STEP 3 只生成一张 storyboard_board.<panel> 自包含黑白分镜板，按从左到右、从上到下映射选定的 Beat、Setup 和唯一信息，不生成独立分镜帧、不后期拼接；H3 默认只接收这一张板，必要时才加入非分镜引用。非 R2V Panel 只生成必要的场景关键帧/目标尾帧；视频提示词交给 $h3-prompt-writing，再把每个 Panel 保存到 Canvas 视频节点，由页面确认或对话授权后的固定快照按 Panel 串行执行。"
+  short_description: "完成故事板、可变网格电影画面分镜板与逐 Panel Canvas 交接"
+  default_prompt: "使用 $zero-to-story 将我的故事整理成故事板、必要视觉资产和逐 Panel Canvas 交接；需要分镜板时，采用与目标成片一致的电影画面风格。"

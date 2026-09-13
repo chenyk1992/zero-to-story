@@ -16,7 +16,7 @@ const FILTERS: Array<{ id: string; label: string; icon: IconName }> = [
   { id: '', label: '全部', icon: 'grid' },
   { id: 'character', label: '角色参考', icon: 'character' },
   { id: 'storyboard', label: '故事板', icon: 'storyboard' },
-  { id: 'board', label: '黑白分镜', icon: 'board' },
+  { id: 'board', label: '电影画面分镜板', icon: 'board' },
   { id: 'image', label: '图片', icon: 'image' },
   { id: 'video', label: '视频', icon: 'video' },
   { id: 'document', label: '文档', icon: 'document' },

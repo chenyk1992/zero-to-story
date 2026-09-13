@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import lfo.media.qc as qc_module
 from lfo.media.qc import GenerationQualityContract, GenerationQualityQC
 
@@ -75,6 +77,38 @@ class TestGenerationQualityQC:
         )
 
         assert report.passed
+
+    @pytest.mark.parametrize("duration", [float("nan"), float("inf"), float("-inf")])
+    def test_nonfinite_duration_fails(self, tmp_path, monkeypatch, duration) -> None:
+        artifact = tmp_path / "generated.mp4"
+        artifact.write_bytes(b"provider output")
+        monkeypatch.setattr(qc_module, "probe", lambda path: {
+            "duration_ms": duration,
+            "width": 720,
+            "height": 1280,
+            "codec": "h264",
+        })
+
+        report = GenerationQualityQC().check(artifact)
+
+        assert not report.passed
+        assert any(result.rule == "duration" for result in report.failures)
+
+    @pytest.mark.parametrize("width,height", [(True, 720), (720, False)])
+    def test_boolean_resolution_value_fails(self, tmp_path, monkeypatch, width, height) -> None:
+        artifact = tmp_path / "generated.mp4"
+        artifact.write_bytes(b"provider output")
+        monkeypatch.setattr(qc_module, "probe", lambda path: {
+            "duration_ms": 5000,
+            "width": width,
+            "height": height,
+            "codec": "h264",
+        })
+
+        report = GenerationQualityQC().check(artifact)
+
+        assert not report.passed
+        assert {result.rule for result in report.failures} >= {"video_stream", "resolution"}
 
     def test_technical_and_semantic_rules_are_not_exposed(self) -> None:
         assert not hasattr(qc_module, "TechnicalQC")

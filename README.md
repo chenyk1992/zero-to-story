@@ -2,7 +2,9 @@
 
 项目自有代码采用 [MIT](LICENSE)，第三方内容见[许可说明](THIRD_PARTY_NOTICES.md)。开发检查见[贡献指南](CONTRIBUTING.md)，公开源码准备见[发布检查](docs/open-source-release.md)。无本机素材依赖的画布示例见 [minimal-canvas.json](examples/minimal-canvas.json)。
 
-这是一个以节点画布为唯一生产入口的故事创作工作空间。可以按故事或章节组织角色参考、故事板、黑白分镜、提示词、图片与视频；支持分类搜索、分区、组件编辑与连线，SQLite 自动保存。点击成品可以预览实际媒体、查看本次冻结参数并跳转关联资料。
+本轮清理、生产链修复与验证结果见[维护记录](docs/maintenance-2026-09.md)。
+
+这是一个以节点画布为唯一生产入口的故事创作工作空间。可以按故事或章节组织角色参考、故事板、电影画面分镜板、提示词、图片与视频；支持分类搜索、分区、组件编辑与连线，SQLite 自动保存。点击成品可以预览实际媒体、查看本次冻结参数并跳转关联资料。
 
 所有生产任务先遵守[项目共享生产规则](docs/ai-system-prompt.md)；[Skill 路由](docs/ai-skill-routing.md)只说明职责边界。
 

@@ -81,18 +81,8 @@ def _is_positive_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
-def _is_nonnegative_number(value: object) -> bool:
-    return _is_number(value) and value >= 0
-
-
 def _state(value: object) -> bool:
     return _is_mapping(value) and bool(value)
-
-
-def _list_of_text(value: object, *, allow_empty: bool = False) -> bool:
-    return isinstance(value, list) and (allow_empty or bool(value)) and all(
-        _is_nonempty_text(item) for item in value
-    )
 
 
 def _mapping(value: object) -> Mapping[str, Any] | None:
@@ -894,14 +884,10 @@ def _validate_links_and_continuity(
     panel_ids = {record_id for record_id in panel_by_id}
 
     shots_by_panel: defaultdict[str, list[Mapping[str, Any]]] = defaultdict(list)
-    shots_by_scene: defaultdict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for shot in shots:
         panel_id = shot.get("panel_id")
-        scene_id = shot.get("scene_id")
         if panel_id in panel_ids:
             shots_by_panel[panel_id].append(shot)
-        if scene_id in scene_ids:
-            shots_by_scene[scene_id].append(shot)
 
     coverage_by_panel: defaultdict[str, list[str]] = defaultdict(list)
     for item in coverage:
@@ -1064,9 +1050,6 @@ def _validate_links_and_continuity(
                         f"must match previous shot {previous_shot.get('id')!r} state_after in the same scene",
                     )
                 )
-
-    del shots_by_scene, shot_by_id
-
 
 def validate_blueprint(document: object) -> list[Issue]:
     """Return all creative preflight issues in ``document``.

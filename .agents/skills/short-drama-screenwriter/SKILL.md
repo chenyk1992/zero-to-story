@@ -1,78 +1,64 @@
 ---
 name: short-drama-screenwriter
-description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 格式创作选题、人物、分集和剧本，并按需提供视频创作 handoff。用户要求短剧编剧、微短剧或分集创作时使用；普通视频提示词、代码脚本和现有短剧的纯视频执行不触发。
+description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 创作选题、角色、分集和可拍剧本，并按需整理创作侧 handoff。用户要求短剧编剧、分集创作或海外短剧改编时使用；普通视频提示词、代码和纯视频执行不触发。
 ---
 
 # 微短剧编剧
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。主会话负责本 Skill 的故事、人物、对白和 handoff 创意决定；下游执行子代理只消费冻结 handoff 完成一个有边界的工作单元，不在本 Skill 中建立监控代理或视频验收流程。
+遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 只负责故事、人物、对白、分集文本和可选 handoff；不调用 Canvas、ComfyUI 或视频提供方，也不记录运行状态。
 
-本 Skill 负责短剧的选题、角色、分集目录、单集剧本、合规检查、导出和可选的创作侧 handoff。按用户给出的范围直接交付：可以写一集、修改已有文本、批量写指定集数或完成整部剧，不擅自扩展为 50–100 集。
+## 适用范围与产物
 
-## 适用边界
+- 用户要选题、创作方案、角色、目录、单集、修改、出海、合规、导出或从剧本整理创作侧 handoff 时使用。
+- 用户要求落盘且未指定位置时使用 `.short-drama/{drama_title}/`；只要对话成稿或审阅，不初始化项目、不写状态。
+- `episodes/epNNN.md` 是剧本主产物。 `handoff/` 只给 `zero-to-story` 提供故事板概要、视觉角色卡和剪辑意图，不改写剧本正文、不创建运行请求。
+- `storyboard_brief.md`、`characters_visual.md` 和 `cut_notes.md` 只记录已写内容的创作事实。Panel、模式、提示词、真实尾帧、Canvas 快照、执行和成片属于下游 Skill。
 
-- 用户要求微短剧、短剧编剧、分集创作、海外短剧改编或从已写剧本生成创作侧 handoff 时使用。
-- 只写剧本和 `.short-drama/{drama_title}/` 下的可选 handoff；不修改运行时代码，不调用 Canvas、ComfyUI 或视频生成能力。
-- `episodes/epNNN.md` 是编剧主产物；`handoff/` 是给 `zero-to-story` 的伴生材料。handoff 不改写剧本正文，也不生成运行时请求或执行状态。
-- `storyboard_brief.md` 和 `characters_visual.md` 交给 `zero-to-story`；单 Panel H3 提示词由 `h3-prompt-writing` 处理。Panel、模式、实际尾帧、Canvas 固定快照和最终成片处理由下游负责。
-- handoff 默认留在 `.short-drama/`；只有用户明确进入视频制作后，下游才按项目规则复制已确认素材到 `workspace/projects/<project_id>/`。本 Skill 不自动写入 `workspace/`。
+## 先判范围，再写
 
-## 交付与状态
+读取项目状态时只读用户点名的剧目；独立请求不扫描其他剧目。用户已给阶段和集数就完成该范围，不擅自扩成整部剧或固定集数。只有缺失信息会改变题材、语言、受众、市场格式或下游输入时才提问；其余采用清楚的默认并说明。
 
-- 用户要求保存、创建或续写项目时，使用 `./.short-drama/{drama_title}/` 及 `.drama-state.json`，按当前阶段只创建必要文件；用户指定其他保存位置时沿用该位置。只要对话中的单集、成稿或审阅时，直接交对应内容，不初始化项目或写状态文件。目录与字段见 [工作流契约](./references/workflow-contract.md)。
-- 继续一个已确定项目时读取其状态；没有指定项目的独立写作请求，不扫描其他剧目或套用它们的阶段、角色和集数。
-- 用户已明确阶段或范围时直接完成该范围；未指定时按工作流推进到当前请求能确定的最小完整产物。只有缺失信息会改变类型、结构、语言、受众或下游输入时才提问。
-- 用户要求审阅、修改或只做某阶段时停在指定边界；用户要求继续时沿用已有状态和授权，不重复问已知事项。
+连载剧在用户未给预算时可参考每集 3–6 场、约 15–25 句对白、一个主冲突和一个副冲突；这是规划参考，不得覆盖用户的时长、场景或对白要求。独立单集按用户规格收束，不强加下集预告。
 
-## 工作流路由
+写作质量以可拍和可读为准：每场有明确目的和变化，动作能被镜头看见，台词推动冲突且能区分角色；时间线、称呼、服装、道具、伏笔、空间关系和人物出场保持连续。需要视频交接时，补充景别、主体位置、可见起止状态和对白/环境声意图；精确对白或屏幕文字逐字保留。
 
-按任务读取 [工作流契约](./references/workflow-contract.md) 的对应小节，不预读整份专业参考：
+## 阶段路由
 
-| 请求/阶段 | 必要参考 |
-| --- | --- |
-| `/开始` 或选题 | [genre-guide](./references/genre-guide.md) |
+先读[工作流契约](./references/workflow-contract.md)中当前阶段，再按需要加载专业参考。不要为形式完整读取全部资料。
+
+| 请求 | 读取 |
+|---|---|
+| `/开始`、选题 | [genre-guide](./references/genre-guide.md) |
 | `/创作方案` | [opening-rules](./references/opening-rules.md)、[paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md) |
 | `/角色开发` | [villain-design](./references/villain-design.md) |
 | `/目录` | [paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md) |
-| `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集另读 [opening-rules](./references/opening-rules.md)；付费集另读 [paywall-design](./references/paywall-design.md) |
-| `/自检 N` 或合规 | [compliance-checklist](./references/compliance-checklist.md)；创作检查按工作流契约执行 |
-| `/桥接 N` | [handoff-mapping](./references/handoff-mapping.md)、[handoff-brief-template](./references/handoff-brief-template.md)；需要字段示例时再读 [handoff-intake-template](./references/handoff-intake-template.json) |
+| `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集再读 [opening-rules](./references/opening-rules.md)，付费集再读 [paywall-design](./references/paywall-design.md) |
+| `/自检 N`、`/合规` | [compliance-checklist](./references/compliance-checklist.md)；创作检查按工作流契约 |
+| `/桥接 N` | [handoff-mapping](./references/handoff-mapping.md)、[handoff-brief-template](./references/handoff-brief-template.md)；字段示例按需读 JSON 模板 |
 | `/出海` | [genre-guide](./references/genre-guide.md) 的出海部分 |
 
-参考文件只在命中对应阶段、类型或检查项时读取；它们是具体创作约束，不是额外审批流程。
+这些参考是创作方法，不是额外审批或视频 QC。
 
-## 创作不变量
+## 交付规则
 
-- 选题最多叠加 3 个类型，保留一个主类型；没有用户指定时按故事意图、受众和平台作合理默认，并在摘要中说明。
-- 连载剧在用户未指定单集预算时可参考 3–6 场、15–25 句对白、至少一个主冲突和一个副冲突；独立单集按用户给出的时长、场景预算和交付格式执行，不强制下集预告。连载集保留钩子和下集预告；第 1 集、付费集按对应参考设计。
-- 写作中保持角色称呼、时间线、道具、伏笔与已写集一致；动作要可拍，台词要能区分角色。
-- 国内格式使用场景标题、中文景别、角色对白和可选音乐提示；海外格式使用 `INT./EXT.`、英文景别和英文对白。精确格式示例、字段和目录指标见工作流契约。
-- 合规检查按 P0–P3 输出问题；红线、灰区、类型和海外市场约束以 `compliance-checklist.md` 为准，不凭印象补规则。
-
-## Handoff 不变量
-
-`/桥接` 只把已写集整理为创作侧 brief、可拍角色卡和剪辑说明：
-
-- 用户授权压缩时，常规连载集可参考将 3–6 场压成 brief 内 1–2 个场景；其余保留用户指定的场景、角色和时长，不为套用数量增删内容。每条候选 Panel/节拍写空间关系和可见结束状态。
-- 一集常见默认时长为 15–60 秒，不覆盖用户指定的总时长；下游按 4–15 秒 Panel 拆分；不把整集或剧本镜头数量直接当作一个 Canvas 视频节点。
-- 对白按可拍节拍组织；用户要求逐字保留时完整转交。钩子、预告和付费墙留在 `cut_notes.md`；音频意图不冒充已存在的音频文件。
-- 只读剧本正文并写入 `.short-drama/`；不记录 Canvas 请求、真实尾帧、运行结果或 QC。
-
-完整字段映射和下游边界见 [handoff mapping](./references/handoff-mapping.md)。
+1. 选题最多 3 个类型且保留一个主类型；用户未指定时按故事意图、受众和平台选定。
+2. 国内格式使用场景标题、中文景别、角色对白和可选声音提示；海外格式使用 `INT./EXT.`、英文景别和英文对白，并做文化适配而非逐字直译。
+3. 连载集保留本集钩子和下集预告；付费点、主冲突、爽点和伏笔服务剧情，不以模板数量替代因果。
+4. 合规只在用户要求或题材明显涉及风险时加载清单；先处理红线和关系/价值观风险，再给少量具体改法，不生成分数表。
+5. `/桥接` 只读剧本并把事实交给 `zero-to-story`。本 Skill 不把音频意图写成音频文件，不写 Canvas ID、请求状态、真实媒体、尾帧或 QC 结论。
 
 ## 快速命令
 
-| 命令 | 产物 |
-| --- | --- |
-| `/开始` | 选题摘要和状态 |
+| 命令 | 主要产物 |
+|---|---|
+| `/开始` | 选题摘要、状态 |
 | `/创作方案` | `creative-plan.md` |
 | `/角色开发` | `characters.md` |
 | `/目录` | `episode-directory.md` |
 | `/分集 N` | `episodes/ep{NNN}.md` |
-| `/自检 N` | 指定集的简洁创作检查 |
-| `/桥接 N` | `handoff/` 下 brief、角色卡、cut notes |
+| `/自检 N` | 必修问题与可选建议 |
+| `/桥接 N` | `handoff/` 下三个创作文件 |
 | `/导出` | `export/{title}.md` |
-| `/出海` | 更新状态中的海外格式和语言 |
-| `/合规` | `compliance-report.md` |
+| `/出海`、`/合规` | 更新格式或 `compliance-report.md` |
 
-详细前置条件、阶段输出、模板和检查清单集中在 [工作流契约](./references/workflow-contract.md)，只在当前阶段需要时读取。
+完成后只报告本轮实际产物、未决事实和下游需要的输入；未执行的阶段不要声称已完成。

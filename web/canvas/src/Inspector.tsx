@@ -376,7 +376,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
 
         {data.nodeType === 'document' && (
           <Section title="文档内容">
-            <TextField label="文档正文" value={data.content || ''} onChange={(content) => onUpdate({ content })} placeholder="输入故事板、黑白分镜或章节说明…" multiline rows={16} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
+            <TextField label="文档正文" value={data.content || ''} onChange={(content) => onUpdate({ content })} placeholder="输入故事板、电影画面分镜板或章节说明…" multiline rows={16} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
             <TextField label="来源文件" value={data.source_path || ''} onChange={(source_path) => onUpdate({ source_path })} placeholder="可选的原始文件路径" optional />
             <p className="field-help">文档只保存到当前画布引用，编辑不会改写原始文件。</p>
           </Section>

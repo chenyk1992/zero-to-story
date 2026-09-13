@@ -1,17 +1,15 @@
-"""Small, evidence-based audio acceptance checks.
+"""Small, evidence-based audio checks.
 
-Creative planning owns the dialogue schedule.  This module only verifies that
-the generated/mixed artifact did not drift from that already-locked contract.
-It deliberately does not inspect visual story semantics.  Speech analysis can
-be supplied by an ASR/diarization adapter (or MiMo evidence); an inconclusive
-analysis is reported for review instead of becoming an automatic storyboard
-failure.
+The caller owns creative decisions and the final listening review.  This
+module only checks hard audio requirements and treats speech analysis as
+review evidence; it never judges visual content.
 """
 
 from __future__ import annotations
 
 import difflib
 import itertools
+import math
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
@@ -20,17 +18,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
 
-from lfo.media._ffmpeg import probe
+from lfo.media._ffmpeg import MediaCommandError, probe
 
 
 class AudioAcceptanceReadiness(StrEnum):
-    """What an audio report says about downstream acceptance review.
-
-    ``passed`` remains a technical/reporting result for compatibility.  A
-    report can pass while its speech analysis is inconclusive, so callers
-    should use this explicit state when deciding whether a clip can be
-    adopted without another listening check.
-    """
+    """Whether the report permits adoption without another audio review."""
 
     READY = "ready"
     REVIEW_REQUIRED = "review_required"
@@ -47,9 +39,52 @@ class SpeechEventExpectation:
     allow_overlap: bool = False
 
 
+def _number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _parse_speech_events(value: object) -> tuple[SpeechEventExpectation, ...]:
+    """Read only complete, typed event declarations from an untrusted value."""
+    if not isinstance(value, Sequence) or isinstance(value, str | bytes):
+        return ()
+    events: list[SpeechEventExpectation] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        event_id, speaker_id, text = (item.get(key) for key in ("event_id", "speaker_id", "text"))
+        start_ms, end_ms = item.get("start_ms"), item.get("end_ms")
+        if not all(
+            isinstance(item_value, str) and item_value.strip()
+            for item_value in (event_id, speaker_id, text)
+        ):
+            continue
+        if not all(
+            isinstance(item_value, int) and not isinstance(item_value, bool)
+            for item_value in (start_ms, end_ms)
+        ):
+            continue
+        events.append(
+            SpeechEventExpectation(
+                cast(str, event_id),
+                cast(str, speaker_id),
+                cast(str, text),
+                cast(int, start_ms),
+                cast(int, end_ms),
+                item.get("allow_overlap") is True,
+            )
+        )
+    return tuple(events)
+
+
 @dataclass(frozen=True, slots=True)
 class AudioAcceptanceContract:
-    """The portion of an audio contract the runtime can evaluate."""
+    """The small portion of an audio contract this module can evaluate."""
 
     require_audio: bool | None = None
     max_peak_db: float | None = -0.1
@@ -62,49 +97,14 @@ class AudioAcceptanceContract:
     def from_dict(cls, value: object) -> AudioAcceptanceContract | None:
         if not isinstance(value, Mapping):
             return None
-        events_value = value.get("speech_events", [])
-        events: list[SpeechEventExpectation] = []
-        if isinstance(events_value, Sequence) and not isinstance(events_value, str | bytes):
-            for item in events_value:
-                if not isinstance(item, Mapping):
-                    continue
-                event_id = item.get("event_id")
-                speaker_id = item.get("speaker_id")
-                text = item.get("text")
-                start_ms = item.get("start_ms")
-                end_ms = item.get("end_ms")
-                if not all(
-                    isinstance(item_value, str) and item_value.strip()
-                    for item_value in (event_id, speaker_id, text)
-                ):
-                    continue
-                if not all(
-                    isinstance(item_value, int) and not isinstance(item_value, bool)
-                    for item_value in (start_ms, end_ms)
-                ):
-                    continue
-                events.append(
-                    SpeechEventExpectation(
-                        event_id=cast(str, event_id),
-                        speaker_id=cast(str, speaker_id),
-                        text=cast(str, text),
-                        start_ms=cast(int, start_ms),
-                        end_ms=cast(int, end_ms),
-                        allow_overlap=bool(item.get("allow_overlap", False)),
-                    )
-                )
+        events = _parse_speech_events(value.get("speech_events", []))
 
         def _float(key: str, default: float | None) -> float | None:
-            # An explicit null disables that optional signal threshold; an
-            # omitted key keeps the conservative default.  Treating both as
-            # the default would make it impossible for a project to opt out
-            # of a metric while retaining transcript/timing checks.
             candidate = value.get(key, default)
             if candidate is None:
                 return None
-            if isinstance(candidate, bool) or not isinstance(candidate, int | float):
-                return default
-            return float(candidate)
+            number = _number(candidate)
+            return default if number is None else number
 
         tolerance = value.get("timing_tolerance_ms", 300)
         if not isinstance(tolerance, int) or isinstance(tolerance, bool) or tolerance < 0:
@@ -121,7 +121,7 @@ class AudioAcceptanceContract:
             min_mean_db=_float("min_mean_db", -60.0),
             timing_tolerance_ms=tolerance,
             transcript_similarity=similarity,
-            speech_events=tuple(events),
+            speech_events=events,
         )
 
 
@@ -147,16 +147,9 @@ class AudioQCReport:
 
     @property
     def acceptance_readiness(self) -> AudioAcceptanceReadiness:
-        """Return an explicit adoption state without collapsing uncertainty.
-
-        An inconclusive speech analysis is reviewable evidence when the
-        technical report passed; it is not converted into a rejection.  The
-        caller that owns the accepted output still decides whether the
-        required listening review is sufficient.
-        """
+        """Return adoption state while keeping uncertain speech evidence reviewable."""
         if not self.passed:
             if self.failures and all(rule.rule.startswith("speech_") for rule in self.failures):
-                # Analyzer mismatches need listening review, not automatic rejection.
                 return AudioAcceptanceReadiness.REVIEW_REQUIRED
             return AudioAcceptanceReadiness.REJECTED
         if self.inconclusive:
@@ -175,7 +168,7 @@ class AudioQCReport:
 
 
 class AudioQualityQC:
-    """Evaluate audio presence and optional speech-analysis evidence."""
+    """Evaluate the declared audio stream and optional speech evidence."""
 
     def check(
         self,
@@ -186,11 +179,42 @@ class AudioQualityQC:
         probe_result: Mapping[str, Any] | None = None,
     ) -> AudioQCReport:
         path = Path(artifact_path)
-        metadata = dict(probe_result or probe(path))
+        try:
+            metadata = dict(probe_result) if probe_result is not None else dict(probe(path))
+        except (MediaCommandError, OSError, ValueError, KeyError, TypeError) as exc:
+            return AudioQCReport(
+                passed=False,
+                results=[
+                    AudioQCRuleResult(
+                        "audio_artifact",
+                        False,
+                        f"Audio artifact cannot be inspected: {exc}",
+                        "probe-readable media",
+                        str(path),
+                    )
+                ],
+                metadata={"file_path": str(path)},
+            )
         policy = contract or AudioAcceptanceContract()
         results: list[AudioQCRuleResult] = []
         inconclusive = False
-        has_audio = bool(metadata.get("has_audio"))
+        audio_value = metadata.get("has_audio")
+        has_audio = audio_value if isinstance(audio_value, bool) else None
+        if has_audio is None:
+            return AudioQCReport(
+                passed=True,
+                inconclusive=True,
+                results=[
+                    AudioQCRuleResult(
+                        "audio_stream",
+                        True,
+                        "audio presence is not a boolean; manual listening is required",
+                        "boolean",
+                        audio_value,
+                    )
+                ],
+                metadata=metadata,
+            )
         if policy.require_audio is not None:
             passed = has_audio == policy.require_audio
             results.append(
@@ -215,33 +239,42 @@ class AudioQualityQC:
 
         analysis_map = analysis if isinstance(analysis, Mapping) else None
         status = str(analysis_map.get("status", "")).upper() if analysis_map else ""
+        review_message: str | None = None
+        review_expected: Any = None
+        review_actual: Any = None
         if status == "INCONCLUSIVE":
             inconclusive = True
-            results.append(
-                AudioQCRuleResult(
-                    "speech_analysis",
-                    True,
-                    "speech analyzer returned INCONCLUSIVE; manual listening is required",
-                    "PASS or a reviewed INCONCLUSIVE",
-                    status,
-                )
-            )
+            review_message = "speech analyzer returned INCONCLUSIVE; manual listening is required"
+            review_expected, review_actual = "PASS or a reviewed INCONCLUSIVE", status
         elif policy.speech_events and analysis_map is None:
             inconclusive = True
+            review_message = "no speech-analysis evidence supplied; manual listening is required"
+            review_expected = "analysis evidence"
+        elif (
+            policy.speech_events
+            and analysis_map is not None
+            and not isinstance(analysis_map.get("speech_events"), list)
+        ):
+            inconclusive = True
+            review_message = "speech event evidence is unavailable; manual listening is required"
+            review_expected = "speech_events array"
+
+        if review_message is not None:
             results.append(
                 AudioQCRuleResult(
                     "speech_analysis",
                     True,
-                    "no speech-analysis evidence supplied; manual listening is required",
-                    "analysis evidence",
-                    None,
+                    review_message,
+                    review_expected,
+                    review_actual,
                 )
             )
 
         if analysis_map is not None and status != "INCONCLUSIVE":
-            self._check_signal_metrics(policy, analysis_map, results)
+            inconclusive = self._check_signal_metrics(policy, analysis_map, results) or inconclusive
             if policy.speech_events:
-                self._check_speech_events(policy, analysis_map, results)
+                if isinstance(analysis_map.get("speech_events"), list):
+                    self._check_speech_events(policy, analysis_map, results)
 
         passed = all(result.passed for result in results)
         return AudioQCReport(
@@ -256,9 +289,21 @@ class AudioQualityQC:
         policy: AudioAcceptanceContract,
         analysis: Mapping[str, Any],
         results: list[AudioQCRuleResult],
-    ) -> None:
+    ) -> bool:
+        inconclusive = False
         peak = _number(analysis.get("peak_db"))
-        if policy.max_peak_db is not None and peak is not None:
+        if policy.max_peak_db is not None and "peak_db" in analysis and peak is None:
+            inconclusive = True
+            results.append(
+                AudioQCRuleResult(
+                    "peak_headroom",
+                    True,
+                    "peak metric is unavailable; manual listening is required",
+                    f"< {policy.max_peak_db} dB",
+                    analysis.get("peak_db"),
+                )
+            )
+        elif policy.max_peak_db is not None and peak is not None:
             passed = peak < policy.max_peak_db
             results.append(
                 AudioQCRuleResult(
@@ -270,7 +315,18 @@ class AudioQualityQC:
                 )
             )
         mean = _number(analysis.get("mean_db"))
-        if policy.speech_events and policy.min_mean_db is not None and mean is not None:
+        if policy.speech_events and policy.min_mean_db is not None and "mean_db" in analysis and mean is None:
+            inconclusive = True
+            results.append(
+                AudioQCRuleResult(
+                    "speech_energy",
+                    True,
+                    "mean metric is unavailable; manual listening is required",
+                    f"> {policy.min_mean_db} dB",
+                    analysis.get("mean_db"),
+                )
+            )
+        elif policy.speech_events and policy.min_mean_db is not None and mean is not None:
             passed = mean > policy.min_mean_db
             results.append(
                 AudioQCRuleResult(
@@ -281,6 +337,7 @@ class AudioQualityQC:
                     mean,
                 )
             )
+        return inconclusive
 
     @staticmethod
     def _check_speech_events(
@@ -373,12 +430,6 @@ class AudioQualityQC:
                             {"previous": previous_id, "current": current_id},
                         )
                     )
-
-
-def _number(value: object) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    return float(value)
 
 
 def _within_tolerance(value: object, expected: int, tolerance: int) -> bool:

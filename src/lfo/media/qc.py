@@ -7,6 +7,7 @@ dimensions.  There is no semantic scoring or repair route here.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -122,10 +123,8 @@ class GenerationQualityQC:
         height = metadata.get("height")
         codec = metadata.get("codec")
         passed = (
-            isinstance(width, int)
-            and width > 0
-            and isinstance(height, int)
-            and height > 0
+            _positive_dimension(width)
+            and _positive_dimension(height)
             and isinstance(codec, str)
             and bool(codec)
         )
@@ -140,21 +139,11 @@ class GenerationQualityQC:
     @staticmethod
     def _duration(metadata: dict[str, Any]) -> QCRuleResult:
         actual = metadata.get("duration_ms")
-        if (
-            isinstance(actual, bool)
-            or not isinstance(actual, (int, float))
-            or actual <= 0
-        ):
-            return QCRuleResult(
-                rule="duration",
-                passed=False,
-                message="Video duration is missing or not positive",
-                expected="> 0 ms",
-                actual=actual,
-            )
+        passed = _positive_finite_number(actual)
         return QCRuleResult(
             rule="duration",
-            passed=True,
+            passed=passed,
+            message="Video duration is missing or not positive" if not passed else "",
             expected="> 0 ms",
             actual=actual,
         )
@@ -163,26 +152,27 @@ class GenerationQualityQC:
     def _resolution(metadata: dict[str, Any]) -> QCRuleResult:
         width = metadata.get("width")
         height = metadata.get("height")
-        positive = (
-            isinstance(width, int)
-            and width > 0
-            and isinstance(height, int)
-            and height > 0
-        )
-        if not positive:
-            return QCRuleResult(
-                rule="resolution",
-                passed=False,
-                message="Video resolution is missing or not positive",
-                expected="positive width and height",
-                actual={"width": width, "height": height},
-            )
+        passed = _positive_dimension(width) and _positive_dimension(height)
         return QCRuleResult(
             rule="resolution",
-            passed=True,
+            passed=passed,
+            message="Video resolution is missing or not positive" if not passed else "",
             expected="positive width and height",
             actual={"width": width, "height": height},
         )
+
+
+def _positive_dimension(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _positive_finite_number(value: object) -> bool:
+    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, ValueError):
+        return False
 
 
 __all__ = [

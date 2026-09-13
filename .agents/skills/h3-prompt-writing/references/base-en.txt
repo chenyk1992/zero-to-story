@@ -80,7 +80,7 @@ Do not add a timestamp to the first shot. Use sequential shot numbers for later 
 
 For ordinary cuts, use `the camera cuts to`, `the shot cuts to`, `the shot transitions to`, `the shot changes to`, or `the shot switches to`. When explicitly requested by the user, cross-dissolve, fade, or wipe may also be used. A cut should introduce new information about the subject, space, state, viewpoint, or time. If only the distance or a slight angle needs to change, prefer camera motion.
 
-The shot count and cut times come from the approved Camera Setup plan, not from the number of storyboard cells. Several consecutive Beat/visible moments may belong to one continuous `[Shot N]`; describe their development inside that shot. Do not add a cut merely because the black-and-white board advances to another cell, and do not distribute cut times evenly unless the director plan explicitly calls for a rhythmic montage.
+The shot count and cut times come from the approved Camera Setup plan, not from the number of storyboard cells. Several consecutive Beat/visible moments may belong to one continuous `[Shot N]`; describe their development inside that shot. Do not add a cut merely because the storyboard board advances to another cell, and do not distribute cut times evenly unless the director plan explicitly calls for a rhythmic montage.
 
 For spatially dependent shots, state the camera's position and viewing direction, the axis side, each subject's facing direction, the gaze target, and the screen-space movement direction whenever those facts affect the story. Preserve these relationships across shots; do not infer a reverse-facing subject from an action verb such as "chases" or "follows".
 

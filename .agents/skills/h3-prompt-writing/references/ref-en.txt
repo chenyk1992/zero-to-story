@@ -4,7 +4,7 @@ This guide explains how rewrite outputs are organized and written in full-refere
 
 Write all six rewrite sections in English. Preserve the original language only for dialogue and lyrics inside `<d>` and for text visibly present in the scene.
 
-**Description detail:** Make `detailed_description` as detailed and explicit as possible. For each shot, clearly establish the current composition, subject appearance and position, environment and lighting, actions and state changes, camera movement, current sound, and the points where referenced content actually appears or takes effect. Avoid reducing the description to a plot summary or a list of reference relationships.
+**Description detail:** Make `detailed_description` precise enough to execute the approved shot. Include relevant visible and audible facts; avoid repeating the same instructions across sections. For each shot, clearly establish the current composition, subject appearance and position, environment and lighting, actions and state changes, camera movement, current sound, and the points where referenced content actually appears or takes effect. Avoid reducing the description to a plot summary or a list of reference relationships.
 
 > The basic formats for shots, camera movement, speakers, dialogue, and ordinary sound are shared with the Video Prompt Writing Guide (T2VA / I2VA / FL2VA). This guide focuses on the reference labels, analysis sections, and format differences specific to full-reference mode.
 
@@ -34,7 +34,7 @@ Full-reference rewrites use four types of labels to identify the source and role
 
 > Once a reference label is assigned to a piece of content, it keeps the same meaning across `subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, and the audio sections.
 
-`subject_definitions` defines each piece of referenced content that must be tracked separately later, such as a person, an environment, a source video's structure, or an audio track. Give each item its own line and explain what its label denotes, its reference role, and the main features to follow; name the corresponding source asset when its provenance needs to be made explicit. If `<Picture N>` or `<Video N>` only identifies the source of another referenced item and will not be analyzed or used separately later, cite it inside that item's definition without adding a separate line. `retention_analysis` records where each referenced item appears and whether it is fully preserved, partially preserved, transferred, or reused.
+`subject_definitions` defines each piece of referenced content that must be tracked separately later, such as a person, an environment, a source video's structure, or an audio track. Create a separate subject label only when that content needs reuse or independent reference treatment; describe ordinary one-off props and background details in the shot prose. Keep one identity across state changes of the same person or object. Give each tracked item its own line and explain what its label denotes, its reference role, and the main features to follow; name the corresponding source asset when its provenance needs to be made explicit. If `<Picture N>` or `<Video N>` only identifies the source of another referenced item and will not be analyzed or used separately later, cite it inside that item's definition without adding a separate line. `retention_analysis` records where each referenced item appears and whether it is fully preserved, partially preserved, transferred, or reused.
 
 ### 2.1 `<Subject N>`
 
@@ -70,10 +70,10 @@ If an image is used only to define a character, scene, costume, or style, do not
 When an image acts as a storyboard or shot-planning reference, state which shots it maps to and what planning information it provides:
 
 ```text
-<Picture 3> is the single input image containing the approved variable-grid storyboard board for [Shot 1] and [Shot 2], defining their ordered viewpoints, subject placement, and state changes.
+<Picture 3> is the single input image containing the approved variable-grid storyboard board for [Shot 1] and [Shot 2], defining their target film look, character and scene appearance, ordered viewpoints, subject placement, and state changes.
 ```
 
-A self-contained variable-grid storyboard board is one source image and therefore receives exactly one `<Picture N>` label, even when it contains several cells or informs several shots. Follow the layout and row-major cell mapping supplied by the approved director plan. Do not assign labels to individual cells, request cropped cell images, or treat the cells as additional input assets. The board is a planning and consistency reference, not an exact first frame, keyframe, or last frame, unless the upstream plan separately supplies an actual frame asset for that purpose under a supported keyframe mode.
+A self-contained variable-grid storyboard board is one source image and therefore receives exactly one `<Picture N>` label, even when it contains several cells or informs several shots. Follow the layout and row-major cell mapping supplied by the approved director plan. Do not assign labels to individual cells, request cropped cell images, or treat the cells as additional input assets. Preserve the approved character and scene appearance and key states shown in the board; describe the intermediate movement, natural performance, and sound in the video prompt. The board is a planning and consistency reference, not an exact first frame, keyframe, or last frame, unless the upstream plan separately supplies an actual frame asset for that purpose under a supported keyframe mode.
 
 ### 2.3 `<Video N>`
 
@@ -243,7 +243,7 @@ The target video is in a cinematic, literary music-video style with soft lightin
 [Shot 2] At 00:09.000, the shot cuts to an extreme close-up...
 ```
 
-For generation tasks, `detailed_description` is normally 350-500 English words. Dialogue-dense content prioritizes fitting the complete spoken timeline rather than mechanically reaching a word count. Video-editing descriptions scale with the complexity of the source video and do not have to follow the generation-task range. A single shot does not automatically justify a shorter description; distribute detail across multiple shots according to their information load.
+Scale `detailed_description` to the approved shot's information load. A simple shot may be short; a complex action needs its observable stages and timing. Preserve complete dialogue and essential reference relationships without padding to a word count or repeating the same description in every section.
 
 ### 5.3 Using Reference Labels in Shots
 
@@ -277,7 +277,7 @@ When verbal content is only a cue within a directly reused BGM or complete sound
 When <Audio 1> reaches the phrase <d>[English] I'm lonely lonely lonely lonely lonely I'm lonely</d>, <Subject 1> performs the corresponding hand gesture without becoming a separate speaker source.
 ```
 
-When dialogue, narration, or lyrics from reference audio are directly reused, or when the input prompt explicitly requests their reperformance, preserve the exact source words and original language inside `<d>`. Write `[unclear]` for unintelligible spans instead of guessing or paraphrasing them. Standardize punctuation to the basic written marks needed to express the sentence, such as `,`, `.`, `?`, and `!`; remove repeated tildes, emoji, bullets, and repeated or decorative punctuation. End complete statements, questions, and exclamations with `.`, `?`, or `!` respectively before `</d>`.
+When dialogue, narration, or lyrics from reference audio are directly reused, or when the input prompt explicitly requests their reperformance, preserve the exact source words and original language inside `<d>`. User-supplied or approved text keeps its original punctuation as well. During transcription, mark unintelligible spans as `[unclear]` rather than guessing; if exact dialogue is required, resolve that gap before treating the prompt as ready for generation. Do not copy source dialogue when only voice timbre or delivery is requested.
 
 When only timbre, rhythm, emotion, or delivery is referenced, do not carry the original dialogue from the reference audio into the target video.
 
@@ -309,6 +309,8 @@ non_diegetic_music: <Audio 2> is directly reused as the complete audience-only s
 Write complete dialogue and lyrics only inside `<d>` in `detailed_description`; do not repeat them in these two sections.
 
 ## 7. Complete Example
+
+This example deliberately preserves a reference coffee-shop environment across three shots, so that environment has its own Subject label. Ordinary background details do not need labels merely because they appear in a shot. Use only the labels needed by the current reference plan; do not copy this example's subject count or length.
 
 <details>
 <summary>Show the complete example</summary>

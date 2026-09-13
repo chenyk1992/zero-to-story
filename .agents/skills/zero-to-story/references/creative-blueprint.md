@@ -6,7 +6,7 @@
 
 storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_blueprint.json 是从它同步编译的机器可读索引，用于一次低成本静态预检；它不是第二套剧情，也不是视频成片评分器。两者冲突时修正故事板，再重新编译蓝图。
 
-新流程只使用 zero-to-story.creative-blueprint.v2，不读取旧 schema，不做迁移兼容。蓝图在任何角色图、视觉控制资产或视频生成前通过一次即可。
+完整故事生产使用 zero-to-story.creative-blueprint.v2，不维护旧 schema 的平行流程。该流程的蓝图在资产或视频生成前通过一次，相关输入变化后才复核；局部交付不因本参考扩展为整章生产。
 
 ## 必须回答的问题
 
@@ -78,18 +78,8 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 `storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。`generation.limits.reference_slots` 统计最终实际输入数，确认 Canvas 请求前仍须核对所选能力。
 
-### Panel ready
-
-Panel 的自身事实、时长、operation、提示词输入、必要资产、采样参数、音频或对白要求、后期责任、输出位置和授权齐全后即可 ready。独立 Panel 可以先准备；只有依赖上一 Panel 的首尾状态时才等待上一段实际 `ACCEPT` 和真实尾帧。视频提交仍保持全局串行。
-
 ## 接力与 Canvas 交接
 
 项目级生成选择存入顶层 `user_constraints.megapixels`、`user_constraints.sampler_profile` 和 `user_constraints.steps`，与故事板一致。准备当前 Panel 时继承到 Canvas 节点参数；所选能力不接受的组合必须在确认前停止，不根据数字猜测模式，也不在执行时切换。故事规划可先于参数选择完成，但不能把尚未选择的值写成用户已批准。
 
-视频提交保持全局串行；当前 Panel 只有在它实际依赖上一 Panel 时才等待上一 Panel 已 `ACCEPT`。下一 Panel 的 I2VA/FL2VA 计划需要时，调用方使用现有 ffmpeg 从已接受视频提取真实尾帧作为精确首帧。明确切镜或换场按已批准的 operation 和引用执行，不能用文字描述代替真实尾帧。
-
-每个 Panel 准备一个只含当前 Clip 的独立 Canvas video 节点。保存只是草稿；页面确认或对话明确授权时，Canvas 服务冻结精确 `execution_snapshot` 并只提交一次。节点内容变化只影响下一次草稿，不改写旧快照、已接受媒体或历史；不维护第二套提示词或执行状态。
-
-## 输出
-
-通过预检后，按本文件和故事板准备 Canvas 节点。视频阶段只保留每个 Panel 的一次 `ACCEPT/REJECT/INCONCLUSIVE` 结果和已接受媒体路径；执行单元必须查看实际文件，记录实际末态和实际音频证据，不能以技术成功或静态预检通过替代成片检查。`REJECT`、`INCONCLUSIVE` 或执行错误即停止，是否确认新快照由用户或调用方按现有授权明确决定。片段接受、替换后的相邻接缝和实际交付文件的一次完整视听检查，统一遵守 [最小视频接受检查](video-qc.md)。
+通过预检后按[Panel 交接](panel-execution.md)准备 H3 和 Canvas 当前节点；执行、依赖及产物验收沿用共享规则。蓝图不记录运行日志、接受结论或恢复状态，不以静态通过替代实际视频检查。

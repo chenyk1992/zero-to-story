@@ -1,69 +1,40 @@
 ---
 name: h3-prompt-writing
-description: Write one complete MiniMax H3 video-generation prompt for a single approved Panel in T2VA, I2VA, FL2VA, or Ref2VA form supported by the current Canvas capability. Use when composing the required H3 sections, aligning keyframes and timing, or defining reference labels; return only the prompt text.
+description: 将一个已确定的 Panel 写成完整 MiniMax H3 视频提示词，支持当前 Canvas 能力允许的 T2VA、I2VA、FL2VA 和 Ref2VA。用于 H3 提示词写作或改写；不做故事规划或视频提交。
 ---
 
-# H3 Prompt Writing
+# 单 Panel H3 提示词
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 只完成一个已确认 Panel 的提示词工作单元，不执行生成、不做内容 `ACCEPT`、不建立监控代理；下游必须依据实际视频和实际音频证据验收。
+遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。输入齐全后直接写作，输出只含一份提示词；不再要求用户确认已有创作决定。
 
-## Priority and stop conditions
+## 输入与模式
 
-The current user instruction is authoritative over this Skill's defaults. When the user or upstream handoff supplies the mode, timing, references and dialogue needed for one Panel, write and return the prompt directly without another confirmation round. Project-level Canvas capabilities, platform permissions and safety boundaries still apply; user priority does not authorize unsupported modes or fabricated assets.
+需要当前 Panel 的：模式、精确时长、镜头及切点、动作与起止状态、画风/视觉锚点、逐字对白和声音要求，以及模式要求的实际素材与引用槽位。采用上游已确定的机位、节奏和字幕/后期责任。缺少会改变生成结果的必要输入，或输入相互冲突时，简短说明具体缺口；不编造素材或静默改模式。非必需细节可按创作意图写清，不把它们变成新的审批。
 
-Stop after one concise incompatibility report when a required mode, asset, field, timing value or reference mapping is missing or contradictory. Do not silently redesign the Panel, invent a reference, emit an unusable prompt or retry the same inputs. Continue only when the user or upstream caller supplies a concrete correction or new approved input.
+| 模式 | 输入与写法 | 只读取对应参考 |
+| --- | --- | --- |
+| T2VA / `video.text_to_video` | 无媒体输入；用已确定的文本锚点建立画面与声音 | [基础格式](references/base-en.txt) |
+| I2VA / `video.image_to_video` | 一张精确首帧；从已完成的可见状态向前发展 | [基础格式](references/base-en.txt) |
+| FL2VA / `video.first_last_frame` | 精确首帧和尾帧；写清两帧之间的连续路径 | [基础格式](references/base-en.txt) |
+| Ref2VA / R2V / `video.reference_to_video` | 已提供的图片、视频或音频参考；不把普通参考当精确首帧 | [全参考格式](references/ref-en.txt) |
 
-## Workflow
+当前 Canvas 不支持仅尾帧 L2VA。选定模式还须符合当前能力说明，不因 H3 文本格式存在就假定执行端支持。
 
-1. Identify the input mode: T2VA, I2VA, FL2VA, or full-reference Ref2VA. Last-frame-only L2VA is not a supported Canvas H3 mode; stop with a concise incompatibility report naming the supported correction instead of emitting an unusable prompt or repeating a confirmation request.
-2. When a zero-to-story director plan or current user specification is supplied, treat its operation, Camera Setup sequence, timing and pacing as fixed input. Do not independently redesign the scene unless the user explicitly asks for that change.
-3. For base text/keyframe modes, read references/base-en.txt. For full-reference mode, read references/ref-en.txt.
-4. Preserve the exact field names, section order, labels and timing notation required by the selected guide.
-5. Run a mandatory shot-header format gate before returning: the first header must be `[Shot 1]` followed directly by descriptive prose. `[Shot 1] At ...`, `[Shot 1] From ...`, `[Shot 1] 00:...` and any first-shot time range are invalid and must be rewritten. Every later shot header must use `[Shot N] At <approved-cut-time>, ...`.
-6. Return one complete prompt for the single Panel. The caller saves it unchanged in the target Canvas video node before confirmation freezes the execution snapshot; do not emit sidecars or duplicate QC documents.
+## 写作步骤
 
-## Base Modes
+1. 核对当前 Panel 的模式、素材和时长能否相互满足。连续接力从前段已完成状态开始；硬切或换场从本段批准的新机位开始，不复演前段收尾。
+2. 按所选参考的字段顺序组织提示词。T2VA/I2VA/FL2VA 使用三个核心字段；Ref2VA 使用六个字段。I2VA/FL2VA 的首行对齐指令照基础格式填写。
+3. 按实际 Camera Setup（摄影镜头）写 `[Shot N]`。每镜写清构图与主体、动作如何发生和完成、摄影机如何运动、声音如何对应；只包含当前可见可听且有用途的信息。
+4. 返回前随写作核对一次：字段顺序、引用标签、镜头切点、逐字对白。不要另写检查报告。
 
-- T2VA: build the audiovisual timeline from text and approved text anchors.
-- I2VA: start from the supplied first frame and develop forward.
-- FL2VA: describe one continuous path between supplied first and last frames.
-- Ref2VA/R2V: use the full-reference six-section form whenever the approved operation is `video.reference_to_video`, including when its only visual input is one variable-grid storyboard board.
+六个 Beat 是故事板里的语义时刻，不等于六个镜头。一个 Setup 内的发展放在同一 Shot。P002 以后的边界 Beat 是零时长上下文，不添加动作、对白或时长。切点与对白窗口沿用已确定输入，不拉伸、压缩、重排或补造。
 
-Use integrated_multimodal_description, overall_soundscape and non_diegetic_music in the order shown in references/base-en.txt.
+## 引用与严格格式
 
-## Director-plan handoff
-
-The upstream creative plan is authoritative for dramatic pacing, operation, Camera Setup count, cut points, camera position, axis side, subject facing, gaze target, screen direction and visual anchors. Treat an approved variable-grid storyboard board as one ordered planning reference. For a zero-to-story handoff, preserve its locked `rowsxcolumns` layout of 2–6 cells and row-major cell mapping, but do not create a separate reference image or H3 [Shot N] for each cell. Emit one [Shot N] for each actual Camera Setup, preserving same-setup development inside one shot.
-
-Use approved character and scene text anchors whenever the selected mode needs stable visual detail. Do not invent a second identity or environment description. If a required anchor is absent, report the incompatibility to the caller instead of silently deleting a reference or changing the mode; if all required anchors are present, continue directly.
-
-## Continuity handoff constraints
-
-Validate the operation against the approved director intent and actual shot relationship:
-
-- Same-scene continuous handoff: prefer I2VA (video.image_to_video) with the previous clip's real tail frame as the exact first frame. Treat it as an already completed visible state and start the new action immediately; never rewind or replay the boundary action.
-- Exact first and last frame together: use FL2VA (video.first_last_frame) and describe one forward path between those keyframes.
-- When the approved operation is Ref2VA/R2V (video.reference_to_video), consume its variable-grid storyboard board, other full references or intentional hard-cut plan without changing the mode. The whole storyboard board is one ordinary reference image; it may guide ordered viewpoints, identity, composition or state, but it is not an exact video first-frame lock.
-
-The current user or upstream plan chooses the operation. This Skill checks that the selected mode can consume the supplied assets and writes the corresponding H3 form. If it cannot, stop with a concise incompatibility report.
-
-The supplied timing is authoritative. Do not stretch, compress, reorder, merge or invent dialogue/action windows. Preserve the approved duration and Camera Setup boundaries. For P002 and later, the upstream plan's boundary Beat is zero-duration context, not necessarily a storyboard cell. If the approved cell mapping includes that boundary state, it adds no shot, action, dialogue or duration; if it does not, do not invent a replacement cell. For a continuous handoff, the first effective shot must advance from the completed pose, gaze, screen direction and prop state. For an approved hard cut or new scene, begin with the first current-Panel Setup instead of inserting or replaying the prior boundary state. Keep one transition ownership per boundary so adjacent clips do not repeat the same closing action.
-
-## Full-Reference Mode
-
-Ref2VA rewrites use subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape and non_diegetic_music in that order. Reference labels stay consistent across every section.
-
-When the handoff supplies fixed typed Canvas reference slots, preserve their identities: `ref_image_0` maps to `<Picture 1>`, `ref_video_0` to `<Video 1>` and `ref_audio_0` to `<Audio 1>`, with the same zero-based-to-one-based mapping for later slots. Define only assets actually supplied; do not renumber, duplicate or invent references.
-
-Read references/ref-en.txt for label rules, retention analysis and the complete example.
-
-## Output Rules
-
-- Write rewrite sections in English; preserve dialogue, lyrics and visible scene text in their original language.
-- Describe every actual shot by composition, subjects, environment, actions, camera, sound and the exact point where referenced content appears.
-- Shot-header syntax is strict: write `[Shot 1]` followed immediately by its prose description. Never put `At 00:00.000`, `From 00:00.000`, a time range or any other timestamp after `[Shot 1]`. Express its end only through the next header, such as `[Shot 2] At 00:04.000`; only later shots carry approved strictly increasing cut times. Before returning, rewrite the prompt if the first shot header contains any time expression.
-- Keep [Shot N] count and cut times aligned with the approved Camera Setup plan, not the number of storyboard cells.
-- Represent one storyboard-board asset with one `<Picture N>` label; never invent labels or input images for its individual cells.
-- Preserve every approved dialogue event verbatim, including speaker, language and timing. Use the required H3 dialogue markers from the selected guide.
-- Avoid plot summaries, unresolved reference labels, invented timing, extra shots and unapproved references.
-- Return the complete H3 prompt as the sole execution text. Do not add a title, explanation, Markdown fence, negative-prompt block or metadata.
+- 全参考模式按 `subject_definitions → summary → retention_analysis → detailed_description → overall_soundscape → non_diegetic_music` 排列；基础模式按 `integrated_multimodal_description → overall_soundscape → non_diegetic_music` 排列。
+- Canvas 槽位 `ref_image_0`、`ref_video_0`、`ref_audio_0` 分别映射 `<Picture 1>`、`<Video 1>`、`<Audio 1>`，后续槽位同样从零基转为一基编号；保留槽位身份，不补号、不重复、不虚构参考。
+- `<Subject N>` 只用于需要跨镜复用或单独说明参考保留关系的内容；普通布景和一次性道具直接写进镜头正文，不为每个名词创建标签。相同人物或道具的状态变化沿用同一身份。
+- 一张分镜板只占一个 `<Picture N>`。保留已确定的 2–6 格 `rowsxcolumns` 布局与从左到右、从上到下顺序；板内格子不成为独立素材或额外 Shot。
+- 第一镜写 `[Shot 1] 描述正文`，后面不带 `At`、`From` 或时间范围。后续写 `[Shot 2] At 00:04.000, ...`，时间取自批准切点并严格递增。
+- 描述字段用英文；对白、歌词和场景可见文字保留原语言、原文和标点。对白标记、说话人和发声时机按对应参考格式填写。
+- 只返回完整提示词，不加标题、解释、代码围栏、negative prompt 或元数据。调用方将其原样保存到目标 Canvas 视频节点。

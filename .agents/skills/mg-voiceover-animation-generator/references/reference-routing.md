@@ -1,49 +1,45 @@
-# MG Skill 参考与执行路由
+# MG 参考与交接路由
 
-共同的角色、授权、Panel ready 和停止规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)；本文件只索引 MG 专业参考。
+共享授权、停止和结果规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。只读取会改变当前 MG 决策的参考。
 
-本文件是参考资料和 Canvas 交付的轻量索引。只读取当前任务会影响决策的资料。
+## 创作参考
 
-## 1. 创作资料路由
+所有 MG 任务先读本路由；只有准备 H3 交接或用户要求提示词文档时才读 [h3-mg-prompt-template.md](h3-mg-prompt-template.md)，再按问题选择：
 
-先读 `h3-mg-prompt-template.md`，再按语义选择：
-
-| 当前需求 | 读取 |
+| 问题 | 参考 |
 |---|---|
-| 所有 MG 口播任务 | `h3-mg-prompt-template.md` |
-| 风格、版式、色彩、层级、信息密度 | `visual-style-layout-library.md` |
-| 卡片、图标、线条、镜头、转场、桥接 | `element-motion-transition-library.md` |
-| 标题、关键词、输入框、动态字形 | `kinetic-typography-motion-library.md` |
-| 抽象概念、对比、分流、聚合、波形 | `mg-motion-pattern-library.md` |
-| 数字、百分比、增长、排名、KPI、进度 | `data-visualization-motion-library.md` |
+| 风格、版式、色彩、信息密度 | visual-style-layout-library.md |
+| 卡片、图标、线条、镜头和转场 | element-motion-transition-library.md |
+| 标题、关键词、输入框、动态字 | kinetic-typography-motion-library.md |
+| 抽象概念、对比、分流、聚合、波形 | mg-motion-pattern-library.md |
+| 数字、百分比、增长、排名、KPI | data-visualization-motion-library.md |
+| 明确要求 Seedance 兼容创作 | seedance-omni-reference-prompt.md（legacy，仅写作） |
 
-不存在的语义映射、桥接或 UI 专用资料不应被引用；用现有资料的语义映射和元素动效规则完成判断。历史 Seedance 资料仅在明确的兼容创作需求下读取，不能替换当前 H3 → Canvas 流程或绕过能力检查。
+不用为形式完整读取未命中的库。库中的建议要翻译成当前画面动作，不写“参考知识库”代替方案。
 
-## 2. 视觉参考路由
+## 视觉参考模式
 
-在准备执行输入前，由当前指令或已确定的创作方案显式选择生成模式。参考数量只用于核对，不用于自动推断；Canvas 字段按当前能力填写：
+模式由已确认的素材用途决定，不能按素材数量猜：
 
-| 已确认意图 | H3 / Canvas 路由 |
+| 已确认用途 | Canvas 模式 |
 |---|---|
-| 无视觉参考 | T2V / `t2v`，不绑定媒体输入 |
-| 单张图片被明确批准为精确首帧 | I2V / `i2v`，绑定唯一 `first_frame` |
-| 两张图片被明确批准为精确首帧和尾帧 | FL2V / `fl2v`，绑定 `first_frame` 与 `last_frame` |
-| 普通身份/构图/风格参考，或视频参考 | R2V / `r2v`，使用类型匹配的参考输入 |
+| 无视觉参考 | T2V，不绑定媒体 |
+| 一张明确的精确首帧 | I2V，绑定唯一 first_frame |
+| 明确的首帧和尾帧 | FL2V，绑定 first_frame / last_frame |
+| 普通身份、构图、风格图或视频参考 | R2V，绑定对应参考端口 |
 
-每个视觉参考都要写清语义用途、保真要求、与 Panel 的绑定、审阅状态和实际来源。产品图由 Skill 生成时同样如此；生成产品图不等于已经生成最终动画。外部口播音频通过音频输入或明确的后期责任登记，不伪装成视觉参考。
+每项参考记录来源、语义用途、保真要求和当前 Panel；没有用途就不绑定。外部口播是音频输入或后期责任，不是视觉参考。产品图即使由 Skill 生成，也先审阅再交接。
 
-## 3. Canvas 交接
+## Canvas 交接
 
-方案确定后，先把当前 Panel 的 MG 创作事实交给 [h3-prompt-writing](../../h3-prompt-writing/SKILL.md)，再把其返回的最终 H3 提示词、模式、素材、生成参数、音频/后期责任和验收要求交给 [canvas-workspace](../../canvas-workspace/SKILL.md)：
+方案确定后：
 
-- 默认建立一个连续生成 Clip；不要把时间线段落误建成多个生成 Panel。只有用户明确要求多条成片或当前 H3 时长上限要求拆分时，才建立多个独立 Panel。
-- `pixel_ratio` 写到 Canvas 节点的 `megapixels`；未指定时不从交付尺寸推断。例如用户明确选择 `0.4` 时写成 `megapixels: 0.4`；`1080x1920` 等交付尺寸属于接受输出后的确定性处理规格。
-- 有外部口播音频时登记实际素材及其输入或后期用途；无外部口播时记录是否允许 H3 原生音频。音频来源必须在提示词、Canvas 节点和后期责任中一致。
-- 普通字幕默认关闭。MG 动态字、UI 标签、标题和数据标签不是字幕。
-- 保存节点只是准备草稿；只有页面确认或对话明确授权才冻结 `execution_snapshot`。用户选择 `comfy` 时由 Canvas 服务调用 `comfy-video-executor`，本 Skill 不直接调用 comfy-cli。
+1. 把当前 Panel 的事实交给 [h3-prompt-writing](../../h3-prompt-writing/SKILL.md)，取得完整 H3 文本；
+2. 把提示词、已确认模式、素材、参数、音频/后期责任和验收重点交给 [canvas-workspace](../../canvas-workspace/SKILL.md)；
+3. 保存草稿，等页面确认或对话明确授权后由 Canvas 冻结快照并提交一次。comfy 由 Canvas 服务调用 [comfy-video-executor](../../comfy-video-executor/SKILL.md)。
 
-## 4. 实际媒体、接力与成片
+只有旧输入明确把 pixel_ratio 当作同一 MP 像素预算时，才将该值映射为 Canvas parameters.megapixels；不要把画幅或像素宽高比当作 MP，未指定不猜。交付分辨率由后期处理负责。默认一个连续 Clip，只有用户要多条成片或能力时长限制要求拆分才建多个 Panel。
 
-每个已确认快照只提交一次。调用方查看回填的实际 Clip，记录实际末态和实际音频证据，再输出一次 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE`；拒绝、未知或任一执行失败即停止。请求状态未知时核对同一 Canvas 请求，不重新提交、切换提供方或建立恢复循环。
+## 结果
 
-真实末帧只在下一 Panel 的已确认模式需要精确首帧时从已接受的实际输出提取、导入画布并绑定；R2V 可按连续性计划使用完整 `ACCEPT` 视频作为普通参考，不把普通参考冒充精确首帧；T2V/硬切无需尾帧。全部 Panel 接受后，如用户要求完整成片，只对已接受的 Canvas 输出做确定性媒体处理，落实顺序、最终口播音频、字幕和交付规格，并检查实际文件的可播放性与视听同步。不要把后期处理变成第二条生成入口。
+实际输出回填原节点后，按共享规则记录任务相关末态和音频证据，并做一次 ACCEPT、REJECT 或 INCONCLUSIVE。请求状态未知时核对同一请求，不重提、不换能力。需要连续性时，只有已接受实际输出才能作为普通视频参考或提取精确尾帧。全部 Panel 接受且用户要求成片时，只对已接受输出做确定性连接、音频、字幕和可播放性/同步检查。
