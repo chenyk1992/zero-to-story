@@ -482,6 +482,15 @@ class CanvasStore:
             raise RunNotFoundError(run_id)
         return self._run_from_row(row)
 
+    def list_queued_runs(self) -> list[dict[str, Any]]:
+        """Read only runnable work, preserving the existing dispatch order."""
+        with self._lock:
+            rows = self._conn().execute(
+                "SELECT * FROM node_runs WHERE status = 'queued' "
+                "ORDER BY created_at ASC, id ASC"
+            ).fetchall()
+        return [self._run_from_row(row) for row in rows]
+
     def list_runs(self, canvas_id: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             if canvas_id is None:
@@ -1726,7 +1735,8 @@ class CanvasStore:
                     "blocked": {"blocked", "handled"},
                     "handled": {"handled"},
                 }
-                if state not in transitions.get(unit.get("state"), set()):
+                previous_state = unit.get("state")
+                if not isinstance(previous_state, str) or state not in transitions.get(previous_state, set()):
                     raise CanvasStoreError(
                         "unit state cannot move backwards; use a new unit for new work",
                         code="continuation_unit_transition",

@@ -1,0 +1,13 @@
+{
+  "name": "雨后纸船 · 最小示例",
+  "graph": {
+    "workspace": {"story": "雨后纸船", "chapter": "示例", "summary": "仅保存草稿；导入不会生成视频。"},
+    "nodes": [
+      {"id": "demo-brief", "type": "document", "position": {"x": 0, "y": 0}, "data": {"label": "故事说明", "content": "一只纸船沿雨后的浅水缓缓漂动。检查纸船形状与运动连续性。"}},
+      {"id": "demo-panel-001", "type": "video", "position": {"x": 400, "y": 0}, "data": {"label": "纸船", "panel_id": "P001", "provider": "comfy", "model": "h3", "mode": "t2v", "prompt": "A paper boat drifts slowly across a shallow rain puddle. A fixed close-up camera observes the continuous motion. Natural overcast daylight.", "duration": 5, "aspect_ratio": "16:9", "megapixels": 0.6, "options": {"comfy": {"sampler_profile": "native", "steps": 12}}}}
+    ],
+    "edges": [{"id": "demo-context", "source": "demo-brief", "sourceHandle": "output", "target": "demo-panel-001", "targetHandle": "related"}],
+    "viewport": {"x": 0, "y": 0, "zoom": 1},
+    "selection": ["demo-panel-001"]
+  }
+}

@@ -11,7 +11,6 @@ import pytest
 
 from lfo.media._ffmpeg import probe
 from lfo.media.boundary import BoundaryEvidenceBuilder, BoundaryEvidenceSpec
-from lfo.media.handlers import build_media_handler_registry
 
 
 def test_boundary_evidence_rejects_invalid_sampling_policy(tmp_path: Path) -> None:
@@ -42,57 +41,6 @@ def test_boundary_evidence_allows_dotted_output_directory(tmp_path: Path) -> Non
         next_path="b.mp4",
         output_directory=str(tmp_path / "evidence.v1"),
     ).validate()
-
-
-def test_real_media_registry_exposes_boundary_evidence_handler(tmp_path: Path) -> None:
-    assert build_media_handler_registry(tmp_path).has_handler("media.boundary_evidence")
-
-
-@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is required")
-def test_boundary_evidence_handler_writes_inside_run_layout(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    project = workspace / "projects" / "project"
-    clips = project / "outputs" / "run" / "clips"
-    previous = clips / "a" / "mixed.mp4"
-    following = clips / "b" / "mixed.mp4"
-    previous.parent.mkdir(parents=True)
-    following.parent.mkdir(parents=True)
-    _make_clip(previous, color="red", frequency=440)
-    _make_clip(following, color="blue", frequency=880)
-    output = project / "outputs" / "run" / "global" / "boundaries" / "a__b"
-    handler = build_media_handler_registry(workspace).get("media.boundary_evidence")
-    assert handler is not None
-
-    result = handler.execute(
-        "boundary-task",
-        "media.boundary_evidence",
-        "a__b:media.boundary_evidence",
-        {
-            "boundary_id": "a__b",
-            "previous_input_task_id": "a.mix",
-            "next_input_task_id": "b.mix",
-            "input_artifacts": {
-                "a.mix": {"file_path": str(previous)},
-                "b.mix": {"file_path": str(following)},
-            },
-            "output_path": str(output),
-            "next_source_in_ms": 100,
-            "next_source_out_ms": 500,
-            "artifact_layout": {
-                "workspace_root": str(workspace),
-                "project_root": str(project),
-            },
-        },
-        "attempt",
-    )
-
-    assert result.success, result.error
-    assert result.artifact_type == "boundary_evidence"
-    assert Path(result.artifact_metadata["preview"]).is_file()
-    assert Path(result.artifact_metadata["metrics"]).is_file()
-    assert Path(result.artifact_metadata["preview"]).is_relative_to(output)
-    metrics = json.loads(Path(result.artifact_metadata["metrics"]).read_text(encoding="utf-8"))
-    assert metrics["window"]["next_head_start_ms"] == 100
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is required")

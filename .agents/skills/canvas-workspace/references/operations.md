@@ -1,5 +1,21 @@
 # 画布操作接口
 
+## 通用导入、编辑与真实尾帧
+
+完整故事图使用本 Skill 的 `scripts/import_workspace.py` 及 JSON manifest，先 `--dry-run` 验证稳定节点 ID、素材路径和连线，再导入。已有画布使用 `CanvasClient.edit(canvas_id, version, operations)` 精确更新；版本冲突后重新读取完整画布并重新应用本次操作，不用新版本号提交旧图，不以历史 Markdown 覆盖当前提示词。
+
+R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序。项目 `scripts/r2v_wire.py` 要求显式画布 ID，冲突即停止保存；替换图片引用时保留其他组件、视口、选择和工作空间信息。`related` 不参与生成。
+
+查看原运行使用 `python -m lfo.canvas call GET /api/runs/<run_id>`；修改提示词使用版本化 `edit` 的 `update_node` 操作，不再复制章节专用提交脚本。审片辅助使用 `scripts/qc_video.py <video> <新的输出目录>` 提取抽样帧和响度；它不作内容判断，不记录 ACCEPT，不提取接力尾帧。
+
+已 ACCEPT 的视频需要下一镜首帧时，从项目根运行：
+
+```powershell
+./.venv/Scripts/python.exe scripts/accepted_tail.py <run_id>
+```
+
+工具读取当前运行与采用摘要，完整解码并在该 run 输出目录创建唯一真实尾帧；不提交生成、不自动连线。将返回项追加到源视频节点 `data.derived_outputs`，保留既有项；源边使用 `sourceHandle: "output:<返回的 id>"`，并设置 `source_run_id` 与 `require_accept: true`，连接目标 `first_frame`。保存仍使用最新版本。再次确认时画布核实尾帧及采用源文件摘要；禁止用普通资产边绕过采用来源检查。
+
 优先使用项目 MCP `story_canvas` 的工具。若当前会话尚未加载新增工具，从项目根用 `.venv/Scripts/python.exe -m lfo.canvas open` 启动/找到页面，使用 `python -m lfo.canvas call METHOD /api/... --body-file <JSON文件>` 调用相同服务。这里的 python 指项目解释器；临时 JSON 放系统临时目录，避免占用创作工作区。
 
 宿主连接配置放在对应宿主的项目级配置中；仓库的 `.codex/config.toml` 只是当前 Codex 连接示例，不是其他宿主的必需配置。工具新增后需要宿主重新加载；普通 CLI 交接立即可用。完整启动与字段说明见 [画布使用指南](../../../../docs/canvas-guide.md)。

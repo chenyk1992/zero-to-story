@@ -1,4 +1,4 @@
-"""LFO Runtime v1 media pipeline."""
+"""Deterministic media inspection and post-processing utilities."""
 
 from __future__ import annotations
 

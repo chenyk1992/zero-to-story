@@ -77,7 +77,7 @@ description: |
 - 不要编造事实、品牌卖点、引用、法律文字或来源。
 - 任何依赖精确文字的镜头，都必须由用户提供准确文本或可信来源。
 - 如果用户指定屏幕文字语言，所有屏幕文字都使用该语言；如果用户指定提示词语言，生成提示词使用用户要求的语言。
-- 生成路线由已确认的 Panel 计划和当前 LFO 能力共同决定；本 Skill 不默认或强制某个模型，也不把提供方参数写进创作计划。
+- 生成路线由已确认的 Panel 计划和当前 Canvas 能力共同决定；本 Skill 不默认或强制某个模型，也不把提供方参数写进创作计划。
 
 ## STEP 4：输出可审片的 B-roll 计划
 
@@ -113,37 +113,24 @@ description: |
 按当前指令或已确定计划只生成授权范围内的镜头或连续长镜头；用户后续修改时重新准备受影响的执行输入，已提交任务仍使用原固定输入。
 
 规则：
-- 每个需要生成的 B-roll 计划项都是一个 Panel/Clip；Panel 时长遵守当前 H3/LFO 契约的 4–15 秒范围。不要把整段逐字稿或多个 Panel 合并成一个生成请求。
+- 每个需要生成的 B-roll 计划项都是一个 Panel/Clip；使用 H3 时，Panel 时长遵守当前 Canvas H3 能力的 4–15 秒范围。不要把整段逐字稿或多个 Panel 合并成一个生成请求。
 - 对共享同一主体、产品、数据系统或视觉世界的 Panel，按计划逐个生成并保持连续性；不要并行提交多个视频任务。
 - 以已确认的计划作为 Panel 顺序、节拍顺序、运动连续性和素材需求的唯一依据。视频提示词交给 `$h3-prompt-writing`，本 Skill 不手工补写 H3 提示词。
 - 某个 Panel 生成失败或被拒时立即停止当前序列，不自动重试、换模型、保留失败候选或改写已批准计划；需要重做时由调用方显式重新准备该 Panel。
 - 执行单元查看实际输出，记录可观察的实际末态和实际音频证据，再作出 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE`，不做分数或分级 QC。
 
-## STEP 7：按所选入口逐 Panel 交接
+## STEP 7：通过 Canvas 逐 Panel 交接
 
-画布任务把当前 Panel 的最终 H3 提示词、素材、operation、参数、音频/后期责任和验收要求交给 [canvas-workspace](../canvas-workspace/SKILL.md)，按固定快照领取、单次提交和实际媒体回填推进，不创建执行包或增加包 hash、assembly 包门槛。需要接镜时绑定已接受的真实输出；原请求未知时按画布规则核对，不重新提交。完成画布交接后跳至 STEP 8。
-
-以下仅用于用户明确选择的 LFO package CLI：
-
-在计划和每个 Panel 的 H3 提示词已经由当前指令或已有确认确定后，调用方为每个 Panel 写出一份 `lfo.video-execution.v1` 的 execution package。所有 Panel 包和最终 assembly 包都直接放在同一个 `workspace/projects/<project_id>/` 项目根目录，用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`），不要放入 Panel 子目录，否则前一 Run 的 `outputs/<run_id>/...` 无法用包内相对 URI 稳定引用。每份包只含当前 Panel 的一个非 `video.passthrough` Clip，并写入已确认的 operation、时长、H3 prompt、最小素材引用、字幕/音频策略和输出策略；不要创建旧 `intake`、`shots[]`、prompt manifest 或生产锁文件。
-
-逐 Panel 交接固定为：
-
-```text
-写当前 Panel package
-  → validate，取得 package_sha256；核对现有明确批准或适用的持续授权，未覆盖时才请求一次精确 hash 批准
-  → execute --approved-sha256 <hash>（同步、一次）
-  → 执行单元依据实际末态与实际音频证据作出 ACCEPT / REJECT / INCONCLUSIVE
-```
+把当前 Panel 的最终 H3 提示词、素材、模式、参数、音频/后期责任和验收要求交给 [canvas-workspace](../canvas-workspace/SKILL.md)。Canvas 节点保存的是下一次生成草稿；只有页面确认或对话明确授权后，服务才冻结 `execution_snapshot`。每个快照只提交一次，实际媒体返回原节点；原请求状态未知时核对同一请求，不重新提交或切换提供方。用户选择 `comfy` 时，由 Canvas 服务把固定快照交给 [comfy-video-executor](../comfy-video-executor/SKILL.md)，本 Skill 不直接运行 comfy-cli。
 
 当前 Panel 自身事实、必要素材、提示词、参数、音频/后期责任、输出位置和授权齐全后即可 ready；独立 Panel 可以先准备。只有下一 Panel 需要连续性时才等待前一 Panel `ACCEPT`。若下一 Panel 需要连续性：
 
-- I2V：从已接受视频实际输出提取真实末帧 PNG，把它作为下一包唯一的 `first_frame` 素材；
-- FL2V：按批准计划把真实首帧和真实尾帧写入下一包；
-- R2V：只有批准 operation 明确需要时，才把上一段完整 `ACCEPT` 视频作为一个 `ref_video_N` fixed typed slot；它不是精确首帧；
+- I2V：从已接受的实际输出提取真实末帧 PNG，导入画布并绑定为下一节点唯一的 `first_frame`；
+- FL2V：按已确认计划把真实首帧和真实尾帧绑定到下一节点；
+- R2V：只有已确认模式明确需要时，才把上一段完整 `ACCEPT` 视频绑定为普通视频参考；它不是精确首帧；
 - T2V 或硬切 R2V：只用已接受视频做人工边界检查，不伪装成模型首帧。
 
-尾帧尚未从实际 `ACCEPT` 输出提取时，不在下一包中虚构路径。前一 Panel 执行失败、`REJECT` 或 `INCONCLUSIVE` 时，不启动依赖它的下一 Panel。所有 Panel 接受后，如用户要求交付完整视频，调用方再创建一份只含已接受视频 `video.passthrough` Clip 的 assembly package，独立 `validate`、核对其完整文件字节 SHA-256 授权后执行一次 `cut` 组装。外部口播音频应作为 assembly 的音频轨道实际替换或保留；用户明确需要字幕时才加入字幕素材/策略，不能把整段逐字稿默认当作字幕。最终 assembly 只在实际文件完成一次可播放、顺序、实际末态、声音、字幕和同步检查。
+尾帧尚未从实际 `ACCEPT` 输出提取时，不在画布中虚构路径。前一 Panel 执行失败、`REJECT` 或 `INCONCLUSIVE` 时，不确认依赖它的下一 Panel。所有 Panel 接受后，如用户要求交付完整视频，只对这些已接受的 Canvas 输出做确定性媒体处理，按计划连接片段、替换或保留外部口播音频，并在明确需要时加入字幕；不能把整段逐字稿默认当作字幕。最终实际文件只做一次可播放性、顺序、实际末态、声音、字幕和同步检查。
 
 ## STEP 8：交付计划与素材
 

@@ -1,6 +1,6 @@
 """The small technical gate used after a video-producing task.
 
-LFO does not attempt to judge the creative result.  It only verifies that the
+This gate does not attempt to judge the creative result. It only verifies that the
 provider returned a real, readable video with a positive duration and usable
 dimensions.  There is no semantic scoring or repair route here.
 """

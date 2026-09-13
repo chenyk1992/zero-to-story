@@ -6,7 +6,7 @@
 
 QC 只依据当前 Shot/Panel Contract 和实际输出的可观察证据。QC 决策只有 `ACCEPT` 或 `REJECT`，不使用 PASS、REVIEW、FAIL、分数或分级报告；校验或执行失败记为 `ERROR` 并立即停止。已有输出但不可播放时记为 `REJECT`。
 
-每个 Panel 作为独立的短生命周期单元同步执行；执行单元在结果返回后做一次最小检查。独立 Panel 可以先准备；只有依赖上一 Panel 的连续性才等待前一段 `ACCEPT`，最终组装仍等全部 Panel 接受。
+每个 Panel 作为独立的短生命周期单元执行；执行单元在 Canvas 回填实际结果后做一次最小检查。独立 Panel 可以先准备；只有依赖上一 Panel 的连续性才等待前一段 `ACCEPT`，最终成片处理仍等全部 Panel 接受。
 
 ## 检查项
 
@@ -23,12 +23,12 @@ QC 只依据当前 Shot/Panel Contract 和实际输出的可观察证据。QC �
 
 ## 执行与接力
 
-1. 当前 Panel 的 package 先 `validate`，并核对用户批准或持续授权覆盖的完整文件字节 SHA-256。
-2. 当前执行单元同步等待官方 `comfy-cli` 返回；执行单元查看实际文件并记录本页最小证据。
-3. 下一条 Presenter Panel 将当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考；只有其他下游 operation 明确需要精确首帧时，才从实际输出提取真实末帧并写入其 `first_frame`。
-4. `REJECT`、证据不足或执行错误立即停止，不自动重试、不修改 prompt、不保留失败候选；需要重做时重新构建当前 Panel package 并重新核对授权。
+1. 当前 Panel 的提示词、模式、参数与素材在 Canvas 中保存；页面确认或对话明确授权后冻结 `execution_snapshot`。
+2. Canvas 服务按已选能力提交一次并回填实际文件；用户选择 `comfy` 时由服务调用 `comfy-video-executor`。执行单元查看实际文件并记录本页最小证据。
+3. 下一条 Presenter Panel 将当前完整 `ACCEPT` 视频作为普通 `ref_video_0` 连续性参考；只有其他下游模式明确需要精确首帧时，才从实际输出提取真实末帧、导入画布并绑定为 `first_frame`。
+4. `REJECT`、证据不足或执行错误立即停止，不自动重试、不修改 prompt、不保留失败候选；需要重做时更新当前 Panel 草稿并由当前授权确认新的快照。
 
-## 最终组装检查
+## 最终成片检查
 
-全部 Panel `ACCEPT` 后，使用已接受片段构建纯 `video.passthrough` assembly package。该 package 独立 `validate`、重新核对完整文件字节 SHA-256 授权，并只执行一次。最终查看实际文件，检查可播放性、片段顺序、实际末态、声音、字幕和同步，而不以轨道存在代替听审。
+全部 Panel `ACCEPT` 后，只对已接受的 Canvas 输出做确定性媒体处理，按计划连接片段、落实音频与字幕，不调用生成模型。最终查看实际文件，检查可播放性、片段顺序、实际末态、声音、字幕和同步，而不以轨道存在代替听审。
 

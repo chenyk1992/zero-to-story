@@ -6,8 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from lfo.media._ffmpeg import MediaCommandError
-from lfo.media.handlers import TimelineHandler
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
 
 
@@ -195,40 +193,3 @@ class TestTimelineAssembler:
         assert not result.success
         assert result.error is not None
         assert "actual media duration" in result.error
-
-    def test_handler_converts_media_exception_to_retryable_result(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        workspace = tmp_path / "workspace"
-        project = workspace / "projects" / "project"
-        output = project / "outputs" / "run" / "global" / "timeline.mp4"
-
-        def fail_assembly(*args: object, **kwargs: object) -> object:
-            raise MediaCommandError("ffmpeg unavailable")
-
-        monkeypatch.setattr("lfo.media.handlers.TimelineAssembler.assemble", fail_assembly)
-        result = TimelineHandler(workspace).execute(
-            "timeline-task",
-            "timeline.assemble",
-            "timeline",
-            {
-                "segments": [
-                    {
-                        "clip_id": "clip",
-                        "input_task_id": "clip.mix",
-                        "duration_ms": 1_000,
-                    }
-                ],
-                "input_artifacts": {"clip.mix": {"file_path": str(tmp_path / "clip.mp4")}},
-                "output_path": str(output),
-                "artifact_layout": {
-                    "workspace_root": str(workspace),
-                    "project_root": str(project),
-                },
-            },
-            "attempt",
-        )
-        assert not result.success
-        assert result.retryable
-        assert result.error is not None
-        assert "ffmpeg unavailable" in result.error

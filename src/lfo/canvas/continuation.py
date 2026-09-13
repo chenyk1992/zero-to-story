@@ -467,7 +467,8 @@ def _dependency_block(
         if edge.get("require_accept"):
             dependencies.append((source_id, _optional_string(edge.get("source_run_id")), True))
 
-    data = node.get("data") if isinstance(node.get("data"), Mapping) else {}
+    raw_data = node.get("data")
+    data = raw_data if isinstance(raw_data, Mapping) else {}
     dependencies.extend(_planned_tail_dependencies(data.get("planned_inputs")))
     planned_tail = data.get("last_frame_source")
     if isinstance(planned_tail, str) and planned_tail.strip():
@@ -537,9 +538,9 @@ def _planned_tail_dependencies(value: Any) -> list[tuple[str, str | None, bool]]
             continue
         source = next(
             (
-                item.get(name)
+                value
                 for name in ("source_node_id", "node_id", "source_id", "source")
-                if isinstance(item.get(name), str) and item.get(name).strip()
+                if isinstance(value := item.get(name), str) and value.strip()
             ),
             None,
         )
@@ -553,9 +554,9 @@ def _planned_tail_dependencies(value: Any) -> list[tuple[str, str | None, bool]]
             continue
         run_id = next(
             (
-                item.get(name)
+                value
                 for name in ("source_run_id", "run_id", "source_run")
-                if isinstance(item.get(name), str) and item.get(name).strip()
+                if isinstance(value := item.get(name), str) and value.strip()
             ),
             None,
         )

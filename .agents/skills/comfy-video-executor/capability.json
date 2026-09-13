@@ -46,6 +46,7 @@
       "label": "生成像素预算（MP）",
       "type": "number",
       "group": "specs",
+      "min": 0.000001,
       "required": true
     },
     {
@@ -65,6 +66,7 @@
       "type": "number",
       "group": "advanced",
       "min": 8,
+      "integer": true,
       "required": true
     },
     {
@@ -72,6 +74,7 @@
       "label": "随机种子",
       "type": "number",
       "group": "advanced",
+      "integer": true,
       "required": false
     },
     {
@@ -79,6 +82,7 @@
       "label": "帧率",
       "type": "number",
       "group": "advanced",
+      "values": [24],
       "options": [{"value": 24, "label": "24 fps"}],
       "required": false
     },
@@ -87,11 +91,25 @@
       "label": "参考图尺寸",
       "type": "select",
       "group": "advanced",
+      "modes": ["r2v"],
       "options": [
         {"value": "match", "label": "匹配"},
         {"value": "max", "label": "最大"}
       ],
       "required": false
     }
-  ]
+  ],
+  "parameter_rules": [
+    {"when": {"sampler_profile": "vdn_turbo"}, "require": {"steps": 8}, "message": "VDN Turbo 必须使用 8 步"}
+  ],
+  "input_rules": {
+    "t2v": {"allowed": []},
+    "i2v": {"allowed": ["first_frame"], "required": ["first_frame"]},
+    "fl2v": {"allowed": ["first_frame", "last_frame"], "required": ["first_frame", "last_frame"]},
+    "r2v": {
+      "allowed": ["reference_images", "reference_videos", "reference_audios"],
+      "max_counts": {"reference_images": 9, "reference_videos": 3, "reference_audios": 3},
+      "any_of": ["reference_images", "reference_videos", "reference_audios"]
+    }
+  }
 }

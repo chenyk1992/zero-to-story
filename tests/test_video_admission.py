@@ -8,8 +8,7 @@ import sys
 import pytest
 
 from lfo.comfy.admission import VideoSubmissionGuard, inspect_submission, reconcile_submission
-from lfo.comfy.cli import ComfyCliRunner
-from lfo.comfy.exceptions import ComfyCliTimeoutError, LfoComfyError
+from lfo.comfy.exceptions import LfoComfyError
 
 
 def test_submission_guard_blocks_a_separate_process():
@@ -25,26 +24,16 @@ def test_submission_guard_blocks_a_separate_process():
     assert b"LfoComfyError" in result.stderr
 
 
-def test_hard_timeout_keeps_task_number_from_partial_stdout():
-    def time_out(*args, **kwargs):
-        raise subprocess.TimeoutExpired(
-            args[0], 1, output=b'{"type":"queued","prompt_id":"remote-early"}\n'
-        )
-
-    runner = ComfyCliRunner(process_runner=time_out)
-    with pytest.raises(ComfyCliTimeoutError) as raised:
-        runner.run_workflow({}, base_url="http://127.0.0.1:8188", timeout_seconds=1)
-    assert raised.value.prompt_id == "remote-early"
-    assert inspect_submission()["provider_task_id"] == "remote-early"
-
-
-def test_other_entrypoint_cannot_submit_while_guard_is_held():
-    calls = []
-    runner = ComfyCliRunner(process_runner=lambda *args, **kwargs: calls.append(args))
-    with VideoSubmissionGuard("http://127.0.0.1:8188"):
-        with pytest.raises(LfoComfyError, match="串行"):
-            runner.run_workflow({}, base_url="http://127.0.0.1:8188", timeout_seconds=1)
-    assert calls == []
+def test_admission_module_command_has_clean_stderr():
+    result = subprocess.run(
+        [sys.executable, "-m", "lfo.comfy.admission"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "null"
+    assert "RuntimeWarning" not in result.stderr
 
 
 def test_lost_process_receipt_keeps_slot_unknown_until_remote_proof(monkeypatch):

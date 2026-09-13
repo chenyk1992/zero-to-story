@@ -1,13 +1,13 @@
 # 画布与视频生产指南
 
-画布是本地故事工作空间。页面、MCP 和 CLI 操作同一个服务、数据库和媒体目录。保存只是编辑；页面确认或对话明确授权后，才固定输入并执行。共同分工见[项目协作规则](ai-system-prompt.md)，具体字段见[画布操作接口](../.agents/skills/canvas-workspace/references/operations.md)。
+画布是本地故事工作空间。页面、MCP 和 `python -m lfo.canvas` 画布命令操作同一个服务、数据库和媒体目录。保存只是编辑；页面确认或对话明确授权后，才固定输入并执行。共同分工见[项目协作规则](ai-system-prompt.md)，具体字段见[画布操作接口](../.agents/skills/canvas-workspace/references/operations.md)。
 
 ## 启动与宿主接入
 
 首次准备项目依赖，在项目根运行：
 
 ```powershell
-./.venv/Scripts/python.exe -m pip install -e ".[dev,canvas]"
+./scripts/bootstrap_dev.ps1
 ```
 
 在 `web/canvas/` 运行 `npm install`、`npm run build`，然后回到项目根运行：
@@ -49,7 +49,7 @@
 
 | 工作 | 当前规则 |
 |---|---|
-| 本地 Comfy 视频 | 项目执行 Skill；画布与包 CLI 共用机器级提交保护，一次提交、串行等待 |
+| 本地 Comfy 视频 | `queued` 脚本任务；服务内部 worker 启动项目执行 Skill，经 HTTP 预检后同步调用官方 comfy-cli；一次提交、串行等待 |
 | 宿主图片工具 | 显式选择已安装能力后可排队；有该工具的会话才能领取 |
 | mmx 视频 | 用户明确选择，且原有 mmx 能力可用时接手；失败不切换提供方 |
 | 独立图片 | 能力声明资源独立时，最多并发 2；`LFO_IMAGE_CONCURRENCY=1` 可收紧到 1 |
@@ -88,7 +88,7 @@
 
 `remote_status` 与核实结果一致，可为 `succeeded`、`failed`、`cancelled`；`source` 可为 `provider_history`、`provider_response`、`operator_confirmation`。不能用无依据的说明代替实际核实。保留原提供方编号和错误，不覆盖已完成任务。已证明提供方结束、但本地结果回收或媒体校验失败时，也可取回同一结果；核实从不生成新媒体。
 
-Comfy 的机器级提交回执位于应用数据目录 `zero-to-story/video/`，可通过 `LFO_VIDEO_STATE` 指定共同位置。诊断命令：
+Comfy 的 `VideoSubmissionGuard` 使用机器级串行互斥，覆盖该次提交和整个同步等待周期。持久回执位于应用数据目录 `zero-to-story/video/`，可通过 `LFO_VIDEO_STATE` 指定位置；执行进程丢失后，它继续阻塞未知任务，直到依据原任务证据核实结束。回执编号与对应 Canvas run 的 `request_id` 一致。诊断命令：
 
 ```powershell
 ./.venv/Scripts/python.exe -m lfo.comfy.admission

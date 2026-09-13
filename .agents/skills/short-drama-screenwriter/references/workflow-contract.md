@@ -2,7 +2,7 @@
 
 共同的角色、授权和停止规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)；本文件只描述短剧创作阶段和 handoff 字段。
 
-本文件是 `short-drama-screenwriter/SKILL.md` 的按需参考。它描述阶段产物和专业检查；通用授权、提问、停止、工作区和下游 LFO 约束以项目根 `AGENTS.md` 为准。
+本文件是 `short-drama-screenwriter/SKILL.md` 的按需参考。它描述阶段产物和专业检查；通用授权、提问、停止、工作区和下游 Canvas 约束以项目根 `AGENTS.md` 为准。
 
 ## 1. 目录与状态
 
@@ -155,11 +155,11 @@ CLOSE-UP — {character} {action}
 
 至少一集完成即可执行，支持单集、范围和 `next`。读取 `handoff-mapping.md` 和 `handoff-brief-template.md`；字段示例按需读取 `handoff-intake-template.json`。
 
-- 若不存在则创建 `handoff/project.json`（剧名、默认 `9:16`、目标总时长、风格、mood，不写 LFO 内部 ID/执行状态）和 `handoff/characters_visual.md`（外貌、服饰、标志特征、关键道具）。
+- 若不存在则创建 `handoff/project.json`（剧名、默认 `9:16`、目标总时长、风格、mood，不写 Canvas 内部 ID/执行状态）和 `handoff/characters_visual.md`（外貌、服饰、标志特征、关键道具）。
 - 按集创建 `handoff/ep{NNN}/storyboard_brief.md` 和 `cut_notes.md`。未指定时 brief 默认 9:16、常见单集时长 15–60 秒；用户给定的画幅、时长、场景与角色范围优先，交给下游按每 Panel 4–15 秒拆分，不把常见单集时长当上限。
 - 用户授权压缩时，连载常规集可参考把 3–6 场压成 brief 内 1–2 个场景；其余保留用户给定的范围，不为套数量增删场景或角色。对白按可拍节拍组织，用户要求逐字保留时完整转交；不按一句对白一个镜头机械编排；每条候选节拍说明前景/中景/远景、左/右/中央和可见结束状态。
 - 钩子、预告、付费墙进 `cut_notes.md` 或 brief 附录，不伪装为视频字幕或模型引用。分别记录对白、环境声、动作声、外部口播和字幕意图，不把意图写成已存在音频。
-- 不改 `episodes/epNNN.md`，不调用 LFO/ComfyUI，不写旧 schema，不自动写 `workspace/`。完成后报告三个 handoff 文件路径和下游输入；不报告不存在的执行包、hash、尾帧或运行结果。
+- 不改 `episodes/epNNN.md`，不调用 Canvas、ComfyUI 或视频提供方，不写运行时请求，不自动写 `workspace/`。完成后报告三个 handoff 文件路径和下游输入；不报告不存在的 Canvas 节点、快照、尾帧或运行结果。
 
 更新 `bridgedEpisodes`，允许与 `completedEpisodes` 并存。完整字段对照以 `handoff-mapping.md` 为准。
 

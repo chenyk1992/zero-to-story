@@ -1,59 +1,50 @@
 # H3 工作流约定
 
-共同的角色、Panel ready、输入冻结和实际末态/音频验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只描述 H3 registry 与绑定约定。
+共同的角色、Panel ready、输入冻结和实际末态/音频验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只描述 Canvas `comfy-video-executor` 的 H3 模板、绑定、预检和结果边界。
 
-LFO 的 H3 工作流以 `src/lfo/registry/` 中的 JSON 为唯一配置来源。JSON
-负责声明模型文件、VAE、提示词和引用输入、分辨率、帧数、采样器、调度器、
-步数以及输出链路。Python 运行时不复制这些值，也不通过节点编号推断
-工作流语义。
+## 模板来源
 
-Python 运行时只做四件事：
+Canvas H3 模板只维护在项目 Skill 的 `.agents/skills/comfy-video-executor/templates/`：
 
-1. 通过稳定的 `_meta.title` 绑定可变输入，例如
-   `LFO.Prompt`、`LFO.Duration`、`LFO.Reference01` 和
-   `LFO.MainGenerator`；节点编号和 ComfyUI 画布顺序不属于公共接口。
-2. 在上传前读取 ComfyUI `/object_info`，检查所需节点、模型选择项及固定
-   配置；输入绑定同时检查声明的槽位。预检应当说明缺少的模型或节点，不通过偷偷换模型、
-   换采样器或删除引用来恢复。
-3. 按 LFO 的单 Panel 契约串行提交一次并同步等待官方 ComfyUI/comfy-cli
-   完成。Python 代码负责素材导入、输入绑定、超时和结果收集，不负责创作
-   提示词或决定镜头语义。
-4. 从本次 ComfyUI 结果中复制唯一明确的视频到 RunArtifactLayout，并记录
-   `prepared_workflow_hash`、采样参数、`provider_elapsed_seconds`、
-   `handler_elapsed_seconds`、媒体流和最小 QC 结果。生成失败或结果不唯一
-   时停止当前 Panel，不自动换工作流重提。工作流技术成功不代表内容
-   `ACCEPT`；执行单元必须依据实际视频记录实际末态和实际音频证据。
+- `h3_native_fl2va.json`
+- `h3_native_r2v.json`
+- `h3_standard_fl2va.json`
+- `h3_standard_r2v.json`
 
-工作流的模型名、采样参数和输出节点必须留在 JSON；绑定代码依赖标题、
-节点类型和公开输入名称。替换 registry JSON 后沿用现有的 workflow hash、manifest、
-binding report 和静态/预检检查。不要在 Python 中增加隐藏的备用节点 ID、
-环境变量模式或同一 JSON 的另一套采样参数。
+模板声明模型、VAE、提示词和引用输入、分辨率、时长、采样器、调度器、步数及输出链路。adapter 不从其他运行时目录加载模板，也不根据旧运行记录选择工作流。模板中的示例值不是 Canvas 默认值；本次确认快照必须显式提供 capability 要求的字段。
 
-当前 H3 视频工作流保持以下边界：VDN8 直接替换标准 FL2VA/R2V 的
-registry JSON，并完整保留这些模板已有的 operation 映射、T2V/FL2V 映射和
-视频/音频/混合引用绑定；LFO 继续使用同一套输入绑定。数字人口播
-`video.virtual_presenter` 继续使用独立的原生 20 步工作流。质量验证采用
-8 步，不能以 4 步作为生产默认。
+## adapter 职责
 
-工作流变更不改变 `VideoExecutionPackage` 公共字段。仍按现有的
-`validate` → `execute --approved-sha256` 和 workflow hash 契约执行。
+Python adapter 只做以下工作：
 
-Canvas Comfy 与 package CLI 共用低层提交占用和持久提交回执；工作流绑定代码不能绕过该占用或自行并发提交。回执诊断由 `python -m lfo.comfy.admission` 提供，核实原任务只读取原始 Comfy `/history`，不重新提交。
+1. 校验冻结 snapshot 的 provider、model、mode、提示词、公共参数和 Comfy 专属参数。
+2. 按模式检查真实素材槽位，通过本地 ComfyUI HTTP 接口上传本次固定输入。
+3. 把已确认提示词逐字绑定到模板，把时长、画幅、像素预算、采样配置、步数、seed、FPS 和引用位置写入公开输入。
+4. 在提交前读取 `/object_info`，检查必需节点以及服务声明的模型或枚举值。动态上传后的文件名不拿旧服务列表做预判。
+5. 在 `VideoSubmissionGuard` 的机器级串行互斥内同步调用一次官方 `comfy run --wait --json`；互斥覆盖提交和整个等待周期，流式返回 stage 和 `provider_task_id`，进程丢失后的持久回执继续阻塞未知任务。
+6. 从本次结果中取得唯一视频，复制或下载到当前 Canvas run 输出目录并做 ffprobe 媒体校验。
 
-## ComfyUI 工作流编码
+adapter 不写创意提示词、不决定镜头语义、不切换 provider、不创建第二套数据库，也不在失败后隐式重提。技术成功不代表内容 `ACCEPT`；故事媒体仍由执行单元查看实际文件，记录实际末态和实际音频证据。
 
-- 同类节点有多个实例时，可变输入使用唯一的 `_meta.title`；声明的标题
-  必须恰好匹配一个节点。采样器等结构性单例可以按 `class_type` 查找，并检查数量。
-- 复用现有的 binding、上传、runner、materialize 和 result collector；新
-  工作流不复制一套提交、下载或耗时统计逻辑。
-- 标准 R2V 与数字人口播共享引用接线和上传流程；场景差异只放在对应的
-  工作流和必要的输入限制中。引用位置由公共包的明确槽位决定。
-- 输入参数及所有本地素材路径先检查，之后才上传；动态参考节点按本次实际
-  使用的素材类型检查，预留但未使用的图片节点不应成为依赖。
-- 通过 `/object_info` 检查 `class_type` 是否可用。业务绑定不硬编码
-  ComfyUI 数字节点 ID，节点 ID 只属于当前 JSON 的内部连线。
-- 预检先验证完整工作流结构、当前 hash 和严格绑定，再检查运行中的节点及
-  模型；不根据历史快照或旧的通过记录跳过本次检查。
-- 新工作流的最小变更是 registry JSON、对应的 capability/manifest 和一
-  个针对绑定、预检或结果收集的测试；需要实际执行时再沿用现有单 Panel
-  流程验证。
+## 模式和素材槽位
+
+- `t2v`：不接受媒体输入。
+- `i2v`：恰好一个 `first_frame` 图片。
+- `fl2v`：恰好一个 `first_frame` 和一个 `last_frame` 图片。
+- `r2v`：至少一个明确类型的图片、视频或音频引用；固定槽位来自画布连线，不从提示词猜测。
+
+图片、视频和音频引用分别绑定到对应的 `LoadImage`、`LoadVideo` 或 `LoadAudio` 链。R2V 的引用顺序和类型必须保持冻结 snapshot 的原顺序。业务代码不依赖 ComfyUI 数字节点 ID；节点 ID 只属于模板内部连线。
+
+## 采样模板
+
+`sampler_profile=native` 使用 `h3_native_*` 模板，接受至少 8 步；`sampler_profile=vdn_turbo` 使用 `h3_standard_*` 模板，只接受 8 步。T2V/I2V 使用 FL2VA 模板族，R2V 使用 R2V 模板族。adapter 不通过打开或关闭某个 VDN 节点把一种 profile 冒充另一种。
+
+模板更新必须同时检查：
+
+- capability 字段与 adapter 校验一致；
+- snapshot 的每个可变值只有一个明确绑定位置；
+- `/object_info` 能识别所需节点和模型；
+- 输出仍然唯一且是视频；
+- 单次提交、未知状态和媒体校验测试仍通过。
+
+静态测试不能代替真实 provider 集成；真实生成只在对应 Canvas run 已确认时执行。

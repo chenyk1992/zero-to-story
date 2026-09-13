@@ -1,6 +1,6 @@
 ---
 name: h3-prompt-writing
-description: Write one complete MiniMax H3 video-generation prompt for a single approved Panel in T2VA, I2VA, FL2VA, or Ref2VA form supported by the current LFO contract. Use when composing the required H3 sections, aligning keyframes and timing, or defining reference labels; return only the prompt text, with no manifest, lock, hash, retry or QC sidecar.
+description: Write one complete MiniMax H3 video-generation prompt for a single approved Panel in T2VA, I2VA, FL2VA, or Ref2VA form supported by the current Canvas capability. Use when composing the required H3 sections, aligning keyframes and timing, or defining reference labels; return only the prompt text.
 ---
 
 # H3 Prompt Writing
@@ -9,18 +9,18 @@ description: Write one complete MiniMax H3 video-generation prompt for a single 
 
 ## Priority and stop conditions
 
-The current user instruction is authoritative over this Skill's defaults. When the user or upstream handoff supplies the operation, timing, references and dialogue needed for one Panel, write and return the prompt directly without another confirmation round. Project-level LFO contracts, platform permissions and safety boundaries still apply; user priority does not authorize unsupported modes or fabricated assets.
+The current user instruction is authoritative over this Skill's defaults. When the user or upstream handoff supplies the mode, timing, references and dialogue needed for one Panel, write and return the prompt directly without another confirmation round. Project-level Canvas capabilities, platform permissions and safety boundaries still apply; user priority does not authorize unsupported modes or fabricated assets.
 
 Stop after one concise incompatibility report when a required mode, asset, field, timing value or reference mapping is missing or contradictory. Do not silently redesign the Panel, invent a reference, emit an unusable prompt or retry the same inputs. Continue only when the user or upstream caller supplies a concrete correction or new approved input.
 
 ## Workflow
 
-1. Identify the input mode: T2VA, I2VA, FL2VA, or full-reference Ref2VA. Last-frame-only L2VA is not an executable LFO mode; stop with a concise incompatibility report naming the supported correction instead of emitting an unusable prompt or repeating a confirmation request.
+1. Identify the input mode: T2VA, I2VA, FL2VA, or full-reference Ref2VA. Last-frame-only L2VA is not a supported Canvas H3 mode; stop with a concise incompatibility report naming the supported correction instead of emitting an unusable prompt or repeating a confirmation request.
 2. When a zero-to-story director plan or current user specification is supplied, treat its operation, Camera Setup sequence, timing and pacing as fixed input. Do not independently redesign the scene unless the user explicitly asks for that change.
 3. For base text/keyframe modes, read references/base-en.txt. For full-reference mode, read references/ref-en.txt.
 4. Preserve the exact field names, section order, labels and timing notation required by the selected guide.
 5. Run a mandatory shot-header format gate before returning: the first header must be `[Shot 1]` followed directly by descriptive prose. `[Shot 1] At ...`, `[Shot 1] From ...`, `[Shot 1] 00:...` and any first-shot time range are invalid and must be rewritten. Every later shot header must use `[Shot N] At <approved-cut-time>, ...`.
-6. Return one complete prompt for the single Panel. The prompt is passed unchanged into the approved execution package; do not emit a sidecar manifest, lock object, hash record or duplicate QC document.
+6. Return one complete prompt for the single Panel. The caller saves it unchanged in the target Canvas video node before confirmation freezes the execution snapshot; do not emit sidecars or duplicate QC documents.
 
 ## Base Modes
 
@@ -53,7 +53,7 @@ The supplied timing is authoritative. Do not stretch, compress, reorder, merge o
 
 Ref2VA rewrites use subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape and non_diegetic_music in that order. Reference labels stay consistent across every section.
 
-When the handoff supplies fixed typed LFO slots, preserve their identities: `ref_image_0` maps to `<Picture 1>`, `ref_video_0` to `<Video 1>` and `ref_audio_0` to `<Audio 1>`, with the same zero-based-to-one-based mapping for later slots. Define only assets actually supplied; do not renumber, duplicate or invent references.
+When the handoff supplies fixed typed Canvas reference slots, preserve their identities: `ref_image_0` maps to `<Picture 1>`, `ref_video_0` to `<Video 1>` and `ref_audio_0` to `<Audio 1>`, with the same zero-based-to-one-based mapping for later slots. Define only assets actually supplied; do not renumber, duplicate or invent references.
 
 Read references/ref-en.txt for label rules, retention analysis and the complete example.
 
@@ -66,4 +66,4 @@ Read references/ref-en.txt for label rules, retention analysis and the complete 
 - Represent one storyboard-board asset with one `<Picture N>` label; never invent labels or input images for its individual cells.
 - Preserve every approved dialogue event verbatim, including speaker, language and timing. Use the required H3 dialogue markers from the selected guide.
 - Avoid plot summaries, unresolved reference labels, invented timing, extra shots and unapproved references.
-- Return the complete H3 prompt as the sole execution text. Do not add a title, explanation, Markdown fence, negative-prompt block, manifest, lock metadata or hash line.
+- Return the complete H3 prompt as the sole execution text. Do not add a title, explanation, Markdown fence, negative-prompt block or metadata.

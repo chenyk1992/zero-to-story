@@ -12,9 +12,9 @@ description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 格式创作�
 ## 适用边界
 
 - 用户要求微短剧、短剧编剧、分集创作、海外短剧改编或从已写剧本生成创作侧 handoff 时使用。
-- 只写剧本和 `.short-drama/{drama_title}/` 下的可选 handoff；不修改 `src/lfo/**`，不调用 LFO、ComfyUI 或视频生成运行时。
-- `episodes/epNNN.md` 是编剧主产物；`handoff/` 是给 `zero-to-story` 的伴生包。handoff 不改写剧本正文，不生成 `lfo.video-execution.v1`、旧 `intake`/`shots[]` 或批准 hash。
-- `storyboard_brief.md` 和 `characters_visual.md` 交给 `zero-to-story`；单 Panel H3 提示词由 `h3-prompt-writing` 处理。LFO 包、Panel、operation、尾帧和组装由下游负责。
+- 只写剧本和 `.short-drama/{drama_title}/` 下的可选 handoff；不修改运行时代码，不调用 Canvas、ComfyUI 或视频生成能力。
+- `episodes/epNNN.md` 是编剧主产物；`handoff/` 是给 `zero-to-story` 的伴生材料。handoff 不改写剧本正文，也不生成运行时请求或执行状态。
+- `storyboard_brief.md` 和 `characters_visual.md` 交给 `zero-to-story`；单 Panel H3 提示词由 `h3-prompt-writing` 处理。Panel、模式、实际尾帧、Canvas 固定快照和最终成片处理由下游负责。
 - handoff 默认留在 `.short-drama/`；只有用户明确进入视频制作后，下游才按项目规则复制已确认素材到 `workspace/projects/<project_id>/`。本 Skill 不自动写入 `workspace/`。
 
 ## 交付与状态
@@ -54,9 +54,9 @@ description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 格式创作�
 `/桥接` 只把已写集整理为创作侧 brief、可拍角色卡和剪辑说明：
 
 - 用户授权压缩时，常规连载集可参考将 3–6 场压成 brief 内 1–2 个场景；其余保留用户指定的场景、角色和时长，不为套用数量增删内容。每条候选 Panel/节拍写空间关系和可见结束状态。
-- 一集常见默认时长为 15–60 秒，不覆盖用户指定的总时长；下游按 4–15 秒 Panel 拆分；不把整集或旧镜头数量当作一个 LFO 包。
+- 一集常见默认时长为 15–60 秒，不覆盖用户指定的总时长；下游按 4–15 秒 Panel 拆分；不把整集或剧本镜头数量直接当作一个 Canvas 视频节点。
 - 对白按可拍节拍组织；用户要求逐字保留时完整转交。钩子、预告和付费墙留在 `cut_notes.md`；音频意图不冒充已存在的音频文件。
-- 只读剧本正文并写入 `.short-drama/`；不记录执行 hash、真实尾帧、运行结果或 QC。
+- 只读剧本正文并写入 `.short-drama/`；不记录 Canvas 请求、真实尾帧、运行结果或 QC。
 
 完整字段映射和下游边界见 [handoff mapping](./references/handoff-mapping.md)。
 

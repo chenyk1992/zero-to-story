@@ -286,7 +286,7 @@ def test_script_execution_translates_only_after_confirm(tmp_path):
     )
     (skill / "execute.py").write_text(
         "import argparse,json,pathlib\np=argparse.ArgumentParser();p.add_argument('--input');p.add_argument('--output-dir');a=p.parse_args()\n"
-        "s=json.loads(pathlib.Path(a.input).read_text(encoding='utf-8'));o=pathlib.Path(a.output_dir)/'result.png';o.write_bytes(s['prompt'].encode())\n"
+        "s=json.loads(pathlib.Path(a.input).read_text(encoding='utf-8'));o=pathlib.Path(a.output_dir)/'result.png';o.write_text(s['prompt']+'|'+s['request_id'],encoding='utf-8')\n"
         "print(json.dumps({'provider_task_id':'one-submit'}),flush=True)\n"
         "print(json.dumps({'outputs':[{'path':str(o),'kind':'image'}],'provider_task_id':'one-submit'}))\n",
         encoding="utf-8",
@@ -301,11 +301,13 @@ def test_script_execution_translates_only_after_confirm(tmp_path):
         assert not service.settings.media_root.exists()
         run = service.confirm(canvas["id"], "image-one", canvas["version"], "one")
         assert run["status"] == "queued"
+        assert "request_id" not in run["snapshot"]
         service._execute(service.store.claim_run(run["id"]))
         result = service.store.get_run(run["id"])
         assert result["status"] == "succeeded"
         assert result["provider_task_id"] == "one-submit"
-        assert Path(result["outputs"][0]["path"]).read_text(encoding="utf-8") == "固定输入"
+        assert Path(result["outputs"][0]["path"]).read_text(encoding="utf-8") == "固定输入|one"
+        assert "request_id" not in result["snapshot"]
         assert not list((service.settings.data_dir / "temporary").glob("*/input.json"))
     finally:
         service.close()

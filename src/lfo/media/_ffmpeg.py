@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -38,15 +39,20 @@ def run_command(
 
 
 def probe(
-    path: str | Path, *, ffprobe_bin: str = "ffprobe", timeout_s: float = 30.0
+    path: str | Path, *, ffprobe_bin: str | None = None, timeout_s: float = 30.0
 ) -> dict[str, Any]:
-    """Return normalized, ffprobe-derived media metadata."""
+    """Return normalized metadata using an explicit or configured ffprobe."""
     file_path = Path(path)
     if not file_path.is_file():
         raise MediaCommandError(f"Media file does not exist: {file_path}")
+    executable = (
+        ffprobe_bin
+        if ffprobe_bin is not None
+        else os.environ.get("LFO_FFPROBE") or "ffprobe"
+    )
     result = run_command(
         [
-            ffprobe_bin,
+            executable,
             "-v",
             "error",
             "-show_entries",

@@ -1,40 +1,26 @@
 # Local Windows ComfyUI profile
 
-共同的角色、Panel ready、能力选择和实际验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只记录本机 Comfy 环境，不定义新的审批或恢复流程。
-
-本文只记录本机环境和单 Panel 执行前检查。机器路径、模型和凭据不进入 package，也不写入提示词。
-
-相关工作流说明：
-
-- [H3 工作流约定](workflow-conventions.md)：JSON、绑定、预检、执行和结果记录边界；
-- [H3 VDN8](h3-vdn8.md)：VDN8 采样参数、已验证范围和性能口径。
+共同的角色、Panel ready、能力选择和实际验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只记录 Canvas Comfy adapter 使用的本机环境，不定义新的授权、重试或恢复流程。
 
 ## 当前机器
 
+以下是本项目验证过的一台参考环境，不是安装前提。新用户按实际安装目录、GPU 与模型配置运行，不应照搬盘符或据此假定固定生成时长。
+
 - ComfyUI Desktop：`D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI`
-- `comfy-cli`：独立安装官方 `comfy-cli`，并确认当前版本支持 `run --wait --json`；默认 workspace 应指向上述目录，执行前以 `comfy --version` 和 `comfy env` 的实际结果为准
 - 服务地址：`http://127.0.0.1:8188`
-- GPU：RTX 5080 16GB，使用 H3 FL2VA int8 路径
+- `comfy-cli`：独立安装官方版本，并确认支持 `run --wait --json`
+- GPU：RTX 5080 16GB
 - 模型目录：`D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI\models\`
 
-如果当前终端找不到 `comfy`，先按官方方式把 CLI 安装到可执行环境，例如：
+如果当前终端找不到 `comfy`，按官方方式安装到画布服务使用的同一执行环境，并核实实际版本：
 
 ```powershell
 python -m pip install comfy-cli
 comfy --version
+comfy env
 ```
 
-官方 `comfy run --wait --json` 可返回 ComfyUI `/view` URL，某些本地版本也会给出绝对产物路径。LFO 会优先复制可解析的本地文件；只有 URL 时则通过同一 ComfyUI 服务的 `/view` 接口流式下载到 RunArtifactLayout。为避免额外下载，可在启动执行的同一 PowerShell 会话中配置输出根目录：
-
-```powershell
-$env:LFO_COMFY_OUTPUT_ROOT = "D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI\output"
-```
-
-该值属于机器配置，不写入执行包或源码。`setup` 发现 ComfyUI 根目录时会自动把其 `input/` 和 `output/` 填入 machine profile；未配置这两个目录不阻断 H3 或 SeedVR2 路径，因为素材上传和输出下载都可通过同一 ComfyUI 服务的 HTTP API 完成。配置 `output` 目录只用于优先复制本地结果和做路径边界检查，不是 SeedVR2 的前置条件。
-
-LFO 只接受本次 comfy-cli 结果中唯一、明确的视频输出；图片、多个视频候选或越过已配置输出根目录的路径都会直接失败。`timeout_sec` 默认是 7200 秒：既传给 comfy-cli 作为事件静默上限，也由 LFO 再加 300 秒退出余量作为整个 CLI 进程的硬上限。超时后当前 Panel 失败，LFO 只尝试中断一次当前 ComfyUI 执行以释放串行队列，不自动重新提交。
-
-当前没有单独的 `D:\cyuiEnv\models\` 目录。H3 模型包括：
+当前 H3 模型包括：
 
 - `minimax_h3_fl2va_pruned_int8_convrot.safetensors`
 - `minimax_h3_ref2va_pruned_int8_convrot.safetensors`
@@ -42,34 +28,47 @@ LFO 只接受本次 comfy-cli 结果中唯一、明确的视频输出；图片�
 - `minimax_h3_video_vae_fp16.safetensors`
 - `minimax_h3_audio_vae_fp32.safetensors`
 
-## LFO machine profile
+VDN8 还需要 `ComfyUI-VDN-H3` 节点和模型根目录下的 `vdn/stage-dmd-step-250/` bundle。以 adapter 对运行中 `/object_info` 的本次预检为准，不能用旧检查记录代替。
 
-机器配置位于 `%APPDATA%\LFO\machines\local-windows.json`。ComfyUI 路径或安装变化后重新设置：
+## Canvas adapter 配置
 
-```powershell
-python -m lfo.cli.main setup --machine-id local-windows
-```
+本地 Comfy 视频在页面确认后进入 `queued`。画布服务内部 worker 启动项目 `.agents/skills/comfy-video-executor/scripts/execute.py`；adapter 通过本地 HTTP 上传固定素材、读取 `/object_info`，再同步调用一次官方 `comfy run --wait --json`。这条路径不经过 Agent claim。
 
-`setup` 只做本机能力发现并保存 machine profile；它不创建 `workspace/` 项目目录、SQLite/旧数据库 schema、环境快照，也不提交视频或 smoke 任务。当前公开 `setup` 不接受或依赖 `--smoke-level`；需要确认工具和服务可用性时使用下面的 `doctor`/`preflight`。
+adapter 依次读取以下安全连接配置，显式参数优先：
 
-单 Panel 执行前检查：
+- 可选配置 JSON；
+- `%APPDATA%\LFO` 下已有的全局或机器配置；
+- `LFO_COMFY_BASE_URL`、`LFO_COMFY_CLI`、`LFO_COMFY_TIMEOUT`、`LFO_COMFY_OUTPUT_ROOT`、`LFO_FFPROBE`。
 
-```powershell
-python -m lfo.cli.main doctor --machine-id local-windows
-python -m lfo.cli.main preflight --machine-id local-windows
-```
-
-`doctor` 和 `preflight` 默认检查当前机器的 `comfy`、`ffmpeg`、`ffprobe` 以及 ComfyUI 可达性；不需要手写 `--tool-ids`。失败结果包含检查 ID、失败原因和可执行的修复提示。检查通过后，同步运行当前 Panel 的隔离执行单元，并在 `validate`/`execute` 上继续传入 `--machine-id local-windows`。Runtime 会把 profile 中的 ComfyUI 地址、`comfy` 可执行文件和可选输出根目录传给实际执行器。LFO 不启动并行任务，不在 ComfyUI 失败后自动重试；环境问题修复后由调用方重新执行当前 Panel。
-
-Canvas 和 package CLI 共用机器范围的 Comfy 提交占用和持久提交回执。需要诊断时运行 `python -m lfo.comfy.admission`；`--reconcile <request-id>` 只读取原始 Comfy `/history`，不重新提交。状态目录由应用数据目录或 `LFO_VIDEO_STATE` 决定。
+只读取服务 URL、CLI 路径、超时、输出根目录和 ffprobe 路径；凭据及无关字段不会输出。默认服务地址为 `http://127.0.0.1:8188`。如果官方 CLI 返回本地绝对路径，adapter 会从该路径复制；否则通过同一 ComfyUI 服务的 `/view` 下载。可以在启动画布服务的同一 PowerShell 会话设置输出根目录，减少下载：
 
 ```powershell
-python -m lfo.cli.main validate path/to/panel-P001.execution-package.json --machine-id local-windows
-python -m lfo.cli.main execute path/to/panel-P001.execution-package.json --approved-sha256 <approved-sha256> --machine-id local-windows
+$env:LFO_COMFY_OUTPUT_ROOT = "D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI\output"
 ```
 
-真实检查仅在明确需要 provider 集成时运行：
+该值只用于优先读取实际输出和执行路径边界检查，不写入画布提示词。缺少输出根目录不会阻止通过 `/view` 回收结果。
+
+## 检查与诊断
+
+启动画布前至少核实：
 
 ```powershell
-python scripts/live_e2e_execution_package.py path/to/panel-P001.execution-package.json --approved-sha256 <approved-sha256> --machine-id local-windows
+comfy --version
+ffmpeg -version
+ffprobe -version
 ```
+
+页面能力目录还会检查 `comfy` 与 `ffprobe` 是否可执行；真实提交前 adapter 会检查 ComfyUI `/object_info`、必需节点以及服务声明的模型和枚举值。检查失败会结束当前 run，不会切换模型、删引用或自动重提。
+
+Canvas Comfy 只接受本次 CLI 结果中唯一、明确且可读取的视频。adapter 会把它复制或下载到当前 run 输出目录，并用 ffprobe 检查视频流、时长、尺寸和编码。技术成功后由画布服务回填实际媒体；故事生产仍需基于实际画面和声音作内容验收。
+
+机器级提交由 `VideoSubmissionGuard` 串行保护，互斥覆盖该次提交和整个同步等待周期。持久回执位于应用数据目录 `zero-to-story/video/`，可用 `LFO_VIDEO_STATE` 指定；执行进程丢失后，它继续阻塞未知任务，直到依据原任务证据核实结束。回执编号与对应 Canvas run 的 `request_id` 一致。诊断或核实原任务时运行：
+
+```powershell
+python -m lfo.comfy.admission
+python -m lfo.comfy.admission --reconcile <canvas-request-id>
+```
+
+第二条命令只读取原 Comfy `/history`，不会重新提交，也不会直接改写画布状态。没有远端编号、空队列或本地停止等待都不能证明原任务已经结束。
+
+真实视频生成只在页面已经确认当前 run 且 provider 集成确有需要时执行。环境检查、文档维护和测试不触发生成。

@@ -175,12 +175,12 @@ describe('Inspector editing behavior', () => {
     expect(option?.textContent).toContain('需 Agent 接手');
   });
 
-  it('shows the selected node frozen input while pending and marks a changed draft', async () => {
+  it('shows the selected node frozen input while queued and marks a changed draft', async () => {
     const node = makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v', prompt: '当前草稿提示词' });
     const run: Run = {
-      id: 'run-pending',
+      id: 'run-queued',
       node_id: node.id,
-      status: 'pending_agent',
+      status: 'queued',
       snapshot: {
         node_id: node.id,
         node_type: 'video',
@@ -205,12 +205,12 @@ describe('Inspector editing behavior', () => {
 
     await renderInspector(node, [capability()], [run, newerOtherNode]);
 
-    expect(container.querySelector('.run-summary')?.textContent).toContain('待 Agent 执行');
+    expect(container.querySelector('.run-summary')?.textContent).toContain('已确认');
     expect(container.querySelector('.snapshot-frozen-note')?.textContent).toContain('冻结输入');
     expect(container.querySelector('.snapshot-body')?.textContent).toContain('确认时冻结的提示词');
     expect(container.querySelector('.snapshot-body')?.textContent).not.toContain('其他节点输入');
     expect(container.querySelector('.stale-note')?.textContent).toContain('当前草稿已有修改');
-    expect(buttonWithText('待 Agent 接手').disabled).toBe(true);
+    expect(buttonWithText('等待执行').disabled).toBe(true);
   });
 
   it('surfaces cancelled runs and inconclusive review without treating them as success', async () => {

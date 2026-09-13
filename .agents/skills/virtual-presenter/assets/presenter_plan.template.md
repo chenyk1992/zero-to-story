@@ -15,7 +15,7 @@
 
 状态只使用 `待确认`、`已确认`、`进行中`、`需重审`、`暂停`、`完成`。本文件是唯一中枢；不在其他文档维护会改变执行结果的副本。
 
-项目数据位于 `workspace/projects/<project_id>/`；每个 Panel 包和最终 assembly 包都直接位于该项目根目录，并使用唯一文件名（如 `panel-P001.execution-package.json`、`assembly.execution-package.json`）。本计划和创作素材只使用项目内已经存在、用途明确且可由 package-relative URI 引用的位置，不自行创建 `inputs/`、`environment-pack/`、`packages/`、独立 `qc/`、失败候选或恢复日志。
+项目数据位于 `workspace/projects/<project_id>/`；Canvas 快照与请求由画布服务管理，创作素材使用项目内已经存在且用途明确的位置。本计划不自行创建平行执行目录、失败候选或恢复日志，也不把画布请求复制成第二套状态。
 
 ## 1. 输入规格（待确认）
 
@@ -71,32 +71,32 @@
 - **L1 轻微交流**：在 L0 基础上最多一个小手势或一次头/视线转移；镜头只做一种轻微变化。
 - **L2 单一复杂意图**：允许一次拿取/指向/转身等主动作和一项镜头变化；不叠加第二个道具动作或第二个信息转折。
 
-## 5. H3 提示词 / LFO 执行包（待确认）
+## 5. H3 提示词 / Canvas 交接（待确认）
 
-| shot_id / Panel | 参考槽位 | H3 提示词路径/正文版本 | package 路径 | validate | 批准文件 SHA-256 | execute 结果 |
+| shot_id / Panel | 参考槽位 | H3 提示词路径/正文版本 | Canvas node_id | provider / mode | 快照状态 | 实际结果 |
 |---|---|---|---|---|---|---|
-| P001 | ref_image_0/1/2, ref_audio_0 |  |  | 待运行 | 待计算 | 待运行 |
+| P001 | ref_image_0/1/2, ref_audio_0 |  |  |  | 草稿 | 待生成 |
 
-固定绑定：ref_image_0=角色、ref_image_1=全景、ref_image_2=方向视图、ref_audio_0=声音；从第二个同画幅 Panel 开始，按 operation 需要绑定上一条 `ACCEPT` 片的真实输出为 ref_video_0。H3 标签对应 `<Picture 1/2/3>`、`<Audio 1>`、`<Video 1>`。包变化时重新构建并重新取得 hash，不维护独立 lock/manifest。
+固定绑定：ref_image_0=角色、ref_image_1=全景、ref_image_2=方向视图、ref_audio_0=声音；从第二个同画幅 Panel 开始，按模式需要绑定上一条 `ACCEPT` 片的真实输出为 ref_video_0。H3 标签对应 `<Picture 1/2/3>`、`<Audio 1>`、`<Video 1>`。修改节点只影响下一次生成草稿；确认时冻结新快照，不改写已接受的实际输出。
 
 ## 6. Panel 执行与接力（进行中）
 
-| Panel | package | 批准文件 SHA-256 | execute 结果 | 输出路径 | 实际末态/音频证据 | QC（ACCEPT/REJECT/INCONCLUSIVE） | 真实尾帧路径（需要时） | 备注 |
+| Panel | Canvas node_id | request_id | 技术状态 | 输出路径 | 实际末态/音频证据 | QC（ACCEPT/REJECT/INCONCLUSIVE） | 真实尾帧路径（需要时） | 备注 |
 |---|---|---|---|---|---|---|---|---|
 | P001 |  |  | 待运行 |  |  | 待检查 |  |  |
 
-视频提交按全局资源严格串行。每个 Panel 作为独立的短生命周期执行单元同步等待官方 `comfy-cli` 完成；下一条 Presenter Panel 只接收上一条完整 `ACCEPT` 视频作为 `ref_video_0`，只有其他下游 operation 明确需要精确首帧时才提取真实尾帧。`ERROR` 或 `REJECT` 立即停止，不自动重试，不维护失败候选或恢复记录。
+视频提交按全局资源严格串行。每个 Panel 作为独立的短生命周期执行单元等待 Canvas 返回实际媒体；选择 `comfy` 时由 Canvas 服务调用 `comfy-video-executor`。下一条 Presenter Panel 只接收上一条完整 `ACCEPT` 视频作为 `ref_video_0`，只有其他下游模式明确需要精确首帧时才提取真实尾帧。执行失败、`REJECT` 或 `INCONCLUSIVE` 立即停止，不自动重试，不维护失败候选或恢复记录。
 
-## 7. 最终组装（待确认）
+## 7. 最终成片处理（待确认）
 
 | 项目 | 记录 |
 |---|---|
-| 所有 Panel | 全部 `ACCEPT` 后组装 |
-| assembly package |  |
-| video backend | `video.passthrough` |
-| validate | 待运行 |
-| 批准文件 SHA-256 | 待计算 |
-| execute 结果 | 待运行 |
+| 输入片段 | 仅全部 `ACCEPT` 的 Canvas 输出 |
+| 片段顺序 / 转场 |  |
+| 音频处理 |  |
+| 字幕处理 |  |
+| 处理方式 | 确定性媒体处理，不调用生成模型 |
+| 视听检查 | 待运行 |
 | 最终输出 |  |
 
 ## 确认日志

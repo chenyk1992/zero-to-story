@@ -69,6 +69,7 @@ class CanvasService:
     def runs(self, canvas_id: str | None = None) -> list[dict[str, Any]]:
         runs = self.store.list_runs(canvas_id)
         canvases: dict[str, Any] = {}
+        snapshots: dict[tuple[str, str], dict[str, Any]] = {}
         result = []
         for original in runs:
             run = copy.deepcopy(self._public_run(original))
@@ -76,7 +77,10 @@ class CanvasService:
             try:
                 if run["canvas_id"] not in canvases:
                     canvases[run["canvas_id"]] = self.store.get_canvas(run["canvas_id"])
-                current = resolve_snapshot(canvases[run["canvas_id"]], run["node_id"], runs)
+                key = (run["canvas_id"], run["node_id"])
+                if key not in snapshots:
+                    snapshots[key] = resolve_snapshot(canvases[run["canvas_id"]], run["node_id"], runs)
+                current = snapshots[key]
                 run["matches_current"] = creative_snapshot(current) == creative_snapshot(
                     run["snapshot"]
                 ) and self.media.inputs_unchanged(run["snapshot"])
@@ -833,7 +837,7 @@ class CanvasService:
             self._wake.clear()
             if self._stop.is_set():
                 return
-            for run in self.store.list_runs():
+            for run in self.store.list_queued_runs():
                 if self._stop.is_set():
                     return
                 if run["status"] != "queued" or run.get("attention_state", "active") != "active":
@@ -867,7 +871,10 @@ class CanvasService:
             capability = self.catalog.validate(run["snapshot"])
             if capability["execution"] != "script":
                 raise ValueError("该 Skill 当前不提供本地执行入口")
-            snapshot = self.media.execution_snapshot(run["snapshot"])
+            snapshot = {
+                **self.media.execution_snapshot(run["snapshot"]),
+                "request_id": run["request_id"],
+            }
             entrypoint = Path(capability["_skill_dir"]) / capability["entrypoint"]
             output_dir = self.settings.output_dir(run["canvas_id"], run["id"])
             output_dir.mkdir(parents=True, exist_ok=True)

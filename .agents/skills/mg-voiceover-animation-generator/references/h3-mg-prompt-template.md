@@ -2,7 +2,7 @@
 
 共同的角色、Panel ready、实际验收和授权规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)；本模板只定义 MG 提示词的创作结构。
 
-这份模板用于生成可审阅的 H3 提示词文档，也可作为已授权画布或 package CLI 任务的创作输入。按当前阶段删减字段；包映射和 hash 记录仅在明确选择 package CLI 后填写，不是画布或提示词交付的前提。
+这份模板用于生成可审阅的 MG 创作与 H3 交接文档。MG Skill 先填入已确定的内容，`h3-prompt-writing` 再按当前模式返回最终 H3 正文；实际执行输入由 `canvas-workspace` 保存到目标视频节点，确认后冻结快照。
 
 ## 审阅文档结构
 
@@ -13,7 +13,7 @@
 - 目标：{讲解 / 发布 / 功能演示 / 抽象主题}
 - 真实或虚构：{真实对象保真 / 原创概念}
 - 时长与画幅：{duration}s，{aspect_ratio}，{output_width}x{output_height}
-- 像素比：{pixel_ratio}（执行包映射到 GenerationRequirements.megapixels）
+- 像素比：{pixel_ratio}（映射到 Canvas 节点的 `megapixels`）
 - Clip：单个连续 Clip
 - 口播：{外部音频 / H3 原生音频 / 无口播}
 - 普通字幕：none；画面文字仅为 MG/UI 设计元素
@@ -31,11 +31,12 @@
 - 视觉锚点与桥接：{上一段如何变为下一段}
 
 ## H3 提示词
-{可直接执行的完整提示词}
+{由 h3-prompt-writing 返回的完整提示词；尚未定稿时标为待生成}
 
-## 授权与执行记录
+## 授权与 Canvas 交接
 - 创作方案授权：{当前指令、已有计划或明确确认的原文/摘要}
-- package CLI 专用（画布删除此项）：{validate 返回的完整文件字节 SHA-256，以及明确批准或适用持续授权的依据}
+- Canvas 节点：{node_id / 待创建}
+- 快照状态：{草稿 / 已确认 / 已回填实际媒体}
 ```
 
 ## H3 提示词正文顺序
@@ -49,16 +50,15 @@
 7. **音频提示**：外部口播时让音乐和音效避让；H3 原生音频时写清语气、节奏和混音禁项；无口播时仅用音乐/轻音效承担节奏。
 8. **连续性与负面约束**：主体、配色、字体层级、几何语言和视觉锚点保持连续；不要做静态图轮播、PPT 硬切、无关角色、真实品牌冒充或文字改写。
 
-## 参数与执行包对照（仅 package CLI）
+## 参数与 Canvas 对照
 
-| 提示词信息 | 执行包位置 | 规则 |
+| 提示词信息 | Canvas 位置 | 规则 |
 |---|---|---|
-| `pixel_ratio` | `GenerationRequirements.megapixels` | 例如 `0.4 -> 0.4`；缺省时不写入，generation 不写 width/height |
-| 交付画幅 | `OutputPolicy` | 可独立保持 `1080x1920` |
-| 视觉参考 | `assets` + `references` | 按已确定的 operation 和参考用途绑定，不按数量猜测：无参考可选 T2V；精确首帧用 I2V、精确首尾帧用 FL2V；普通图像/视频参考用 R2V，即使只有一个 |
-| 外部口播 | audio asset + Clip audio track | 以外部音频为准，避免重复原生口播 |
-| 普通字幕 | `OutputPolicy.subtitles_mode` | 默认 `none` |
-| 创作方案授权 | package approval metadata | 记录当前指令或已有计划；不重复询问已确定事项 |
-| 执行包文件 hash | package approval metadata | `validate` 后核对当前完整文件 SHA-256 的明确批准或适用持续授权；未覆盖时才询问 |
+| `pixel_ratio` | `parameters.megapixels` | 例如 `0.4 -> 0.4`；所选能力要求该值而当前未确定时，在确认前补齐明确选择，不从交付尺寸猜测 |
+| 生成画幅 | `parameters.aspect_ratio` | 与当前 Panel 计划一致 |
+| 视觉参考 | `inputs` 对应端口 | 按已确定模式和参考用途绑定，不按数量猜测：无参考可选 T2V；精确首帧用 I2V、精确首尾帧用 FL2V；普通图像/视频参考用 R2V，即使只有一个 |
+| 外部口播 | 音频引用或后期责任 | 以外部音频为准，避免重复原生口播；实际替换在接受输出后的确定性处理完成 |
+| 普通字幕 | 后期责任 | 默认关闭；仅用户明确需要时准备 |
+| 创作方案授权 | 当前指令或计划记录 | 不重复询问已确定事项；保存草稿不等于确认执行 |
 
-提示词方案确定后，保留此文档作为创作侧记录。画布任务交给 [canvas-workspace](../../canvas-workspace/SKILL.md)；明确选择 package CLI 后才调用 `lfo.skill_adapter.mg_voiceover.build_package` 并核对精确 hash 授权。用户只要求审阅时交付文档，不自动执行。
+创作方案确定后，把单 Panel 事实交给 [h3-prompt-writing](../../h3-prompt-writing/SKILL.md)，保留其返回的正式 H3 文本作为创作侧记录，再逐字交给 [canvas-workspace](../../canvas-workspace/SKILL.md)。用户只要求审阅时交付文档，不自动确认执行；用户选择 `comfy` 时由 Canvas 服务把固定快照交给 `comfy-video-executor`。

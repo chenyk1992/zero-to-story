@@ -259,6 +259,49 @@ def test_normalize_rejects_conflicting_provider_option_copies(tmp_path: pathlib.
         executor.normalize_snapshot(snapshot)
 
 
+def test_runtime_config_accepts_legacy_timeout_sec_key(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LFO_COMFY_TIMEOUT", raising=False)
+    config_path = tmp_path / "comfy.json"
+    config_path.write_text(json.dumps({"timeout_sec": 321}), encoding="utf-8")
+
+    config = executor.load_runtime_config(config_path=config_path)
+
+    assert config.timeout_seconds == 321
+
+
+def test_canvas_request_id_drives_a_safe_workflow_prefix(tmp_path: pathlib.Path) -> None:
+    snapshot = _snapshot(tmp_path)
+    snapshot["request_id"] = "../unsafe/request"
+
+    workflow, normalized = executor.prepare_workflow(
+        snapshot,
+        uploader=lambda _path: pytest.fail("t2v must not upload media"),
+    )
+
+    prefix = _nodes(workflow, "SaveVideo")[0]["inputs"]["filename_prefix"]
+    assert prefix == "canvas/video_node___1/___unsafe_request/video"
+    assert normalized["request_id"] == "../unsafe/request"
+
+
+def test_canvas_request_id_prefix_is_bounded_without_changing_the_id(
+    tmp_path: pathlib.Path,
+) -> None:
+    snapshot = _snapshot(tmp_path)
+    request_id = "../unsafe/" + "r" * 300
+    snapshot["request_id"] = request_id
+
+    workflow, normalized = executor.prepare_workflow(
+        snapshot,
+        uploader=lambda _path: pytest.fail("t2v must not upload media"),
+    )
+
+    prefix = _nodes(workflow, "SaveVideo")[0]["inputs"]["filename_prefix"]
+    assert prefix.split("/") == ["canvas", "video_node___1", "___unsafe_" + "r" * 70, "video"]
+    assert normalized["request_id"] == request_id
+
+
 def test_collect_outputs_prefers_nonempty_envelope_over_duplicate_executed_output(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -374,6 +417,50 @@ def test_run_comfy_cli_parses_one_terminal_result_and_command(monkeypatch: pytes
     assert captured["kwargs"]["text"] is True
 
 
+def test_run_comfy_cli_uses_the_canvas_request_id_for_admission(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    from lfo.comfy import admission
+
+    captured: dict[str, Any] = {}
+
+    class Guard:
+        def __init__(self, base_url: str, *, request_id: str | None = None) -> None:
+            captured.update(base_url=base_url, request_id=request_id)
+
+        def __enter__(self) -> Guard:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def submitted(self, provider_task_id: str | None = None) -> None:
+            captured["provider_task_id"] = provider_task_id
+
+        def finished(self) -> None:
+            captured["finished"] = True
+
+    result = executor.CliResult(
+        "prompt-request",
+        (executor.OutputRef("clip.mp4"),),
+        (),
+    )
+    monkeypatch.setattr(admission, "VideoSubmissionGuard", Guard)
+    monkeypatch.setattr(executor, "_run_comfy_cli", lambda *_args, **_kwargs: result)
+    workflow_path = tmp_path / "workflow.json"
+    workflow_path.write_text("{}", encoding="utf-8")
+
+    actual = executor.run_comfy_cli(
+        workflow_path,
+        executor.RuntimeConfig(),
+        request_id="canvas-request-7",
+    )
+
+    assert actual is result
+    assert captured["request_id"] == "canvas-request-7"
+    assert captured["finished"] is True
+
+
 def test_materialize_video_copies_absolute_provider_output(tmp_path: pathlib.Path) -> None:
     provider_output = tmp_path / "provider-output.mp4"
     provider_output.write_bytes(b"video bytes")
@@ -391,6 +478,63 @@ def test_materialize_video_copies_absolute_provider_output(tmp_path: pathlib.Pat
     )
     assert pathlib.Path(output["path"]).read_bytes() == b"video bytes"
     assert output["kind"] == "video"
+
+
+def test_project_probe_uses_lfo_ffprobe_override(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lfo.media import _ffmpeg
+
+    video = tmp_path / "generated.mp4"
+    video.write_bytes(b"video bytes")
+    configured = tmp_path / "configured-ffprobe.exe"
+    seen: dict[str, Any] = {}
+
+    def fake_run(command: list[str], *, timeout_s: float) -> subprocess.CompletedProcess[str]:
+        seen.update(command=command, timeout_s=timeout_s)
+        payload = {
+            "format": {"duration": "1.0"},
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 64,
+                    "height": 64,
+                    "r_frame_rate": "24/1",
+                }
+            ],
+        }
+        return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+    monkeypatch.setenv("LFO_FFPROBE", str(configured))
+    monkeypatch.setattr(_ffmpeg, "run_command", fake_run)
+
+    metadata = executor.validate_video_output(video)
+
+    assert seen["command"][0] == str(configured)
+    assert metadata["duration_ms"] == 1000
+
+
+def test_explicit_ffprobe_bin_takes_priority_over_environment(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lfo.media import _ffmpeg
+
+    video = tmp_path / "generated.mp4"
+    video.write_bytes(b"video bytes")
+    seen: dict[str, Any] = {}
+
+    def fake_run(command: list[str], *, timeout_s: float) -> subprocess.CompletedProcess[str]:
+        seen.update(command=command, timeout_s=timeout_s)
+        payload = {"format": {"duration": "1.0"}, "streams": []}
+        return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+    monkeypatch.setenv("LFO_FFPROBE", str(tmp_path / "configured-ffprobe.exe"))
+    monkeypatch.setattr(_ffmpeg, "run_command", fake_run)
+
+    _ffmpeg.probe(video, ffprobe_bin="explicit-ffprobe")
+
+    assert seen["command"][0] == "explicit-ffprobe"
 
 
 def test_run_timeout_is_terminal_and_never_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:

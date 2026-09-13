@@ -1,4 +1,4 @@
-"""One machine-wide Comfy submission guard shared by both project entrypoints.
+"""One machine-wide Comfy submission guard for Canvas video execution.
 
 The OS lock protects concurrent processes. A small receipt survives a lost
 process so unknown remote work does not silently release the submission slot.

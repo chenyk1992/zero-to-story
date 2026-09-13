@@ -1,14 +1,10 @@
-# GPT-6 适配变更说明：PyYAML 仅加入开发依赖，用于真实解析 Skill 配置。
 [project]
 name = "lfo"
 version = "1.0.0"
-description = "LFO — reusable local video generation, media processing, and export runtime."
+description = "Local node-canvas workspace and deterministic media utilities."
+license = "MIT"
 requires-python = ">=3.12"
-dependencies = [
-    "requests>=2.32",
-    "websocket-client>=1.8",
-    "pynvml>=11.5",
-]
+dependencies = []
 
 [project.optional-dependencies]
 canvas = [
@@ -62,7 +58,6 @@ ignore = [
 "src/lfo/canvas/**" = ["RUF001"]  # Chinese user-interface messages.
 "tests/**" = ["E501", "SIM", "RUF059", "F841", "B007", "B017", "RUF001", "E402", "F811", "B905", "RUF043"]
 "**/__init__.py" = ["F401", "RUF022"]
-"src/lfo/environment/tools/resource_probe.py" = ["SIM112"]
 
 [tool.ruff.format]
 quote-style = "double"

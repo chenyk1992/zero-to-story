@@ -20,7 +20,7 @@ if str(_SRC_DIR) not in sys.path:
 def isolate_process_state(monkeypatch, tmp_path):
     """Isolate each test from global state mutations.
 
-    - Redirects APPDATA / USERPROFILE / LFO_HOME / LFO_CONFIG to tmp_path.
+    - Redirects application, workspace and submission state to tmp_path.
     - Saves and restores os.chdir() to prevent cwd leaks.
     """
     original_cwd = Path.cwd()
@@ -28,21 +28,9 @@ def isolate_process_state(monkeypatch, tmp_path):
     # Isolate environment variables to per-test temp dirs
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "user"))
-    monkeypatch.setenv("LFO_HOME", str(tmp_path / "lfo-home"))
-    monkeypatch.setenv("LFO_CONFIG", str(tmp_path / "lfo-home" / "config.yaml"))
-    # Isolate the user workspace so default-path pipeliners (e.g. tests
-    # that instantiate PipelineService without an explicit output_dir)
-    # don't pollute the real ``<repo>/workspace/`` tree.
     monkeypatch.setenv("LFO_WORKSPACE", str(tmp_path / "workspace"))
     monkeypatch.setenv("LFO_VIDEO_STATE", str(tmp_path / "video-state"))
     monkeypatch.setenv("LFO_CANVAS_DATA", str(tmp_path / "canvas-state"))
-
-    # Reset module-level caches in config_resolver (if any)
-    from lfo.config import config_resolver
-
-    for attr in ("_global_config", "_machine_cache"):
-        if hasattr(config_resolver, attr):
-            setattr(config_resolver, attr, None)
 
     try:
         yield

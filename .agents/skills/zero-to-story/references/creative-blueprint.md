@@ -21,7 +21,7 @@ storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_
 | generation.panel_plans | 每个 Panel 的 operation、可选视觉资产、首尾帧来源和最小运行时引用 |
 | generation.shots | 每个 Camera Setup 的镜头边界、动作、人物、参考和状态 |
 
-must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事件可以在创作阶段删减。场景内文字要么写进已确认 H3 提示词，要么在故事板中明确标记确定性后期；台词字幕单独沿用逐字对白和执行包字幕策略，不要求生成模型烧录。导演决策复用已有 purpose、visible_proof、状态、运镜和 reason 等字段，不为审美判断增加 Schema 字段或静态评分。
+must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事件可以在创作阶段删减。场景内文字要么写进已确认 H3 提示词，要么在故事板中明确标记确定性后期；台词字幕单独沿用逐字对白和 Canvas 后期责任，不要求生成模型烧录。导演决策复用已有 purpose、visible_proof、状态、运镜和 reason 等字段，不为审美判断增加 Schema 字段或静态评分。
 
 ## 编译顺序
 
@@ -40,7 +40,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 ## 最小预检范围
 
-预检只阻断会让执行包无法运行或破坏 Panel 接力的错误：
+预检只阻断会让 Canvas 固定快照无法执行或破坏 Panel 接力的错误：
 
 - JSON 结构、ID、顺序和跨区域引用完整。
 - 每个 Panel 为 4–15 秒，目标总时长等于 Panel 时长之和。
@@ -74,22 +74,22 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 `storyboard_board` 是 R2V 的分镜板策略，使用时必须在 STEP 1 写入规范的 `storyboard_layout: "rowsxcolumns"`，例如 `1x2`、`2x2` 或 `2x3`，且行数乘列数为 2–6；其他策略的该字段必须为 `null` 或省略。STEP 3 按此布局一次生成或复用一张 `storyboard_board.<panel>`，不能生成 `storyboard_frame.*` 独立格子，也不能在事后拼板。
 
-`reference_assets` 用于已明确选择普通参考图的 R2V，例如开场构图图加人物正面角色图。每张图有独立用途并列入 `runtime_input_keys`，Setup引用的有序并集必须相同；不强制新增分镜板，不允许空引用或混入分镜板key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；开始画面只作为构图/状态参考，不承诺像素级首帧锁。包用明确的 `ref_image_N` fixed槽位，实际数量与能力仍由LFO检查。
+`reference_assets` 用于已明确选择普通参考图的 R2V，例如开场构图图加人物正面角色图。每张图有独立用途并列入 `runtime_input_keys`，Setup 引用的有序并集必须相同；不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；开始画面只作为构图/状态参考，不承诺像素级首帧锁。Canvas 使用明确的 `ref_image_N` 语义槽位，实际数量由所选能力检查。
 
-`storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。`generation.limits.reference_slots` 统计最终实际输入数，执行包 `validate` 仍负责确认后端能力。
+`storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。`generation.limits.reference_slots` 统计最终实际输入数，确认 Canvas 请求前仍须核对所选能力。
 
 ### Panel ready
 
 Panel 的自身事实、时长、operation、提示词输入、必要资产、采样参数、音频或对白要求、后期责任、输出位置和授权齐全后即可 ready。独立 Panel 可以先准备；只有依赖上一 Panel 的首尾状态时才等待上一段实际 `ACCEPT` 和真实尾帧。视频提交仍保持全局串行。
 
-## 接力与执行包
+## 接力与 Canvas 交接
 
-项目级生成选择存入顶层 `user_constraints.megapixels`、`user_constraints.sampler_profile` 和 `user_constraints.steps`，与故事板一致。模式/步数的支持范围和一次选择规则见 [执行包格式](execution-package.md#项目级生成参数选择一次逐-panel-继承)。编译当前 Panel 时继承到 `generation.requirements`；适配器拒绝与项目模式或步数不同的 Panel 覆盖，不根据数字猜测模式，也不在执行时切换。故事规划可先于参数选择完成，但不能把尚未选择的值写成用户已批准。
+项目级生成选择存入顶层 `user_constraints.megapixels`、`user_constraints.sampler_profile` 和 `user_constraints.steps`，与故事板一致。准备当前 Panel 时继承到 Canvas 节点参数；所选能力不接受的组合必须在确认前停止，不根据数字猜测模式，也不在执行时切换。故事规划可先于参数选择完成，但不能把尚未选择的值写成用户已批准。
 
 视频提交保持全局串行；当前 Panel 只有在它实际依赖上一 Panel 时才等待上一 Panel 已 `ACCEPT`。下一 Panel 的 I2VA/FL2VA 计划需要时，调用方使用现有 ffmpeg 从已接受视频提取真实尾帧作为精确首帧。明确切镜或换场按已批准的 operation 和引用执行，不能用文字描述代替真实尾帧。
 
-每个 Panel 编译一份只含一个 Clip 的独立 `execution-package.json`。每份包的锁值是该文件的精确文件字节 SHA-256，并通过运行时的 `--approved-sha256 <hash>` 传入；不再维护 prompt manifest 或独立 production lock。包内容变化都必须重新计算 hash，并核对现有授权是否覆盖；无覆盖时才需要新的明确授权。
+每个 Panel 准备一个只含当前 Clip 的独立 Canvas video 节点。保存只是草稿；页面确认或对话明确授权时，Canvas 服务冻结精确 `execution_snapshot` 并只提交一次。节点内容变化只影响下一次草稿，不改写旧快照、已接受媒体或历史；不维护第二套提示词或执行状态。
 
 ## 输出
 
-通过预检后，按本文件和故事板编译一次执行包。视频阶段只保留每个 Panel 的一次 `ACCEPT/REJECT` 结果和已接受媒体路径；执行单元必须查看实际文件，记录实际末态和实际音频证据，不能以技术成功或静态预检通过替代成片检查。`REJECT` 或执行错误即停止，是否重新开始由用户或调用方明确决定。片段接受、替换后的相邻接缝和实际交付文件的一次完整视听检查，统一遵守 [最小视频接受检查](video-qc.md)。
+通过预检后，按本文件和故事板准备 Canvas 节点。视频阶段只保留每个 Panel 的一次 `ACCEPT/REJECT/INCONCLUSIVE` 结果和已接受媒体路径；执行单元必须查看实际文件，记录实际末态和实际音频证据，不能以技术成功或静态预检通过替代成片检查。`REJECT`、`INCONCLUSIVE` 或执行错误即停止，是否确认新快照由用户或调用方按现有授权明确决定。片段接受、替换后的相邻接缝和实际交付文件的一次完整视听检查，统一遵守 [最小视频接受检查](video-qc.md)。

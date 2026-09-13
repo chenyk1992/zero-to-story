@@ -19,7 +19,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 
 & $venvPython -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 'Existing .venv needs Python 3.12+')"
 if ($LASTEXITCODE -ne 0) { throw "Inspect the existing .venv; it was not replaced." }
-& $venvPython -m pip install -e "${projectRoot}[dev]"
+& $venvPython -m pip install -e "${projectRoot}[dev,canvas]"
 if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed; inspect the error before retrying." }
-& $venvPython -c "import pytest, yaml; print('Development environment ready:', __import__('sys').executable)"
+& $venvPython -c "import mcp, pytest, yaml; print('Development environment ready:', __import__('sys').executable)"
 if ($LASTEXITCODE -ne 0) { throw "Development environment verification failed." }

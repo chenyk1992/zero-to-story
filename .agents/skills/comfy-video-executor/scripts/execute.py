@@ -1,8 +1,7 @@
 """Execute one confirmed canvas video snapshot through local ComfyUI.
 
-This file intentionally has no import from the production LFO runtime.  The
-canvas adapter is removable on its own: its only provider boundary is the
-local ComfyUI HTTP API and the official ``comfy run`` CLI.
+The adapter keeps a narrow provider boundary: local ComfyUI HTTP, the official
+``comfy run`` CLI, and the project's shared admission and media-probe helpers.
 """
 
 from __future__ import annotations
@@ -126,10 +125,16 @@ def _safe_config_values(value: dict[str, Any]) -> dict[str, Any]:
     storage = value.get("storage")
     storage = storage if isinstance(storage, dict) else {}
     result: dict[str, Any] = {}
-    for key in ("base_url", "cli", "timeout_seconds", "timeout_sec"):
+    for key in ("base_url", "cli"):
         candidate = comfy.get(key, value.get(key))
         if candidate is not None:
             result[key] = candidate
+    timeout = comfy.get(
+        "timeout_seconds",
+        comfy.get("timeout_sec", value.get("timeout_seconds", value.get("timeout_sec"))),
+    )
+    if timeout is not None:
+        result["timeout_seconds"] = timeout
     output_root = (
         comfy.get("output_root")
         or storage.get("comfy_output")
@@ -317,6 +322,11 @@ def normalize_snapshot(snapshot: object) -> dict[str, Any]:
         raise ExecutorError("snapshot.parameters must be an object")
     if not isinstance(inputs, dict):
         raise ExecutorError("snapshot.inputs must be an object")
+    request_id = snapshot.get("request_id")
+    if request_id is not None and (
+        not isinstance(request_id, str) or not request_id.strip()
+    ):
+        raise ExecutorError("snapshot.request_id must be a non-empty string")
 
     provider = _provider_parameters(parameters)
     common: dict[str, Any] = {}
@@ -374,8 +384,16 @@ def normalize_snapshot(snapshot: object) -> dict[str, Any]:
             raise ExecutorError("r2v uses reference lists instead of first/last frame inputs")
         if not (images or videos or audios):
             raise ExecutorError("r2v requires at least one reference asset")
+    from lfo.canvas.input_contract import validate_input_contract
+
+    capability = json.loads((pathlib.Path(__file__).resolve().parents[1] / "capability.json").read_text(encoding="utf-8"))
+    try:
+        validate_input_contract({**snapshot, "parameters": {**common, **provider}}, capability)
+    except ValueError as exc:
+        raise ExecutorError(str(exc)) from exc
     return {
         "node_id": node_id,
+        "request_id": request_id,
         "mode": mode,
         "prompt": prompt,
         "parameters": common,
@@ -419,8 +437,11 @@ def _load_template(mode: str, profile: str) -> dict[str, Any]:
 
 
 def _prefix_for(node_id: str, request_id: str) -> str:
-    safe = "".join(char if char.isalnum() or char in "-_" else "_" for char in node_id)
-    return f"canvas/{safe[:80]}/{request_id}/video"
+    safe_node = "".join(char if char.isalnum() or char in "-_" else "_" for char in node_id)
+    safe_request = "".join(
+        char if char.isalnum() or char in "-_" else "_" for char in request_id
+    )
+    return f"canvas/{safe_node[:80] or 'node'}/{safe_request[:80] or 'request'}/video"
 
 
 def prepare_workflow(
@@ -433,7 +454,8 @@ def prepare_workflow(
     normalized = normalize_snapshot(snapshot)
     comfy = normalized["comfy"]
     workflow = _load_template(normalized["mode"], comfy["sampler_profile"])
-    request_id = request_id or uuid.uuid4().hex
+    request_id = request_id or normalized["request_id"] or uuid.uuid4().hex
+    normalized["request_id"] = request_id
 
     generator_type = "MiniMaxH3ReferenceToVideo" if normalized["mode"] == "r2v" else "MiniMaxH3ImageToVideo"
     generator = _one_node(workflow, generator_type)
@@ -788,12 +810,13 @@ def run_comfy_cli(
     config: RuntimeConfig,
     *,
     emit: Callable[[dict[str, Any]], None] | None = None,
+    request_id: str | None = None,
 ) -> CliResult:
     from lfo.comfy.admission import VideoSubmissionGuard
     from lfo.comfy.exceptions import LfoComfyError
 
     try:
-        with VideoSubmissionGuard(config.base_url) as guard:
+        with VideoSubmissionGuard(config.base_url, request_id=request_id) as guard:
             guard.submitted()
             def progress(event: dict[str, Any]) -> None:
                 if event.get("provider_task_id"):
@@ -1151,7 +1174,7 @@ def execute_snapshot(
         with tempfile.TemporaryDirectory(prefix="canvas-comfy-") as temp_dir:
             stage = "upload"
             emit({"stage": stage})
-            workflow, _normalized = prepare_workflow(snapshot, uploader=uploader)
+            workflow, normalized = prepare_workflow(snapshot, uploader=uploader)
             stage = "input_validation"
             emit({"stage": stage})
             preflight_workflow(workflow, config)
@@ -1159,7 +1182,12 @@ def execute_snapshot(
             workflow_path.write_text(json.dumps(workflow, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             stage = "submit"
             emit({"stage": stage})
-            result = run_comfy_cli(workflow_path, config, emit=emit)
+            result = run_comfy_cli(
+                workflow_path,
+                config,
+                emit=emit,
+                request_id=normalized["request_id"],
+            )
         stage = "collection"
         emit({"stage": stage, "remote_finished": True, "provider_task_id": result.provider_task_id})
         output = materialize_video(result, output_dir, config)

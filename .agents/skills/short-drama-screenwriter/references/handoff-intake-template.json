@@ -30,6 +30,6 @@
   "origin": {
     "source": "user",
     "derived_from": [".short-drama/{drama_title}/episodes/ep{NNN}.md"],
-    "reason": "短剧编剧 Skill /桥接 生成的创作侧简报；交给 zero-to-story，不直接交给 LFO。"
+    "reason": "短剧编剧 Skill /桥接 生成的创作侧简报；交给 zero-to-story，不直接创建或确认 Canvas 生成请求。"
   }
 }

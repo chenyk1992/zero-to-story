@@ -10,13 +10,12 @@ import pytest
 
 from lfo.media._ffmpeg import probe
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
-from lfo.media.export import Exporter, ExportSpec
 from lfo.media.subtitles import SubtitleCue, SubtitleRenderer
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineSpec
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is required")
-def test_timeline_export_preserves_source_resolution_with_unicode_space_paths(tmp_path: Path) -> None:
+def test_timeline_preserves_source_resolution_with_unicode_space_paths(tmp_path: Path) -> None:
     media_dir = tmp_path / "媒体 文件"
     media_dir.mkdir()
     source = media_dir / "原始 片段.mp4"
@@ -52,15 +51,10 @@ def test_timeline_export_preserves_source_resolution_with_unicode_space_paths(tm
     )
     assert timeline.success, timeline.error
     assert not list(media_dir.glob(".*.concat.txt"))
-    final_path = media_dir / "最终 成片.mp4"
-    exported = Exporter().export(
-        ExportSpec("run", "package", "ph", "mh", str(final_path)), str(timeline_path)
-    )
-    assert exported.success, exported.error
-    final_metadata = probe(final_path)
-    assert final_metadata["duration_ms"] > 0
-    assert final_metadata["width"] == 96
-    assert final_metadata["height"] == 64
+    timeline_metadata = probe(timeline_path)
+    assert timeline_metadata["duration_ms"] > 0
+    assert timeline_metadata["width"] == 96
+    assert timeline_metadata["height"] == 64
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is required")

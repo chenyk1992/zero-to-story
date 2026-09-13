@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import copy
 import json
-import math
+import os
 import shutil
 from pathlib import Path
 from typing import Any
+
+from lfo.canvas.input_contract import validate_input_contract
 
 
 class CapabilityCatalog:
@@ -50,9 +52,18 @@ class CapabilityCatalog:
                             installed=False, available=False, reason="执行 Skill 缺少有效入口"
                         )
                 for executable in item.get("requires_executables", []):
-                    if not shutil.which(executable):
+                    override_name = {
+                        "comfy": "LFO_COMFY_CLI",
+                        "ffprobe": "LFO_FFPROBE",
+                    }.get(executable)
+                    candidate = (
+                        os.environ.get(override_name, "") if override_name else ""
+                    ) or executable
+                    if not shutil.which(candidate):
                         item.update(
-                            installed=False, available=False, reason=f"本机尚未发现 {executable}"
+                            installed=False,
+                            available=False,
+                            reason=f"本机尚未发现 {candidate}",
                         )
                 if item["id"] in entries:
                     entries[item["id"]].update(
@@ -99,35 +110,5 @@ class CapabilityCatalog:
             choices = capability.get(choices_key, [])
             if choices and snapshot.get(key) not in [choice["id"] for choice in choices]:
                 raise ValueError(f"请在所选生成方式中选择有效的 {key}")
-        parameters = snapshot["parameters"]
-        for field in capability.get("fields", []):
-            key = field["key"]
-            value = parameters.get(key)
-            if value is None or value == "":
-                if field.get("required"):
-                    raise ValueError(f"请填写{field['label']}")
-                continue
-            if field["type"] == "number":
-                if (
-                    isinstance(value, bool)
-                    or not isinstance(value, (int, float))
-                    or not math.isfinite(value)
-                ):
-                    raise ValueError(f"{field['label']}需要有效数值")
-                if "min" in field and value < field["min"]:
-                    raise ValueError(f"{field['label']}不能小于 {field['min']}")
-                if "max" in field and value > field["max"]:
-                    raise ValueError(f"{field['label']}不能大于 {field['max']}")
-                if field.get("integer") and int(value) != value:
-                    raise ValueError(f"{field['label']}需要整数")
-            if field["type"] == "select" and value not in [
-                opt["value"] for opt in field.get("options", [])
-            ]:
-                raise ValueError(f"请重新选择{field['label']}")
-            if field["type"] == "boolean" and not isinstance(value, bool):
-                raise ValueError(f"{field['label']}需要开关值")
-        allowed = {field["key"] for field in capability.get("fields", [])}
-        for key, value in parameters.items():
-            if key not in allowed and value is not None and value != "":
-                raise ValueError(f"所选方式不支持参数 {key}，请调整后确认")
+        validate_input_contract(snapshot, capability)
         return copy.deepcopy(capability)

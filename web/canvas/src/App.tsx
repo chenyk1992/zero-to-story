@@ -162,12 +162,19 @@ function firstOutput(run?: Run): RunOutput | undefined {
 }
 
 function decorateNodes(nodes: FlowNode[], edges: Edge[], runs: Run[], onPreview: (nodeId: string, output?: RunOutput) => void): FlowNode[] {
+  const runsByNode = new Map<string, Run[]>();
+  for (const run of sortRuns(runs)) {
+    const history = runsByNode.get(run.node_id) || [];
+    history.push(run);
+    runsByNode.set(run.node_id, history);
+  }
   return nodes.map((node) => {
     const media = resolveMediaOutput(node.id, nodes, edges, runs);
     if (!GENERATION_KINDS.has(node.data.nodeType) && !media) return node;
-    const last = latestRun(runs, node.id);
-    const success = latestSuccessfulRun(runs, node.id);
-    const runHistory = sortRuns(runs).filter((run) => run.node_id === node.id && run.status === 'succeeded' && run.outputs?.length);
+    const nodeRuns = runsByNode.get(node.id) || [];
+    const last = nodeRuns[0];
+    const runHistory = nodeRuns.filter((run) => run.status === 'succeeded' && run.outputs?.length);
+    const success = runHistory[0];
     const output = firstOutput(success) || media;
     const preview: PreviewInfo | undefined = output ? { runId: success?.id || `asset-${node.id}`, output } : undefined;
     return {

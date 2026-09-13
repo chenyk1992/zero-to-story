@@ -1,33 +1,37 @@
-# Virtual Presenter v1
+# Virtual Presenter
 
-共同的角色、Panel ready、实际末态/音频验收和授权复用规则见[项目共享生产规则](ai-system-prompt.md)。本指南只描述数字人口播的创作与 package 交接。
+共同的角色、Panel ready、实际末态/音频验收和授权复用规则见[项目共享生产规则](ai-system-prompt.md)。本文只描述数字人口播如何交接到唯一的节点画布生产入口。
 
-`virtual-presenter` 是创作侧用于规划自然连续口播镜头的 Skill。它负责角色、环境、文案、声音参考、H3 提示词和用户确认；LFO 只负责执行一个已经确认的 Panel/Clip。
+`virtual-presenter` 负责角色、环境、表演、文案、声音参考和 H3 提示词；画布负责保存配置、冻结本次输入、记录运行状态和展示实际成品。两者都不把创作决定藏进 provider adapter。
 
 ## 创作资产
 
-项目数据放在 `workspace/projects/<project_id>/` 下。角色图、全景图、声音和环境视图是输入素材；执行包只引用当前 Panel 实际需要的文件，不把平台缓存或内部 ID 写入公共契约。
+项目数据放在 `workspace/projects/<project_id>/`。角色图、全景图、声音、环境视图和已接受的前序视频都是明确输入素材；平台缓存或内部 ID 不进入提示词或画布素材引用。
 
-环境辅助工具可从大约 2:1 的 equirectangular 全景图生成四个方向视图。它拒绝不符合比例的输入，不拉伸原图。
+环境辅助工具可以从约 2:1 的 equirectangular 全景图生成方向视图。它拒绝不符合比例的输入，不拉伸原图。
 
 ## 单 Panel 交付
 
-每个口播 Panel 生成一个只含一个 Clip 的 `lfo.video-execution.v1` package。需要连续接力时，下一条 Presenter Panel 使用上一段完整 `ACCEPT` 视频作为普通 `ref_video_0` 参考；只有其他下游 operation 明确要求精确首帧时，才从接受视频提取真实尾帧并绑定为 `first_frame`。
+每个口播 Panel 对应一个画布视频组件。组件保存最终提示词、时长、画幅、像素预算、采样配置、步数和本次真正需要的素材连线。需要连续接力时，可以把上一段实际 `ACCEPT` 视频作为明确的视频引用；只有下游模式要求精确首帧时，才从已接受版本提取真实尾帧并连接到 `first_frame`。
 
-执行顺序固定为：
+执行顺序是：
 
 ```text
-创作审批 → package → validate（返回 package_sha256）
-→ 核对项目授权并绑定 package 完整文件字节 SHA-256（exact file SHA-256）
-→ 当前 Panel 的隔离执行单元 → 同步 ComfyUI/comfy-cli → 最小 QC → ACCEPT/REJECT
+创作内容确定 → 保存画布草稿 → 页面确认当前版本
+→ 服务冻结 snapshot 并创建 queued run
+→ 服务内部脚本 worker 启动 Comfy adapter
+→ HTTP 上传与 /object_info 预检 → 官方 comfy-cli 单次同步提交
+→ 实际媒体回填 → 内容验收
 ```
 
-`plan` 只在需要时用于诊断，不是执行前置步骤。
+本地 Comfy 是 `queued` 脚本任务，不进入 `pending_agent`，也不需要对话 Agent 再 claim。adapter 不批量执行多个 Panel、不并行调用 ComfyUI、不自动换 seed、改提示词、换 provider 或重提。请求状态不确定时核实原任务，而不是新建另一请求。
 
-LFO 不批量执行多个 Shot，不并行调用 ComfyUI，不做语义评分，不自动换 seed、改提示词或重试。执行单元查看实际输出，记录实际末态（人物位置、姿态、手势、手持物和动作完成状态）与实际音频证据（声音、对白、停顿、同步和可懂度），再作一次 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE`。证据不足时先复核，仍不清楚就暂停；ComfyUI/素材失败也立即停止。需要重做时由调用方重新准备当前 Panel。
+故事生产的执行单元查看实际输出，记录人物位置、姿态、手势、手持物和动作完成状态，以及声音、对白、停顿、同步和可懂度，再作一次 `ACCEPT`、`REJECT` 或证据不足时的 `INCONCLUSIVE`。证据不足先复核，仍不清楚就只阻塞相关依赖。
 
-## 最终组装
+## 多 Panel 与最终交付
 
-所有口播 Panel 都 `ACCEPT` 后，调用方一次性创建只含 `video.passthrough` Clip 的 assembly package，运行 `validate` 取得 `package_sha256`，将其绑定到已覆盖当前包的用户授权后再 `execute` 一次；已有适用的持续授权时不重复确认。按顺序直接 `cut` 并做一次可播放检查。最终文件写入项目的 `final/<output.directory>/`。
+多个 Panel 仍按画布运行逐个冻结和提交；视频资源保持全局串行，提示词、资料、独立素材和检查可在资源允许时并行准备。依赖上一段末态的 Panel 必须等待上一段实际接受。
 
-机器环境检查见 [`docs/local-windows.md`](local-windows.md)，当前执行契约见 [`docs/package-v1-reference.md`](package-v1-reference.md)。
+当前画布没有隐含的自动全片组装步骤。用户需要完整成片时，主会话只使用已接受的实际片段，并通过当前已接入、明确授权的确定性媒体流程完成顺序、声音和字幕处理；没有可用能力时报告具体缺口，不能把若干成功片段描述成已经组装的成片。最终文件仍需检查可播放性、顺序、接缝、声音、字幕和同步。
+
+本机环境见[Local Windows ComfyUI profile](local-windows.md)，Canvas 状态、恢复和回填见[画布指南](canvas-guide.md)。

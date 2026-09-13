@@ -12,7 +12,7 @@
 
 - 主会话决定故事、镜头意图、连续性、operation 和素材计划。
 - `$h3-prompt-writing` 只把已经确认的单 Panel 镜头事实写成 H3 提示词，不重新设计故事或镜头。
-- LFO 只消费公共执行包与素材，不理解故事板语义，不作导演决策。
+- `canvas-workspace` 只保存已确定输入、确认固定快照并回填实际媒体，不理解故事板语义，不作导演决策。
 - 执行单元查看实际结果，记录实际末态和实际音频证据，再作一次 `ACCEPT/REJECT` 和最终视听检查。
 
 重要的视点、调度或节奏争议由主会话解决；执行子代理只做冻结输入的下游工作，不承担创意复审、监控或隐式改稿。
@@ -62,4 +62,4 @@ R2V 的 `storyboard_board` 是一张自包含的黑白分镜板，必须在 STEP
 
 ## 交付文件
 
-创作阶段维护 `storyboard_brief.md`、`creative_blueprint.json`、`character_assets.md` 以及按需的 `panels/<panel>/storyboard_board.png`、`scene_keyframe.png`、`last_frame.png`。执行包放在同一个 `workspace/projects/<project_id>/` 项目根目录，每个 Panel 一个唯一文件名，assembly 另一个唯一文件名；运行时目录和数据边界见项目 [AGENTS.md](../../../../AGENTS.md)。
+创作阶段维护 `storyboard_brief.md`、`creative_blueprint.json`、`character_assets.md` 以及按需的 `panels/<panel>/storyboard_board.png`、`scene_keyframe.png`、`last_frame.png`。Canvas 管理节点快照和请求，实际媒体按画布规则回填并存入项目媒体位置；项目数据边界见 [AGENTS.md](../../../../AGENTS.md)。

@@ -1,4 +1,4 @@
-"""EP01 视频验收辅助：抽帧 + 分段音频响度。
+"""视频验收辅助：抽样帧 + 分段音频响度；不替代听审和真实尾帧。
 
 用法:
     python scripts/qc_video.py <video_path> <outdir> [frame_count]
@@ -17,6 +17,8 @@ from pathlib import Path
 
 def run(cmd: list[str]) -> str:
     p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if p.returncode:
+        raise RuntimeError((p.stderr or p.stdout or 'Media command failed')[-1200:])
     return (p.stdout or "") + (p.stderr or "")
 
 
@@ -24,7 +26,9 @@ def main() -> None:
     video = Path(sys.argv[1])
     outdir = Path(sys.argv[2])
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-    outdir.mkdir(parents=True, exist_ok=True)
+    if n < 2 or n > 120:
+        raise ValueError('frame_count must be between 2 and 120')
+    outdir.mkdir(parents=True, exist_ok=False)
 
     probe = run([
         "ffprobe", "-v", "error", "-print_format", "json",
@@ -48,6 +52,10 @@ def main() -> None:
              "-frames:v", "1", "-q:v", "2", str(outdir / f"frame_{i:02d}_{t:04.1f}s.jpg")])
 
     rep = outdir / "audio_report.txt"
+    if a is None:
+        rep.write_text('No audio stream; no listening evidence inferred.\n', encoding='utf-8')
+        print('frames ->', outdir)
+        return
     with rep.open("w", encoding="utf-8") as f:
         f.write("== overall volumedetect ==\n")
         f.write(run(["ffmpeg", "-i", str(video), "-af", "volumedetect",

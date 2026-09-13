@@ -244,6 +244,9 @@ function RelatedComponents({ node, nodes, edges, onSelectNode }: Pick<InspectorP
 }
 
 function CapabilityFieldEditor({ field, value, onChange }: { field: CapabilityField; value: string | number | boolean | undefined; onChange: (value: string | number | boolean | undefined) => void }) {
+  if (field.type === 'number' && field.values) {
+    return <SelectField label={field.label} value={String(value ?? '')} options={[{ value: '', label: field.required ? '请选择' : '未设置' }, ...field.values.map((item) => ({ value: String(item), label: String(item) }))]} onChange={(item) => onChange(item === '' ? undefined : Number(item))} optional={!field.required} required={field.required} />;
+  }
   if (field.type === 'boolean') {
     return <label className="toggle-field"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /><span>{field.label}</span></label>;
   }
