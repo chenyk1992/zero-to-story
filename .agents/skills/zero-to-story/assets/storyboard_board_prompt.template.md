@@ -1,6 +1,6 @@
 # 可变网格电影画面分镜板 Prompt
 
-共同的 Panel ready、可观察要求和实际验收规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本模板只生成选择了 `storyboard_board` 的 R2V 分镜板。
+共同的 Panel ready、可观察要求和实际验收规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本模板只生成选择了 `storyboard_board` 的 R2V 分镜板。
 
 > 只用于 `visual_asset_policy: "storyboard_board"` 的 R2V Panel。STEP 1 必须先为该 Panel 锁定一个 `rowsxcolumns` 布局，且行数 × 列数为 2–6（例如 `1x2`、`2x2`、`2x3`）。STEP 3 只调用一次图片生成，直接输出一张自包含分镜板；不先生成独立分镜帧，也不在后期拼接。资产 key 为 `storyboard_board.<panel>`，H3 将它作为一张参考图接收。
 

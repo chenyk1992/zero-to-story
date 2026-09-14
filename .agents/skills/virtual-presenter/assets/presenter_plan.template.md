@@ -1,6 +1,6 @@
 # Presenter Plan
 
-共享授权、Panel ready 和实际结果规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本模板只记录数字人口播创作事实；Canvas 请求状态仍以画布为准。
+共享授权、Panel ready 和实际结果规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本模板只记录数字人口播创作事实；Canvas 请求状态仍以画布为准。
 
 ## 0. 计划身份
 

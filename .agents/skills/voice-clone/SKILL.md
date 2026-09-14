@@ -6,7 +6,7 @@ allowed-tools: [read, exec_command]
 
 # MiniMax 音色克隆
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 处理音频到 `voice_id`，不扩展到故事、TTS 视频或自动保存音色库。用用户当前语言交互。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 处理音频到 `voice_id`，不扩展到故事、TTS 视频或自动保存音色库。用用户当前语言交互。
 
 ## 输入与授权
 

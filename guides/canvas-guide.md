@@ -4,6 +4,8 @@
 
 ## 启动与宿主接入
 
+Windows 新电脑先按 [Windows 使用指南](windows-setup.md)运行 `./scripts/check_environment.ps1`。预检与启动只检查和提醒，不下载安装；依赖由用户自行准备，或经明确授权后由 Agent 分析并安装。新电脑从空画布开始，不迁移用户私有数据。
+
 首次准备项目依赖，在项目根运行：
 
 ```powershell

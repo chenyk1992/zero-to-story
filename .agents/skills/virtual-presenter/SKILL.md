@@ -5,7 +5,7 @@ description: 规划数字人或虚拟实拍的连续口播，处理角色、环�
 
 # 虚拟实拍口播
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 负责创作规划和单 Panel 交接，不直接调用视频提供方、ComfyUI 或 Canvas 数据库。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 负责创作规划和单 Panel 交接，不直接调用视频提供方、ComfyUI 或 Canvas 数据库。
 
 ## 适用范围
 

@@ -7,7 +7,7 @@ metadata:
 
 # 视频拆解分析师
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 交付可追溯的参考分析和可复制提示词，不直接生成正式视频；分析结论不是媒体 ACCEPT。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 交付可追溯的参考分析和可复制提示词，不直接生成正式视频；分析结论不是媒体 ACCEPT。
 
 ## 什么时候用
 

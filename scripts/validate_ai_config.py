@@ -82,7 +82,7 @@ def validate(root: Path) -> tuple[dict[str, int], list[str]]:
     for path in entries:
         issues.extend(check_skill(path))
     # All skill Markdown supports progressive loading; old eval outputs are data.
-    markdown = [root / "AGENTS.md", *sorted((root / "docs").glob("ai-*.md"))]
+    markdown = [root / "AGENTS.md", root / "README.md", root / "CONTRIBUTING.md", *sorted((root / "guides").glob("*.md"))]
     for entry in entries:
         markdown.append(entry)
         markdown.extend(sorted((entry.parent / "references").rglob("*.md")))

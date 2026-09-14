@@ -1,6 +1,6 @@
 # 故事板文档结构与填充规则
 
-共同的角色、Panel ready、实际验收和授权规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文只规定故事板字段、导演检查和 Panel 映射。
+共同的角色、Panel ready、实际验收和授权规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本文只规定故事板字段、导演检查和 Panel 映射。
 
 ## 目录
 

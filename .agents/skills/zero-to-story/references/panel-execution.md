@@ -1,6 +1,6 @@
 # 单 Panel 交接
 
-只在当前 Panel 已确定、要写提示词或进入 Canvas 时读取。授权、串行执行和失败处理统一遵守[共享规则](../../../../docs/ai-system-prompt.md)。
+只在当前 Panel 已确定、要写提示词或进入 Canvas 时读取。授权、串行执行和失败处理统一遵守[共享规则](../../../../guides/ai-system-prompt.md)。
 
 ## 交给 H3
 

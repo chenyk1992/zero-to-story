@@ -5,7 +5,7 @@ description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 创作选题�
 
 # 微短剧编剧
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 只负责故事、人物、对白、分集文本和可选 handoff；不调用 Canvas、ComfyUI 或视频提供方，也不记录运行状态。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 只负责故事、人物、对白、分集文本和可选 handoff；不调用 Canvas、ComfyUI 或视频提供方，也不记录运行状态。
 
 ## 适用范围与产物
 

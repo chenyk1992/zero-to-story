@@ -5,7 +5,7 @@ description: 由 Canvas 服务执行已确认的本地 Comfy H3 视频快照，�
 
 # 本地 Comfy 视频执行
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。这是 Canvas 服务调用的脚本适配器；对话 Agent 不领取或重复运行它。创意、模式、素材和参数须在确认前决定，adapter 保持提示词原文与冻结输入。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。这是 Canvas 服务调用的脚本适配器；对话 Agent 不领取或重复运行它。创意、模式、素材和参数须在确认前决定，adapter 保持提示词原文与冻结输入。
 
 ## 正常生产路线
 

@@ -1,6 +1,6 @@
 # Presenter Plan 与 Shot Contract
 
-共享授权和实际结果规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文件只定义数字人口播计划的字段和创作标准。
+共享授权和实际结果规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本文件只定义数字人口播计划的字段和创作标准。
 
 ## 计划用法
 

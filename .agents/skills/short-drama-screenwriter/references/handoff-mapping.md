@@ -1,6 +1,6 @@
 # Handoff 对照表：短剧剧本 → 项目桥接包
 
-遵守[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文件只映射已写剧本的创作事实，具体视频交接由下游 Skill 负责。
+遵守[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本文件只映射已写剧本的创作事实，具体视频交接由下游 Skill 负责。
 
 本文件供 `/桥接` 使用。目标是把 `episodes/epNNN.md` 的可拍事实整理成创作侧简报，交给 **zero-to-story** 继续完成故事板、视觉资产、Panel、H3 提示词和 Canvas 交接。短剧编剧 Skill 不调用 Canvas 或提供方，也不决定视频模式。
 

@@ -18,7 +18,7 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 
 优先使用项目 MCP `story_canvas` 的工具。若当前会话尚未加载新增工具，从项目根用 `.venv/Scripts/python.exe -m lfo.canvas open` 启动/找到页面，使用 `python -m lfo.canvas call METHOD /api/... --body-file <JSON文件>` 调用相同服务。这里的 python 指项目解释器；临时 JSON 放系统临时目录，避免占用创作工作区。
 
-宿主连接配置放在对应宿主的项目级配置中；仓库的 `.codex/config.toml` 只是当前 Codex 连接示例，不是其他宿主的必需配置。工具新增后需要宿主重新加载；普通 CLI 交接立即可用。完整启动与字段说明见 [画布使用指南](../../../../docs/canvas-guide.md)。
+宿主连接配置放在对应宿主的项目级配置中；仓库的 `.codex/config.toml` 只是当前 Codex 连接示例，不是其他宿主的必需配置。工具新增后需要宿主重新加载；普通 CLI 交接立即可用。完整启动与字段说明见 [画布使用指南](../../../../guides/canvas-guide.md)。
 
 | 操作 | 接口 |
 |---|---|
@@ -42,7 +42,7 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 | 记录真实单元交接 | POST /api/continuations/{id}/units，正文 `revision`、`unit_id`、`state`，实际 `agent_id` 与可选 `turn_id`、`node_id`、`run_id`、`reason` |
 | 暂停或恢复接续 | POST /api/continuations/{id}/state，正文 `revision`、`state`，暂停附 `reason` |
 
-接续记录不会创建生成请求，也不等于授权或内容接受。主会话在宿主真实派发成功后才登记 `dispatched`，处理返回结果后登记 `handled` 或 `blocked`。当前 Codex hooks 的信任、加载限制和空闲接续条件见[接续指南](../../../../docs/canvas-continuation.md)。
+接续记录不会创建生成请求，也不等于授权或内容接受。主会话在宿主真实派发成功后才登记 `dispatched`，处理返回结果后登记 `handled` 或 `blocked`。当前 Codex hooks 的信任、加载限制和空闲接续条件见[接续指南](../../../../guides/canvas-continuation.md)。
 
 graph 包含 nodes、edges、viewport、selection，以及可选 workspace（story、chapter、summary、source 与扩展元数据）。节点为 `{id,type,position:{x,y},data:{...}}`，类型为 asset、image、video、document、section。边为 `{id,source,target,sourceHandle:"output",targetHandle}`。输入端口为 first_frame、last_frame、reference_image、reference_video、reference_audio。图片参考也使用 reference_image。`output:<派生输出id>` 读取源组件 derived_outputs 内固定的素材；普通 output 读取最新成功成品，没有成功运行时读取 data.asset。
 
@@ -52,4 +52,4 @@ graph 包含 nodes、edges、viewport、selection，以及可选 workspace（sto
 
 生成请求 request_id 在一次请求重发时保持不变。新一轮明确生成使用新编号。领取后输出的 execution_snapshot 是实际执行依据；不要再次读取草稿取代它。
 
-成功 outputs 格式为 `[{"path":"实际本地文件路径","kind":"image 或 video","name":"显示名称"}]`。已有成品的 snapshot 是只读生成依据，不是修改入口。未知状态只能通过 `claim-recovery` 后的 `reconcile` 以原任务证据核实，不能用空说明解除，也不自动重提。状态、审片、能力标签和事件语义见[画布与视频生产指南](../../../../docs/canvas-guide.md)。
+成功 outputs 格式为 `[{"path":"实际本地文件路径","kind":"image 或 video","name":"显示名称"}]`。已有成品的 snapshot 是只读生成依据，不是修改入口。未知状态只能通过 `claim-recovery` 后的 `reconcile` 以原任务证据核实，不能用空说明解除，也不自动重提。状态、审片、能力标签和事件语义见[画布与视频生产指南](../../../../guides/canvas-guide.md)。

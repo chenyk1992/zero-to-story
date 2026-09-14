@@ -32,6 +32,10 @@ artifacts/
 # Local workflow outputs and test data; keep out of Git.
 /workspace/
 
+# Local iteration plans, maintenance notes and retrospectives.
+# Durable user/Agent documentation is tracked in guides/.
+/docs/
+
 # Node
 node_modules/
 

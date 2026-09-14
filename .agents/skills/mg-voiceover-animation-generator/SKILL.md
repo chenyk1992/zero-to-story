@@ -5,7 +5,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 口播动画，
 
 # MG 口播动画
 
-遵守[项目共享生产规则](../../../docs/ai-system-prompt.md)。本 Skill 负责 MG 的创意方案、口播/视觉映射和单 Panel 交接；不直接操作 Canvas 数据库、ComfyUI 或视频提供方。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 负责 MG 的创意方案、口播/视觉映射和单 Panel 交接；不直接操作 Canvas 数据库、ComfyUI 或视频提供方。
 
 ## 适用范围与交付
 

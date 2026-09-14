@@ -1,6 +1,6 @@
 # Canvas Handoff
 
-共享授权、Canvas 唯一入口和实际结果规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本文件只说明 Presenter Panel 如何交给画布。
+共享授权、Canvas 唯一入口和实际结果规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本文件只说明 Presenter Panel 如何交给画布。
 
 ## 分工
 

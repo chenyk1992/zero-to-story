@@ -1,6 +1,6 @@
 # 单帧视觉控制图 Prompt 模板
 
-共同的 Panel ready、可观察要求和实际验收规则见[项目共享生产规则](../../../../docs/ai-system-prompt.md)。本模板只生成一张单帧视觉控制图。
+共同的 Panel ready、可观察要求和实际验收规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本模板只生成一张单帧视觉控制图。
 
 ## 使用方式
 
