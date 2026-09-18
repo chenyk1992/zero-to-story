@@ -51,6 +51,13 @@ const VIDEO_TARGETS_BY_MODE: Record<string, string[]> = {
   r2v: ['reference_image', 'reference_video', 'reference_audio'],
 };
 
+function videoTargetIds(data: StoryNodeData): string[] {
+  const modeTargets = VIDEO_TARGETS_BY_MODE[data.mode];
+  if (!modeTargets) return TARGETS.video.map((target) => target.id);
+  if (data.provider === 'comfy' && data.mode === 'r2v') return ['first_frame', ...modeTargets];
+  return modeTargets;
+}
+
 const MODE_LABELS: Record<string, string> = {
   create: '图像生成',
   t2v: '文生视频',
@@ -104,7 +111,7 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
   const data = rawData as StoryNodeData;
   const kind = data.nodeType;
   const isMedia = kind === 'image' || kind === 'video';
-  const targets = (TARGETS[kind] || []).filter((target) => kind !== 'video' || !data.mode || !VIDEO_TARGETS_BY_MODE[data.mode] || VIDEO_TARGETS_BY_MODE[data.mode].includes(target.id));
+  const targets = (TARGETS[kind] || []).filter((target) => kind !== 'video' || !data.mode || videoTargetIds(data).includes(target.id));
   const derivedOutputs = data.derived_outputs || [];
   const targetSignature = `${targets.map((target) => target.id).join('|')}::${derivedOutputs.map((output) => output.id).join('|')}`;
   const isRunning = data.runStatus === 'queued' || data.runStatus === 'pending_agent' || data.runStatus === 'running';

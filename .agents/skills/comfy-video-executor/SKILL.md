@@ -23,7 +23,7 @@ description: 由 Canvas 服务执行已确认的本地 Comfy H3 视频快照，�
 | `t2v` | 不带媒体 |
 | `i2v` | 一张 `first_frame` |
 | `fl2v` | `first_frame` 和 `last_frame` |
-| `r2v` | 至少一个 typed reference，保留原槽位 |
+| `r2v` | 至少一个 typed reference，保留原槽位；可另接 `first_frame`，用 AddGuide 在第 0 帧引导，不将声音参考变为固定音轨。启用 `frame_zero_video_guide` 时，第一条 `reference_video` 会改作带原声的多帧第 0 帧引导，生成结果包含重叠前缀，采用后由后期裁掉重叠。 |
 
 H3 必填 `duration`、`aspect_ratio`、`megapixels`，Comfy 还需 `sampler_profile` 与 `steps`。`native` 至少 8 步，`vdn_turbo` 恰为 8 步。缺值或重复配置冲突要报告，不能从 workflow 模板补成用户选择。
 

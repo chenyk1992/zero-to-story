@@ -43,12 +43,19 @@ ASPECT_LABELS = {
 }
 REFERENCE_LIMITS = {"image": 9, "video": 3, "audio": 3}
 ADVANCED_KEYS = frozenset(
-    {"sampler_profile", "steps", "seed", "fps", "reference_image_size"}
+    {
+        "sampler_profile",
+        "steps",
+        "seed",
+        "fps",
+        "reference_image_size",
+        "frame_zero_video_guide",
+    }
 )
 PROCESS_EXIT_GRACE_SECONDS = 300.0
 DYNAMIC_MEDIA_INPUTS = {
     "LoadImage": frozenset({"image"}),
-    "LoadVideo": frozenset({"video"}),
+    "LoadVideo": frozenset({"file"}),
     "LoadAudio": frozenset({"audio"}),
 }
 
@@ -362,6 +369,11 @@ def normalize_snapshot(snapshot: object) -> dict[str, Any]:
         raise ExecutorError("parameters.reference_image_size must be 'match' or 'max'")
     if image_size is not None and mode != "r2v":
         raise ExecutorError("reference_image_size is supported only by r2v")
+    frame_zero_video_guide = provider.get("frame_zero_video_guide", False)
+    if not isinstance(frame_zero_video_guide, bool):
+        raise ExecutorError("parameters.frame_zero_video_guide must be a boolean")
+    if frame_zero_video_guide and mode != "r2v":
+        raise ExecutorError("frame_zero_video_guide is supported only by r2v")
 
     first = inputs.get("first_frame")
     last = inputs.get("last_frame")
@@ -380,10 +392,14 @@ def normalize_snapshot(snapshot: object) -> dict[str, Any]:
         if first_asset is None or last_asset is None or images or videos or audios:
             raise ExecutorError("fl2v requires exactly one first_frame and last_frame")
     elif mode == "r2v":
-        if first_asset is not None or last_asset is not None:
-            raise ExecutorError("r2v uses reference lists instead of first/last frame inputs")
+        if last_asset is not None:
+            raise ExecutorError("r2v does not support a last_frame input")
         if not (images or videos or audios):
             raise ExecutorError("r2v requires at least one reference asset")
+        if frame_zero_video_guide and not videos:
+            raise ExecutorError(
+                "frame_zero_video_guide requires at least one reference video"
+            )
     from lfo.canvas.input_contract import validate_input_contract
 
     capability = json.loads((pathlib.Path(__file__).resolve().parents[1] / "capability.json").read_text(encoding="utf-8"))
@@ -515,6 +531,8 @@ def prepare_workflow(
             generator_inputs[key] = [load_id, 0]
     elif normalized["mode"] == "r2v":
         assert uploader is not None
+        frame_zero_video_guide = normalized["comfy"].get("frame_zero_video_guide", False)
+        guided_video_components_id: str | None = None
         for key in list(generator_inputs):
             if key.startswith(("ref_images.", "ref_videos.", "ref_video_audios.", "ref_audios.")):
                 generator_inputs.pop(key, None)
@@ -535,14 +553,21 @@ def prepare_workflow(
             token = uploader(asset["path"])
             load_id = _add_node(
                 workflow,
-                {"_meta": {"title": f"Canvas.ReferenceVideo{index + 1}"}, "class_type": "LoadVideo", "inputs": {"video": token}},
+                {"_meta": {"title": f"Canvas.ReferenceVideo{index + 1}"}, "class_type": "LoadVideo", "inputs": {"file": token}},
             )
             components_id = _add_node(
                 workflow,
                 {"_meta": {"title": f"Canvas.ReferenceVideoComponents{index + 1}"}, "class_type": "GetVideoComponents", "inputs": {"video": [load_id, 0]}},
             )
-            generator_inputs[f"ref_videos.ref_video_{index}"] = [components_id, 0]
-            generator_inputs[f"ref_video_audios.ref_video_audio_{index}"] = [components_id, 1]
+            if frame_zero_video_guide and index == 0:
+                # The first video is a short temporal prefix, not an additional
+                # semantic <Video N> reference. Its frames and soundtrack are
+                # attached to AddGuide below, matching Comfy's multiframe
+                # workflow and avoiding a second, competing video reference.
+                guided_video_components_id = components_id
+            else:
+                generator_inputs[f"ref_videos.ref_video_{index}"] = [components_id, 0]
+                generator_inputs[f"ref_video_audios.ref_video_audio_{index}"] = [components_id, 1]
         for index, asset in enumerate(normalized["reference_audios"]):
             token = uploader(asset["path"])
             load_id = _add_node(
@@ -550,6 +575,51 @@ def prepare_workflow(
                 {"_meta": {"title": f"Canvas.ReferenceAudio{index + 1}"}, "class_type": "LoadAudio", "inputs": {"audio": token}},
             )
             generator_inputs[f"ref_audios.ref_audio_{index}"] = [load_id, 0]
+        if frame_zero_video_guide:
+            if guided_video_components_id is None:
+                raise ExecutorError(
+                    "frame_zero_video_guide could not prepare its reference video"
+                )
+            # Anchor the short, frame-valid (22, 39, ...) continuation prefix
+            # together with its original soundtrack at output frame zero.
+            # The caller trims the overlap after content acceptance.
+            generator_id = next(key for key, node in workflow.items() if node is generator)
+            guide_id = _add_node(workflow, {
+                "_meta": {"title": "Canvas.FrameZeroVideoGuide"},
+                "class_type": "MiniMaxH3AddGuide",
+                "inputs": {
+                    "positive": [generator_id, 0],
+                    "latent": [generator_id, 1],
+                    "vae": generator_inputs["vae"],
+                    "audio_vae": generator_inputs["audio_vae"],
+                    "image": [guided_video_components_id, 0],
+                    "audio": [guided_video_components_id, 1],
+                    "frame_idx": 0,
+                },
+            })
+            _one_node(workflow, "BasicGuider")["inputs"]["conditioning"] = [guide_id, 0]
+        elif normalized["first_frame"] is not None:
+            # Timed image conditioning is separate from identity/voice references.
+            # Keep the R2V latent and reference slots, then anchor frame zero with
+            # the same AddGuide route used by Comfy's multiframe workflow.
+            generator_id = next(key for key, node in workflow.items() if node is generator)
+            load_id = _add_node(workflow, {
+                "_meta": {"title": "Canvas.first_frame"},
+                "class_type": "LoadImage",
+                "inputs": {"image": uploader(normalized["first_frame"]["path"])},
+            })
+            guide_id = _add_node(workflow, {
+                "_meta": {"title": "Canvas.FrameZeroGuide"},
+                "class_type": "MiniMaxH3AddGuide",
+                "inputs": {
+                    "positive": [generator_id, 0],
+                    "latent": [generator_id, 1],
+                    "vae": generator_inputs["vae"],
+                    "image": [load_id, 0],
+                    "frame_idx": 0,
+                },
+            })
+            _one_node(workflow, "BasicGuider")["inputs"]["conditioning"] = [guide_id, 0]
     return workflow, normalized
 
 
@@ -1022,7 +1092,15 @@ def _run_comfy_cli(
 
 
 def _video_refs(result: CliResult) -> list[OutputRef]:
-    refs = [reference for reference in result.outputs if pathlib.Path(reference.filename).suffix.lower() in VIDEO_EXTENSIONS]
+    # LoadVideo exposes its source file as an intermediate ``type=input``
+    # output when a temporal guide is present. Only SaveVideo/output (or an
+    # explicitly resolved absolute path) is a generated result.
+    refs = [
+        reference
+        for reference in result.outputs
+        if reference.file_type in {"output", "absolute"}
+        and pathlib.Path(reference.filename).suffix.lower() in VIDEO_EXTENSIONS
+    ]
     if not refs:
         raise ExecutorError(f"Comfy prompt {result.provider_task_id} did not report a video output", provider_task_id=result.provider_task_id)
     if len(refs) > 1:

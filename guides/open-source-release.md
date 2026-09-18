@@ -1,6 +1,6 @@
 # 当前仓库发布检查
 
-项目直接在当前代码仓库维护和开源。项目自有代码使用 MIT，第三方内容保留各自 LICENSE 和 NOTICE，见 [许可说明](../THIRD_PARTY_NOTICES.md)。
+项目直接在当前代码仓库维护和开源。项目自有代码使用 Apache License 2.0，第三方内容保留各自 LICENSE 和 NOTICE，见 [许可说明](../THIRD_PARTY_NOTICES.md)。
 
 `workspace/` 保存本机工作流验证产物，不纳入 Git。历史测试目录 `.short-drama/`、运行数据库和本地迭代记录 `docs/` 也由忽略规则排除。长期操作说明和 Agent 必需规则放在 `guides/`，必须随代码分发。已跟踪文件需使用 `git rm --cached` 取消跟踪，本机文件可继续使用；不需要另建仓库或导出源码。
 

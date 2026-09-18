@@ -15,6 +15,7 @@
 | 参考视频拆解或复刻分析 | `video-deconstruct-analyzer` | 可追溯证据和复刻提示词路线；不直接生成正式产物 |
 | 用 MiMo 分析视频 | `mimo-video-understanding` | 视频观察证据；不把模型描述直接当作内容接受结论 |
 | 明确的声音/音色克隆 | `voice-clone` | 授权检查、音频校验和 voice id；不替代 TTS 或视频执行 |
+| 四川话短句语音合成与 ComfyUI 试听准备 | `sichuan-tts` | Qwen3-TTS Eric 预置男声、预检和试听工作流；不做音色克隆，尚未接入 Canvas 音频执行 |
 | 中英文文本去模板化 | `shuorenhua` | 文本审校和改写；不改变事实、责任主体或视频执行契约 |
 
 ## 如何交接

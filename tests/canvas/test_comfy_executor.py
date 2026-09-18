@@ -132,6 +132,9 @@ def test_prepare_r2v_preserves_typed_reference_slots(tmp_path: pathlib.Path) -> 
     audio_id = generator["ref_audios.ref_audio_0"][0]
     assert workflow[image_id]["class_type"] == "LoadImage"
     assert workflow[video_id]["class_type"] == "GetVideoComponents"
+    video_load_id = workflow[video_id]["inputs"]["video"][0]
+    assert workflow[video_load_id]["class_type"] == "LoadVideo"
+    assert workflow[video_load_id]["inputs"] == {"file": "canvas-input/reference.mp4"}
     assert workflow[audio_id]["class_type"] == "LoadAudio"
     assert generator["ref_video_audios.ref_video_audio_0"] == [video_id, 1]
     assert not any(
@@ -139,6 +142,69 @@ def test_prepare_r2v_preserves_typed_reference_slots(tmp_path: pathlib.Path) -> 
         for node in workflow.values()
         if isinstance(node, dict)
     )
+
+
+@pytest.mark.parametrize("profile,steps", [("native", 12), ("vdn_turbo", 8)])
+def test_r2v_frame_zero_guide_keeps_reference_and_audio_routes(tmp_path, profile, steps):
+    snapshot = _snapshot(tmp_path, "r2v")
+    snapshot["parameters"].update(sampler_profile=profile, steps=steps)
+    snapshot["inputs"]["first_frame"] = _asset(tmp_path, "accepted-tail.png", "image")
+    snapshot["inputs"]["reference_audios"] = [_asset(tmp_path, "voice.wav", "audio")]
+    workflow, _ = executor.prepare_workflow(snapshot, uploader=lambda path: f"uploaded/{path.name}")
+    generator_id = next(k for k, n in workflow.items() if n["class_type"] == "MiniMaxH3ReferenceToVideo")
+    guide_id = next(k for k, n in workflow.items() if n["class_type"] == "MiniMaxH3AddGuide")
+    guide = workflow[guide_id]["inputs"]
+    generator = workflow[generator_id]["inputs"]
+    assert guide["frame_idx"] == 0
+    assert guide["positive"] == [generator_id, 0]
+    assert guide["latent"] == [generator_id, 1]
+    assert guide["vae"] == generator["vae"]
+    assert workflow[guide["image"][0]]["inputs"]["image"] == "uploaded/accepted-tail.png"
+    assert "audio" not in guide  # Voice identity must not become a forced soundtrack.
+    assert workflow[generator["ref_images.ref_image_0"][0]]["inputs"]["image"] == "uploaded/reference.png"
+    assert workflow[generator["ref_audios.ref_audio_0"][0]]["inputs"]["audio"] == "uploaded/voice.wav"
+    assert _nodes(workflow, "BasicGuider")[0]["inputs"]["conditioning"] == [guide_id, 0]
+    assert _nodes(workflow, "SamplerCustomAdvanced")[0]["inputs"]["latent_image"] == [generator_id, 1]
+
+
+def test_r2v_frame_zero_video_guide_uses_first_video_with_its_audio(tmp_path: pathlib.Path) -> None:
+    snapshot = _snapshot(tmp_path, "r2v")
+    snapshot["parameters"]["frame_zero_video_guide"] = True
+    snapshot["inputs"]["reference_videos"] = [_asset(tmp_path, "tail-22-frames.mp4", "video")]
+    workflow, _ = executor.prepare_workflow(
+        snapshot, uploader=lambda path: f"uploaded/{path.name}"
+    )
+
+    generator_id = next(
+        key for key, node in workflow.items() if node["class_type"] == "MiniMaxH3ReferenceToVideo"
+    )
+    generator = workflow[generator_id]["inputs"]
+    guide_id = next(
+        key for key, node in workflow.items()
+        if node.get("_meta", {}).get("title") == "Canvas.FrameZeroVideoGuide"
+    )
+    guide = workflow[guide_id]["inputs"]
+    components_id = guide["image"][0]
+    assert workflow[components_id]["class_type"] == "GetVideoComponents"
+    assert guide["positive"] == [generator_id, 0]
+    assert guide["latent"] == [generator_id, 1]
+    assert guide["vae"] == generator["vae"]
+    assert guide["audio_vae"] == generator["audio_vae"]
+    assert guide["image"] == [components_id, 0]
+    assert guide["audio"] == [components_id, 1]
+    assert guide["frame_idx"] == 0
+    assert "ref_videos.ref_video_0" not in generator
+    assert "ref_video_audios.ref_video_audio_0" not in generator
+    assert _nodes(workflow, "BasicGuider")[0]["inputs"]["conditioning"] == [guide_id, 0]
+
+
+def test_r2v_without_first_frame_has_no_guide_and_rejects_last_frame(tmp_path):
+    snapshot = _snapshot(tmp_path, "r2v")
+    workflow, _ = executor.prepare_workflow(snapshot, uploader=lambda path: path.name)
+    assert not _nodes(workflow, "MiniMaxH3AddGuide")
+    snapshot["inputs"]["last_frame"] = _asset(tmp_path, "last.png", "image")
+    with pytest.raises(executor.ExecutorError, match="last_frame"):
+        executor.normalize_snapshot(snapshot)
 
 
 def test_http_uploader_uses_unique_root_names_without_overwrite(
@@ -363,6 +429,21 @@ def test_video_refs_rejects_two_distinct_video_outputs() -> None:
 
     with pytest.raises(executor.ExecutorError, match="multiple video outputs"):
         executor._video_refs(result)
+
+
+def test_video_refs_ignores_load_video_intermediate_input() -> None:
+    result = executor.CliResult(
+        "prompt-guided-video",
+        (
+            executor.OutputRef("accepted-tail-22frames.mp4", file_type="input"),
+            executor.OutputRef("video_00001_.mp4", "canvas", "output"),
+        ),
+        (),
+    )
+
+    assert executor._video_refs(result) == [
+        executor.OutputRef("video_00001_.mp4", "canvas", "output")
+    ]
 
 
 def test_run_comfy_cli_parses_one_terminal_result_and_command(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:

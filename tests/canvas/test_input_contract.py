@@ -23,6 +23,7 @@ def snapshot():
     ("t2v", {}), ("i2v", {"first_frame": {"path": "first.png"}}),
     ("fl2v", {"first_frame": {}, "last_frame": {}}),
     ("r2v", {"reference_images": [{"path": "identity.png"}]}),
+    ("r2v", {"first_frame": {"path": "tail.png"}, "reference_audios": [{"path": "voice.wav"}]}),
 ])
 def test_four_supported_modes(mode, inputs):
     validate_input_contract({**snapshot(), "mode": mode, "inputs": inputs}, CAPABILITY)

@@ -97,6 +97,14 @@
         {"value": "max", "label": "最大"}
       ],
       "required": false
+    },
+    {
+      "key": "frame_zero_video_guide",
+      "label": "首段视频引导",
+      "type": "boolean",
+      "group": "advanced",
+      "modes": ["r2v"],
+      "required": false
     }
   ],
   "parameter_rules": [
@@ -107,7 +115,7 @@
     "i2v": {"allowed": ["first_frame"], "required": ["first_frame"]},
     "fl2v": {"allowed": ["first_frame", "last_frame"], "required": ["first_frame", "last_frame"]},
     "r2v": {
-      "allowed": ["reference_images", "reference_videos", "reference_audios"],
+      "allowed": ["first_frame", "reference_images", "reference_videos", "reference_audios"],
       "max_counts": {"reference_images": 9, "reference_videos": 3, "reference_audios": 3},
       "any_of": ["reference_images", "reference_videos", "reference_audios"]
     }

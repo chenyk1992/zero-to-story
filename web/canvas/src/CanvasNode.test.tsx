@@ -31,6 +31,22 @@ describe('media card controls', () => {
     expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['first_frame', 'related']);
   });
 
+  it('exposes a first-frame guide only for Comfy R2V while keeping other modes and providers unchanged', () => {
+    const node = createFlowNode('video', { x: 0, y: 0 });
+    node.data.provider = 'comfy';
+    node.data.mode = 'r2v';
+    expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['first_frame', 'reference_image', 'reference_video', 'reference_audio', 'related']);
+
+    node.data.provider = 'mmx';
+    expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['reference_image', 'reference_video', 'reference_audio', 'related']);
+
+    node.data.provider = 'comfy';
+    node.data.mode = 'i2v';
+    expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['first_frame', 'related']);
+    node.data.mode = 'fl2v';
+    expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['first_frame', 'last_frame', 'related']);
+  });
+
   it('shows the configured provider instead of labeling every image as built-in generation', () => {
     const node = createFlowNode('image', { x: 0, y: 0 });
     expect(render(node).querySelector('.node-provider')?.textContent).toBe('请选择生成方式');

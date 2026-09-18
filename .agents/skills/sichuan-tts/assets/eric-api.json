@@ -1,0 +1,32 @@
+{
+  "1": {
+    "class_type": "FB_Qwen3TTSCustomVoice",
+    "inputs": {
+      "text": "你今天下午有空没得？有空就出来耍嘛。我们先去吃碗面，吃了再慢慢逛。莫着急，我在楼底下等你。",
+      "speaker": "Eric",
+      "model_choice": "1.7B",
+      "device": "cuda",
+      "precision": "bf16",
+      "language": "Chinese",
+      "seed": 42,
+      "instruct": "",
+      "max_new_tokens": 2048,
+      "top_p": 1.0,
+      "top_k": 50,
+      "temperature": 0.9,
+      "repetition_penalty": 1.05,
+      "attention": "sdpa",
+      "unload_model_after_generate": true
+    }
+  },
+  "2": {
+    "class_type": "SaveAudio",
+    "inputs": {
+      "audio": [
+        "1",
+        0
+      ],
+      "filename_prefix": "audio/sichuan-tts/eric"
+    }
+  }
+}
