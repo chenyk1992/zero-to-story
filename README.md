@@ -1,6 +1,8 @@
 # zero-to-story
 
-项目自有代码采用 [Apache License 2.0](LICENSE)，第三方内容见[许可说明](THIRD_PARTY_NOTICES.md)。开发检查见[贡献指南](CONTRIBUTING.md)，公开源码准备见[发布检查](guides/open-source-release.md)。无本机素材依赖的画布示例见 [minimal-canvas.json](examples/minimal-canvas.json)。
+作者：**chenyakun** · [微信联系](#作者与联系)
+
+项目自有代码采用 [MIT](LICENSE)，第三方内容见[许可说明](THIRD_PARTY_NOTICES.md)。开发检查见[贡献指南](CONTRIBUTING.md)，公开源码准备见[发布检查](guides/open-source-release.md)。无本机素材依赖的画布示例见 [minimal-canvas.json](examples/minimal-canvas.json)。
 
 本 README 是新手入口。长期生产规范与操作参考位于 `guides/`，随代码分发；本地迭代计划、维护记录和复盘放在 `docs/`，不提交到 Git。
 
@@ -239,3 +241,13 @@ $zero-to-story
 代码、项目 Skills、宿主配置、`guides/`、测试和公开示例随 Git 分发。`docs/` 只存本地迭代记录，不作为运行依赖；`workspace/`、`.short-drama/`、应用数据、凭据和本机依赖环境不迁移、不提交。
 
 README 帮助用户上手；`guides/` 中的共享规则和详细契约供 Agent 按需读取。不要把这些必需规则与迭代记录一起排除，否则新克隆的仓库无法按约定执行。
+
+## 作者与联系
+
+作者：**chenyakun**。欢迎交流项目使用、视频创作与合作。
+
+使用微信扫描下方二维码添加好友，添加时请备注 `zero-to-story`。
+
+<img src="guides/assets/chenyakun-wechat.png" alt="chenyakun 的微信联系二维码" width="320" />
+
+项目自有代码采用 [MIT 许可证](LICENSE)，使用和再分发时请保留许可证中的版权声明。

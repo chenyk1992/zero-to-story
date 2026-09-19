@@ -2,7 +2,8 @@
 name = "lfo"
 version = "1.0.0"
 description = "Local node-canvas workspace and deterministic media utilities."
-license = "Apache-2.0"
+license = "MIT"
+authors = [{ name = "chenyakun" }]
 requires-python = ">=3.12"
 dependencies = []
 
