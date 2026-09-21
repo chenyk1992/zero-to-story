@@ -14,6 +14,7 @@ description: 将灵感、小说、剧本或短剧交接转成故事板、角色�
 | 当前交付 | 读取时机与资源 |
 | --- | --- |
 | 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
+| 细化当前镜头的动作或表演 | 仅按需要读[动作导演参考](references/action-direction.md)或[表演导演参考](references/performance-direction.md)，再写回已有的 Setup、状态与转场字段 |
 | 完整故事生产的结构化蓝图 | 从故事板编译时读[创作蓝图](references/creative-blueprint.md) |
 | 角色图、分镜板、关键帧 | 只在准备相应资产时读[视觉资产](references/creative-assets.md) |
 | 单 Panel 提示词和生成交接 | 输入准备好后读[Panel 交接](references/panel-execution.md)，调用 [h3-prompt-writing](../h3-prompt-writing/SKILL.md) |

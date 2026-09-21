@@ -59,11 +59,24 @@ STEP 1 先在 `storyboard_brief.md` 和 `creative_blueprint.json` 中锁定每�
 |---|---|---|---|
 | `none` | 不调用图片模型；使用文本或等待上一 Clip 真实尾帧 | T2V、同场接力 I2V | 由 `runtime_input_keys` 显式决定 |
 | `storyboard_board` | 按 STEP 1 锁定的布局一次生成或复用一张自包含电影画面分镜板 | R2V | 以 `storyboard_board.<panel>` 作为一个 fixed reference |
-| `reference_assets` | 复用已明确选择、各有用途的普通视觉参考，如开场构图和人物正面 | R2V | 各占独立 typed fixed槽位；不视作精确首帧、不强制分镜板 |
+| `reference_assets` | 复用已明确选择、各有用途的 typed 图片、视频或声音参考，如场景视频、开场构图、人物正面或声音样本 | R2V | 按 `kind` 绑定独立 `reference_image`、`reference_video` 或 `reference_audio` 槽位；不视作精确首帧、不强制分镜板 |
 | `scene_keyframe` | 生成或复用一张与成片画幅一致的彩色场景/首帧关键帧 | 新场景 I2V | I2V 时它必须是唯一精确首帧 |
 | `last_frame` | 生成一张与成片画幅一致的目标尾帧 | FL2V | 与精确首帧成对传入，不附加分镜板 |
 
 `runtime_input_keys` 是会真正传给视频模型的最小素材集。`planning_only_asset_keys` 只供导演审阅、历史对照或人工说明，默认不在 STEP 3 物化，禁止绑定为 H3/Canvas 参考。R2V 可以选择 `storyboard_board` 或 `reference_assets`；若选择分镜板，必须在 STEP 1 以 `storyboard_board` 和明确布局重新纳入当前计划。资产不能反向决定 operation。
+
+### 当前 Panel 的素材检查
+
+只检查当前 Panel 实际要用的素材，不建立全局资产先行门禁，也不阻塞素材已齐全的独立 Panel。把结论落在现有计划和 Canvas 输入中：
+
+| 项目 | 核对内容与责任 |
+| --- | --- |
+| 存在 | Canvas readiness 核对实际文件、已接受尾帧依赖和当前能力输入是否可用；T2V 没有视觉参考也可以成立。 |
+| 用途 | 创作者说明这项素材为何服务当前模式，例如精确首帧、身份、场景布局或声音参考；`planning_only` 不能充当运行时素材。 |
+| 绑定 | Canvas 快照的端口和槽位必须与计划一致；创作者再核对图中人物、状态和构图是否真能承担所声明用途，不能仅凭 `related` 关联推断。 |
+| 版本 | 创作者确认引用的是计划中的资产版本；真实续接使用已 `ACCEPT` 的源版本。Canvas 确认时冻结实际输入，后续替换素材按新快照处理。 |
+
+这四项分别由 Canvas 就绪检查、创作者的导演判断和既有确认流程承担，不新增表单、批准状态或生成任务。等待另一个 Panel 的角色图时，当前 Panel 若自身 `runtime_input_keys` 已齐全且没有真实依赖，仍可按原计划推进。
 
 ## R2V 自包含可变网格分镜板
 

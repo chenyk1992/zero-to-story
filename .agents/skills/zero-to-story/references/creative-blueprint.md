@@ -74,7 +74,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 `storyboard_board` 是 R2V 的分镜板策略，使用时必须在 STEP 1 写入规范的 `storyboard_layout: "rowsxcolumns"`，例如 `1x2`、`2x2` 或 `2x3`，且行数乘列数为 2–6；其他策略的该字段必须为 `null` 或省略。STEP 3 按此布局一次生成或复用一张 `storyboard_board.<panel>`，不能生成 `storyboard_frame.*` 独立格子，也不能在事后拼板。
 
-`reference_assets` 用于已明确选择普通参考图的 R2V，例如开场构图图加人物正面角色图。每张图有独立用途并列入 `runtime_input_keys`，Setup 引用的有序并集必须相同；不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；开始画面只作为构图/状态参考，不承诺像素级首帧锁。Canvas 使用明确的 `ref_image_N` 语义槽位，实际数量由所选能力检查。
+`reference_assets` 用于已明确选择且各有用途的 typed 图片、视频或声音参考。每项按 `kind` 绑定 `reference_image`、`reference_video` 或 `reference_audio` 槽位，列入 `runtime_input_keys`，Setup 引用的有序并集必须相同；不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；开始画面只作为构图/状态参考，不承诺像素级首帧锁。Canvas 槽位按实际 `kind` 和能力说明检查，不能把嵌入视频音轨伪造成独立声音参考。
 
 `storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。`generation.limits.reference_slots` 统计最终实际输入数，确认 Canvas 请求前仍须核对所选能力。
 
