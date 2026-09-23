@@ -55,6 +55,7 @@ class CapabilityCatalog:
                     override_name = {
                         "comfy": "LFO_COMFY_CLI",
                         "ffprobe": "LFO_FFPROBE",
+                        "ffmpeg": "LFO_FFMPEG",
                     }.get(executable)
                     candidate = (
                         os.environ.get(override_name, "") if override_name else ""

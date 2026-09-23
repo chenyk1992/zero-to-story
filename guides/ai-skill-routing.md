@@ -9,13 +9,14 @@
 | 单个 Panel 的 MiniMax H3 提示词 | `h3-prompt-writing` | 一份完整提示词；不执行生成或编排运行时 |
 | 节点画布的故事、资产和待办 | `canvas-workspace` | 读取最新画布、保存编辑、领取已确认请求、回填实际媒体；不改画布 API 之外的运行时状态 |
 | 已确认的本地 Comfy 视频快照执行 | `comfy-video-executor` | 按固定快照执行一次并返回实际文件与结果；不写创意、不改冻结输入、不自动重提 |
+| 已确认的本地 Qwen 图片快照执行 | `comfy-image-executor` | 文生图、最多 10 张图片参考生成/编辑，由画布 worker 执行；无需 Codex，不写创意或重复提交 |
 | 数字人或虚拟实拍连续口播 | `virtual-presenter` | 角色、环境、表演、文案、声音参考和交接；不把普通 MG 或 B-roll 当作数字人流程 |
 | 口播、产品或抽象主题的 MG 动画 | `mg-voiceover-animation-generator` | MG 方案、口播、供 H3 定稿的内容和按需交接；不替代数字人或 B-roll Skill |
 | 逐字稿驱动的 B-roll | `transcript-broll-planner` | 语义拆分、镜头规划和获授权后的 Panel 交接；不改口播事实 |
 | 参考视频拆解或复刻分析 | `video-deconstruct-analyzer` | 可追溯证据和复刻提示词路线；不直接生成正式产物 |
 | 用 MiMo 分析视频 | `mimo-video-understanding` | 视频观察证据；不把模型描述直接当作内容接受结论 |
 | 明确的声音/音色克隆 | `voice-clone` | 授权检查、音频校验和 voice id；不替代 TTS 或视频执行 |
-| 四川话短句语音合成与 ComfyUI 试听准备 | `sichuan-tts` | Qwen3-TTS Eric 预置男声、预检和试听工作流；不做音色克隆，尚未接入 Canvas 音频执行 |
+| 四川话短句与 ComfyUI 工作流准备 | `sichuan-tts` | Qwen3-TTS Eric 预置男声、只读预检和参数准备；尚未接入 Canvas 音频执行，不提交生成或脱离画布试听，不做音色克隆 |
 | 中英文文本去模板化 | `shuorenhua` | 文本审校和改写；不改变事实、责任主体或视频执行契约 |
 
 ## 如何交接

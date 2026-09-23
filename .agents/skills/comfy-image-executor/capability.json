@@ -1,0 +1,180 @@
+{
+  "id": "comfy-qwen-image",
+  "label": "本地 Qwen 2.1（ComfyUI）",
+  "node_types": [
+    "image"
+  ],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": [
+    "comfy",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "video",
+    "capacity": 1
+  },
+  "models": [
+    {
+      "id": "qwen-image-2.1",
+      "label": "Qwen Image 2.1 · INT8"
+    }
+  ],
+  "modes": [
+    {
+      "id": "create",
+      "label": "文生图"
+    },
+    {
+      "id": "reference",
+      "label": "图片参考生成"
+    },
+    {
+      "id": "edit",
+      "label": "图片编辑"
+    }
+  ],
+  "fields": [
+    {
+      "key": "aspect_ratio",
+      "label": "画幅比例",
+      "type": "select",
+      "group": "specs",
+      "required": true,
+      "modes": [
+        "create",
+        "reference"
+      ],
+      "options": [
+        {
+          "value": "1:1",
+          "label": "1:1"
+        },
+        {
+          "value": "2:3",
+          "label": "2:3"
+        },
+        {
+          "value": "3:2",
+          "label": "3:2"
+        },
+        {
+          "value": "3:4",
+          "label": "3:4"
+        },
+        {
+          "value": "4:3",
+          "label": "4:3"
+        },
+        {
+          "value": "9:16",
+          "label": "9:16"
+        },
+        {
+          "value": "16:9",
+          "label": "16:9"
+        },
+        {
+          "value": "21:9",
+          "label": "21:9"
+        }
+      ]
+    },
+    {
+      "key": "megapixels",
+      "label": "生成像素预算（MP）",
+      "type": "number",
+      "group": "specs",
+      "required": true,
+      "modes": [
+        "create",
+        "reference"
+      ],
+      "min": 0.25,
+      "max": 4
+    },
+    {
+      "key": "transparent",
+      "label": "要求真实透明背景（提示词也须明确）",
+      "type": "boolean",
+      "group": "specs"
+    },
+    {
+      "key": "steps",
+      "label": "采样步数（未填为 25）",
+      "type": "number",
+      "group": "advanced",
+      "min": 1,
+      "max": 100,
+      "integer": true
+    },
+    {
+      "key": "seed",
+      "label": "随机种子（未填时生成并记录）",
+      "type": "number",
+      "group": "advanced",
+      "min": 0,
+      "max": 9007199254740991,
+      "integer": true
+    },
+    {
+      "key": "reference_resolution",
+      "label": "参考图预算边长（默认 0 保持原尺寸）",
+      "type": "number",
+      "group": "advanced",
+      "modes": [
+        "reference",
+        "edit"
+      ],
+      "min": 0,
+      "max": 2048,
+      "integer": true
+    }
+  ],
+  "input_rules": {
+    "create": {
+      "allowed": []
+    },
+    "reference": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 10
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    },
+    "edit": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 10
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    }
+  }
+}

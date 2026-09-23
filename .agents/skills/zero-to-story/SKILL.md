@@ -13,6 +13,7 @@ description: 将灵感、小说、剧本或短剧交接转成故事板、角色�
 
 | 当前交付 | 读取时机与资源 |
 | --- | --- |
+| 剧本、改编与叙事声音 | 读[剧本与改编层](references/script-adaptation.md)，再进入故事板设计 |
 | 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
 | 细化当前镜头的动作或表演 | 仅按需要读[动作导演参考](references/action-direction.md)或[表演导演参考](references/performance-direction.md)，再写回已有的 Setup、状态与转场字段 |
 | 完整故事生产的结构化蓝图 | 从故事板编译时读[创作蓝图](references/creative-blueprint.md) |
@@ -27,6 +28,8 @@ description: 将灵感、小说、剧本或短剧交接转成故事板、角色�
 3. **准备必要资产。** 完整生产的蓝图先做一次静态预检；按报错修正后再查，不由模型逐项复算脚本已验证的字段。按当前 Panel 的控制需求复用或生成角色卡、分镜板、关键帧；`planning_only` 资产默认不生成。每张资产只检查能否承担用途。
 4. **写提示词并交接。** 将已确定的单 Panel 事实交给 H3 Skill，把返回提示词与素材、参数原样交给 [canvas-workspace](../canvas-workspace/SKILL.md)。每个 Panel 对应一个视频节点。已有授权覆盖时按共享规则执行；只要草稿时停在保存。
 5. **处理实际结果。** 按视频验收做一次结论。下游需要精确首帧时，才从已接受视频提取真实尾帧。用户要求完整成片时，对已接受输出完成确定性后期和一次最终视听检查。
+
+各引用中的 "STEP 1 / STEP 3" 即上述第 1 步（设计故事和镜头，含 operation、布局与资产计划锁定）与第 3 步（准备必要资产）。[创作蓝图](references/creative-blueprint.md)的"编译顺序"是第 1–2 步内部的子流程，编号独立，不与上述步骤对应。
 
 完整故事生产的静态预检命令：
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection } from '@xyflow/react';
-import { addCanvasEdge, createFlowNode, isValidConnection, normalizeEdges, outputForNode, resolveMediaOutput, serializeGraph, sortRuns, toFlowNode } from './graph';
+import { addCanvasEdge, createFlowNode, isValidConnection, moveReferenceEdge, normalizeEdges, outputForNode, resolveMediaOutput, serializeGraph, sortRuns, toFlowNode } from './graph';
 import type { FlowNode, Run } from './types';
 import { normalizeWorkspace } from './workspace';
 
@@ -9,6 +9,16 @@ function imageAsset(path = 'assets/frame.png') {
 }
 
 describe('canvas graph contract', () => {
+  it('reorders only the selected node image inputs and preserves unrelated edges', () => {
+    const edges = normalizeEdges([
+      { id: 'one', source: 'a', target: 'image', targetHandle: 'reference_image' },
+      { id: 'other', source: 'a', target: 'video', targetHandle: 'reference_image' },
+      { id: 'two', source: 'b', target: 'image', targetHandle: 'reference_image' },
+    ]);
+    expect(moveReferenceEdge(edges, 'two', -1).map((edge) => edge.id)).toEqual(['two', 'other', 'one']);
+    expect(moveReferenceEdge(edges, 'one', -1)).toEqual(edges);
+    expect(edges.map((edge) => edge.id)).toEqual(['one', 'other', 'two']);
+  });
   it('creates direct-prompt media nodes without assuming a provider or model', () => {
     const video = createFlowNode('video', { x: 16, y: 24 });
     const image = createFlowNode('image', { x: 320, y: 24 });

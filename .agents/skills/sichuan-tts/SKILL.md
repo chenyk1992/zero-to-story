@@ -1,15 +1,15 @@
 ---
 name: sichuan-tts
-description: 准备和验证 ComfyUI 中的四川话语音合成，使用 Qwen3-TTS 的 Eric 预置成都男声。用于四川话短句试听与工作流准备；本期不处理音色克隆、训练或视频生成。
+description: 准备 ComfyUI 中的四川话语音合成，使用 Qwen3-TTS 的 Eric 预置成都男声。用于只读环境预检、台词与工作流准备；尚未接入 Canvas 音频执行，不提交生成任务，不处理音色克隆或训练。
 ---
 
 # 四川话语音合成
 
-遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 提供可复用的预检和试听工作流；直接 ComfyUI 技术试听已成功生成音频，尚未接通 Canvas 音频执行能力，不能宣称已能从项目画布生成语音。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 当前只提供只读预检、台词和工作流准备。尚未接通 Canvas 音频执行能力，不提交生成任务，也不能宣称已能从项目画布生成语音。
 
 ## 最小目标
 
-将一段用户确认的短台词生成可试听、可保存的四川话音频。默认使用 `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`、`Eric`、`Chinese`、`bf16`、`sdpa`，风格指令先留空。Eric 是官方标注的成都男声，不代表所有四川地区的方言。
+准备一段用户确认的短台词及其语音参数，供后续 Canvas 音频能力接入后执行。默认使用 `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`、`Eric`、`Chinese`、`bf16`、`sdpa`，风格指令先留空。Eric 是官方标注的成都男声，不代表所有四川地区的方言。
 
 用户已有台词时保留原文；需要改成自然四川话时，先展示改写。未提供台词的首次试用可使用[试听配置](assets/eric-smoke.json)中的示例。时长由实际输出测量，不承诺固定秒数。
 
@@ -44,11 +44,11 @@ ffprobe -v error -show_entries format=duration:stream=sample_rate,channels -of j
 
 ## 执行边界
 
-项目正式生产须由 Canvas 已接入的音频能力冻结输入并执行；当前 Comfy 视频能力不能代替音频能力，不伪造 capability.json 或把音频登记为视频。
+所有 Comfy TTS 生成，包括短句试听和插件验证，都须由 Canvas 已接入的音频能力冻结输入并执行。当前音频能力未接入，完成准备后报告缺口并停止；当前 Comfy 视频能力不能代替音频能力，不伪造 capability.json 或把音频登记为视频。
 
-如果用户明确批准脱离 Canvas 的一次 ComfyUI 技术试听，可按其范围验证插件；否则完成准备并说明音频入口缺口。试听配置是参数草稿；[API 工作流](assets/eric-api.json)提供 CustomVoice 到 SaveAudio 的实际连接。执行前依据本次 `/object_info` 检查字段、枚举和保存节点，不能因模板存在就自动提交。
+不提供脱离 Canvas 的技术试听例外，不直接调用 `/prompt`、Comfy CLI 或另建提交脚本。试听配置是参数草稿；[API 工作流](assets/eric-api.json)仅用于核对 CustomVoice 到 SaveAudio 的连接。可依据本次 `/object_info` 只读检查字段、枚举和保存节点；模板存在、环境就绪或生成授权都不能替代画布能力接入。
 
-获授权执行后保留单次任务 ID，使用原任务历史核实完成并取得实际音频；状态未知时不盲目重提。产物归入该项目的 outputs 目录，不写 workspace 根目录。
+后续 Canvas 音频能力接入时，应由服务保存单次任务 ID、共用 Comfy 提交互斥与持久回执，并用原任务历史核实完成、回填实际音频；状态未知时不重提。产物归入该项目的 outputs 目录，不写 workspace 根目录。
 
 ## 验证与交付
 

@@ -196,7 +196,7 @@ def test_legacy_omni_model_keeps_payload_compatible(
     assert result == "旧模型正文"
     assert "thinking" not in request_payload(captured)
 
-    with pytest.raises(ValueError, match="only for mimo-v2.5"):
+    with pytest.raises(ValueError, match="only for mimo-v2.6-pro"):
         mimo_video.analyze_video(
             make_video(tmp_path), "分析", model="mimo-v2-omni", thinking="enabled"
         )

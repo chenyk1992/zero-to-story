@@ -18,6 +18,7 @@ interface InspectorProps {
   saveBlocked: boolean;
   onUpdate: (patch: StoryNodePatch) => void;
   onUpdateOptions: (provider: string, key: string, value: string | number | boolean | undefined) => void;
+  onMoveReference?: (edgeId: string, direction: -1 | 1) => void;
   onSelectNode: (nodeId: string) => void;
   onRemove: () => void;
   onExecute: () => void;
@@ -184,10 +185,12 @@ function SelectField({ label, value, options, onChange, disabled = false, option
   );
 }
 
-function IncomingSources({ node, nodes, edges, onSelectNode }: Pick<InspectorProps, 'node' | 'nodes' | 'edges' | 'onSelectNode'>) {
+function IncomingSources({ node, nodes, edges, runs, onSelectNode, onMoveReference }: Pick<InspectorProps, 'node' | 'nodes' | 'edges' | 'runs' | 'onSelectNode' | 'onMoveReference'>) {
   if (!node) return null;
   const incoming = edges.filter((edge) => edge.target === node.id && edge.targetHandle !== 'related');
   if (!incoming.length) return <p className="muted-note input-empty-note"><Icon name="link" size={14} />还没有接入素材。可以从其他节点右侧的圆点拖到这里。</p>;
+  const references = incoming.filter((edge) => edge.targetHandle === 'reference_image');
+  let referenceNumber = 0;
   return (
     <div className="source-list">
       {incoming.map((edge) => {
@@ -195,12 +198,26 @@ function IncomingSources({ node, nodes, edges, onSelectNode }: Pick<InspectorPro
         const derivedId = edge.sourceHandle?.startsWith('output:') ? edge.sourceHandle.slice('output:'.length) : '';
         const derived = derivedId ? source?.data.derived_outputs?.find((item) => item.id === derivedId) : undefined;
         const sourceLabel = derived ? `${source?.data.label || '未知节点'} · ${derived.label || '派生输出'}` : (source?.data.label || '未知节点');
+        const isReference = edge.targetHandle === 'reference_image';
+        const sourceRun = sortRuns(runs).find((run) => run.node_id === edge.source && run.status === 'succeeded'
+          && (!edge.data?.source_run_id || run.id === edge.data.source_run_id));
+        const count = derived || edge.data?.require_accept ? 1 : Math.max(1, sourceRun?.outputs.filter((output) => output.kind === 'image').length || 0);
+        const firstNumber = referenceNumber + 1;
+        if (isReference) referenceNumber += count;
+        const referenceLabel = count === 1 ? `图 ${firstNumber}` : `图 ${firstNumber}–${referenceNumber}`;
+        const position = references.findIndex((item) => item.id === edge.id);
         return (
-          <button className="source-chip" type="button" key={edge.id} onClick={() => source && onSelectNode(source.id)}>
+          <div key={edge.id}>
+          <button className="source-chip" type="button" onClick={() => source && onSelectNode(source.id)}>
             <Icon name="link" size={14} />
-            <span>{sourceLabel}</span>
+            <span>{isReference ? `${referenceLabel} · ` : ''}{sourceLabel}</span>
             <small><Icon name="arrowUpRight" size={12} />{TARGET_LABELS[edge.targetHandle || ''] || '输入'}</small>
           </button>
+          {isReference && onMoveReference && <div className="reference-order">
+            <button type="button" disabled={position === 0} onClick={() => onMoveReference(edge.id, -1)} aria-label={`${referenceLabel}上移`}>上移</button>
+            <button type="button" disabled={position === references.length - 1} onClick={() => onMoveReference(edge.id, 1)} aria-label={`${referenceLabel}下移`}>下移</button>
+          </div>}
+          </div>
         );
       })}
     </div>
@@ -259,8 +276,9 @@ function CapabilityFieldEditor({ field, value, onChange }: { field: CapabilityFi
   return <TextField label={field.label} value={String(value ?? '')} onChange={onChange} optional={!field.required} required={field.required} />;
 }
 
-export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, saveBlocked, onUpdate, onUpdateOptions, onSelectNode, onRemove, onExecute, onUploadAsset, onImportAssetPath, onCompositionChange, onOpenPreview, onOpenMedia, onClose }: InspectorProps) {
+export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, saveBlocked, onUpdate, onUpdateOptions, onMoveReference, onSelectNode, onRemove, onExecute, onUploadAsset, onImportAssetPath, onCompositionChange, onOpenPreview, onOpenMedia, onClose }: InspectorProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [reorderedRun, setReorderedRun] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showStoryboard, setShowStoryboard] = useState(false);
@@ -287,13 +305,17 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
       : [{ value: '', label: '请选择生成方式', disabled: false }];
   const modelOptions = currentCapability?.models?.map((option) => ({ value: option.id, label: option.label })) || [];
   const modeOptions = currentCapability?.modes?.map((option) => ({ value: option.id, label: option.label })) || [];
-  const dynamicSpecFields = currentCapability?.fields?.filter((field) => field.group === 'specs' && !['duration', 'aspect_ratio', 'megapixels'].includes(field.key)) || [];
-  const advancedFields = currentCapability?.fields?.filter((field) => field.group === 'advanced') || [];
+  const applicable = (field: CapabilityField) => !field.modes || field.modes.includes(node?.data.mode || '');
+  const dynamicSpecFields = currentCapability?.fields?.filter((field) => applicable(field) && field.group === 'specs' && !['duration', 'aspect_ratio', 'megapixels'].includes(field.key)) || [];
+  const advancedFields = currentCapability?.fields?.filter((field) => applicable(field) && field.group === 'advanced') || [];
+  const inactiveFields = currentCapability?.fields?.filter((field) => !applicable(field)
+    && node?.data.options[node.data.provider]?.[field.key] !== undefined
+    && node?.data.options[node.data.provider]?.[field.key] !== '') || [];
   const durationField = currentCapability?.fields.find((field) => field.key === 'duration');
   const aspectField = currentCapability?.fields.find((field) => field.key === 'aspect_ratio');
   const megapixelsField = currentCapability?.fields.find((field) => field.key === 'megapixels');
   const unsupportedCommonFields = currentCapability && currentCapability.fields.length > 0
-    ? (['duration', 'aspect_ratio', 'megapixels'] as const).filter((key) => node && dataForNode(node, key) !== undefined && !currentCapability.fields.some((field) => field.key === key))
+    ? (['duration', 'aspect_ratio', 'megapixels'] as const).filter((key) => node && dataForNode(node, key) !== undefined && !currentCapability.fields.some((field) => field.key === key && applicable(field)))
     : [];
   const orderedRuns = useMemo(() => sortRuns(runs), [runs]);
   const orderedLatestRun = useMemo(() => orderedRuns.find((run) => run.node_id === node?.id), [orderedRuns, node?.id]);
@@ -313,7 +335,8 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
   }
 
   const data = node.data as unknown as StoryNodeData;
-  const draftChanged = Boolean(data.resultChanged || draftDiffersFromRun(data, orderedLatestRun));
+  const referenceRunKey = orderedLatestRun ? `${node.id}:${orderedLatestRun.id}` : undefined;
+  const draftChanged = Boolean((referenceRunKey && reorderedRun === referenceRunKey) || data.resultChanged || draftDiffersFromRun(data, orderedLatestRun));
   const latestRunLabel = orderedLatestRun ? (RUN_STATUS_LABELS[orderedLatestRun.status] || orderedLatestRun.status) : '';
   const effectiveRunStatus = orderedLatestRun?.status || data.runStatus;
   const effectiveRunError = orderedLatestRun?.error || data.runError;
@@ -408,17 +431,21 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
         {(data.nodeType === 'image' || data.nodeType === 'video') && (
           <>
             <Section title="输入素材" className="input-section">
-              <IncomingSources node={node} nodes={nodes} edges={edges} onSelectNode={onSelectNode} />
+              <IncomingSources node={node} nodes={nodes} edges={edges} runs={runs} onSelectNode={onSelectNode} onMoveReference={onMoveReference ? (edgeId, direction) => {
+                setReorderedRun(referenceRunKey);
+                onMoveReference(edgeId, direction);
+              } : undefined} />
+              {data.provider === 'comfy-qwen-image' && <p className="field-help">最多 10 张输入图，按显示顺序对应 &lt;image1&gt;～&lt;image10&gt;。编辑时第 1 张是待编辑图，其余为辅助参考；请在提示词写清每张图的用途。调整顺序后也请检查提示词中的编号。</p>}
             </Section>
             {(data.nodeType === 'video' || data.nodeType === 'image') && (
               <>
                 <Section title={data.nodeType === 'video' ? '视频规格' : '图片规格'} className="specs-section">
                   <div className="field-grid two-cols">
                     {data.nodeType === 'video' && <NumberField label="时长（秒）" value={data.duration} min={durationField?.min ?? 1} max={durationField?.max ?? 60} step={durationField?.integer ? 1 : 0.1} onChange={(duration) => onUpdate({ duration })} optional={!durationField?.required} required={durationField?.required} />}
-                    {aspectField?.options?.length ? <SelectField label="画幅比例" value={data.aspect_ratio || ''} options={[{ value: '', label: aspectField.required ? '请选择' : '未设置' }, ...aspectField.options]} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} optional={!aspectField.required} required={aspectField.required} /> : <TextField label="画幅比例" value={data.aspect_ratio || ''} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} placeholder="9:16" optional={!aspectField?.required} required={aspectField?.required} />}
+                    {(!aspectField || applicable(aspectField)) && (aspectField?.options?.length ? <SelectField label="画幅比例" value={data.aspect_ratio || ''} options={[{ value: '', label: aspectField.required ? '请选择' : '未设置' }, ...aspectField.options]} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} optional={!aspectField.required} required={aspectField.required} /> : <TextField label="画幅比例" value={data.aspect_ratio || ''} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} placeholder="9:16" optional={!aspectField?.required} required={aspectField?.required} />)}
                   </div>
-                  {data.nodeType === 'video' && <NumberField label="生成像素预算（MP）" value={data.megapixels} min={megapixelsField?.min ?? 0.01} max={megapixelsField?.max ?? 10} step={0.01} onChange={(megapixels) => onUpdate({ megapixels })} placeholder={megapixelsField?.required ? '请输入像素预算' : '由生成方式决定'} optional={!megapixelsField?.required} required={megapixelsField?.required} />}
-                  <p className="field-help">{data.nodeType === 'video' ? '画幅比例和像素预算是两项设置。当前方式将按能力信息判断必填项。' : '选择图片画幅偏好；连接参考图后，请在“模式”中选择参考图片编辑。'}</p>
+                  {(data.nodeType === 'video' || megapixelsField && applicable(megapixelsField)) && <NumberField label="生成像素预算（MP）" value={data.megapixels} min={megapixelsField?.min ?? 0.01} max={megapixelsField?.max ?? 10} step={0.01} onChange={(megapixels) => onUpdate({ megapixels })} placeholder={megapixelsField?.required ? '请输入像素预算' : '由生成方式决定'} optional={!megapixelsField?.required} required={megapixelsField?.required} />}
+                  <p className="field-help">{data.nodeType === 'video' ? '画幅比例和像素预算是两项设置。当前方式将按能力信息判断必填项。' : data.provider === 'comfy-qwen-image' ? (data.mode === 'edit' ? '编辑沿用第 1 张图处理后的尺寸，并对齐 32 像素；无需设置新画幅。' : '画幅与像素预算共同决定输出尺寸，并对齐 32 像素。1 MP 为约 1024×1024 像素；默认 25 步。') : '选择图片画幅偏好；连接参考图后，请在“模式”中选择参考图片编辑。'}</p>
                   {unsupportedCommonFields.map((key) => <div className="unsupported-field-warning" key={key}>当前方式不支持{key === 'megapixels' ? '生成像素预算' : key === 'duration' ? '时长' : '画幅比例'}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdate({ [key]: undefined })}>清空</button></div>)}
                   {dynamicSpecFields.map((field) => <CapabilityFieldEditor key={field.key} field={field} value={data.options[data.provider]?.[field.key]} onChange={(value) => onUpdateOptions(data.provider, field.key, value)} />)}
                 </Section>
@@ -428,6 +455,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
                   {modelOptions.length > 0 && <SelectField label="模型" value={data.model} options={[{ value: '', label: modelOptions.length === 1 ? '请选择模型' : '请选择模型' }, ...modelOptions]} onChange={(model) => onUpdate({ model })} optional={modelOptions.length !== 1} required={!data.model} />}
                   {modeOptions.length > 0 && <SelectField label="模式" value={data.mode} options={[{ value: '', label: '请选择模式' }, ...modeOptions]} onChange={(mode) => onUpdate({ mode })} optional={!data.mode} required={!data.mode} />}
                   {!currentCapability && <p className="field-help">能力信息尚未返回时只保留通用配置；执行前服务端仍会再次校验。</p>}
+                  {inactiveFields.map((field) => <div className="unsupported-field-warning" key={field.key}>当前模式不支持{field.label}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdateOptions(data.provider, field.key, undefined)}>清空</button></div>)}
                 </Section>
                 {(advancedFields.length > 0 || data.options[data.provider] && Object.keys(data.options[data.provider]).length > 0) && (
                   <Section title="高级参数" collapsed={!showAdvanced} className="advanced-section">
@@ -525,6 +553,7 @@ function OutputPreview({ output, title, status, help, onOpen }: { output: Run['o
         <span className="preview-overlay"><Icon name={isImage ? 'expand' : isAudio ? 'play' : 'play'} size={13} />{isImage ? '查看原图' : isAudio ? '播放音频' : '播放视频'}</span>
       </button>
       <p className="field-help">{help}</p>
+      {isImage && output.metadata?.width && output.metadata?.height && <p className="field-help">实际尺寸 {output.metadata.width} × {output.metadata.height}{output.metadata.has_transparency ? ' · 含透明区域' : ''}{output.metadata.steps ? ` · ${output.metadata.steps} 步` : ''}</p>}
     </section>
   );
 }

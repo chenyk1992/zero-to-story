@@ -19,6 +19,21 @@ def snapshot():
     return {"mode": "t2v", "parameters": {"duration": 5, "aspect_ratio": "16:9", "megapixels": 0.6, "sampler_profile": "native", "steps": 12}, "inputs": {}}
 
 
+def test_required_mode_field_is_only_required_in_its_modes():
+    cap = {"fields": [{"key": "aspect_ratio", "label": "画幅", "type": "text", "required": True, "modes": ["create"]}]}
+    validate_input_contract({"mode": "edit", "parameters": {}, "inputs": {}}, cap)
+    with pytest.raises(ValueError):
+        validate_input_contract({"mode": "create", "parameters": {}, "inputs": {}}, cap)
+    with pytest.raises(ValueError):
+        validate_input_contract({"mode": "edit", "parameters": {"aspect_ratio": "1:1"}, "inputs": {}}, cap)
+
+
+@pytest.mark.parametrize("bad", [{"path": "ref.png"}, "ref.png", 1])
+def test_multiple_input_requires_array(bad):
+    with pytest.raises(ValueError, match="数组"):
+        validate_input_contract({**snapshot(), "mode": "r2v", "inputs": {"reference_images": bad}}, CAPABILITY)
+
+
 @pytest.mark.parametrize("mode,inputs", [
     ("t2v", {}), ("i2v", {"first_frame": {"path": "first.png"}}),
     ("fl2v", {"first_frame": {}, "last_frame": {}}),

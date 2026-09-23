@@ -1,4 +1,4 @@
-"""One machine-wide Comfy submission guard for Canvas video execution.
+"""One machine-wide Comfy submission guard for Canvas image and video execution.
 
 The OS lock protects concurrent processes. A small receipt survives a lost
 process so unknown remote work does not silently release the submission slot.
@@ -40,7 +40,7 @@ class VideoSubmissionGuard:
         self._acquire()
         if self.receipt.exists():
             self._lock.close()
-            raise LfoComfyError("原视频任务尚未核实结束。先查看 lfo.comfy.admission。不能再次提交")
+            raise LfoComfyError("原 Comfy 图片或视频任务尚未核实结束。先查看 lfo.comfy.admission。不能再次提交")
         return self
 
     def _acquire(self) -> None:
@@ -62,7 +62,7 @@ class VideoSubmissionGuard:
                 fcntl.flock(self._lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             self._lock.close()
-            raise LfoComfyError("另一个视频正在提交或等待。视频生成必须串行") from exc
+            raise LfoComfyError("另一个 Comfy 图片或视频正在提交或等待。本地生成必须串行") from exc
 
     def submitted(self, provider_task_id: str | None = None) -> None:
         record = {

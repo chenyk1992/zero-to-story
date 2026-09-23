@@ -20,7 +20,7 @@ import urllib.request
 from pathlib import Path
 
 DEFAULT_BASE_URL = "https://api.xiaomimimo.com/v1"
-DEFAULT_MODEL = "mimo-v2.5"
+DEFAULT_MODEL = "mimo-v2.6-pro"
 BASE64_LIMIT_CHARS = 50 * 1024 * 1024
 
 
@@ -126,10 +126,10 @@ def analyze_video(
         ],
         "max_completion_tokens": max_tokens,
     }
-    if model == "mimo-v2.5":
+    if model == "mimo-v2.6-pro":
         payload["thinking"] = {"type": thinking}
     elif thinking == "enabled":
-        raise ValueError("Explicit thinking control is supported only for mimo-v2.5")
+        raise ValueError("Explicit thinking control is supported only for mimo-v2.6-pro")
 
     endpoint = chat_completions_url(base_url or os.environ.get("MIMO_VIDEO_BASE_URL", DEFAULT_BASE_URL))
     request = urllib.request.Request(
@@ -182,7 +182,7 @@ def main() -> None:
     parser.add_argument("--fps", type=float, default=2.0, help="每秒抽帧数 [0.1, 10]")
     parser.add_argument("--media-resolution", default="default", choices=["default", "max"], help="分辨率档次")
     parser.add_argument("--max-tokens", type=int, default=1024, help="最大输出 token 数")
-    parser.add_argument("--model", default=DEFAULT_MODEL, choices=["mimo-v2.5", "mimo-v2-omni"], help="模型名称")
+    parser.add_argument("--model", default=DEFAULT_MODEL, choices=["mimo-v2.6-pro", "mimo-v2-omni"], help="模型名称")
     parser.add_argument("--base-url", default=None, help="API base URL 或完整 /chat/completions URL")
     parser.add_argument("--thinking", default="disabled", choices=["enabled", "disabled"], help="深度思考开关；描述任务默认关闭，避免思考耗尽正文输出额度")
     parser.add_argument("--output", help="输出文件路径")

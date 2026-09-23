@@ -60,6 +60,8 @@ function videoTargetIds(data: StoryNodeData): string[] {
 
 const MODE_LABELS: Record<string, string> = {
   create: '图像生成',
+  reference: '图片参考生成',
+  edit: '图片编辑',
   t2v: '文生视频',
   i2v: '图生视频',
   fl2v: '首尾帧',
@@ -74,6 +76,7 @@ function shorten(value: string, length = 94): string {
 function providerLabel(data: StoryNodeData): string {
   const provider = String(data.provider || '').trim();
   const normalized = provider.toLowerCase().replace(/[_\s-]/g, '');
+  if (provider === 'comfy-qwen-image') return 'Qwen 2.1';
   if (normalized.includes('imagegen')) return '内置生图';
   if (normalized.includes('comfy')) return 'Comfy / H3';
   if (!provider) return data.nodeType === 'image' || data.nodeType === 'video' ? '请选择生成方式' : '未选择生成方式';

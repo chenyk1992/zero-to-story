@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any
 
 
@@ -12,6 +13,10 @@ def validate_input_contract(snapshot: dict[str, Any], capability: dict[str, Any]
     for field in capability.get("fields", []):
         value = parameters.get(field["key"])
         label = field["label"]
+        if field.get("modes") and snapshot["mode"] not in field["modes"]:
+            if value is not None and value != "":
+                raise ValueError(f"{label}仅适用于 {', '.join(field['modes'])}")
+            continue
         if value is None or value == "":
             if field.get("required"):
                 raise ValueError(f"请填写{label}")
@@ -54,6 +59,16 @@ def validate_input_contract(snapshot: dict[str, Any], capability: dict[str, Any]
     }
     counts = {}
     for key, value in snapshot.get("inputs", {}).items():
+        if value is not None:
+            if key.startswith("reference_") and not isinstance(value, list):
+                raise ValueError(f"{labels.get(key, key)}必须是数组")
+            if key in {"first_frame", "last_frame"} and not isinstance(value, dict):
+                raise ValueError(f"{labels.get(key, key)}必须是素材对象")
+        extensions = rules.get("file_extensions", {}).get(key)
+        if extensions and isinstance(value, list):
+            for asset in value:
+                if not isinstance(asset, dict) or Path(str(asset.get("path", ""))).suffix.lower() not in extensions:
+                    raise ValueError(f"{labels.get(key, key)}格式只支持：{', '.join(extensions)}")
         counts[key] = len(value) if isinstance(value, list) else int(value is not None)
         if counts[key] and key not in rules.get("allowed", []):
             raise ValueError(f"{snapshot['mode']} 不接受{labels.get(key, key)}，请调整输入连线")

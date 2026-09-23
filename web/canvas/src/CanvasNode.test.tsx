@@ -54,5 +54,9 @@ describe('media card controls', () => {
     expect(render(node).querySelector('.node-provider')?.textContent).toBe('custom-studio');
     node.data.provider = 'codex-imagegen';
     expect(render(node).querySelector('.node-provider')?.textContent).toBe('内置生图');
+    node.data.provider = 'comfy-qwen-image';
+    node.data.mode = 'reference';
+    expect(render(node).querySelector('.node-provider')?.textContent).toBe('Qwen 2.1');
+    expect(render(node).textContent).toContain('图片参考生成');
   });
 });

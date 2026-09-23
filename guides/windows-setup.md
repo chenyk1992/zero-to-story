@@ -34,6 +34,7 @@
 | 画布编辑、保存和浏览 | 项目 Python 与构建后的页面；本机应用数据目录和项目工作区可写 |
 | 对话创作和画布操作 | 宿主加载项目规则与 `.agents/skills`；MCP 宿主加载项目连接，或通过项目 Python CLI 操作。配置示例见[画布指南](canvas-guide.md) |
 | 宿主图片生成 | 接手会话实际可调用图片工具；Skill 或能力选项存在不代表工具可用 |
+| 本地 Qwen 图片 | 运行中的 ComfyUI、Qwen 2.1 节点及模型、官方 comfy-cli、FFmpeg/FFprobe；无需 Codex，见 [Qwen 图片指南](qwen-image.md) |
 | 本地 H3 视频 | 官方 comfy-cli、运行中的 ComfyUI、所选工作流的自定义节点及模型、FFprobe；详见[本机环境](local-windows.md)。执行服务必须能找到 CLI；配置 JSON 中的覆盖值由 adapter 检查，通用预检只检查 PATH 和环境变量覆盖 |
 | 媒体检查、尾帧和后期 | FFmpeg、FFprobe；分别运行 `ffmpeg -version`、`ffprobe -version` 验证。部分工具直接使用 PATH 中的 ffprobe，完整功能应将其配置在 PATH |
 | MiMo 视频理解 | `MIMO_API_KEY`、服务网络访问和可用账户；分析脚本使用 Python 标准库 |

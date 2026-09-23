@@ -1,5 +1,7 @@
 # 画布与视频生产指南
 
+图片节点可选 Codex imagegen 或本地 Qwen 2.1。Qwen 支持文生图、1～10 张图片参考生成和编辑，由服务执行，无需 Codex；设置与素材规范见 [Qwen 图片指南](qwen-image.md)。
+
 画布是本地故事工作空间。页面、MCP 和 `python -m lfo.canvas` 画布命令操作同一个服务、数据库和媒体目录。保存只是编辑；页面确认或对话明确授权后，才固定输入并执行。共同分工见[项目协作规则](ai-system-prompt.md)，具体字段见[画布操作接口](../.agents/skills/canvas-workspace/references/operations.md)。
 
 ## 启动与宿主接入

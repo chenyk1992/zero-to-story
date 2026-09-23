@@ -46,6 +46,7 @@ if (-not $StartupOnly) {
         $candidate = $commandName
         if ($commandName -eq 'comfy' -and $env:LFO_COMFY_CLI) { $candidate = $env:LFO_COMFY_CLI }
         if ($commandName -eq 'ffprobe' -and $env:LFO_FFPROBE) { $candidate = $env:LFO_FFPROBE }
+        if ($commandName -eq 'ffmpeg' -and $env:LFO_FFMPEG) { $candidate = $env:LFO_FFMPEG }
         Report-Check ([bool](Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue)) "$commandName executable discovery" 'Prepare the executable in the service environment; see guides/windows-setup.md. Discovery does not verify it runs.'
     }
     foreach ($keyName in @('MIMO_API_KEY', 'MINIMAX_API_KEY')) {

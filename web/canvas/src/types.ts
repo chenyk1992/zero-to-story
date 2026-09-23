@@ -147,6 +147,7 @@ export interface RunOutput {
   path: string;
   kind: string;
   name?: string;
+  metadata?: { width?: number; height?: number; has_alpha?: boolean; has_transparency?: boolean; seed?: number; steps?: number };
 }
 
 export interface PreviewInfo {

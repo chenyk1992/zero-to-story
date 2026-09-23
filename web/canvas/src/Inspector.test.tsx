@@ -95,6 +95,44 @@ async function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe('Inspector editing behavior', () => {
+  it('immediately marks reordered references as draft changes until a new run', async () => {
+    const node = makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v', duration: undefined, aspect_ratio: undefined });
+    const run: Run = { id: 'queued', node_id: node.id, status: 'queued', outputs: [], created_at: '2026-09-22T00:00:00Z',
+      snapshot: { node_id: node.id, node_type: 'video', provider: 'comfy', model: 'h3', mode: 't2v', prompt: node.data.prompt, parameters: {}, inputs: {} } };
+    const events = callbacks();
+    const onMoveReference = vi.fn();
+    const edges = ['a', 'b'].map(id => ({ id, source: id, target: node.id, targetHandle: 'reference_image' }));
+    const render = async (current: Run) => act(async () => root.render(<Inspector node={node} nodes={[node]} edges={edges} capabilities={[capability()]} runs={[current]} canExecute saveBlocked={false} {...events} onMoveReference={onMoveReference} />));
+    await render(run);
+    expect(container.querySelector('.stale-note')).toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="图 1下移"]')!.click());
+    expect(onMoveReference).toHaveBeenCalledWith('a', 1);
+    expect(container.querySelector('.stale-note')).not.toBeNull();
+    await render({ ...run, id: 'new-run' });
+    expect(container.querySelector('.stale-note')).toBeNull();
+  });
+  it('lets users clear retained reference-only options after switching to text generation', async () => {
+    const node = createFlowNode('image', { x: 0, y: 0 }, 'qwen');
+    Object.assign(node.data, { provider: 'comfy-qwen-image', model: 'qwen-image-2.1', mode: 'create', options: { 'comfy-qwen-image': { reference_resolution: 1024 } } });
+    const cap: Capability = { ...capability(), id: 'comfy-qwen-image', node_types: ['image'],
+      models: [{ id: 'qwen-image-2.1', label: 'Qwen' }], modes: [{ id: 'create', label: '文生图' }],
+      fields: [{ key: 'reference_resolution', label: '参考图预算边长', type: 'number', group: 'advanced', modes: ['reference', 'edit'] }] };
+    const events = await renderInspector(node, [cap]);
+    expect(container.textContent).toContain('当前模式不支持参考图预算边长');
+    await act(async () => buttonWithText('清空').click());
+    expect(events.onUpdateOptions).toHaveBeenCalledWith('comfy-qwen-image', 'reference_resolution', undefined);
+  });
+  it('exposes Qwen pixel budget and explains edit target ordering', async () => {
+    const node = createFlowNode('image', { x: 0, y: 0 }, 'qwen');
+    Object.assign(node.data, { provider: 'comfy-qwen-image', model: 'qwen-image-2.1', mode: 'reference' });
+    const cap: Capability = { ...capability(), id: 'comfy-qwen-image', node_types: ['image'],
+      models: [{ id: 'qwen-image-2.1', label: 'Qwen' }], modes: [{ id: 'reference', label: '图片参考生成' }],
+      fields: [{ key: 'megapixels', label: '生成像素预算（MP）', type: 'number', group: 'specs', min: 0.25, max: 4, required: true }] };
+    await renderInspector(node, [cap]);
+    expect(container.textContent).toContain('生成像素预算');
+    expect(container.textContent).toContain('10 张');
+    expect(container.textContent).toContain('第 1 张');
+  });
   it('opens audio in the media preview without nesting playback controls inside its button', async () => {
     const node = createFlowNode('asset', { x: 0, y: 0 }, 'audio-test');
     node.data.asset = { path: 'audio/voice.wav', kind: 'audio', name: '旁白.wav' };

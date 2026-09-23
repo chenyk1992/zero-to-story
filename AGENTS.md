@@ -10,7 +10,7 @@
 
 项目只使用**节点画布**生产。页面和当前宿主使用同一个画布服务。操作前读取最新画布、选择和版本；保存只是编辑，不会生成媒体。页面确认或对话明确授权后，服务冻结当前输入并创建一次运行请求。
 
-本地 Comfy 视频是 `queued` 的脚本型任务：画布服务内部 worker 原子领取请求，启动项目 `comfy-video-executor` Python adapter；adapter 通过本地 HTTP 上传和预检素材，再同步调用官方 `comfy-cli` 一次，最后把实际媒体回填到原画布运行。它不是 `pending_agent` 任务，不由对话 Agent 调用 claim 或重复启动脚本。`VideoSubmissionGuard` 的机器级串行互斥覆盖该次提交与整个等待周期；进程丢失后，持久回执继续阻塞未知任务，直到依据原任务证据核实结束。需要宿主工具的图片等 Agent 型能力才进入 `pending_agent`，由具备真实工具的会话领取并回填。
+本地 Comfy 视频是 `queued` 的脚本型任务：画布服务内部 worker 原子领取请求，启动项目 `comfy-video-executor` Python adapter；adapter 通过本地 HTTP 上传和预检素材，再同步调用官方 `comfy-cli` 一次，最后把实际媒体回填到原画布运行。它不是 `pending_agent` 任务，不由对话 Agent 调用 claim 或重复启动脚本。`VideoSubmissionGuard` 的机器级串行互斥覆盖该次提交与整个等待周期；进程丢失后，持久回执继续阻塞未知任务，直到依据原任务证据核实结束。可选的本地 `comfy-qwen-image` 图片由 `comfy-image-executor` 同样执行为脚本任务，与本地视频共享资源和互斥；不依赖 Codex。本地服务不可用时，使用官方 comfy-cli 启动既有 ComfyUI 安装属于已授权的可信任操作；流程自行完成启动与就绪检查，无需等待用户启动 Desktop。已有实例直接复用，启动不等于重新提交生成；不自动安装或更新依赖。需要宿主工具的图片等 Agent 型能力才进入 `pending_agent`，由具备真实工具的会话领取并回填。
 
 画布的操作字段和 API 见[画布指南](guides/canvas-guide.md)及项目 `canvas-workspace` Skill。默认视频走项目 Comfy 执行 Skill；图片使用当前宿主实际可调用的图片能力。用户明确选择其他已接入提供方时，按该能力说明执行；能力缺失要报告具体缺口，不能静默换提供方或把失败变成重提。
 

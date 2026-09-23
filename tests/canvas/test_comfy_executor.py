@@ -14,6 +14,7 @@ SKILL_ROOT = pathlib.Path(__file__).resolve().parents[2] / ".agents" / "skills" 
 sys.path.insert(0, str(SKILL_ROOT))
 
 from scripts import execute as executor
+from lfo.comfy import transport
 
 
 def _asset(tmp_path: pathlib.Path, name: str, kind: str) -> dict[str, str]:
@@ -242,7 +243,7 @@ def test_http_uploader_uses_unique_root_names_without_overwrite(
         uploaded_names.add(name)
         return Response({"name": name, "subfolder": "", "type": "input"})
 
-    monkeypatch.setattr(executor, "urlopen", fake_urlopen)
+    monkeypatch.setattr(transport, "urlopen", fake_urlopen)
     upload = executor._http_uploader("http://127.0.0.1:8188", 5.0)
 
     first_token = upload(first)
@@ -279,7 +280,7 @@ def test_http_uploader_uses_response_name_subfolder_and_type(
                 {"name": "server-renamed.png", "subfolder": "server-input", "type": "input"}
             ).encode("utf-8")
 
-    monkeypatch.setattr(executor, "urlopen", lambda request, timeout: Response())
+    monkeypatch.setattr(transport, "urlopen", lambda request, timeout: Response())
     upload = executor._http_uploader("http://127.0.0.1:8188", 5.0)
 
     assert upload(source) == "server-input/server-renamed.png"
@@ -301,7 +302,7 @@ def test_http_uploader_rejects_non_input_response_type(
         def read(self) -> bytes:
             return b'{"name":"frame.png","subfolder":"","type":"output"}'
 
-    monkeypatch.setattr(executor, "urlopen", lambda request, timeout: Response())
+    monkeypatch.setattr(transport, "urlopen", lambda request, timeout: Response())
     upload = executor._http_uploader("http://127.0.0.1:8188", 5.0)
 
     with pytest.raises(executor.ExecutorError, match="unexpected file type"):
@@ -527,7 +528,7 @@ def test_run_comfy_cli_uses_the_canvas_request_id_for_admission(
         (),
     )
     monkeypatch.setattr(admission, "VideoSubmissionGuard", Guard)
-    monkeypatch.setattr(executor, "_run_comfy_cli", lambda *_args, **_kwargs: result)
+    monkeypatch.setattr(transport, "_run_comfy_cli", lambda *_args, **_kwargs: result)
     workflow_path = tmp_path / "workflow.json"
     workflow_path.write_text("{}", encoding="utf-8")
 
@@ -644,7 +645,7 @@ def test_run_timeout_is_terminal_and_never_retries(monkeypatch: pytest.MonkeyPat
         return HangingProcess()
 
     monkeypatch.setattr(executor.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(executor, "PROCESS_EXIT_GRACE_SECONDS", 0.01)
+    monkeypatch.setattr(transport, "PROCESS_EXIT_GRACE_SECONDS", 0.01)
     workflow_path = tmp_path / "workflow.json"
     workflow_path.write_text("{}", encoding="utf-8")
     with pytest.raises(executor.ExecutorError, match="wall-clock timeout"):
@@ -678,7 +679,7 @@ def test_timeout_preserves_early_provider_id_and_emits_unknown(
             self.returncode = -9
 
     monkeypatch.setattr(executor.subprocess, "Popen", lambda *args, **kwargs: QueuedThenHangingProcess())
-    monkeypatch.setattr(executor, "PROCESS_EXIT_GRACE_SECONDS", 0.01)
+    monkeypatch.setattr(transport, "PROCESS_EXIT_GRACE_SECONDS", 0.01)
     events: list[dict[str, Any]] = []
     workflow_path = tmp_path / "workflow.json"
     workflow_path.write_text("{}", encoding="utf-8")

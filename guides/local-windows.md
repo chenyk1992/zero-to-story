@@ -32,6 +32,8 @@ VDN8 还需要 `ComfyUI-VDN-H3` 节点和模型根目录下的 `vdn/stage-dmd-st
 
 ## Canvas adapter 配置
 
+本地 Qwen 图片入口为 `.agents/skills/comfy-image-executor/scripts/execute.py`，沿用下述 Comfy 提交链，见 [Qwen 图片指南](qwen-image.md)。图片与视频共享机器锁和旧持久回执。图片完整解码额外使用 FFmpeg，可用 `LFO_FFMPEG` 指定已有可执行文件。
+
 本地 Comfy 视频在页面确认后进入 `queued`。画布服务内部 worker 启动项目 `.agents/skills/comfy-video-executor/scripts/execute.py`；adapter 通过本地 HTTP 上传固定素材、读取 `/object_info`，再同步调用一次官方 `comfy run --wait --json`。这条路径不经过 Agent claim。
 
 adapter 依次读取以下安全连接配置，显式参数优先：
@@ -72,3 +74,11 @@ python -m lfo.comfy.admission --reconcile <canvas-request-id>
 第二条命令只读取原 Comfy `/history`，不会重新提交，也不会直接改写画布状态。没有远端编号、空队列或本地停止等待都不能证明原任务已经结束。
 
 真实视频生成只在页面已经确认当前 run 且 provider 集成确有需要时执行。环境检查、文档维护和测试不触发生成。
+
+## 自动启动已有服务
+
+本地服务离线时，图片和视频共用连接层自动通过 `comfy launch` 启动已配置安装，等待 `/object_info` 就绪后才上传和提交。无需 ComfyUI Desktop 或用户另发命令。在线实例直接复用；远程地址不会触发本机启动。
+
+安装路径和原启动选项来自 `comfy env`；Python 环境依次使用 `LFO_COMFY_VENV`、安装内 `.venv` / `venv` 或 Desktop 安装旁已有的 `standalone-env`，不会继承画布自己的虚拟环境。未发现独立环境时沿用 CLI 的系统解释器。地址、端口与提交配置一致。可以用 `LFO_COMFY_VENV` 指定已有模型环境，不会自动安装依赖。
+
+启动与生成共用机器互斥，未知提交回执仍阻止操作。启动最长等待 180 秒，超时保留 startup.json 防止重复拉起；日志为应用状态目录 video/startup.log。服务就绪后启动记录解除；失败时核实原进程和日志，不清理用户数据库、不换备用配置。

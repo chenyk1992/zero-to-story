@@ -43,6 +43,7 @@ import {
 } from './api';
 import {
   addCanvasEdge,
+  moveReferenceEdge,
   createFlowNode,
   DEFAULT_VIEWPORT,
   isValidConnection,
@@ -760,6 +761,10 @@ function App() {
             saveBlocked={saveBlocked}
             onUpdate={updateSelected}
             onUpdateOptions={updateSelectedOptions}
+            onMoveReference={(edgeId, direction) => {
+              setEdges((current) => moveReferenceEdge(current, edgeId, direction));
+              markDirty();
+            }}
             onSelectNode={selectNode}
             onRemove={removeSelected}
             onExecute={() => void handleExecute()}

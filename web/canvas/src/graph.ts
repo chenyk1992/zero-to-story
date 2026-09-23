@@ -238,6 +238,21 @@ export function addCanvasEdge(edges: Edge[], connection: Connection): Edge[] {
   }, edges);
 }
 
+/** Reorder only image-reference slots for this target; serialized order is input order. */
+export function moveReferenceEdge(edges: Edge[], edgeId: string, direction: -1 | 1): Edge[] {
+  const selected = edges.find((edge) => edge.id === edgeId);
+  if (!selected || selected.targetHandle !== 'reference_image') return edges;
+  const positions = edges.map((edge, index) => ({ edge, index }))
+    .filter(({ edge }) => edge.target === selected.target && edge.targetHandle === 'reference_image')
+    .map(({ index }) => index);
+  const current = positions.findIndex((index) => edges[index].id === edgeId);
+  const next = current + direction;
+  if (next < 0 || next >= positions.length) return edges;
+  const result = [...edges];
+  [result[positions[current]], result[positions[next]]] = [result[positions[next]], result[positions[current]]];
+  return result;
+}
+
 export function graphHasNode(graph: CanvasGraph, nodeId: string): boolean {
   return graph.nodes.some((node) => node.id === nodeId);
 }

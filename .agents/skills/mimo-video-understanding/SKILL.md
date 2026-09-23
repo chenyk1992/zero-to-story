@@ -28,11 +28,11 @@ description: 用 MiMo 分析视频中的内容、动作和时间顺序，支持�
 
 | 参数 | 默认值与用途 |
 | --- | --- |
-| `--model` | `mimo-v2.5`；也支持 `mimo-v2-omni`，沿用用户选择 |
+| `--model` | `mimo-v2.6-pro`；也支持 `mimo-v2-omni`，沿用用户选择 |
 | `--fps` | 2.0，允许 0.1–10；动作较快才提高采样 |
 | `--media-resolution` | `default`；需要辨认局部细节时可用 `max` |
 | `--max-tokens` | 脚本默认 1024；短描述可用 1500，按输出需要调整 |
-| `--thinking` | `disabled`；只有 `mimo-v2.5` 支持 `enabled` |
+| `--thinking` | `disabled`；只有 `mimo-v2.6-pro` 支持 `enabled` |
 
 先用短问题获取相关观察，不把整章剧本、长评分表和执行日志一起发给模型。验收或对位任务由调用方用这次观察对照既定要求，通常不再调用 MiMo 评分；只有用户要求评分时才输出分数。
 

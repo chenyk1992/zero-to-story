@@ -973,3 +973,7 @@
     max-width: 174px;
   }
 }
+
+.reference-order { display: flex; justify-content: flex-end; gap: 8px; margin: 4px 0 8px; }
+.reference-order button { font: inherit; cursor: pointer; }
+.reference-order button:disabled { opacity: .4; cursor: default; }
