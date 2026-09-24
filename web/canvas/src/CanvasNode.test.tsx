@@ -59,4 +59,21 @@ describe('media card controls', () => {
     expect(render(node).querySelector('.node-provider')?.textContent).toBe('Qwen 2.1');
     expect(render(node).textContent).toContain('图片参考生成');
   });
+
+  it('renders a speech card with a reference audio port and keeps FLAC results previewable', () => {
+    const node = createFlowNode('audio' as never, { x: 0, y: 0 }, 'voice');
+    Object.assign(node.data, { label: '语音', prompt: '我会按原文说完。', provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', runStatus: 'succeeded' });
+    node.data.latestSuccessfulRun = {
+      id: 'voice-run', node_id: node.id, status: 'succeeded',
+      snapshot: { node_id: node.id, node_type: 'audio' as never, provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', prompt: node.data.prompt, parameters: {}, inputs: {} },
+      outputs: [{ path: 'audio/voice.flac', kind: 'audio/flac' }],
+    };
+
+    const card = render(node);
+    expect([...card.querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['reference_audio', 'related']);
+    expect(card.querySelector('.node-preview')).not.toBeNull();
+    expect(card.querySelector('.preview-audio-mark')).not.toBeNull();
+    expect(card.textContent).toContain('我会按原文说完。');
+    expect(card.textContent).toContain('语音合成');
+  });
 });

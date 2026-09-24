@@ -1,0 +1,239 @@
+{
+  "id": "comfy-qwen-tts",
+  "label": "本地 Qwen3-TTS（ComfyUI）",
+  "node_types": [
+    "audio"
+  ],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": [
+    "comfy",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "video",
+    "capacity": 1
+  },
+  "models": [
+    {
+      "id": "qwen3-tts-1.7b-customvoice",
+      "label": "Qwen3-TTS · 1.7B"
+    }
+  ],
+  "modes": [
+    {
+      "id": "tts",
+      "label": "预置音色"
+    },
+    {
+      "id": "design",
+      "label": "声音设计"
+    },
+    {
+      "id": "clone",
+      "label": "音色克隆"
+    }
+  ],
+  "fields": [
+    {
+      "key": "speaker",
+      "label": "音色",
+      "type": "select",
+      "group": "specs",
+      "modes": ["tts"],
+      "required": true,
+      "default": "Eric",
+      "options": [
+        {
+          "value": "Aiden",
+          "label": "Aiden"
+        },
+        {
+          "value": "Dylan",
+          "label": "Dylan"
+        },
+        {
+          "value": "Eric",
+          "label": "Eric（成都男声）"
+        },
+        {
+          "value": "Ono_anna",
+          "label": "Ono_anna"
+        },
+        {
+          "value": "Ryan",
+          "label": "Ryan"
+        },
+        {
+          "value": "Serena",
+          "label": "Serena"
+        },
+        {
+          "value": "Sohee",
+          "label": "Sohee"
+        },
+        {
+          "value": "Uncle_fu",
+          "label": "Uncle_fu"
+        },
+        {
+          "value": "Vivian",
+          "label": "Vivian"
+        }
+      ]
+    },
+    {
+      "key": "language",
+      "label": "语言",
+      "type": "select",
+      "group": "specs",
+      "required": true,
+      "default": "Chinese",
+      "options": [
+        {
+          "value": "Auto",
+          "label": "自动"
+        },
+        {
+          "value": "Chinese",
+          "label": "中文"
+        },
+        {
+          "value": "English",
+          "label": "英语"
+        },
+        {
+          "value": "Japanese",
+          "label": "Japanese"
+        },
+        {
+          "value": "Korean",
+          "label": "Korean"
+        },
+        {
+          "value": "French",
+          "label": "French"
+        },
+        {
+          "value": "German",
+          "label": "German"
+        },
+        {
+          "value": "Spanish",
+          "label": "Spanish"
+        },
+        {
+          "value": "Portuguese",
+          "label": "Portuguese"
+        },
+        {
+          "value": "Russian",
+          "label": "Russian"
+        },
+        {
+          "value": "Italian",
+          "label": "Italian"
+        }
+      ]
+    },
+    {
+      "key": "tempo",
+      "label": "语速倍率",
+      "type": "number",
+      "group": "specs",
+      "required": true,
+      "default": 1.2,
+      "min": 0.5,
+      "max": 2
+    },
+    {
+      "key": "instruct",
+      "label": "声音描述 / 表演指令",
+      "type": "text",
+      "group": "specs",
+      "modes": ["tts", "design"]
+    },
+    {
+      "key": "ref_text",
+      "label": "参考音频实际转写",
+      "type": "text",
+      "group": "specs",
+      "modes": ["clone"]
+    },
+    {
+      "key": "x_vector_only",
+      "label": "仅提取音色（无需转写）",
+      "type": "boolean",
+      "group": "specs",
+      "modes": ["clone"]
+    },
+    {
+      "key": "reference_source",
+      "label": "参考来源",
+      "type": "text",
+      "group": "specs",
+      "modes": ["clone"],
+      "required": true
+    },
+    {
+      "key": "authorization",
+      "label": "参考音色授权依据",
+      "type": "text",
+      "group": "specs",
+      "modes": ["clone"],
+      "required": true
+    },
+    {
+      "key": "reference_verified",
+      "label": "已听审参考（有转写时已核对）",
+      "type": "boolean",
+      "group": "specs",
+      "modes": ["clone"],
+      "required": true
+    },
+    {
+      "key": "seed",
+      "label": "种子",
+      "type": "number",
+      "group": "advanced",
+      "integer": true,
+      "min": 0,
+      "max": 9007199254740991
+    },
+    {
+      "key": "max_new_tokens",
+      "label": "生成 Token 上限",
+      "type": "number",
+      "group": "advanced",
+      "integer": true,
+      "default": 2048,
+      "min": 512,
+      "max": 4096
+    },
+    {
+      "key": "temperature",
+      "label": "采样温度",
+      "type": "number",
+      "group": "advanced",
+      "default": 0.9,
+      "min": 0.1,
+      "max": 2
+    }
+  ],
+  "input_rules": {
+    "tts": {
+      "allowed": []
+    },
+    "design": {
+      "allowed": []
+    },
+    "clone": {
+      "allowed": ["reference_audios"],
+      "required": ["reference_audios"],
+      "max_counts": {
+        "reference_audios": 1
+      }
+    }
+  }
+}

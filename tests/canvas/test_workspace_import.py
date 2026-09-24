@@ -15,6 +15,16 @@ importer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(importer)
 
 
+def test_audio_import_reads_verbatim_script_without_generating(tmp_path):
+    text = "第一句。\n第二句！"
+    (tmp_path / "voice.txt").write_text(text, encoding="utf-8")
+    manifest = {"name": "语音", "graph": {"nodes": [{"id": "voice", "type": "audio",
+        "position": {"x": 0, "y": 0}, "data": {"prompt_source_path": "voice.txt"}}], "edges": []}}
+    prepared = importer.prepare_workspace(manifest, tmp_path)
+    assert prepared["graph"]["nodes"][0]["data"]["prompt"] == text
+    assert "prompt" not in manifest["graph"]["nodes"][0]["data"]
+
+
 def test_import_reads_documents_and_prompt_sources_and_registers_embedded_media_once(tmp_path):
     (tmp_path / "story.md").write_text("# 故事板\n回身取信", encoding="utf-8")
     (tmp_path / "prompt.txt").write_text("雨夜里的人物回头", encoding="utf-8")

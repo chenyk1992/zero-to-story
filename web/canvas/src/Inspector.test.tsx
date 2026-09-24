@@ -42,11 +42,36 @@ function capability(available = true): Capability {
   };
 }
 
+function ttsCapability(): Capability {
+  return {
+    id: 'comfy-qwen-tts', label: 'Qwen 语音合成', node_types: ['audio' as never],
+    execution: 'script', available: true, installed: true,
+    models: [{ id: 'qwen3-tts-1.7b-customvoice', label: 'Qwen3-TTS 1.7B CustomVoice' }],
+    modes: [{ id: 'tts', label: '语音合成' }],
+    fields: [
+      { key: 'speaker', label: '声音角色', type: 'select', group: 'specs', required: true, default: 'Eric', options: ['Aiden', 'Dylan', 'Eric', 'Ono_anna', 'Ryan', 'Serena', 'Sohee', 'Uncle_fu', 'Vivian'].map((value) => ({ value, label: value })) },
+      { key: 'language', label: '语言', type: 'select', group: 'specs', required: true, default: 'Chinese', options: [{ value: 'Chinese', label: '中文' }] },
+      { key: 'tempo', label: '语速', type: 'number', group: 'specs', required: true, default: 1.2, min: 0.5, max: 2 },
+      { key: 'instruct', label: '语音风格指令', type: 'text', group: 'advanced' },
+      { key: 'seed', label: '随机种子', type: 'number', group: 'advanced', min: 0, max: 9007199254740991, integer: true },
+      { key: 'max_new_tokens', label: '最大新 token 数', type: 'number', group: 'advanced', default: 2048, min: 512, max: 4096, integer: true },
+    ],
+  };
+}
+
 function makeVideo(overrides: Partial<FlowNode['data']> = {}) {
   const node = createFlowNode('video', { x: 0, y: 0 }, 'video-test');
   node.data.label = '夜站镜头';
   node.data.prompt = '人物在雨夜站台回头';
   Object.assign(node.data, overrides);
+  return node;
+}
+
+function makeAudio(overrides: Partial<FlowNode['data']> = {}) {
+  const node = createFlowNode('audio' as never, { x: 0, y: 0 }, 'audio-test');
+  node.data.label = '旁白';
+  node.data.prompt = '请完整说出这句台词。';
+  Object.assign(node.data, { provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', ...overrides });
   return node;
 }
 
@@ -145,6 +170,51 @@ describe('Inspector editing behavior', () => {
     expect(events.onOpenMedia).toHaveBeenCalledWith(expect.objectContaining({ path: 'audio/voice.wav', kind: 'audio' }));
     expect(events.onUpdate).not.toHaveBeenCalled();
     expect(events.onExecute).not.toHaveBeenCalled();
+  });
+
+  it('shows TTS default hints for unsaved required fields and keeps confirmation disabled', async () => {
+    const node = makeAudio();
+    const events = await renderInspector(node, [ttsCapability()]);
+    const fields = [...container.querySelectorAll<HTMLLabelElement>('label.field')];
+    const fieldFor = (label: string) => fields.find((field) => field.textContent?.includes(label));
+
+    expect(fieldFor('逐字台词')?.querySelector('textarea')?.value).toBe('请完整说出这句台词。');
+    expect(fieldFor('声音角色')?.querySelector<HTMLSelectElement>('select')?.value).toBe('');
+    expect(fieldFor('声音角色')?.querySelector('option[value=""]')?.textContent).toContain('默认值 Eric');
+    expect(fieldFor('声音角色')?.querySelector('select')?.textContent).toContain('Uncle_fu');
+    expect(fieldFor('语言')?.querySelector<HTMLSelectElement>('select')?.value).toBe('');
+    expect(fieldFor('语言')?.querySelector('option[value=""]')?.textContent).toContain('默认值 Chinese');
+    expect(fieldFor('语速')?.querySelector<HTMLInputElement>('input')?.value).toBe('');
+    expect(fieldFor('语速')?.querySelector<HTMLInputElement>('input')?.placeholder).toContain('默认值 1.2');
+    expect(container.textContent).not.toContain('画幅比例');
+    expect(container.textContent).not.toContain('像素预算');
+    expect(container.textContent).not.toContain('时长（秒）');
+    expect(buttonWithText('确认执行').disabled).toBe(true);
+    expect(events.onExecute).not.toHaveBeenCalled();
+
+    await act(async () => buttonWithText('展开高级参数（3项）').click());
+    const tokenField = [...container.querySelectorAll<HTMLLabelElement>('label.field')].find((field) => field.textContent?.includes('最大新 token 数'));
+    const tokens = tokenField?.querySelector<HTMLInputElement>('input[type="number"]');
+    expect(tokens?.value).toBe('2048');
+    expect(tokens?.min).toBe('512');
+    expect(tokens?.max).toBe('4096');
+    const seedField = [...container.querySelectorAll<HTMLLabelElement>('label.field')].find((field) => field.textContent?.includes('随机种子'));
+    expect(seedField?.querySelector<HTMLInputElement>('input[type="number"]')?.max).toBe('9007199254740991');
+  });
+
+  it('shows successful FLAC output duration and keeps the generated run preview action', async () => {
+    const node = makeAudio();
+    const run: Run = {
+      id: 'tts-success', node_id: node.id, status: 'succeeded',
+      snapshot: { node_id: node.id, node_type: 'audio' as never, provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', prompt: node.data.prompt, parameters: {}, inputs: {} },
+      outputs: [{ path: 'audio/voice.flac', kind: 'audio/flac', name: '旁白.flac', metadata: { duration_ms: 2450, sample_rate: 24000, channels: 1, tempo: 1.2, seed: 7, raw_duration_ms: 2410 } }],
+    };
+    const events = await renderInspector(node, [ttsCapability()], [run]);
+
+    expect(container.querySelector('.preview-section')?.textContent).toContain('实际时长 2.45 秒');
+    expect(container.querySelector('.preview-card')?.textContent).toContain('播放音频');
+    await act(async () => container.querySelector<HTMLButtonElement>('.preview-card')?.click());
+    expect(events.onOpenPreview).toHaveBeenCalledWith(run);
   });
 
   it('keeps history and derived outputs collapsed until opened, then opens the selected media read-only', async () => {

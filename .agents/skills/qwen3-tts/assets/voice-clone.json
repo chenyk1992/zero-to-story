@@ -1,0 +1,37 @@
+{
+  "kind": "tts-trial-draft",
+  "provider": "ComfyUI-Qwen-TTS",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+  "node_class": "FB_Qwen3TTSVoiceClone",
+  "postprocess": {
+    "backend": "ffmpeg",
+    "tempo": 1.2,
+    "preserve_pitch": true,
+    "output_format": "flac",
+    "preserve_original": true
+  },
+  "inputs": {
+    "model_choice": "1.7B",
+    "device": "cuda",
+    "precision": "bf16",
+    "language": "Chinese",
+    "seed": 42,
+    "max_new_tokens": 2048,
+    "top_p": 1.0,
+    "top_k": 50,
+    "temperature": 0.9,
+    "repetition_penalty": 1.05,
+    "attention": "sdpa",
+    "unload_model_after_generate": true,
+    "target_text": "明天早上九点，我们在门口见。",
+    "ref_text": "",
+    "x_vector_only": false
+  },
+  "reference": {
+    "path": "",
+    "source": "",
+    "authorization": "",
+    "transcript_verified": false,
+    "listening_status": "INCONCLUSIVE"
+  }
+}

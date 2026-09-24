@@ -294,6 +294,17 @@ def create_mcp(settings: CanvasSettings):
         )
 
     @mcp.tool()
+    def canvas_handoff_agent_claim(
+        run_id: str, reason: str, expected_updated_at: str
+    ) -> dict[str, Any]:
+        """只接替已暂停的 Codex 生图原运行丢失的完成令牌；不生成新媒体。"""
+        return client.request(
+            "POST",
+            f"/api/runs/{run_id}/handoff-agent-claim",
+            {"reason": reason, "expected_updated_at": expected_updated_at},
+        )
+
+    @mcp.tool()
     def canvas_claim_recovery(run_id: str, reason: str) -> dict[str, Any]:
         """原接手方不可用时，独占核实一个 unknown 请求。只取得核实令牌，不能重新生成。"""
         return client.request("POST", f"/api/runs/{run_id}/claim-recovery", {"reason": reason})

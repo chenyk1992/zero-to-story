@@ -213,7 +213,7 @@ class CanvasMedia:
             if isinstance(output.get("metadata"), dict):
                 asset["metadata"] = {
                     key: output["metadata"][key]
-                    for key in ("duration_ms", "width", "height", "codec", "fps", "has_audio", "has_alpha", "has_transparency", "has_visible_pixels", "seed", "steps")
+                    for key in ("duration_ms", "width", "height", "codec", "fps", "has_audio", "has_alpha", "has_transparency", "has_visible_pixels", "seed", "steps", "sample_rate", "channels", "tempo", "raw_duration_ms", "audio_codec")
                     if key in output["metadata"]
                 }
             result.append(asset)

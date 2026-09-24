@@ -2,6 +2,8 @@
 
 图片节点可选 Codex imagegen 或本地 Qwen 2.1。Qwen 支持文生图、1～10 张图片参考生成和编辑，由服务执行，无需 Codex；设置与素材规范见 [Qwen 图片指南](qwen-image.md)。
 
+语音节点可选本地 Qwen3-TTS 的预置音色、声音设计或授权音色克隆，填写对应台词和参数后经画布确认执行，回填可播放的 FLAC；见 [Canvas TTS 指南](canvas-tts.md)。
+
 画布是本地故事工作空间。页面、MCP 和 `python -m lfo.canvas` 画布命令操作同一个服务、数据库和媒体目录。保存只是编辑；页面确认或对话明确授权后，才固定输入并执行。共同分工见[项目协作规则](ai-system-prompt.md)，具体字段见[画布操作接口](../.agents/skills/canvas-workspace/references/operations.md)。
 
 ## 启动与宿主接入
@@ -54,6 +56,7 @@ Windows 新电脑先按 [Windows 使用指南](windows-setup.md)运行 `./script
 | 工作 | 当前规则 |
 |---|---|
 | 本地 Comfy 视频 | `queued` 脚本任务；服务内部 worker 启动项目执行 Skill，经 HTTP 预检后同步调用官方 comfy-cli；一次提交、串行等待 |
+| 本地 Qwen TTS | `queued` 脚本任务；音频节点支持预置音色、声音设计及授权克隆，与本地图片/视频共用 Comfy 资源和提交锁 |
 | 宿主图片工具 | 显式选择已安装能力后可排队；有该工具的会话才能领取 |
 | mmx 视频 | 用户明确选择，且原有 mmx 能力可用时接手；失败不切换提供方 |
 | 独立图片 | 能力声明资源独立时，最多并发 2；`LFO_IMAGE_CONCURRENCY=1` 可收紧到 1 |

@@ -12,8 +12,8 @@
 
 1. 确认运行中 ComfyUI 对应的安装目录与 Python，记录依赖版本。项目 `.venv` 与 ComfyUI 的 Python 可能不同。
 2. 仅添加 `ComfyUI-Qwen-TTS` 插件，记录取得的 commit。检查 requirements 与当前环境差异后再安装缺失依赖，不直接覆盖 Torch/CUDA。上游 README 指明 transformers 4.57.3 或具有其兼容补丁的 5.x；不能只依据 requirements 中较宽的下限认定兼容。
-3. 仅准备 `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` 与其所需 `Qwen/Qwen3-TTS-Tokenizer-12Hz`。先确认仓库布局和实际文件大小，避免一键下载全部模型。插件可能在加载时自动联网下载，启动前核对下载授权。
-4. 本次 v1.0.7 源码的加载器只遍历模型根的直接子目录，使用 `models/qwen-tts/<模型名>/`。README 中带 `Qwen/` 的嵌套示例不能直接套用；Tokenizer 检查也使用不带该层的目录。其他版本按其实际加载器核实，不能凭目录名认定已加载。
+3. 按所选模式准备 `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`、`Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` 或 `Qwen/Qwen3-TTS-12Hz-1.7B-Base`，以及所需 `Qwen/Qwen3-TTS-Tokenizer-12Hz`。本机两套新增模型已获用户授权下载；其他机器先确认仓库布局、文件大小和下载授权，避免一键下载全部模型。
+4. 本次 v1.0.7 源码的加载器只遍历模型根的直接子目录，使用 `models/qwen-tts/<模型名>/`。README 中带 `Qwen/` 的嵌套示例不能直接套用；独立 Tokenizer 检查也使用不带该层的目录。各模型内的 `speech_tokenizer/` 与独立 Tokenizer 都须具备，不能互相替代。Canvas 执行前分别核实，CLI 配置须对应运行中的本地安装。
 5. 确认现有任务状态，在可重启时重启 ComfyUI，然后重新检查节点；有目录但无节点时检查导入日志。
 
 Python 兼容性和显存占用由实际导入、加载及短句生成验证。模型文件大小不等于显存需求。首次优先 sdpa，不为加速额外安装 Flash Attention。
@@ -22,7 +22,7 @@ Python 兼容性和显存占用由实际导入、加载及短句生成验证。�
 
 使用 Skill 的 eric-smoke.json 作为参数输入；eric-api.json 是已按实时 schema 检查过的 API 工作流，连接 CustomVoice AUDIO 输出到 SaveAudio，输出 FLAC。SaveAudio 在 ComfyUI 0.35.1 中已标记 deprecated 但仍可用，后续迁移到 SaveAudioAdvanced 时须核实其动态 format 字段。API 工作流不包含 Canvas 冻结运行或提交授权。
 
-当前只做只读预检和工作流核对；Canvas 音频节点、能力契约与执行回填尚未接入，不能提交短句生成或技术试听。接入后，短句验证也须由画布确认并执行，记录实际结果再决定是否调整指令。单独区分技术成功与四川话听审；无音频时不判断口音质量，不在安装插件时顺手改视频能力。
+先做只读预检和工作流核对，再通过 [Canvas TTS](../../../../guides/canvas-tts.md) 保存音频节点并确认执行短句验证；不能用本参考中的 API 工作流直接提交。记录实际结果再决定是否调整指令。单独区分技术成功与四川话听审；无音频时不判断口音质量，不在安装插件时顺手改视频能力。
 
 ## 历史验证记录（不构成执行入口）
 

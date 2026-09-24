@@ -11,6 +11,7 @@ const TONES = {
   asset: 'amber',
   image: 'cyan',
   video: 'rose',
+  audio: 'amber',
   document: 'violet',
   section: 'section',
 } as const;
@@ -19,6 +20,7 @@ const NODE_ICONS: Record<string, IconName> = {
   asset: 'asset',
   image: 'image',
   video: 'video',
+  audio: 'audio',
   document: 'document',
   section: 'section',
 };
@@ -27,12 +29,14 @@ const NODE_LABELS: Record<string, string> = {
   asset: '素材',
   image: '图片',
   video: '视频',
+  audio: '语音',
   document: '文档',
   section: '分区',
 };
 
 const TARGETS: Record<string, Array<{ id: string; label: string }>> = {
   image: [{ id: 'reference_image', label: '图片参考' }],
+  audio: [{ id: 'reference_audio', label: '声音参考' }],
   // Keep every video input handle mounted. A mode can change during editing,
   // while an existing connection must remain addressable by React Flow.
   video: [
@@ -66,6 +70,9 @@ const MODE_LABELS: Record<string, string> = {
   i2v: '图生视频',
   fl2v: '首尾帧',
   r2v: '参考生视频',
+  tts: '语音合成',
+  design: '声音设计',
+  clone: '音色克隆',
 };
 
 function shorten(value: string, length = 94): string {
@@ -77,9 +84,10 @@ function providerLabel(data: StoryNodeData): string {
   const provider = String(data.provider || '').trim();
   const normalized = provider.toLowerCase().replace(/[_\s-]/g, '');
   if (provider === 'comfy-qwen-image') return 'Qwen 2.1';
+  if (provider === 'comfy-qwen-tts') return 'Qwen3-TTS';
   if (normalized.includes('imagegen')) return '内置生图';
   if (normalized.includes('comfy')) return 'Comfy / H3';
-  if (!provider) return data.nodeType === 'image' || data.nodeType === 'video' ? '请选择生成方式' : '未选择生成方式';
+  if (!provider) return data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio' ? '请选择生成方式' : '未选择生成方式';
   return provider;
 }
 
@@ -87,7 +95,7 @@ function PreviewThumbnail({ path, kind, alt }: { path: string; kind: string; alt
   const normalizedKind = kind.toLowerCase();
   const isImage = normalizedKind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(path);
   if (isImage) return <img src={mediaUrl(path)} alt={alt} loading="lazy" />;
-  if (normalizedKind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg)$/i.test(path)) {
+  if (normalizedKind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(path)) {
     return <span className="preview-audio-mark"><Icon name="audio" size={26} /></span>;
   }
   return <video src={mediaUrl(path)} muted preload="metadata" onLoadedMetadata={(event: SyntheticEvent<HTMLVideoElement>) => { const video = event.currentTarget; if (video.duration > 0) video.currentTime = Math.min(0.05, video.duration / 2); }} />;
@@ -113,7 +121,7 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
   const [derivedExpanded, setDerivedExpanded] = useState(false);
   const data = rawData as StoryNodeData;
   const kind = data.nodeType;
-  const isMedia = kind === 'image' || kind === 'video';
+  const isMedia = kind === 'image' || kind === 'video' || kind === 'audio';
   const targets = (TARGETS[kind] || []).filter((target) => kind !== 'video' || !data.mode || videoTargetIds(data).includes(target.id));
   const derivedOutputs = data.derived_outputs || [];
   const targetSignature = `${targets.map((target) => target.id).join('|')}::${derivedOutputs.map((output) => output.id).join('|')}`;
@@ -186,15 +194,15 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
           <>
             {currentOutput && <OutputPreviewButton output={currentOutput} label={data.latestSuccessfulRun ? '最近成功成品' : '当前成品'} current onOpen={(output) => data.onPreview?.(output)} />}
             {prompt ? <button className={`node-prompt-summary${promptExpanded ? ' expanded' : ''}`} type="button" onClick={(event) => { event.stopPropagation(); setPromptExpanded((value) => !value); }} aria-expanded={promptExpanded}>
-              <span className="node-prompt-copy"><Icon name="film" size={12} /><span>{promptCaption}</span></span>
+              <span className="node-prompt-copy"><Icon name={kind === 'audio' ? 'audio' : 'film'} size={12} /><span>{promptCaption}</span></span>
               <b>{promptExpanded ? '收起' : '展开'}<Icon name={promptExpanded ? 'chevronUp' : 'chevronDown'} size={12} /></b>
-            </button> : <div className="node-prompt-empty"><Icon name="info" size={13} /><span>未填写提示词</span></div>}
+            </button> : <div className="node-prompt-empty"><Icon name="info" size={13} /><span>{kind === 'audio' ? '未填写逐字台词' : '未填写提示词'}</span></div>}
             <div className="node-meta" aria-label="生成规格">
               <span className="node-provider">{providerLabel(data)}</span>
               {data.mode && <span>{MODE_LABELS[data.mode] || data.mode}</span>}
               {kind === 'video' && data.duration ? <span>时长 {data.duration}s</span> : null}
-              {data.aspect_ratio && <span>画幅 {data.aspect_ratio}</span>}
-              {data.megapixels ? <span>预算 {data.megapixels} MP</span> : null}
+              {kind !== 'audio' && data.aspect_ratio && <span>画幅 {data.aspect_ratio}</span>}
+              {kind !== 'audio' && data.megapixels ? <span>预算 {data.megapixels} MP</span> : null}
             </div>
             {data.resultChanged && <div className="node-stale"><Icon name="alert" size={12} />参数已变更 · 结果来自上一版</div>}
             {derivedOutputs.length > 0 && <div className="node-output-group"><button className="node-output-heading node-output-heading-toggle" type="button" onClick={(event) => { event.stopPropagation(); setDerivedExpanded((value) => !value); }} aria-expanded={derivedExpanded}><span><Icon name="layers" size={13} />派生输出</span><small>{derivedOutputs.length} 项 <Icon name={derivedExpanded ? 'chevronUp' : 'chevronDown'} size={11} /></small></button>{derivedExpanded && <div className="node-output-list">{derivedOutputs.map((output) => { const media = assetToOutput(output.asset); return media ? <OutputPreviewButton key={output.id} output={media} label={output.label || '派生成品'} onOpen={(value) => data.onPreview?.(value)} /> : null; })}</div>}</div>}

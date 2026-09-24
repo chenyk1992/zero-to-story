@@ -1,6 +1,6 @@
 """Validation and input resolution for the lightweight canvas graph.
 
-The canvas keeps a generation component self-contained: image and video
+The canvas keeps a generation component self-contained: image, video and audio
 nodes carry their own prompt and can carry a real existing asset.  Generation
 history and derived outputs are metadata on that same node; they are not
 additional executable nodes.  Provider-specific rules remain in Skills and
@@ -15,9 +15,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from typing import Any
 
-NODE_TYPES = frozenset({"asset", "image", "video", "document", "section"})
-GENERATION_NODE_TYPES = frozenset({"image", "video"})
-NODE_CATEGORIES = frozenset({"character", "storyboard", "board", "image", "video", "document"})
+NODE_TYPES = frozenset({"asset", "image", "video", "audio", "document", "section"})
+GENERATION_NODE_TYPES = frozenset({"image", "video", "audio"})
+NODE_CATEGORIES = frozenset({"character", "storyboard", "board", "image", "video", "audio", "document"})
 TARGET_HANDLES = frozenset(
     {
         "first_frame",
@@ -233,7 +233,7 @@ def resolve_snapshot(
 ) -> dict[str, Any]:
     """Resolve a generation node into provider-neutral effective inputs.
 
-    Prompt text is always read from the target image/video node.  A connected
+    Prompt text is always read from the target generation node.  A connected
     media source uses an explicitly bound ``source_run_id`` when supplied;
     ``require_accept`` additionally requires its reviewed actual file version.
     Ordinary inputs use the newest succeeded run, or the embedded ``data.asset``.
@@ -661,9 +661,17 @@ def _connection_is_possible(
     if target_handle == "related":
         return derived_id is None and source_type != "section" and target_type != "section"
     if target_handle in MEDIA_INPUT_HANDLES:
-        if target_type not in GENERATION_NODE_TYPES:
+        if target_type not in {"image", "video", "audio"}:
             return False
-        if source_type not in {"asset", "image", "video"}:
+        if target_type == "audio" and target_handle != "reference_audio":
+            return False
+        if source_type not in {"asset", *GENERATION_NODE_TYPES}:
+            return False
+        if source_type == "audio" and (
+            target_type not in {"video", "audio"} or target_handle != "reference_audio"
+        ):
+            return False
+        if target_type == "audio" and source_type not in {"asset", "audio"}:
             return False
         return derived_id is None or source_type in GENERATION_NODE_TYPES
     return False

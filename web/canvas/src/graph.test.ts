@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection } from '@xyflow/react';
-import { addCanvasEdge, createFlowNode, isValidConnection, moveReferenceEdge, normalizeEdges, outputForNode, resolveMediaOutput, serializeGraph, sortRuns, toFlowNode } from './graph';
+import { addCanvasEdge, createFlowNode, isValidConnection, moveReferenceEdge, normalizeEdges, outputForNode, resolveMediaOutput, serializeGraph, sortRuns, targetHandlesFor, toFlowNode } from './graph';
 import type { FlowNode, Run } from './types';
 import { normalizeWorkspace } from './workspace';
 
@@ -123,5 +123,45 @@ describe('canvas graph contract', () => {
     const workspace = normalizeWorkspace({ story: '第六章', chapter: '车站', summary: '夜里重逢', imported_at: '2026-09-08T00:00:00Z' });
     expect(workspace.story).toBe('第六章');
     expect(workspace.imported_at).toBe('2026-09-08T00:00:00Z');
+  });
+
+  it('round-trips a TTS node and lets its audio output feed video or clone audio references', () => {
+    const voice = createFlowNode('audio' as never, { x: 32, y: 48 }, 'voice-1');
+    Object.assign(voice.data, {
+      label: '语音', prompt: '请沿用逐字台词', provider: 'comfy-qwen-tts',
+      model: 'qwen3-tts-1.7b-customvoice', mode: 'tts',
+      options: { 'comfy-qwen-tts': { speaker: 'Eric', language: 'Chinese', tempo: 1.2 } },
+    });
+    const video = createFlowNode('video', { x: 320, y: 48 }, 'shot-1');
+    const image = createFlowNode('image', { x: 640, y: 48 }, 'image-1');
+    const clone = createFlowNode('audio' as never, { x: 640, y: 120 }, 'clone-1');
+
+    expect(targetHandlesFor('audio' as never)).toEqual(['reference_audio']);
+    expect(voice.data.category).toBe('audio');
+    expect(isValidConnection({ source: voice.id, sourceHandle: 'output', target: video.id, targetHandle: 'reference_audio' }, [voice, video])).toBe(true);
+    expect(isValidConnection({ source: voice.id, sourceHandle: 'output', target: video.id, targetHandle: 'first_frame' }, [voice, video])).toBe(false);
+    expect(isValidConnection({ source: voice.id, sourceHandle: 'output', target: image.id, targetHandle: 'reference_image' }, [voice, image])).toBe(false);
+    expect(isValidConnection({ source: voice.id, sourceHandle: 'output', target: clone.id, targetHandle: 'reference_audio' }, [voice, clone])).toBe(true);
+    expect(isValidConnection({ source: video.id, sourceHandle: 'output', target: clone.id, targetHandle: 'reference_audio' }, [video, clone])).toBe(false);
+    expect(isValidConnection({ source: image.id, sourceHandle: 'output', target: voice.id, targetHandle: 'reference_audio' }, [image, voice])).toBe(false);
+
+    const graph = serializeGraph([voice, video], [], { x: 0, y: 0, zoom: 1 }, []);
+    expect(graph.nodes[0]).toMatchObject({ type: 'audio', data: { prompt: '请沿用逐字台词', provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts' } });
+    expect(toFlowNode(graph.nodes[0]).data.options).toEqual({ 'comfy-qwen-tts': { speaker: 'Eric', language: 'Chinese', tempo: 1.2 } });
+  });
+
+  it('resolves successful audio runs and recognizes FLAC files as audio references', () => {
+    const voice = createFlowNode('audio' as never, { x: 0, y: 0 }, 'voice-1');
+    const run = {
+      id: 'run-voice', node_id: voice.id, status: 'succeeded' as const,
+      snapshot: { node_id: voice.id, node_type: 'audio' as never, provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', prompt: '逐字台词', parameters: {}, inputs: {} },
+      outputs: [{ path: 'audio/voice.flac', kind: 'audio/flac', metadata: { duration_ms: 2450, sample_rate: 24000, channels: 1, tempo: 1.2, seed: 12, raw_duration_ms: 2430 } }],
+    };
+    expect(outputForNode(voice, 'output', [run])?.path).toBe('audio/voice.flac');
+
+    const flacAsset = createFlowNode('asset', { x: 0, y: 0 }, 'flac');
+    flacAsset.data.asset = { path: 'audio/reference.flac', name: 'reference.flac', kind: 'file' };
+    const video = createFlowNode('video', { x: 320, y: 0 }, 'shot-1');
+    expect(isValidConnection({ source: flacAsset.id, sourceHandle: 'output', target: video.id, targetHandle: 'reference_audio' }, [flacAsset, video])).toBe(true);
   });
 });

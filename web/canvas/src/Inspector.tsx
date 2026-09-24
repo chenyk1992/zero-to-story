@@ -34,6 +34,7 @@ const KIND_LABELS: Record<CanvasNodeType, string> = {
   asset: '素材组件',
   image: '图片创作卡',
   video: '视频创作卡',
+  audio: '语音生成卡',
 };
 const STORY_KIND_LABELS: Record<StoryNodeType, string> = { ...KIND_LABELS, document: '文档组件', section: '分区组件' };
 
@@ -261,19 +262,22 @@ function RelatedComponents({ node, nodes, edges, onSelectNode }: Pick<InspectorP
 }
 
 function CapabilityFieldEditor({ field, value, onChange }: { field: CapabilityField; value: string | number | boolean | undefined; onChange: (value: string | number | boolean | undefined) => void }) {
+  const effectiveValue = field.required ? value : value ?? field.default;
+  const defaultHint = field.default === undefined ? undefined : `默认值 ${String(field.default)}`;
+  const selectPlaceholder = field.required ? defaultHint || '请选择' : '未设置';
   if (field.type === 'number' && field.values) {
-    return <SelectField label={field.label} value={String(value ?? '')} options={[{ value: '', label: field.required ? '请选择' : '未设置' }, ...field.values.map((item) => ({ value: String(item), label: String(item) }))]} onChange={(item) => onChange(item === '' ? undefined : Number(item))} optional={!field.required} required={field.required} />;
+    return <SelectField label={field.label} value={String(effectiveValue ?? '')} options={[{ value: '', label: selectPlaceholder }, ...field.values.map((item) => ({ value: String(item), label: String(item) }))]} onChange={(item) => onChange(item === '' ? undefined : Number(item))} optional={!field.required} required={field.required} />;
   }
   if (field.type === 'boolean') {
-    return <label className="toggle-field"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /><span>{field.label}</span></label>;
+    return <label className="toggle-field"><input type="checkbox" checked={Boolean(effectiveValue)} onChange={(event) => onChange(event.target.checked)} /><span>{field.label}</span></label>;
   }
   if (field.type === 'select') {
-    return <SelectField label={field.label} value={String(value ?? '')} options={[{ value: '', label: field.required ? '请选择' : '未设置' }, ...(field.options || [])]} onChange={onChange} optional={!field.required} required={field.required} />;
+    return <SelectField label={field.label} value={String(effectiveValue ?? '')} options={[{ value: '', label: selectPlaceholder }, ...(field.options || [])]} onChange={onChange} optional={!field.required} required={field.required} />;
   }
   if (field.type === 'number') {
-    return <NumberField label={field.label} value={typeof value === 'number' ? value : value === undefined || value === '' ? undefined : Number(value)} min={field.min} max={field.max} onChange={onChange} optional={!field.required} required={field.required} />;
+    return <NumberField label={field.label} value={typeof effectiveValue === 'number' ? effectiveValue : effectiveValue === undefined || effectiveValue === '' ? undefined : Number(effectiveValue)} min={field.min} max={field.max} step={field.integer ? 1 : undefined} placeholder={field.required ? defaultHint : undefined} onChange={onChange} optional={!field.required} required={field.required} />;
   }
-  return <TextField label={field.label} value={String(value ?? '')} onChange={onChange} optional={!field.required} required={field.required} />;
+  return <TextField label={field.label} value={String(effectiveValue ?? '')} onChange={onChange} placeholder={field.required ? defaultHint : undefined} optional={!field.required} required={field.required} />;
 }
 
 export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, saveBlocked, onUpdate, onUpdateOptions, onMoveReference, onSelectNode, onRemove, onExecute, onUploadAsset, onImportAssetPath, onCompositionChange, onOpenPreview, onOpenMedia, onClose }: InspectorProps) {
@@ -340,7 +344,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
   const latestRunLabel = orderedLatestRun ? (RUN_STATUS_LABELS[orderedLatestRun.status] || orderedLatestRun.status) : '';
   const effectiveRunStatus = orderedLatestRun?.status || data.runStatus;
   const effectiveRunError = orderedLatestRun?.error || data.runError;
-  const selectionReady = hasExecutableSelection(data.provider, data.model, data.mode, data.nodeType as CanvasNodeType, capabilities);
+  const selectionReady = hasExecutableSelection(data.provider, data.model, data.mode, data.nodeType as CanvasNodeType, capabilities, data.options[data.provider] || {});
   const currentOutput = orderedLatestSuccess?.outputs[0] || linkedMedia;
   const historyEntries: HistoryEntry[] = [
     ...(data.history || []),
@@ -376,7 +380,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
       <div className="inspector-topline">
         <div className="inspector-title-wrap">
           <span className={`inspector-kind-icon kind-${data.nodeType}`}>
-            <Icon name={data.nodeType === 'image' ? 'image' : data.nodeType === 'video' ? 'video' : data.nodeType === 'asset' ? 'asset' : data.nodeType === 'document' ? 'document' : 'section'} size={17} />
+            <Icon name={data.nodeType === 'image' ? 'image' : data.nodeType === 'video' ? 'video' : data.nodeType === 'audio' ? 'audio' : data.nodeType === 'asset' ? 'asset' : data.nodeType === 'document' ? 'document' : 'section'} size={17} />
           </span>
           <div className="inspector-heading-copy"><span className="inspector-kicker">编辑组件</span><h2>{STORY_KIND_LABELS[data.nodeType] || '组件设置'}</h2><span className="inspector-node-label">{data.label || '未命名组件'}</span></div>
         </div>
@@ -390,9 +394,9 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
           <TextField label="组件名称" value={data.label} onChange={updateLabel} placeholder={STORY_KIND_LABELS[data.nodeType] || '组件'} />
         </Section>
 
-        {(data.nodeType === 'image' || data.nodeType === 'video') && (
+        {(data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio') && (
           <Section title="提示词" className="prompt-section">
-            <TextField label={data.nodeType === 'image' ? '图片提示词' : '视频提示词'} value={data.prompt} onChange={updatePrompt} placeholder={data.nodeType === 'image' ? '描述想要的画面…' : '描述主体、动作、镜头运动和风格…'} multiline rows={6} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
+            <TextField label={data.nodeType === 'image' ? '图片提示词' : data.nodeType === 'audio' ? '逐字台词' : '视频提示词'} value={data.prompt} onChange={updatePrompt} placeholder={data.nodeType === 'image' ? '描述想要的画面…' : data.nodeType === 'audio' ? '输入需要合成的台词，保持文字原样…' : '描述主体、动作、镜头运动和风格…'} multiline rows={6} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
             <p className="field-help prompt-help">保存会更新草稿；确认执行后才会固定本次输入。</p>
           </Section>
         )}
@@ -428,25 +432,25 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
           </Section>
         )}
 
-        {(data.nodeType === 'image' || data.nodeType === 'video') && (
+        {(data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio') && (
           <>
-            <Section title="输入素材" className="input-section">
+            {(data.nodeType !== 'audio' || data.mode === 'clone' || edges.some((edge) => edge.target === node?.id && edge.targetHandle === 'reference_audio')) && <Section title="输入素材" className="input-section">
               <IncomingSources node={node} nodes={nodes} edges={edges} runs={runs} onSelectNode={onSelectNode} onMoveReference={onMoveReference ? (edgeId, direction) => {
                 setReorderedRun(referenceRunKey);
                 onMoveReference(edgeId, direction);
               } : undefined} />
               {data.provider === 'comfy-qwen-image' && <p className="field-help">最多 10 张输入图，按显示顺序对应 &lt;image1&gt;～&lt;image10&gt;。编辑时第 1 张是待编辑图，其余为辅助参考；请在提示词写清每张图的用途。调整顺序后也请检查提示词中的编号。</p>}
-            </Section>
-            {(data.nodeType === 'video' || data.nodeType === 'image') && (
+            </Section>}
+            {(data.nodeType === 'video' || data.nodeType === 'image' || data.nodeType === 'audio') && (
               <>
-                <Section title={data.nodeType === 'video' ? '视频规格' : '图片规格'} className="specs-section">
+                <Section title={data.nodeType === 'video' ? '视频规格' : data.nodeType === 'audio' ? '语音规格' : '图片规格'} className="specs-section">
                   <div className="field-grid two-cols">
                     {data.nodeType === 'video' && <NumberField label="时长（秒）" value={data.duration} min={durationField?.min ?? 1} max={durationField?.max ?? 60} step={durationField?.integer ? 1 : 0.1} onChange={(duration) => onUpdate({ duration })} optional={!durationField?.required} required={durationField?.required} />}
-                    {(!aspectField || applicable(aspectField)) && (aspectField?.options?.length ? <SelectField label="画幅比例" value={data.aspect_ratio || ''} options={[{ value: '', label: aspectField.required ? '请选择' : '未设置' }, ...aspectField.options]} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} optional={!aspectField.required} required={aspectField.required} /> : <TextField label="画幅比例" value={data.aspect_ratio || ''} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} placeholder="9:16" optional={!aspectField?.required} required={aspectField?.required} />)}
+                    {data.nodeType !== 'audio' && (!aspectField || applicable(aspectField)) && (aspectField?.options?.length ? <SelectField label="画幅比例" value={data.aspect_ratio || ''} options={[{ value: '', label: aspectField.required ? '请选择' : '未设置' }, ...aspectField.options]} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} optional={!aspectField.required} required={aspectField.required} /> : <TextField label="画幅比例" value={data.aspect_ratio || ''} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} placeholder="9:16" optional={!aspectField?.required} required={aspectField?.required} />)}
                   </div>
-                  {(data.nodeType === 'video' || megapixelsField && applicable(megapixelsField)) && <NumberField label="生成像素预算（MP）" value={data.megapixels} min={megapixelsField?.min ?? 0.01} max={megapixelsField?.max ?? 10} step={0.01} onChange={(megapixels) => onUpdate({ megapixels })} placeholder={megapixelsField?.required ? '请输入像素预算' : '由生成方式决定'} optional={!megapixelsField?.required} required={megapixelsField?.required} />}
-                  <p className="field-help">{data.nodeType === 'video' ? '画幅比例和像素预算是两项设置。当前方式将按能力信息判断必填项。' : data.provider === 'comfy-qwen-image' ? (data.mode === 'edit' ? '编辑沿用第 1 张图处理后的尺寸，并对齐 32 像素；无需设置新画幅。' : '画幅与像素预算共同决定输出尺寸，并对齐 32 像素。1 MP 为约 1024×1024 像素；默认 25 步。') : '选择图片画幅偏好；连接参考图后，请在“模式”中选择参考图片编辑。'}</p>
-                  {unsupportedCommonFields.map((key) => <div className="unsupported-field-warning" key={key}>当前方式不支持{key === 'megapixels' ? '生成像素预算' : key === 'duration' ? '时长' : '画幅比例'}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdate({ [key]: undefined })}>清空</button></div>)}
+                  {data.nodeType !== 'audio' && (data.nodeType === 'video' || megapixelsField && applicable(megapixelsField)) && <NumberField label="生成像素预算（MP）" value={data.megapixels} min={megapixelsField?.min ?? 0.01} max={megapixelsField?.max ?? 10} step={0.01} onChange={(megapixels) => onUpdate({ megapixels })} placeholder={megapixelsField?.required ? '请输入像素预算' : '由生成方式决定'} optional={!megapixelsField?.required} required={megapixelsField?.required} />}
+                  {data.nodeType === 'audio' ? <p className="field-help">按原文合成台词；语音角色、语言和语速由当前能力设置。</p> : <p className="field-help">{data.nodeType === 'video' ? '画幅比例和像素预算是两项设置。当前方式将按能力信息判断必填项。' : data.provider === 'comfy-qwen-image' ? (data.mode === 'edit' ? '编辑沿用第 1 张图处理后的尺寸，并对齐 32 像素；无需设置新画幅。' : '画幅与像素预算共同决定输出尺寸，并对齐 32 像素。1 MP 为约 1024×1024 像素；默认 25 步。') : '选择图片画幅偏好；连接参考图后，请在“模式”中选择参考图片编辑。'}</p>}
+                  {data.nodeType !== 'audio' && unsupportedCommonFields.map((key) => <div className="unsupported-field-warning" key={key}>当前方式不支持{key === 'megapixels' ? '生成像素预算' : key === 'duration' ? '时长' : '画幅比例'}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdate({ [key]: undefined })}>清空</button></div>)}
                   {dynamicSpecFields.map((field) => <CapabilityFieldEditor key={field.key} field={field} value={data.options[data.provider]?.[field.key]} onChange={(value) => onUpdateOptions(data.provider, field.key, value)} />)}
                 </Section>
                 <Section title="生成方式" className="route-section">
@@ -507,7 +511,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
         {data.nodeType !== 'section' && <RelatedComponents node={node} nodes={nodes} edges={edges} onSelectNode={onSelectNode} />}
 
       </div>
-      {(data.nodeType === 'video' || data.nodeType === 'image') && (
+      {(data.nodeType === 'video' || data.nodeType === 'image' || data.nodeType === 'audio') && (
         <div className="inspector-action">
           {effectiveRunStatus === 'failed' && <div className="run-error">{effectiveRunError || '上一次执行失败'}</div>}
           {draftChanged && <div className="stale-note">当前草稿已有修改，尚未用于生成。已有任务继续使用确认时的输入。</div>}
@@ -544,7 +548,8 @@ function RunSummary({ run }: { run: Run }) {
 function OutputPreview({ output, title, status, help, onOpen }: { output: Run['outputs'][number]; title: string; status: string; help: string; onOpen: () => void }) {
   if (!output) return null;
   const isImage = output.kind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(output.path);
-  const isAudio = output.kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg)$/i.test(output.path);
+  const isAudio = output.kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path);
+  const durationMs = output.metadata?.duration_ms;
   return (
     <section className="preview-section">
       <div className="section-title"><h3><Icon name={isImage ? 'image' : isAudio ? 'audio' : 'film'} size={15} />{title}</h3><span className="success-badge">{status}</span></div>
@@ -553,6 +558,7 @@ function OutputPreview({ output, title, status, help, onOpen }: { output: Run['o
         <span className="preview-overlay"><Icon name={isImage ? 'expand' : isAudio ? 'play' : 'play'} size={13} />{isImage ? '查看原图' : isAudio ? '播放音频' : '播放视频'}</span>
       </button>
       <p className="field-help">{help}</p>
+      {isAudio && typeof durationMs === 'number' && <p className="field-help">实际时长 {(durationMs / 1000).toFixed(2)} 秒</p>}
       {isImage && output.metadata?.width && output.metadata?.height && <p className="field-help">实际尺寸 {output.metadata.width} × {output.metadata.height}{output.metadata.has_transparency ? ' · 含透明区域' : ''}{output.metadata.steps ? ` · ${output.metadata.steps} 步` : ''}</p>}
     </section>
   );
@@ -620,7 +626,7 @@ function FriendlySnapshot({ title, values }: { title: string; values: Record<str
 }
 
 function friendlyKey(key: string): string {
-  const labels: Record<string, string> = { duration: '时长', aspect_ratio: '画幅比例', megapixels: '像素预算', fps: '帧率', model: '模型', mode: '模式', provider: '生成方式', first_frame: '首帧', last_frame: '尾帧', reference_images: '图片参考', reference_videos: '视频参考', reference_audios: '音频参考', reference_image: '图片参考', reference_video: '视频参考', reference_audio: '音频参考', sampler_profile: '采样配置', steps: '采样步数', seed: '随机种子', reference_image_size: '参考图尺寸' };
+  const labels: Record<string, string> = { duration: '时长', aspect_ratio: '画幅比例', megapixels: '像素预算', fps: '帧率', model: '模型', mode: '模式', provider: '生成方式', first_frame: '首帧', last_frame: '尾帧', reference_images: '图片参考', reference_videos: '视频参考', reference_audios: '音频参考', reference_image: '图片参考', reference_video: '视频参考', reference_audio: '音频参考', sampler_profile: '采样配置', steps: '采样步数', seed: '随机种子', reference_image_size: '参考图尺寸', speaker: '声音角色', language: '语言', tempo: '语速', instruct: '语音风格指令', max_new_tokens: '最大新 token 数' };
   return labels[key] || key.replace(/_/g, ' ');
 }
 

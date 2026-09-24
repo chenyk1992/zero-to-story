@@ -161,6 +161,35 @@ const connectionCanvas: Canvas = {
   },
 };
 
+function ttsCapability(): Capability {
+  return {
+    id: 'comfy-qwen-tts', label: 'Qwen 语音合成', node_types: ['audio' as never],
+    execution: 'script', available: true, installed: true,
+    models: [{ id: 'qwen3-tts-1.7b-customvoice', label: 'Qwen3-TTS 1.7B CustomVoice' }],
+    modes: [{ id: 'tts', label: '语音合成' }],
+    fields: [
+      { key: 'speaker', label: '声音角色', type: 'select', group: 'specs', required: true, default: 'Eric', options: [{ value: 'Eric', label: 'Eric' }] },
+      { key: 'language', label: '语言', type: 'select', group: 'specs', required: true, default: 'Chinese', options: [{ value: 'Chinese', label: '中文' }] },
+      { key: 'tempo', label: '语速', type: 'number', group: 'specs', required: true, default: 1.2, min: 0.5, max: 2 },
+      { key: 'max_new_tokens', label: '最大新 token 数', type: 'number', group: 'advanced', default: 2048, min: 512, max: 4096, integer: true },
+    ],
+  };
+}
+
+function audioCanvas(provider: string, options: Record<string, Record<string, string | number | boolean | undefined>> = {}): Canvas {
+  return {
+    id: 'canvas-audio', name: '语音测试', version: 3,
+    graph: {
+      nodes: [{ id: 'voice-1', type: 'audio' as never, position: { x: 80, y: 80 }, data: {
+        nodeType: 'audio' as never, label: '旁白', prompt: '请按原文读。', provider,
+        model: provider === 'comfy-qwen-tts' ? 'qwen3-tts-1.7b-customvoice' : '',
+        mode: provider === 'comfy-qwen-tts' ? 'tts' : '', options,
+      } }],
+      edges: [], viewport: { x: 0, y: 0, zoom: 1 }, selection: ['voice-1'],
+    },
+  };
+}
+
 beforeEach(() => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
   Object.defineProperty(window, 'matchMedia', {
@@ -373,6 +402,89 @@ describe('App responsive workspace', () => {
     expect(routeSelects[0]?.value).toBe('image-local');
     expect(routeSelects[1]?.value).toBe('image-model');
     expect(routeSelects[2]?.value).toBe('create');
+  });
+
+  it('adds a speech card with the available Qwen TTS route and capability defaults', async () => {
+    api.getCapabilities.mockResolvedValue({ capabilities: [ttsCapability()] });
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    const addVoice = container.querySelector<HTMLButtonElement>('[aria-label="添加语音"]');
+    expect(addVoice).not.toBeNull();
+    await act(async () => addVoice?.click());
+
+    const routeSelects = container.querySelectorAll<HTMLSelectElement>('.route-section select');
+    expect(container.querySelector('.inspector h2')?.textContent).toContain('语音');
+    expect(routeSelects[0]?.value).toBe('comfy-qwen-tts');
+    expect(routeSelects[1]?.value).toBe('qwen3-tts-1.7b-customvoice');
+    expect(routeSelects[2]?.value).toBe('tts');
+    const speaker = [...container.querySelectorAll<HTMLLabelElement>('label.field')].find((field) => field.textContent?.includes('声音角色'));
+    expect(speaker?.querySelector<HTMLSelectElement>('select')?.value).toBe('Eric');
+    expect(container.querySelector('.execute-button')?.textContent).toContain('确认执行');
+    expect(container.querySelector<HTMLButtonElement>('.execute-button')?.disabled).toBe(false);
+
+    await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 850)); });
+    const savedGraph = api.updateCanvas.mock.calls.at(-1)?.[2] as { nodes?: Array<{ type: string; data: { options?: Record<string, Record<string, unknown>> } }> } | undefined;
+    const savedVoice = savedGraph?.nodes?.find((savedNode) => savedNode.type === 'audio');
+    expect(savedVoice?.data.options?.['comfy-qwen-tts']).toMatchObject({ speaker: 'Eric', language: 'Chinese', tempo: 1.2, max_new_tokens: 2048 });
+  });
+
+  it('persists TTS defaults after the user explicitly changes the provider', async () => {
+    const existing = audioCanvas('legacy-tts');
+    api.getCanvases.mockResolvedValue({ canvases: [existing] });
+    api.getCanvas.mockResolvedValue(existing);
+    api.getCapabilities.mockResolvedValue({ capabilities: [ttsCapability()] });
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    const provider = container.querySelector<HTMLSelectElement>('.route-section select');
+    expect(provider?.value).toBe('legacy-tts');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    setter?.call(provider, 'comfy-qwen-tts');
+    await act(async () => provider?.dispatchEvent(new Event('change', { bubbles: true })));
+
+    const speaker = [...container.querySelectorAll<HTMLLabelElement>('label.field')].find((field) => field.textContent?.includes('声音角色'));
+    expect(speaker?.querySelector<HTMLSelectElement>('select')?.value).toBe('Eric');
+    await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 850)); });
+    const savedGraph = api.updateCanvas.mock.calls.at(-1)?.[2] as { nodes?: Array<{ data: { options?: Record<string, Record<string, unknown>> } }> } | undefined;
+    expect(savedGraph?.nodes?.[0]?.data.options?.['comfy-qwen-tts']).toMatchObject({ speaker: 'Eric', language: 'Chinese', tempo: 1.2, max_new_tokens: 2048 });
+  });
+
+  it('does not backfill capability defaults into an already loaded audio card', async () => {
+    const existing = audioCanvas('comfy-qwen-tts');
+    api.getCanvases.mockResolvedValue({ canvases: [existing] });
+    api.getCanvas.mockResolvedValue(existing);
+    api.getCapabilities.mockResolvedValue({ capabilities: [ttsCapability()] });
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    const fields = [...container.querySelectorAll<HTMLLabelElement>('label.field')];
+    const speaker = fields.find((field) => field.textContent?.includes('声音角色'));
+    const language = fields.find((field) => field.textContent?.includes('语言'));
+    const tempo = fields.find((field) => field.textContent?.includes('语速'));
+    expect(speaker?.querySelector<HTMLSelectElement>('select')?.value).toBe('');
+    expect(language?.querySelector<HTMLSelectElement>('select')?.value).toBe('');
+    expect(tempo?.querySelector<HTMLInputElement>('input')?.value).toBe('');
+    expect(container.querySelector<HTMLButtonElement>('.execute-button')?.disabled).toBe(true);
+  });
+
+  it('plays a generated FLAC audio run from its result preview', async () => {
+    const currentAudioCanvas = audioCanvas('comfy-qwen-tts');
+    const run = {
+      id: 'tts-run', node_id: 'voice-1', status: 'succeeded' as const,
+      snapshot: { node_id: 'voice-1', node_type: 'audio' as never, provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', prompt: '请按原文读。', parameters: {}, inputs: {} },
+      outputs: [{ path: 'audio/voice.flac', kind: 'audio/flac', name: '旁白.flac', metadata: { duration_ms: 2450 } }],
+    };
+    api.getCanvases.mockResolvedValue({ canvases: [currentAudioCanvas] });
+    api.getCanvas.mockResolvedValue(currentAudioCanvas);
+    api.getRuns.mockResolvedValue({ runs: [run] });
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    const outputPreview = container.querySelector<HTMLButtonElement>('.preview-card');
+    expect(outputPreview?.textContent).toContain('播放音频');
+    await act(async () => outputPreview?.click());
+    expect(container.querySelector<HTMLAudioElement>('.preview-modal audio')?.src).toContain('/media/audio/voice.flac');
   });
 });
 

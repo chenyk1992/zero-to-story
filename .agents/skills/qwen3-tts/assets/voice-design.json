@@ -1,0 +1,29 @@
+{
+  "kind": "tts-trial-draft",
+  "provider": "ComfyUI-Qwen-TTS",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "node_class": "FB_Qwen3TTSVoiceDesign",
+  "postprocess": {
+    "backend": "ffmpeg",
+    "tempo": 1.2,
+    "preserve_pitch": true,
+    "output_format": "flac",
+    "preserve_original": true
+  },
+  "inputs": {
+    "text": "别着急，我们把事情一件一件说清楚。明天见面的时候，我会把答案告诉你。",
+    "model_choice": "1.7B",
+    "device": "cuda",
+    "precision": "bf16",
+    "language": "Chinese",
+    "seed": 42,
+    "instruct": "成年女性，中低音区，温暖略带沙哑，普通话清楚，像面对熟人交谈，情绪克制。",
+    "max_new_tokens": 2048,
+    "top_p": 1.0,
+    "top_k": 50,
+    "temperature": 0.9,
+    "repetition_penalty": 1.05,
+    "attention": "sdpa",
+    "unload_model_after_generate": true
+  }
+}

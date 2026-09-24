@@ -62,6 +62,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   board: '电影画面分镜板',
   image: '图片',
   video: '视频',
+  audio: '语音',
   document: '文档',
 };
 
@@ -72,6 +73,7 @@ export const CATEGORY_OPTIONS = [
   { value: 'board', label: '电影画面分镜板' },
   { value: 'image', label: '图片' },
   { value: 'video', label: '视频' },
+  { value: 'audio', label: '语音' },
   { value: 'document', label: '文档' },
 ];
 
@@ -87,7 +89,7 @@ export function normalizeWorkspace(value: unknown, fallbackStory = ''): Workspac
 }
 
 export function isStoryNodeType(value: unknown): value is StoryNodeType {
-  return typeof value === 'string' && ['asset', 'image', 'video', 'document', 'section'].includes(value);
+  return typeof value === 'string' && ['asset', 'image', 'video', 'audio', 'document', 'section'].includes(value);
 }
 
 export function isSectionNode(node: { data: { nodeType?: unknown } }): boolean {
@@ -106,6 +108,7 @@ export function categoryForNode(node: { data: Partial<StoryNodeData> }): string 
   if (nodeType === 'document') return 'document';
   if (nodeType === 'image') return 'image';
   if (nodeType === 'video') return 'video';
+  if (nodeType === 'audio') return 'audio';
   return undefined;
 }
 

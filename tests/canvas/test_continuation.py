@@ -290,7 +290,7 @@ def test_continuation_scope_rejects_non_media_nodes(service: CanvasService) -> N
     canvas = service.store.create_canvas("demo", _graph([_node("doc", "document")]))
     from lfo.canvas.store import CanvasStoreError
 
-    with pytest.raises(CanvasStoreError, match="only image or video"):
+    with pytest.raises(CanvasStoreError, match="only image, video or audio"):
         service.configure_continuation(
             canvas["id"], "sess", ["doc"], "用户明确授权当前范围", canvas["version"]
         )

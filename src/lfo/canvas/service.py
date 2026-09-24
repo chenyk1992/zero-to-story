@@ -28,7 +28,7 @@ from lfo.canvas.graph import CanvasError, resolve_snapshot
 from lfo.canvas.media import CanvasMedia, creative_snapshot
 from lfo.canvas.settings import CanvasSettings
 from lfo.canvas.store import CanvasStore, ContinuationRevisionError
-from lfo.media._ffmpeg import probe, run_command
+from lfo.media._ffmpeg import probe, probe_audio, run_command
 
 
 class CanvasService:
@@ -179,6 +179,13 @@ class CanvasService:
             item = dict(output)
             if expected_kind == "video":
                 item["metadata"] = self._verify_video_output(path)
+            elif expected_kind == "audio":
+                # Validate the actual delivery rather than trusting adapter metadata.
+                metadata = item.get("metadata")
+                item["metadata"] = {
+                    **(metadata if isinstance(metadata, dict) else {}),
+                    **probe_audio(resolved),
+                }
             checked.append(item)
         return checked
 
@@ -286,6 +293,14 @@ class CanvasService:
     ) -> dict[str, Any]:
         with self._confirm_lock:
             token = self.store.handoff_recovery(run_id, reason, expected_updated_at)
+        self._notify()
+        return {"run_id": run_id, "owner_token": token}
+
+    def handoff_agent_claim(
+        self, run_id: str, reason: str, expected_updated_at: str
+    ) -> dict[str, Any]:
+        with self._confirm_lock:
+            token = self.store.handoff_agent_claim(run_id, reason, expected_updated_at)
         self._notify()
         return {"run_id": run_id, "owner_token": token}
 

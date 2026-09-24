@@ -44,4 +44,21 @@ describe('canvas capability selection', () => {
     expect(hasExecutableSelection('provider-a', 'model-a', 'create', 'image', [capability])).toBe(true);
     expect(hasExecutableSelection('legacy-provider', '', '', 'image', [])).toBe(true);
   });
+
+  it('requires persisted values for custom required fields even when the capability advertises defaults', () => {
+    const tts = makeCapability({
+      id: 'comfy-qwen-tts',
+      node_types: ['audio' as never],
+      models: [{ id: 'qwen3-tts-1.7b-customvoice', label: 'Qwen3-TTS' }],
+      modes: [{ id: 'tts', label: '语音合成' }],
+      fields: [
+        { key: 'speaker', label: '声音角色', type: 'select', group: 'specs', required: true, options: [{ value: 'Eric', label: 'Eric' }] },
+        { key: 'language', label: '语言', type: 'select', group: 'specs', required: true, default: 'Chinese', options: [{ value: 'Chinese', label: '中文' }] },
+      ],
+    });
+
+    expect(hasExecutableSelection('comfy-qwen-tts', 'qwen3-tts-1.7b-customvoice', 'tts', 'audio' as never, [tts])).toBe(false);
+    expect(hasExecutableSelection('comfy-qwen-tts', 'qwen3-tts-1.7b-customvoice', 'tts', 'audio' as never, [tts], { speaker: 'Eric' })).toBe(false);
+    expect(hasExecutableSelection('comfy-qwen-tts', 'qwen3-tts-1.7b-customvoice', 'tts', 'audio' as never, [tts], { speaker: 'Eric', language: 'Chinese' })).toBe(true);
+  });
 });

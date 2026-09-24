@@ -35,7 +35,7 @@ def prepare_workspace(manifest: dict[str, Any], base: Path) -> dict[str, Any]:
         source_key = "source_path" if is_document else "prompt_source_path"
         source = data.get(source_key)
         field = "content" if is_document else "prompt"
-        if node["type"] in {"document", "image", "video"} and source and field not in data:
+        if node["type"] in {"document", "image", "video", "audio"} and source and field not in data:
             path = _path(source, base)
             if path.stat().st_size > 2 * 1024 * 1024:
                 raise ValueError(f"文档过大，请选取相关章节：{path.name}")

@@ -17,6 +17,7 @@ const LABELS: Record<CanvasNodeType, string> = {
   asset: '素材',
   image: '图片',
   video: '视频',
+  audio: '语音',
 };
 
 export function newId(prefix: string): string {
@@ -30,6 +31,7 @@ export function createNodeData(nodeType: CanvasNodeType): CanvasNodeData {
   return {
     nodeType,
     label: LABELS[nodeType],
+    ...(nodeType === 'audio' ? { category: 'audio' } : {}),
     prompt: '',
     duration: undefined,
     aspect_ratio: undefined,
@@ -51,7 +53,7 @@ export function createFlowNode(nodeType: CanvasNodeType, position: XYPosition, i
 }
 
 function asNodeType(value: unknown): CanvasNodeType {
-  return typeof value === 'string' && (['asset', 'image', 'video'] as string[]).includes(value)
+  return typeof value === 'string' && (['asset', 'image', 'video', 'audio'] as string[]).includes(value)
     ? value as CanvasNodeType
     : 'asset';
 }
@@ -154,6 +156,7 @@ export const TARGET_HANDLES: Record<CanvasNodeType, string[]> = {
   asset: [],
   image: ['reference_image'],
   video: ['first_frame', 'last_frame', 'reference_image', 'reference_video', 'reference_audio'],
+  audio: ['reference_audio'],
 };
 
 export function isOutputHandle(handle?: string | null): boolean {
@@ -178,7 +181,7 @@ function knownKind(output?: RunOutput): 'image' | 'video' | 'audio' | undefined 
   const kind = output.kind.toLowerCase();
   if (kind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(output.path)) return 'image';
   if (kind.startsWith('video') || /\.(mp4|webm|mov|m4v)$/i.test(output.path)) return 'video';
-  if (kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg)$/i.test(output.path)) return 'audio';
+  if (kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path)) return 'audio';
   return undefined;
 }
 
@@ -190,7 +193,7 @@ export function outputForNode(node: FlowNode, sourceHandle: string | null = SOUR
     const derived = node.data.derived_outputs?.find((item) => item.id === outputId);
     return assetToOutput(derived?.asset);
   }
-  if (node.data.nodeType === 'image' || node.data.nodeType === 'video') {
+  if (node.data.nodeType === 'image' || node.data.nodeType === 'video' || node.data.nodeType === 'audio') {
     const success = sortRuns(runs).find((run) => run.node_id === node.id && run.status === 'succeeded' && run.outputs?.length);
     if (success?.outputs?.[0]) return success.outputs[0];
   }
@@ -223,6 +226,7 @@ export function isValidConnection(connection: Connection, nodes: FlowNode[]): bo
   }
   if (targetHandle === 'reference_video') return sourceMatches(source, connection.sourceHandle, 'video');
   if (targetHandle === 'reference_audio') {
+    if (target.data.nodeType === 'audio' && source.data.nodeType !== 'audio' && source.data.nodeType !== 'asset') return false;
     const outputKind = knownKind(outputForNode(source, connection.sourceHandle || SOURCE_HANDLE));
     return outputKind ? outputKind === 'audio' : source.data.nodeType === 'video' || sourceMatches(source, connection.sourceHandle, 'audio');
   }

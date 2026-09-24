@@ -10,6 +10,7 @@ const ITEMS: Array<{ type: StoryNodeType; label: string; hint: string; icon: Ico
   { type: 'asset', label: '素材', hint: '图片、视频或音频', icon: 'asset' },
   { type: 'image', label: '图片', hint: '图片创作卡，选择可用生成方式', icon: 'image' },
   { type: 'video', label: '视频', hint: '视频创作卡，选择可用生成方式', icon: 'video' },
+  { type: 'audio', label: '语音', hint: '语音合成卡，输入逐字台词并选择可用生成方式', icon: 'audio' },
 ];
 
 const FILTERS: Array<{ id: string; label: string; icon: IconName }> = [
@@ -19,6 +20,7 @@ const FILTERS: Array<{ id: string; label: string; icon: IconName }> = [
   { id: 'board', label: '电影画面分镜板', icon: 'board' },
   { id: 'image', label: '图片', icon: 'image' },
   { id: 'video', label: '视频', icon: 'video' },
+  { id: 'audio', label: '语音', icon: 'audio' },
   { id: 'document', label: '文档', icon: 'document' },
 ];
 

@@ -14,7 +14,7 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 | 任务 | 做法 |
 | --- | --- |
 | 查看或编辑 | 读取版本，按用户要求修改节点；冲突时重读并合并，保留用户最新改动 |
-| 整理故事资料 | 章节内容用 `document`，区域用 `section`，图片/视频用 `image`/`video`，其他素材用 `asset` |
+| 整理故事资料 | 章节内容用 `document`，区域用 `section`，图片/视频/语音生成用 `image`/`video`/`audio`，已有素材用 `asset` |
 | 导入明确选定的旧资料 | 按需读[工作空间导入](references/story-workspace.md)，保留来源和既有审片结论 |
 | 接手生成 | 区分脚本型与 Agent 型能力，按下节处理 |
 | 连续生产 | 仅此时读[接续指南](../../../guides/canvas-continuation.md)并登记当前范围 |
@@ -31,7 +31,7 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 
 页面“确认执行”已授权那次冻结输入，无须再问一次。对话只要求修改、预览或保存时，停在草稿。明确授权执行时，按最新版本确认当前输入并读取创建的请求。
 
-1. **识别能力。** 读取能力说明与待办。脚本型请求由服务处理；`comfy` 视频为 `queued`，由服务启动 [comfy-video-executor](../comfy-video-executor/SKILL.md)，对话不 claim 或重复启动。`comfy-qwen-image` 图片同样由服务启动 [comfy-image-executor](../comfy-image-executor/SKILL.md)，无需 Codex。Agent 型请求才进入以下领取步骤。
+1. **识别能力。** 读取能力说明与待办。脚本型请求由服务处理；`comfy` 视频为 `queued`，由服务启动 [comfy-video-executor](../comfy-video-executor/SKILL.md)，对话不 claim 或重复启动。`comfy-qwen-image` 图片与 `comfy-qwen-tts` 语音分别由服务启动 [comfy-image-executor](../comfy-image-executor/SKILL.md) 和 [comfy-tts-executor](../comfy-tts-executor/SKILL.md)，无需 Codex。Agent 型请求才进入以下领取步骤。
 2. **领取 Agent 任务。** 用当前真实 `host_tools` 调用 `canvas_claim`。能力缺失或抢占失败时报告并保留待办，不先生成。用户明确选择且已接入的 mmx H3 才使用对应执行 Skill。
 3. **执行一次。** 严格使用返回的 `execution_snapshot`、素材与参数，提示词原样传入。能力无法表达输入时说明差异；未知状态核实原请求，不重提或换提供方。
 4. **回填。** 用 `canvas_complete` 写实际输出路径和媒体类型。宿主无法指定目录时传回真实路径，由服务复制。领取后明确失败写 `failed`，提交结果不能核实写 `unknown`。完成令牌只用于该请求，不写入提示词或媒体元数据。

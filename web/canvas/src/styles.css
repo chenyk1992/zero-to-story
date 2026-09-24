@@ -60,6 +60,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .palette-asset .palette-icon { color: #f4c279; border-color: rgba(242, 189, 107, .35); background: rgba(242, 189, 107, .1); }
 .palette-image .palette-icon { color: #7ce4ee; border-color: rgba(85, 215, 228, .35); background: rgba(85, 215, 228, .1); }
 .palette-video .palette-icon { color: #ff91a8; border-color: rgba(246, 117, 143, .35); background: rgba(246, 117, 143, .1); }
+.palette-audio .palette-icon { color: #f1bd79; border-color: rgba(241, 189, 121, .35); background: rgba(241, 189, 121, .1); }
 .palette-result .palette-icon { color: #7de0b1; border-color: rgba(98, 213, 163, .35); background: rgba(98, 213, 163, .1); }
 .palette-foot { display: flex; align-items: center; gap: 5px; margin-top: auto; padding: 18px 0; color: #56647c; font-size: 9px; writing-mode: vertical-rl; }
 .online-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
@@ -345,6 +346,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .asset-list-board { color: #9db1c9; background: rgba(153, 174, 209, .09); }
 .asset-list-image { color: #6ee1eb; background: rgba(85, 215, 228, .1); }
 .asset-list-video { color: #ff9bae; background: rgba(246, 117, 143, .1); }
+.asset-list-audio { color: #f2bd7d; background: rgba(242, 189, 125, .1); }
 .asset-list-prompt { color: #baaefe; background: rgba(155, 137, 255, .1); }
 .asset-list-copy { min-width: 0; flex: 1; }
 .asset-list-copy strong, .asset-list-copy small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

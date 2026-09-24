@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -91,3 +92,28 @@ def atomic_replace(temp_path: Path, output_path: Path) -> None:
         raise MediaCommandError(f"Media command did not produce an output file: {temp_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path.replace(output_path)
+
+
+def probe_audio(path: str | Path) -> dict[str, Any]:
+    """Require a decodable, positive-duration audio-only file before publishing it."""
+    metadata = probe(path)
+    duration = metadata.get("duration_ms")
+    if (
+        metadata.get("has_audio") is not True
+        or metadata.get("width") is not None
+        or not isinstance(duration, (int, float))
+        or isinstance(duration, bool)
+        or not math.isfinite(duration)
+        or duration <= 0
+        or not metadata.get("audio_codec")
+        or not isinstance(metadata.get("sample_rate"), int)
+        or metadata["sample_rate"] <= 0
+        or not isinstance(metadata.get("channels"), int)
+        or metadata["channels"] <= 0
+    ):
+        raise MediaCommandError("Audio output requires a valid audio stream and positive duration")
+    run_command([
+        os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-xerror",
+        "-i", str(path), "-map", "0:a:0", "-f", "null", "-",
+    ])
+    return {**metadata, "codec": metadata["audio_codec"]}

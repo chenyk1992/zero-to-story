@@ -72,7 +72,7 @@ import './workbench.css';
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
 
-const GENERATION_KINDS = new Set<CanvasNodeType>(['image', 'video']);
+const GENERATION_KINDS = new Set<CanvasNodeType>(['image', 'video', 'audio']);
 const NON_REEXECUTABLE_STATUSES = new Set(['pending_agent', 'queued', 'running', 'unknown']);
 const GRAPH_BASE_KEYS = new Set(['nodes', 'edges', 'viewport', 'selection', 'workspace']);
 
@@ -107,6 +107,29 @@ function applyCapabilityDefaults(node: FlowNode, capabilities: Capability[]): Fl
   const mode = !node.data.mode && capability.modes.length === 1 ? capability.modes[0].id : node.data.mode;
   if (provider === node.data.provider && model === node.data.model && mode === node.data.mode) return node;
   return { ...node, data: { ...node.data, provider, model, mode } };
+}
+
+function applyAudioCapabilityDefaults(node: FlowNode, capabilities: Capability[]): FlowNode {
+  if (node.data.nodeType !== 'audio' || !node.data.provider) return node;
+  const capability = capabilities.find((item) => item.id === node.data.provider && item.node_types.includes('audio'));
+  if (!capability) return node;
+  const current = node.data.options[node.data.provider] || {};
+  const next = { ...current };
+  let changed = false;
+  for (const field of capability.fields) {
+    if (field.default !== undefined && next[field.key] === undefined) {
+      next[field.key] = field.default;
+      changed = true;
+    }
+  }
+  if (!changed) return node;
+  return {
+    ...node,
+    data: {
+      ...node.data,
+      options: { ...node.data.options, [node.data.provider]: next },
+    },
+  };
 }
 
 function toWorkspaceNode(raw: RawApiNode): FlowNode {
@@ -236,6 +259,7 @@ function App() {
   const savePromisesRef = useRef(new Map<string, Promise<boolean>>());
   const saveRequestTokensRef = useRef(new Map<string, symbol>());
   const saveCanvasRef = useRef<((force?: boolean) => Promise<boolean>) | undefined>(undefined);
+  const pendingAudioDefaultsRef = useRef(new Set<string>());
   const bootRef = useRef(false);
   const workspaceRef = useRef<WorkspaceMeta>(DEFAULT_WORKSPACE);
   const graphMetaRef = useRef<Record<string, unknown>>({});
@@ -254,6 +278,7 @@ function App() {
 
   const applyCanvas = useCallback((canvas: Canvas, preserveSelection = false) => {
     if (activeIdRef.current !== canvas.id) {
+      pendingAudioDefaultsRef.current.clear();
       activeIdRef.current = canvas.id;
       runsRequestRef.current += 1;
       continuationsRequestRef.current += 1;
@@ -410,7 +435,11 @@ function App() {
     setNodes((current) => {
       let changed = false;
       const next = current.map((node) => {
-        const hydrated = applyCapabilityDefaults(node, capabilities);
+        const routed = applyCapabilityDefaults(node, capabilities);
+        const hydrated = pendingAudioDefaultsRef.current.has(node.id)
+          ? applyAudioCapabilityDefaults(routed, capabilities)
+          : routed;
+        if (pendingAudioDefaultsRef.current.has(node.id) && hydrated.data.provider) pendingAudioDefaultsRef.current.delete(node.id);
         if (hydrated !== node) changed = true;
         return hydrated;
       });
@@ -518,11 +547,20 @@ function App() {
   const updateSelected = useCallback((patch: StoryNodePatch) => {
     const id = selectedIdRef.current;
     if (!id) return;
+    const selected = nodesRef.current.find((node) => node.id === id);
+    const changedAudioProvider = selected?.data.nodeType === 'audio'
+      && patch.provider !== undefined
+      && patch.provider !== selected.data.provider;
+    if (changedAudioProvider) pendingAudioDefaultsRef.current.delete(id);
     setNodes((current) => {
-      return current.map((node) => node.id === id ? { ...node, data: { ...node.data, ...patch, resultChanged: Boolean(node.data.latestSuccessfulRun) } } : node);
+      return current.map((node) => {
+        if (node.id !== id) return node;
+        const updated = { ...node, data: { ...node.data, ...patch, resultChanged: Boolean(node.data.latestSuccessfulRun) } };
+        return changedAudioProvider ? applyAudioCapabilityDefaults(updated, capabilities) : updated;
+      });
     });
     markDirty();
-  }, [markDirty]);
+  }, [capabilities, markDirty]);
 
   const updateNodeById = useCallback((nodeId: string, patch: StoryNodePatch) => {
     setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, data: { ...node.data, ...patch, resultChanged: Boolean(node.data.latestSuccessfulRun) } } : node));
@@ -540,7 +578,9 @@ function App() {
   }, [markDirty]);
 
   const addNodeAt = useCallback((nodeType: StoryNodeType, position: { x: number; y: number }) => {
-    const node = applyCapabilityDefaults(createWorkspaceNode(nodeType, position), capabilities);
+    const routed = applyCapabilityDefaults(createWorkspaceNode(nodeType, position), capabilities);
+    const node = applyAudioCapabilityDefaults(routed, capabilities);
+    if (nodeType === 'audio' && !node.data.provider) pendingAudioDefaultsRef.current.add(node.id);
     setNodes((current) => [...current, node]);
     selectedIdRef.current = node.id;
     setSelectedId(node.id);
@@ -756,6 +796,7 @@ function App() {
                 selectedNode.data.mode,
                 selectedNode.data.nodeType,
                 capabilities,
+                selectedNode.data.options[selectedNode.data.provider] || {},
               )
             )}
             saveBlocked={saveBlocked}
@@ -850,7 +891,7 @@ function Workspace(props: WorkspaceProps) {
   const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const type = event.dataTransfer.getData('application/x-canvas-node') as StoryNodeType;
-    if (!type || !['document', 'section', 'asset', 'image', 'video'].includes(type)) return;
+    if (!type || !['document', 'section', 'asset', 'image', 'video', 'audio'].includes(type)) return;
     clearConnectionFocus();
     if (window.innerWidth <= 1050) setPaletteCollapsed(true);
     props.onAddNode(type, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
@@ -911,7 +952,7 @@ function Workspace(props: WorkspaceProps) {
           </Panel>
           {minimapOpen && <MiniMap nodeColor={(node) => {
             const kind = (node.data as unknown as { nodeType?: string } | undefined)?.nodeType;
-            return kind === 'video' ? '#9daca5' : kind === 'image' ? '#82a89d' : kind === 'asset' ? '#b3a286' : kind === 'document' ? '#8e98ae' : '#394443';
+            return kind === 'video' ? '#9daca5' : kind === 'image' ? '#82a89d' : kind === 'audio' ? '#c18e5b' : kind === 'asset' ? '#b3a286' : kind === 'document' ? '#8e98ae' : '#394443';
           }} maskColor="rgba(15, 19, 20, 0.72)" position="bottom-right" />}
           <Panel position="top-left" className="canvas-toolbar"><Icon name="grid" size={16} /><strong>创作画布</strong><span>{props.nodes.filter((node) => !isSectionNode(node)).length} 张卡片</span><span className="canvas-toolbar-separator" /><span className="connection-legend"><i className="input-line" />实际输入<i className="reference-line" />资料关联</span></Panel>
           {focusedConnection && <Panel position="top-left" className="connection-focus-panel">
@@ -966,7 +1007,7 @@ function MediaModal({ output, onClose }: { output: RunOutput; onClose: () => voi
       <div ref={dialogRef} className="preview-modal" role="dialog" aria-modal="true" aria-label="素材预览">
         <div className="preview-modal-head"><div><h2>{output.name || '关联媒体'}</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="关闭预览"><Icon name="close" /></button></div>
         <div className="preview-modal-content">{renderMedia(output, output.name || '关联媒体')}</div>
-        <div className="preview-modal-foot"><span>原始媒体 · 只读预览</span><span>{output.kind.startsWith('image') ? '图片' : output.kind.startsWith('video') ? '视频' : output.kind.startsWith('audio') ? '音频' : '媒体'}</span></div>
+        <div className="preview-modal-foot"><span>原始媒体 · 只读预览</span><span>{output.kind.startsWith('image') ? '图片' : output.kind.startsWith('video') ? '视频' : isAudioOutput(output) ? '音频' : '媒体'}</span></div>
       </div>
     </div>
   );
@@ -999,8 +1040,12 @@ function usePreviewDialog(onClose: () => void) {
 function renderMedia(output: RunOutput, label: string) {
   const kind = output.kind.toLowerCase();
   if (kind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(output.path)) return <img src={mediaUrl(output.path)} alt={label} loading="lazy" />;
-  if (kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg)$/i.test(output.path)) return <audio src={mediaUrl(output.path)} controls preload="metadata" />;
+  if (isAudioOutput(output)) return <audio src={mediaUrl(output.path)} controls preload="metadata" />;
   return <video src={mediaUrl(output.path)} controls preload="metadata" />;
+}
+
+function isAudioOutput(output: RunOutput): boolean {
+  return output.kind.toLowerCase().startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path);
 }
 
 export default App;

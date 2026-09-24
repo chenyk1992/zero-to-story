@@ -27,6 +27,7 @@ Panel 指一段独立生成的视频。它的时长、动作、提示词、必�
 - **Agent 型能力**：具备真实工具的会话独占领取 `pending_agent`，使用冻结输入提交一次，回填实际媒体。
 - **本地 Comfy 视频**：确认后为 `queued`，由服务内部 worker 原子领取并启动项目 `comfy-video-executor` adapter。adapter 用本地 HTTP 上传素材和预检，再同步调用官方 `comfy-cli` 一次。它不经过 Agent claim，对话不能重复启动脚本。
 - **本地 Qwen 图片**：选择 `comfy-qwen-image` 后同样为 `queued`，由 worker 启动项目 `comfy-image-executor`，共用上传、预检和官方 CLI 提交链。与本地视频共用资源和机器锁，无需宿主图片工具。输入规范见 [Qwen 图片指南](qwen-image.md)。
+- **本地 Qwen TTS**：`audio` 节点选择 `comfy-qwen-tts`，确认后由 worker 启动 `comfy-tts-executor`，共用 Comfy 提交链、资源与机器锁。原始音频保留，节点回填按所选语速处理后的实际音频；见 [Canvas TTS](canvas-tts.md)。
 - **失败或未知**：停止受影响单元及其依赖，核实原请求；不自动重提、换提供方或把失败候选登记为正式产物。其他独立工作继续。
 
 本地 ComfyUI 离线时，共享连接层使用官方 comfy-cli 启动已配置安装并等待就绪，无需用户另外启动 Desktop。启动使用同一服务地址与既有模型环境，记录启动日志；已有服务直接复用，启动超时不重复创建实例。此授权不包含安装、更新、替换模型或重复提交生成。

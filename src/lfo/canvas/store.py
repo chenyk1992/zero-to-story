@@ -751,6 +751,61 @@ class CanvasStore:
             self._emit_event(updated, "run.recovery_handoff", {"reason": reason.strip()}, now)
         return token
 
+    def handoff_agent_claim(self, run_id: str, reason: str, expected_updated_at: str) -> str:
+        """Replace a lost claim on a paused, still-running Codex image request.
+
+        This transfers only ownership of the original request. It never creates
+        another run or submits media generation.
+        """
+
+        for name, value in (("reason", reason), ("expected_updated_at", expected_updated_at)):
+            if not isinstance(value, str) or not value.strip():
+                raise CanvasStoreError(
+                    f"agent claim handoff requires non-empty {name}",
+                    code="agent_handoff_input",
+                    status=400,
+                )
+        with self._lock, self._transaction():
+            row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise RunNotFoundError(run_id)
+            if row["updated_at"] != expected_updated_at:
+                raise RunStateError("run changed; read it again", code="agent_handoff_conflict")
+            snapshot = _load(row["snapshot"], "snapshot")
+            if not (
+                row["status"] == "running"
+                and row["attention_state"] == "paused"
+                and row["owner_token"]
+                and row["stage"] == "input_validation"
+                and row["provider_task_id"] is None
+                and snapshot.get("node_type") == "image"
+                and snapshot.get("provider") == "codex-imagegen"
+            ):
+                raise RunStateError(
+                    "only a paused Codex image claim before remote submission can be handed off",
+                    code="agent_handoff_not_ready",
+                )
+            now = _now()
+            token = uuid4().hex
+            evidence = _append_evidence(
+                _load(row["evidence"], "evidence"),
+                {"kind": "agent_claim_handoff", "reason": reason.strip()},
+                row["stage"],
+                now,
+            )
+            cursor = self._conn().execute(
+                "UPDATE node_runs SET owner_token = ?, evidence = ?, updated_at = ? "
+                "WHERE id = ? AND updated_at = ? AND status = 'running' "
+                "AND attention_state = 'paused' AND owner_token IS NOT NULL",
+                (token, _dump(evidence), now, run_id, expected_updated_at),
+            )
+            if cursor.rowcount != 1:
+                raise RunStateError("run changed; read it again", code="agent_handoff_conflict")
+            updated = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            assert updated is not None
+            self._emit_event(updated, "run.agent_claim_handoff", {"reason": reason.strip()}, now)
+        return token
+
     def reconcile_run(
         self,
         run_id: str,
@@ -1521,7 +1576,7 @@ class CanvasStore:
             ]
             if non_media:
                 raise CanvasStoreError(
-                    "continuation scope may contain only image or video nodes",
+                    "continuation scope may contain only image, video or audio nodes",
                     code="continuation_node_type",
                     status=400,
                 )

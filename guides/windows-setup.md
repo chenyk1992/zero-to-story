@@ -38,6 +38,7 @@
 | 本地 H3 视频 | 官方 comfy-cli、运行中的 ComfyUI、所选工作流的自定义节点及模型、FFprobe；详见[本机环境](local-windows.md)。执行服务必须能找到 CLI；配置 JSON 中的覆盖值由 adapter 检查，通用预检只检查 PATH 和环境变量覆盖 |
 | 媒体检查、尾帧和后期 | FFmpeg、FFprobe；分别运行 `ffmpeg -version`、`ffprobe -version` 验证。部分工具直接使用 PATH 中的 ffprobe，完整功能应将其配置在 PATH |
 | MiMo 视频理解 | `MIMO_API_KEY`、服务网络访问和可用账户；分析脚本使用 Python 标准库 |
+| 本地 Qwen TTS | 已安装 Qwen3-TTS 节点及所选模式的 1.7B 权重、独立 Tokenizer、官方 comfy-cli、FFmpeg/FFprobe；见 [Canvas TTS](canvas-tts.md) |
 | MiniMax 音色克隆 | `MINIMAX_API_KEY`、服务网络访问、可用账户、FFprobe 和已授权参考音频；脚本使用 Python 标准库 |
 | 可选 mmx 视频 | 用户另行接入 mmx CLI、认证及 `mmx-h3-video` Skill；它不随本仓库提供，不是默认本地 H3 的前提 |
 | 持续生产与验收 | 宿主的实际委派、视听检查与接续能力；按[接续指南](canvas-continuation.md)核实。普通浏览器打开画布不会自动提供这些 Agent 能力 |

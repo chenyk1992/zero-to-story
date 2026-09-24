@@ -1,6 +1,6 @@
 import type { Edge, Node, Viewport, XYPosition } from '@xyflow/react';
 
-export const NODE_KINDS = ['asset', 'image', 'video'] as const;
+export const NODE_KINDS = ['asset', 'image', 'video', 'audio'] as const;
 export type CanvasNodeType = (typeof NODE_KINDS)[number];
 
 export type RunStatus = 'queued' | 'pending_agent' | 'running' | 'succeeded' | 'failed' | 'unknown' | 'cancelled';
@@ -147,7 +147,19 @@ export interface RunOutput {
   path: string;
   kind: string;
   name?: string;
-  metadata?: { width?: number; height?: number; has_alpha?: boolean; has_transparency?: boolean; seed?: number; steps?: number };
+  metadata?: {
+    width?: number;
+    height?: number;
+    has_alpha?: boolean;
+    has_transparency?: boolean;
+    seed?: number;
+    steps?: number;
+    duration_ms?: number;
+    raw_duration_ms?: number;
+    sample_rate?: number;
+    channels?: number;
+    tempo?: number;
+  };
 }
 
 export interface PreviewInfo {

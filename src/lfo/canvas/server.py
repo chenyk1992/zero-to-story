@@ -303,6 +303,8 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 self._json(service.reconcile_run(segments[2], **body))
             elif segments[3] == "handoff-recovery":
                 self._json(service.handoff_recovery(segments[2], **body))
+            elif segments[3] == "handoff-agent-claim":
+                self._json(service.handoff_agent_claim(segments[2], **body))
             elif segments[3] == "claim-recovery":
                 token = service.store.claim_recovery(segments[2], **body)
                 service._notify()

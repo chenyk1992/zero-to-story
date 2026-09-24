@@ -518,6 +518,50 @@ def test_missing_provider_never_silently_selects_native_image_tool(production):
         resolve_snapshot(canvas, "one")
 
 
+def test_paused_agent_claim_can_handoff_without_new_generation(production, tmp_path):
+    service, canvas = production
+    run = confirm(service, canvas)
+    original = service.claim_agent(run["id"], ["image_gen"])["owner_token"]
+    service.store.set_attention(run["id"], "paused", "original owner lost its token")
+    before = service.store.get_run(run["id"])
+
+    handoff = service.handoff_agent_claim(
+        run["id"], "completed image exists; original token lost", before["updated_at"]
+    )
+    replacement = handoff["owner_token"]
+    assert replacement != original
+    current = service.store.get_run(run["id"])
+    assert current["status"] == "running"
+    assert current["request_id"] == before["request_id"]
+    assert current["snapshot"] == before["snapshot"]
+    assert current["outputs"] == []
+    assert current["evidence"][-1]["kind"] == "agent_claim_handoff"
+    assert len(service.store.list_runs(canvas["id"])) == 1
+
+    image = tmp_path / "result.png"
+    image.write_bytes(b"actual-image-bytes")
+    with pytest.raises(CanvasError):
+        service.complete_agent(run["id"], original, outputs=[{"path": str(image), "kind": "image"}])
+    done = service.complete_agent(
+        run["id"], replacement, outputs=[{"path": str(image), "kind": "image"}]
+    )
+    assert done["status"] == "succeeded"
+
+
+def test_agent_claim_handoff_rejects_active_and_stale_run(production):
+    service, canvas = production
+    run = confirm(service, canvas)
+    service.claim_agent(run["id"], ["image_gen"])
+    before = service.store.get_run(run["id"])
+    with pytest.raises(CanvasError):
+        service.handoff_agent_claim(run["id"], "lost token", before["updated_at"])
+    service.store.set_attention(run["id"], "paused", "lost token")
+    current = service.store.get_run(run["id"])
+    with pytest.raises(CanvasError):
+        service.handoff_agent_claim(run["id"], "lost token", before["updated_at"])
+    assert service.store.get_run(run["id"]) == current
+
+
 def test_recovery_handoff_after_bad_proof_keeps_audit_and_invalidates_token(production):
     service, canvas = production
     run = confirm(service, canvas)

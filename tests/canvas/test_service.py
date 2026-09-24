@@ -241,6 +241,30 @@ def test_dialogue_edit_and_browser_read_share_configuration(http_service):
     assert run["status"] == "pending_agent"
 
 
+def test_http_handoff_agent_claim_keeps_original_run(http_service, service):
+    canvas = http_service.request(
+        "POST", "/api/canvases", {"name": "令牌交接", "graph": image_graph()}
+    )
+    run = http_service.request(
+        "POST",
+        f"/api/canvases/{canvas['id']}/runs",
+        {"node_id": "image-one", "version": canvas["version"], "request_id": "handoff-once"},
+    )
+    original = http_service.request(
+        "POST", f"/api/runs/{run['id']}/claim", {"host_tools": ["image_gen"]}
+    )["owner_token"]
+    service.store.set_attention(run["id"], "paused", "original claim lost")
+    before = service.store.get_run(run["id"])
+    handed = http_service.request(
+        "POST",
+        f"/api/runs/{run['id']}/handoff-agent-claim",
+        {"reason": "generated file exists", "expected_updated_at": before["updated_at"]},
+    )
+    assert handed["owner_token"] != original
+    assert len(service.store.list_runs(canvas["id"])) == 1
+    assert service.store.get_run(run["id"])["status"] == "running"
+
+
 def test_media_range_and_foreign_origin(http_service, service):
     from urllib.error import HTTPError
     from urllib.parse import quote

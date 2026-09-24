@@ -80,6 +80,12 @@
   background: rgba(156, 197, 223, .1);
 }
 
+.kind-audio {
+  color: #e4b16f;
+  border-color: rgba(228, 177, 111, .3);
+  background: rgba(228, 177, 111, .1);
+}
+
 .kind-asset,
 .kind-document {
   color: #d0b481;

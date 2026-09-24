@@ -44,6 +44,7 @@ export function hasExecutableSelection(
   mode: string,
   nodeType: CanvasNodeType,
   capabilities: Capability[],
+  parameters: Record<string, string | number | boolean | undefined> = {},
 ): boolean {
   if (!provider) return false;
   // If capability discovery is unavailable, preserve the existing explicit
@@ -53,5 +54,12 @@ export function hasExecutableSelection(
   if (!capability || !isCapabilitySelectable(capability, nodeType)) return false;
   if (capability.models.length > 0 && !model) return false;
   if (capability.modes.length > 0 && !mode) return false;
+  const commonParameterKeys = new Set(['duration', 'aspect_ratio', 'megapixels']);
+  const missingRequiredField = capability.fields.some((field) => {
+    if (!field.required || commonParameterKeys.has(field.key) || field.modes && !field.modes.includes(mode)) return false;
+    const value = parameters[field.key];
+    return value === undefined || value === '';
+  });
+  if (missingRequiredField) return false;
   return true;
 }
