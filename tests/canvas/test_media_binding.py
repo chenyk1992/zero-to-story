@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -40,3 +41,29 @@ def test_accepted_derived_input_checks_frame_and_actual_parent(tmp_path, changed
         media.execution_snapshot(frozen)["inputs"]["first_frame"]["path"]
         == frozen["inputs"]["first_frame"]["frozen_path"]
     )
+
+
+def test_frozen_input_accepts_directory_identity_across_resolved_alias(tmp_path, monkeypatch):
+    media = CanvasMedia(CanvasSettings(tmp_path, tmp_path / "state", tmp_path / "media"))
+    media.settings.media_root.mkdir()
+    frame = media.settings.media_root / "frame.png"
+    frame.write_bytes(b"original frozen image")
+    frozen = media.freeze({"inputs": {"first_frame": media.import_file(str(frame))}}, "request")
+    input_root = media.settings.data_dir / "inputs"
+    original_resolve = Path.resolve
+
+    def resolve_alias(path, *args, **kwargs):
+        if path == input_root:
+            return tmp_path / "logical-alias" / "inputs"
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve_alias)
+    effective = media.execution_snapshot(frozen)
+    assert Path(effective["inputs"]["first_frame"]["path"]).read_bytes() == frame.read_bytes()
+
+    outside = tmp_path / "outside" / "request" / "frame.png"
+    outside.parent.mkdir(parents=True)
+    outside.write_bytes(frame.read_bytes())
+    frozen["inputs"]["first_frame"]["frozen_path"] = str(outside)
+    with pytest.raises(ValueError, match="运行输入路径无效"):
+        media.execution_snapshot(frozen)

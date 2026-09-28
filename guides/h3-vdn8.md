@@ -46,7 +46,7 @@ VDN8 是 Canvas 本地 H3 视频的 8 步加速采样配置。当前 `comfy-vide
 
 ## 当前环境与限制
 
-已验证的节点环境为 ComfyUI 0.34.x 和 ComfyUI-VDN-H3 1.4.0。VDN bundle 位于 ComfyUI 模型根目录的 `vdn/stage-dmd-step-250/`，包含 linear branch、default/turbo adapters 及配置和元数据。adapter 在本次提交前通过 `/object_info` 检查节点、模型和枚举；不能只复制一个权重文件，或用旧检查记录代替当前预检。
+已验证的节点环境为 ComfyUI 0.34.x 和 ComfyUI-VDN-H3 1.4.0。VDN bundle 位于 ComfyUI 模型根目录的 `vdn/stage-dmd-step-250/`，包含 linear branch、default/turbo adapters 及配置和元数据。adapter 在本次提交前通过 MCP `nodes` 和 `validate_workflow` 检查节点、模型和枚举；不能只复制一个权重文件，或用旧检查记录代替当前预检。
 
 本机 VDN merge/stream 路径配合裁剪 H3 基座时，会跳过 51 个完整宽度的 turbo AdaLN delta 张量。这可能影响细节或时序稳定性，不能解释为所有 turbo 权重都已合并。
 

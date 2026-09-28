@@ -59,7 +59,7 @@ def test_invalid_image_limit_is_reported(tmp_path, monkeypatch, value):
         CanvasSettings.resolve(tmp_path, tmp_path / "state", tmp_path / "media")
 
 
-def test_explicit_comfy_cli_path_satisfies_capability_check(tmp_path, monkeypatch) -> None:
+def test_project_comfy_mcp_config_satisfies_capability_check(tmp_path, monkeypatch) -> None:
     project = tmp_path / "project"
     skill = project / ".agents" / "skills" / "comfy-video"
     skill.mkdir(parents=True)
@@ -71,15 +71,14 @@ def test_explicit_comfy_cli_path_satisfies_capability_check(tmp_path, monkeypatc
                 "execution": "script",
                 "entrypoint": "execute.py",
                 "node_types": ["video"],
-                "requires_executables": ["comfy"],
+                "requires_executables": ["comfy-mcp"],
             }
         ),
         encoding="utf-8",
     )
-    executable = tmp_path / "custom-comfy.exe"
-    executable.write_bytes(b"test executable")
-    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("LFO_COMFY_CLI", str(executable))
+    from lfo.comfy import transport
+
+    monkeypatch.setattr(transport, "load_runtime_config", lambda: transport.RuntimeConfig())
 
     capability = CapabilityCatalog(project).get("comfy")
 

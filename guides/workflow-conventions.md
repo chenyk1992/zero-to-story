@@ -18,11 +18,11 @@ Canvas H3 模板只维护在项目 Skill 的 `.agents/skills/comfy-video-executo
 Python adapter 只做以下工作：
 
 1. 校验冻结 snapshot 的 provider、model、mode、提示词、公共参数和 Comfy 专属参数。
-2. 按模式检查真实素材槽位，通过本地 ComfyUI HTTP 接口上传本次固定输入。
+2. 按模式检查真实素材槽位，通过官方本地 Comfy MCP `upload_file` 上传本次固定输入。
 3. 把已确认提示词逐字绑定到模板，把时长、画幅、像素预算、采样配置、步数、seed、FPS 和引用位置写入公开输入。
-4. 在提交前读取 `/object_info`，检查必需节点以及服务声明的模型或枚举值。动态上传后的文件名不拿旧服务列表做预判。
-5. 在 `VideoSubmissionGuard` 的机器级串行互斥内同步调用一次官方 `comfy run --wait --json`；互斥覆盖提交和整个等待周期，流式返回 stage 和 `provider_task_id`，进程丢失后的持久回执继续阻塞未知任务。
-6. 从本次结果中取得唯一视频，复制或下载到当前 Canvas run 输出目录并做 ffprobe 媒体校验。
+4. 在提交前通过 MCP `nodes` 和 `validate_workflow` 检查必需节点、枚举值和工作流。动态上传后的文件名不拿旧服务列表做预判。
+5. 在 `VideoSubmissionGuard` 的机器级串行互斥内先写提交意图，调用一次 `run_workflow(wait=False)`；立即持久化返回的 `prompt_id`，以 `job` 查询原任务。进程丢失后的未知回执继续阻塞新任务。
+6. 经 `fetch_outputs` 把本次唯一视频取回当前 Canvas run 输出目录，并做 ffprobe 媒体校验。
 
 adapter 不写创意提示词、不决定镜头语义、不切换 provider、不创建第二套数据库，也不在失败后隐式重提。技术成功不代表内容 `ACCEPT`；故事媒体仍由执行单元查看实际文件，记录实际末态和实际音频证据。
 
@@ -43,7 +43,7 @@ adapter 不写创意提示词、不决定镜头语义、不切换 provider、不
 
 - capability 字段与 adapter 校验一致；
 - snapshot 的每个可变值只有一个明确绑定位置；
-- `/object_info` 能识别所需节点和模型；
+- MCP `nodes` 和 `validate_workflow` 能识别所需节点和模型；
 - 输出仍然唯一且是视频；
 - 单次提交、未知状态和媒体校验测试仍通过。
 

@@ -42,9 +42,16 @@ if (-not $StartupOnly) {
         }
     } catch { $nodeOkay = $false }
     Report-Check $nodeOkay 'Node.js for page builds' 'Use a supported Node.js LTS version (20.19+ or 22.12+).'
-    foreach ($commandName in @('npm', 'ffmpeg', 'ffprobe', 'comfy')) {
+    if ($pythonOkay) {
+        $comfyMcpOkay = $false
+        try {
+            & $checkPython -B -c "from lfo.comfy.transport import load_runtime_config; load_runtime_config()" 2>$null
+            $comfyMcpOkay = $LASTEXITCODE -eq 0
+        } catch { $comfyMcpOkay = $false }
+        Report-Check $comfyMcpOkay 'Canvas Comfy MCP command and internal CLI discovery' 'Configure the project-local .lfo/comfy-mcp.json; see guides/local-windows.md.'
+    }
+    foreach ($commandName in @('npm', 'ffmpeg', 'ffprobe')) {
         $candidate = $commandName
-        if ($commandName -eq 'comfy' -and $env:LFO_COMFY_CLI) { $candidate = $env:LFO_COMFY_CLI }
         if ($commandName -eq 'ffprobe' -and $env:LFO_FFPROBE) { $candidate = $env:LFO_FFPROBE }
         if ($commandName -eq 'ffmpeg' -and $env:LFO_FFMPEG) { $candidate = $env:LFO_FFMPEG }
         Report-Check ([bool](Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue)) "$commandName executable discovery" 'Prepare the executable in the service environment; see guides/windows-setup.md. Discovery does not verify it runs.'
@@ -53,7 +60,7 @@ if (-not $StartupOnly) {
         Report-Check (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($keyName))) "$keyName presence (optional feature)" 'Configure only when using that API. Authentication and balance are not tested.'
     }
     Write-Host '[MANUAL] Verify host image tools, project Skills/MCP, audio/video review, and continuation support in the actual host.'
-    Write-Host '[MANUAL] Verify running ComfyUI, custom nodes and models; the adapter preflights the selected workflow before submission.'
+    Write-Host '[MANUAL] Verify Comfy MCP, running ComfyUI, custom nodes and models; the adapter preflights the selected workflow before submission.'
     Write-Host '[MANUAL] mmx requires its external Skill, CLI and authentication. Seedance is not integrated.'
 }
 Write-Host 'Read-only check finished. No downloads, installations, API generations or private-data migration were performed.'

@@ -25,14 +25,16 @@ Panel 指一段独立生成的视频。它的时长、动作、提示词、必�
 所有 Comfy 生成任务（包括 TTS 和技术试听）都必须经过画布确认与服务执行链，不提供绕过画布的 HTTP、CLI 或独立脚本提交入口。尚未接入画布的能力只做只读预检和工作流准备，并明确报告能力缺口；不能用其他媒体类型冒充该能力。只读诊断与服务内部调用不构成额外生产入口。
 
 - **Agent 型能力**：具备真实工具的会话独占领取 `pending_agent`，使用冻结输入提交一次，回填实际媒体。
-- **本地 Comfy 视频**：确认后为 `queued`，由服务内部 worker 原子领取并启动项目 `comfy-video-executor` adapter。adapter 用本地 HTTP 上传素材和预检，再同步调用官方 `comfy-cli` 一次。它不经过 Agent claim，对话不能重复启动脚本。
-- **本地 Qwen 图片**：选择 `comfy-qwen-image` 后同样为 `queued`，由 worker 启动项目 `comfy-image-executor`，共用上传、预检和官方 CLI 提交链。与本地视频共用资源和机器锁，无需宿主图片工具。输入规范见 [Qwen 图片指南](qwen-image.md)。
+- **本地 Comfy 视频**：确认后为 `queued`，由服务内部 worker 原子领取并启动项目 `comfy-video-executor` adapter。adapter 使用画布自己的官方本地 Comfy MCP 会话上传、预检、单次提交、查询原任务和取回产物。它不经过 Agent claim，对话不能重复启动脚本。
+- **本地 Qwen 图片**：选择 `comfy-qwen-image` 后同样为 `queued`，由 worker 启动项目 `comfy-image-executor`，共用 MCP 执行链。与本地视频共用资源和机器锁，无需宿主图片工具。输入规范见 [Qwen 图片指南](qwen-image.md)。
 - **本地 Qwen TTS**：`audio` 节点选择 `comfy-qwen-tts`，确认后由 worker 启动 `comfy-tts-executor`，共用 Comfy 提交链、资源与机器锁。原始音频保留，节点回填按所选语速处理后的实际音频；见 [Canvas TTS](canvas-tts.md)。
 - **失败或未知**：停止受影响单元及其依赖，核实原请求；不自动重提、换提供方或把失败候选登记为正式产物。其他独立工作继续。
 
-本地 ComfyUI 离线时，共享连接层使用官方 comfy-cli 启动已配置安装并等待就绪，无需用户另外启动 Desktop。启动使用同一服务地址与既有模型环境，记录启动日志；已有服务直接复用，启动超时不重复创建实例。此授权不包含安装、更新、替换模型或重复提交生成。
+本地 ComfyUI 离线时，共享 MCP 连接层调用 `launch_comfyui` 启动已配置安装并等待就绪，无需用户另外启动 Desktop。启动使用同一回环地址与既有模型环境；已有服务直接复用，启动超时保留启动标记，不重复创建实例。此授权不包含安装、更新、替换模型或重复提交生成。
 
-Comfy 的 `VideoSubmissionGuard` 以机器级互斥覆盖提交和整个等待周期。进程丢失后，持久回执继续阻塞未知任务，直到根据原任务证据核实结束。回执以 Canvas `request_id` 标识，位于应用数据目录 `zero-to-story/video`，可由 `LFO_VIDEO_STATE` 指定。诊断用 `python -m lfo.comfy.admission`；`--reconcile REQUEST_ID` 只读原 Comfy `/history`，不重提，也不替代画布状态核实。
+Comfy 的 `VideoSubmissionGuard` 以机器级互斥覆盖提交和整个等待周期。进程丢失后，持久回执继续阻塞未知任务，直到根据原任务证据核实结束。回执以 Canvas `request_id` 标识，位于应用数据目录 `zero-to-story/video`，可由 `LFO_VIDEO_STATE` 指定。诊断用 `python -m lfo.comfy.admission`；`--reconcile REQUEST_ID` 通过 MCP `job` 只读核实原任务，不重提，也不替代画布状态核实。
+
+如果操作员确认 ComfyUI 重启等事件已使原任务失败或取消、原历史无法再查询，可用 `--operator-reconcile REQUEST_ID --provider-task-id TASK_ID --terminal-status failed|cancelled --reason "..."` 记录核实依据并解除完全匹配的回执。该路径只接受原 Canvas 请求编号和原 Comfy 任务编号，先写入应用数据目录的核实审计记录，再清除回执；它不会改变 Canvas run 状态，也不会提交新任务。`prompt_not_found`、空队列或历史缺失本身都不足以作出失败/取消判断；必须由操作员实际确认原任务终态。
 
 ## 产出后：一次必要验收
 

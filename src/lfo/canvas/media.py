@@ -144,7 +144,17 @@ class CanvasMedia:
             if isinstance(value, dict):
                 if "frozen_path" in value:
                     path = Path(value["frozen_path"]).resolve()
-                    if not path.is_relative_to((self.settings.data_dir / "inputs").resolve()):
+                    input_root = self.settings.data_dir / "inputs"
+                    within_inputs = path.is_relative_to(input_root.resolve())
+                    if not within_inputs:
+                        # Windows app virtualization can resolve a file to its
+                        # physical path while leaving its logical root unchanged.
+                        # freeze() stores files exactly one request folder deep.
+                        try:
+                            within_inputs = path.parent.parent.samefile(input_root)
+                        except OSError:
+                            within_inputs = False
+                    if not within_inputs:
                         raise ValueError("运行输入路径无效")
                     with path.open("rb") as stream:
                         digest = hashlib.file_digest(stream, "sha256").hexdigest()

@@ -11,7 +11,7 @@ description: 由 Canvas 服务执行已确认的本地 Comfy H3 视频快照，�
 
 1. Canvas 页面或对话确认当前节点，服务冻结快照并创建 `queued` 请求。
 2. 服务 worker 原子领取，注入该 run 的 `request_id`，启动 [scripts/execute.py](scripts/execute.py)。
-3. adapter 校验输入、通过本地 HTTP 上传必要素材和读取 `/object_info`，用官方 `comfy run --wait --json` 同步提交一次。
+3. adapter 校验输入，通过画布持有的官方本地 Comfy MCP 会话上传素材、预检节点和工作流，调用一次 `run_workflow(wait=False)`，以 `job` 查询原任务并用 `fetch_outputs` 取回产物。
 4. 收回唯一视频，做必要技术校验，复制到服务指定的 run 输出目录并回填原运行。内容验收由调用方按共享规则处理。
 
 ## 输入与能力

@@ -51,6 +51,20 @@ def _snapshot(prompt: str = "a scene") -> dict:
     }
 
 
+def test_delete_canvas_with_run_events(tmp_path) -> None:
+    with CanvasStore(tmp_path / "canvas.sqlite3") as store:
+        canvas = store.create_canvas("test", _graph())
+        other = store.create_canvas("keep", _graph())
+        run = store.create_run(canvas["id"], "video-1", 1, "delete-test", _snapshot())
+        with pytest.raises(RunStateError):
+            store.delete_canvas(canvas["id"])
+        store.cancel_pending(run["id"])
+        assert store.delete_canvas(canvas["id"])["deleted"] is True
+        assert store.list_runs(canvas["id"]) == []
+        assert [item["id"] for item in store.list_canvases()] == [other["id"]]
+        assert store._conn().execute("SELECT count(*) FROM run_events").fetchone()[0] == 0
+
+
 def test_canvas_version_is_compare_and_swap(tmp_path) -> None:
     with CanvasStore(tmp_path / "canvas.sqlite3") as store:
         canvas = store.create_canvas("demo", _graph())

@@ -175,7 +175,7 @@ def prepare_workflow(snapshot, *, uploader, inspect_fn=None):
     prefix = hashlib.sha256(normalized["request_id"].encode()).hexdigest()[:24]
     workflow["8"]["inputs"]["filename_prefix"] = f"canvas/qwen/{prefix}/image"
     if not normalized["paths"]:
-        # Explicit empty V3 autogrow group also satisfies comfy-cli 1.13 validation.
+        # Explicit empty V3 autogrow group also satisfies current workflow validation.
         workflow["4"]["inputs"]["images"] = {}
     if normalized["paths"]:
         workflow["9"] = {
@@ -206,12 +206,9 @@ def materialize_image(result, output_dir, config, normalized):
     target = output_dir / "image.png"
     with tempfile.TemporaryDirectory(prefix=".image-", dir=output_dir) as temporary:
         candidate = Path(temporary) / "candidate.png"
-        if ref.file_type == "absolute":
-            source = Path(ref.filename).resolve()
-            if source != candidate.resolve():
-                shutil.copyfile(source, candidate)
-        else:
-            transport._download_view(config.base_url, ref, candidate, config.timeout_seconds)
+        source = Path(ref.filename).resolve()
+        if source != candidate.resolve():
+            shutil.copyfile(source, candidate)
         metadata = inspect_image(candidate)
         if metadata.get("codec") != "png":
             raise ValueError("实际输出不是 PNG 图片")
@@ -240,32 +237,33 @@ def execute_snapshot(snapshot, output_dir, config, *, emit=None):
     stage, result = "input_validation", None
     try:
         emit({"stage": stage})
-        # Validate and preflight all nodes/models before uploading any input.
+        from lfo.comfy.admission import VideoSubmissionGuard
+
         workflow, normalized = prepare_workflow(snapshot, uploader=lambda p: p.name)
-        transport.preflight_workflow(workflow, config)
         output_dir.mkdir(parents=True, exist_ok=True)
-        stage = "upload"
-        emit({"stage": stage})
-        upload = transport._http_uploader(config.base_url, config.timeout_seconds)
-        for index, path in enumerate(normalized["paths"], 1):
-            workflow[str(10 + index)]["inputs"]["image"] = upload(path)
-        workflow_path = output_dir / "workflow.json"
-        workflow_path.write_text(
-            json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        conditions = {key: value for key, value in normalized.items() if key != "paths"}
-        conditions["references"] = [
-            {"index": i, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
-            for i, p in enumerate(normalized["paths"], 1)
-        ]
-        (output_dir / "conditions.json").write_text(
-            json.dumps(conditions, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        stage = "submit"
-        emit({"stage": stage})
-        result = transport.run_comfy_cli(
-            workflow_path, config, emit=emit, request_id=normalized["request_id"]
-        )
+        with VideoSubmissionGuard(config.base_url, request_id=normalized["request_id"]) as guard, transport.ready_session(config) as session:
+                stage = "upload"
+                emit({"stage": stage})
+                for index, path in enumerate(normalized["paths"], 1):
+                    workflow[str(10 + index)]["inputs"]["image"] = transport.upload_input(path, session)
+                workflow_path = output_dir / "workflow.json"
+                workflow_path.write_text(
+                    json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                transport.preflight_workflow(workflow, workflow_path, session)
+                conditions = {key: value for key, value in normalized.items() if key != "paths"}
+                conditions["references"] = [
+                    {"index": i, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                    for i, p in enumerate(normalized["paths"], 1)
+                ]
+                (output_dir / "conditions.json").write_text(
+                    json.dumps(conditions, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                stage = "submit"
+                emit({"stage": stage})
+                result = transport.run_workflow(
+                    workflow_path, output_dir, config, session, guard=guard, emit=emit
+                )
         stage = "collection"
         emit({"stage": stage, "remote_finished": True, "provider_task_id": result.provider_task_id})
         output = materialize_image(result, output_dir, config, normalized)

@@ -130,11 +130,11 @@ def test_capability_uses_shared_gpu_resource_and_ten_inputs():
 
 
 def test_transparent_output_requires_real_transparency(tmp_path, monkeypatch):
-    from lfo.comfy.transport import CliResult, OutputRef, RuntimeConfig
+    from lfo.comfy.transport import ComfyResult, OutputRef, RuntimeConfig
 
     image = tmp_path / "remote.png"
     image.write_bytes(b"image")
-    result = CliResult("prompt-one", (OutputRef(str(image), file_type="absolute"),), ())
+    result = ComfyResult("prompt-one", (OutputRef(str(image), file_type="absolute"),))
     monkeypatch.setattr(qwen, "inspect_image", lambda p: {**inspect(p), "has_alpha": True})
     with pytest.raises(ValueError, match="透明"):
         qwen.materialize_image(
@@ -146,11 +146,11 @@ def test_transparent_output_requires_real_transparency(tmp_path, monkeypatch):
 
 
 def test_output_dimensions_must_match_frozen_request(tmp_path, monkeypatch):
-    from lfo.comfy.transport import CliResult, OutputRef, RuntimeConfig
+    from lfo.comfy.transport import ComfyResult, OutputRef, RuntimeConfig
 
     image = tmp_path / "remote.png"
     image.write_bytes(b"image")
-    result = CliResult("prompt-one", (OutputRef(str(image), file_type="absolute"),), ())
+    result = ComfyResult("prompt-one", (OutputRef(str(image), file_type="absolute"),))
     monkeypatch.setattr(qwen, "inspect_image", inspect)
     with pytest.raises(ValueError, match="尺寸"):
         qwen.materialize_image(
@@ -179,25 +179,26 @@ def test_execute_uses_one_shared_submission_and_keeps_conditions(tmp_path, monke
     events, calls = [], []
     monkeypatch.setattr(qwen, "inspect_image", inspect)
     monkeypatch.setattr(transport, "preflight_workflow", lambda *a: calls.append("preflight"))
-    monkeypatch.setattr(
-        transport, "_http_uploader", lambda *a: lambda p: calls.append(p.name) or p.name
-    )
+    from contextlib import nullcontext
 
-    def submit(path, config, *, emit, request_id):
+    monkeypatch.setattr(transport, "ready_session", lambda *a: nullcontext(object()))
+    monkeypatch.setattr(transport, "upload_input", lambda p, _s: calls.append(p.name) or p.name)
+
+    def submit(path, _output_dir, _config, _session, *, guard, emit):
         calls.append("submit")
         graph = json.loads(path.read_text(encoding="utf-8"))
         assert graph["4"]["inputs"]["prompt"] == value["prompt"]
-        assert request_id == value["request_id"]
-        return transport.CliResult("pid", (), ())
+        assert guard.request_id == value["request_id"]
+        return transport.ComfyResult("pid", ())
 
-    monkeypatch.setattr(transport, "run_comfy_cli", submit)
+    monkeypatch.setattr(transport, "run_workflow", submit)
     monkeypatch.setattr(
         qwen, "materialize_image", lambda *a: {"path": "image.png", "kind": "image"}
     )
     result = qwen.execute_snapshot(
         value, tmp_path / "run", transport.RuntimeConfig(), emit=events.append
     )
-    assert calls == ["preflight", "ref-1.png", "ref-2.png", "ref-3.png", "submit"]
+    assert calls == ["ref-1.png", "ref-2.png", "ref-3.png", "preflight", "submit"]
     assert result["status"] == "succeeded"
     conditions = json.loads((tmp_path / "run/conditions.json").read_text(encoding="utf-8"))
     assert [r["index"] for r in conditions["references"]] == [1, 2, 3]
@@ -217,7 +218,10 @@ def test_unknown_submission_is_not_retried(tmp_path, monkeypatch):
             "lost connection", provider_task_id="original", status="unknown"
         )
 
-    monkeypatch.setattr(transport, "run_comfy_cli", submit)
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(transport, "ready_session", lambda *a: nullcontext(object()))
+    monkeypatch.setattr(transport, "run_workflow", submit)
     with pytest.raises(transport.ExecutorError) as err:
         qwen.execute_snapshot(
             snapshot(tmp_path), tmp_path / "run", transport.RuntimeConfig(), emit=lambda e: None
@@ -236,8 +240,11 @@ def test_missing_models_stop_before_upload_or_submission(tmp_path, monkeypatch):
         raise transport.ExecutorError("missing model")
 
     monkeypatch.setattr(transport, "preflight_workflow", missing)
-    monkeypatch.setattr(transport, "_http_uploader", lambda *a: pytest.fail("must not upload"))
-    monkeypatch.setattr(transport, "run_comfy_cli", lambda *a, **k: pytest.fail("must not submit"))
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(transport, "ready_session", lambda *a: nullcontext(object()))
+    monkeypatch.setattr(transport, "upload_input", lambda p, _s: p.name)
+    monkeypatch.setattr(transport, "run_workflow", lambda *a, **k: pytest.fail("must not submit"))
     with pytest.raises(transport.ExecutorError, match="missing model"):
         qwen.execute_snapshot(
             snapshot(tmp_path, "reference", 1),
@@ -288,10 +295,10 @@ def test_image_inspection_reports_actual_alpha(tmp_path, monkeypatch):
 
 
 def test_nearly_opaque_alpha_is_not_a_removed_background(tmp_path, monkeypatch):
-    from lfo.comfy.transport import CliResult, OutputRef, RuntimeConfig
+    from lfo.comfy.transport import ComfyResult, OutputRef, RuntimeConfig
     image = tmp_path / "remote.png"
     image.write_bytes(b"image")
-    result = CliResult("pid", (OutputRef(str(image), file_type="absolute"),), ())
+    result = ComfyResult("pid", (OutputRef(str(image), file_type="absolute"),))
     monkeypatch.setattr(qwen, "inspect_image", lambda p: {**inspect(p), "codec": "png", "has_alpha": True, "has_transparency": True, "has_visible_pixels": True, "alpha_min": 254, "alpha_max": 255})
     with pytest.raises(ValueError, match="透明"):
         qwen.materialize_image(result, tmp_path / "out", RuntimeConfig(), {"width": 1000, "height": 701, "transparent": True})

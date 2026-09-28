@@ -6,3 +6,12 @@ command = ".venv/Scripts/python.exe"
 args = ["-m", "lfo.canvas", "mcp"]
 startup_timeout_sec = 15
 tool_timeout_sec = 180
+
+# Official local Comfy MCP; dependencies live in an isolated project environment.
+[mcp_servers.comfy-mcp]
+command = "E:/ideaProjects/zero-to-story/.venv/comfy-mcp/Scripts/comfy-mcp.exe"
+startup_timeout_sec = 30
+tool_timeout_sec = 180
+
+[mcp_servers.comfy-mcp.env]
+COMFY_BIN = "C:/Users/Administrator/AppData/Local/Programs/Python/Python312/Scripts/comfy.exe"

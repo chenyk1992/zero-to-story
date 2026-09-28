@@ -1,154 +1,110 @@
-from urllib.error import URLError
+from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import pytest
 
 from lfo.comfy import transport
 
 
-def test_online_preflight_does_not_launch(monkeypatch):
-    monkeypatch.setattr(transport, "_fetch_object_info", lambda *a: {})
-    launch = []
-    monkeypatch.setattr(transport, "ensure_local_service", lambda *a: launch.append(1))
-    transport.preflight_workflow({}, transport.RuntimeConfig())
-    assert not launch
+class FakeSession:
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+    def call(self, name, args=None, **_kwargs):
+        self.calls.append((name, args))
+        return self.replies.pop(0)
 
 
-def test_offline_preflight_launches_once_then_validates(monkeypatch):
-    calls = []
-
-    def fetch(*args):
-        calls.append("probe")
-        if len(calls) == 1:
-            raise transport.ExecutorError("offline") from URLError(ConnectionRefusedError())
-        return {}
-
-    monkeypatch.setattr(transport, "_fetch_object_info", fetch)
-    monkeypatch.setattr(transport, "ensure_local_service", lambda *a: calls.append("launch"))
-    transport.preflight_workflow({}, transport.RuntimeConfig())
-    assert calls == ["probe", "launch", "probe"]
+def info(*, running: bool, workspace: Path | None = None):
+    return {
+        "server": {"running": running, "url": "http://127.0.0.1:8188" if running else None},
+        "workspace": {"path": str(workspace or Path("C:/ComfyUI"))},
+        "config": {"default_launch_extras": "--use-sage-attention"},
+    }
 
 
-def test_bad_response_does_not_launch(monkeypatch):
-    def fetch(*args):
-        raise transport.ExecutorError("invalid json") from ValueError()
-
-    monkeypatch.setattr(transport, "_fetch_object_info", fetch)
-    monkeypatch.setattr(
-        transport, "ensure_local_service", lambda *a: pytest.fail("must not launch")
-    )
-    with pytest.raises(transport.ExecutorError):
-        transport.preflight_workflow({}, transport.RuntimeConfig())
+def test_online_session_reuses_existing_comfy(monkeypatch):
+    first = FakeSession([info(running=True)])
+    monkeypatch.setattr(transport, "_session", lambda *a, **k: first)
+    with transport.ready_session(transport.RuntimeConfig()) as session:
+        assert session is first
+    assert first.calls == [("server_info", None)]
 
 
-def test_remote_service_cannot_launch_local():
-    with pytest.raises(transport.ExecutorError, match="local"):
-        transport.ensure_local_service(transport.RuntimeConfig(base_url="http://example.org:8188"))
+def test_offline_session_uses_existing_model_venv_and_launches_once(monkeypatch, tmp_path):
+    from lfo.comfy import admission
+
+    workspace = tmp_path / "desktop" / "ComfyUI"
+    venv = workspace.parent / "standalone-env" / "Scripts"
+    venv.mkdir(parents=True)
+    (venv / "python.exe").write_bytes(b"python")
+    first = FakeSession([info(running=False, workspace=workspace)])
+    second = FakeSession([
+        info(running=False, workspace=workspace), {"ok": True},
+        info(running=True, workspace=workspace),
+    ])
+    sessions = iter([first, second])
+    selected = []
+
+    def session(_config, **kwargs):
+        selected.append(kwargs.get("model_venv"))
+        return next(sessions)
+
+    monkeypatch.setattr(transport, "_session", session)
+    monkeypatch.setattr(admission, "state_directory", lambda: tmp_path / "state")
+    with transport.ready_session(transport.RuntimeConfig()) as active:
+        assert active is second
+    assert selected == [None, venv.parent]
+    assert second.calls[1][0] == "launch_comfyui"
+    assert "--use-sage-attention" in second.calls[1][1]["extra_args"]
+    assert not (tmp_path / "state" / "startup.json").exists()
 
 
-@pytest.fixture
-def startup(monkeypatch, tmp_path):
-    import json
-    from types import SimpleNamespace
+def test_failed_launch_keeps_marker_and_blocks_second_attempt(monkeypatch, tmp_path):
+    from lfo.comfy import admission
+    from lfo.comfy.mcp_client import McpCallError
 
-    folder = tmp_path / "state"
-    monkeypatch.setenv("LFO_VIDEO_STATE", str(folder))
-    monkeypatch.delenv("LFO_COMFY_VENV", raising=False)
-    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "wrong-canvas-env"))
-    workspace = tmp_path / "install" / "ComfyUI"
-    workspace.mkdir(parents=True)
-    (workspace / "main.py").touch()
-    venv = workspace.parent / "standalone-env"
-    python = venv / ("Scripts/python.exe" if transport.os.name == "nt" else "bin/python")
-    python.parent.mkdir(parents=True)
-    python.touch()
-    monkeypatch.setattr(
-        transport.subprocess,
-        "run",
-        lambda *a, **k: SimpleNamespace(
-            returncode=0,
-            stdout=json.dumps(
-                {
-                    "data": {
-                        "workspace": {"path": str(workspace)},
-                        "config": {"default_launch_extras": "--use-sage-attention"},
-                    }
-                }
-            ),
-        ),
-    )
-    monkeypatch.setattr(transport, "_port_open", lambda *a: False)
-    launches = []
-    process = SimpleNamespace(pid=123, poll=lambda: None)
-    monkeypatch.setattr(
-        transport.subprocess,
-        "Popen",
-        lambda command, **kwargs: launches.append((command, kwargs)) or process,
-    )
-    return folder, workspace, venv, launches, process
+    workspace = tmp_path / "ComfyUI"
+    (workspace / ".venv" / "Scripts").mkdir(parents=True)
+    (workspace / ".venv" / "Scripts" / "python.exe").write_bytes(b"python")
+    first = FakeSession([info(running=False, workspace=workspace)])
+    second = FakeSession([info(running=False, workspace=workspace)])
+
+    def fail_launch(name, args=None, **_kwargs):
+        if name == "launch_comfyui":
+            raise McpCallError("timeout")
+        return second.replies.pop(0)
+
+    second.call = fail_launch
+    sessions = iter([first, second, FakeSession([info(running=False, workspace=workspace)])])
+    monkeypatch.setattr(transport, "_session", lambda *a, **k: next(sessions))
+    monkeypatch.setattr(admission, "state_directory", lambda: tmp_path / "state")
+    with pytest.raises(transport.ExecutorError, match="timeout"):
+        with transport.ready_session(transport.RuntimeConfig()):
+            pass
+    assert json.loads((tmp_path / "state" / "startup.json").read_text())["base_url"] == "http://127.0.0.1:8188"
+    with pytest.raises(transport.ExecutorError, match="重复启动"):
+        with transport.ready_session(transport.RuntimeConfig()):
+            pass
 
 
-def offline(*args):
-    raise transport.ExecutorError("offline") from URLError(ConnectionRefusedError())
+def test_non_loopback_target_is_rejected():
+    with pytest.raises(transport.ExecutorError, match="回环"):
+        transport.load_runtime_config(base_url="http://example.org:8188")
+    with pytest.raises(transport.ExecutorError, match="端口"):
+        transport.load_runtime_config(base_url="http://127.0.0.1:0")
 
 
-def test_startup_uses_existing_model_runtime_and_clears_receipt(monkeypatch, startup):
-    folder, workspace, venv, launches, process = startup
-    calls = []
-
-    def probe(*a):
-        calls.append(1)
-        if len(calls) == 1:
-            offline()
-        return {}
-
-    monkeypatch.setattr(transport, "_fetch_object_info", probe)
-    transport.ensure_local_service(transport.RuntimeConfig())
-    assert len(launches) == 1
-    command, kwargs = launches[0]
-    assert command[1:5] == ["--workspace", str(workspace), "launch", "--"]
-    assert "--use-sage-attention" in command
-    assert command[command.index("--port") + 1] == "8188"
-    assert kwargs["env"]["VIRTUAL_ENV"] == str(venv)
-    assert not (folder / "startup.json").exists()
-
-
-def test_start_timeout_keeps_receipt_and_blocks_duplicate(monkeypatch, startup):
-    folder, _, _, launches, _ = startup
-    monkeypatch.setattr(transport, "_fetch_object_info", offline)
-    with pytest.raises(transport.ExecutorError, match="timed out"):
-        transport.ensure_local_service(transport.RuntimeConfig(timeout_seconds=0))
-    assert (folder / "startup.json").exists()
-    with pytest.raises(transport.ExecutorError, match="Previous Comfy startup"):
-        transport.ensure_local_service(transport.RuntimeConfig())
-    assert len(launches) == 1
-
-
-def test_known_startup_exit_is_reported(monkeypatch, startup):
-    folder, _, _, launches, process = startup
-    process.poll = lambda: 1
-    monkeypatch.setattr(transport, "_fetch_object_info", offline)
-    with pytest.raises(transport.ExecutorError, match="exited"):
-        transport.ensure_local_service(transport.RuntimeConfig())
-    assert len(launches) == 1
-    assert not (folder / "startup.json").exists()
-
-
-def test_unknown_generation_receipt_blocks_startup(monkeypatch, startup):
-
-    folder, _, _, launches, _ = startup
-    folder.mkdir()
-    (folder / "submission.json").write_text("{}")
-    monkeypatch.setattr(transport, "_fetch_object_info", offline)
-    with pytest.raises(transport.ExecutorError, match="原 Comfy") as caught:
-        transport.ensure_local_service(transport.RuntimeConfig())
-    assert caught.value.status == "failed"  # This new request has never been submitted.
-    assert not launches
-
-
-def test_existing_listener_is_not_relaunched(monkeypatch, startup):
-    _, _, _, launches, _ = startup
-    monkeypatch.setattr(transport, "_fetch_object_info", offline)
-    monkeypatch.setattr(transport, "_port_open", lambda *a: True)
-    with pytest.raises(transport.ExecutorError, match="already listening"):
-        transport.ensure_local_service(transport.RuntimeConfig())
-    assert not launches
+def test_conflicting_local_targets_are_rejected(monkeypatch):
+    monkeypatch.setenv("LFO_COMFY_MCP_URL", "http://127.0.0.1:8189")
+    with pytest.raises(transport.ExecutorError, match="冲突"):
+        transport.load_runtime_config(base_url="http://127.0.0.1:8188")

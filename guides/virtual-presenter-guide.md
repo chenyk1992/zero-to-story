@@ -20,7 +20,7 @@
 创作内容确定 → 保存画布草稿 → 页面确认当前版本
 → 服务冻结 snapshot 并创建 queued run
 → 服务内部脚本 worker 启动 Comfy adapter
-→ HTTP 上传与 /object_info 预检 → 官方 comfy-cli 单次同步提交
+→ Comfy MCP 上传与预检 → 单次提交并查询原任务 → MCP 取回产物
 → 实际媒体回填 → 内容验收
 ```
 

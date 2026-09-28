@@ -6,7 +6,7 @@ Codex imagegen 由具备真实图片工具的宿主领取 Agent 请求。Qwen �
 
 ## 环境
 
-需要已运行的 ComfyUI、支持 `run --wait --json` 的官方 comfy-cli、FFmpeg/FFprobe。服务进程可用 `LFO_COMFY_CLI`、`LFO_FFMPEG`、`LFO_FFPROBE` 指定已有可执行文件，连接配置见[本机环境](local-windows.md)。不自动安装模型或启动备用实例。
+需要官方本地 Comfy MCP、其内部使用的官方 comfy-cli、已有 ComfyUI 安装、FFmpeg/FFprobe。画布通过 MCP 完成启动、上传、预检、提交、查询和取回；项目连接配置见[本机环境](local-windows.md)。不自动安装模型或启动备用实例。
 
 模型配置为 `qwen_image_2.1_int8_convrot.safetensors`、`qwen3vl_8b_int8_convrot.safetensors`、`qwen_image_2.1_vae_bf16.safetensors`。每次提交前预检原生 Qwen 2.1 节点及模型，缺失时停止，不换权重。参考来源：[Comfy-Org 模型](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)、[ComfyUI 工作流模板](https://github.com/Comfy-Org/workflow_templates)。本地模板和实际节点实现是本适配的验证依据。
 

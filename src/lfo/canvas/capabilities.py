@@ -52,8 +52,18 @@ class CapabilityCatalog:
                             installed=False, available=False, reason="执行 Skill 缺少有效入口"
                         )
                 for executable in item.get("requires_executables", []):
+                    if executable == "comfy-mcp":
+                        try:
+                            from lfo.comfy.transport import load_runtime_config
+
+                            load_runtime_config()
+                        except (OSError, ValueError, RuntimeError) as exc:
+                            item.update(
+                                installed=False, available=False,
+                                reason=f"本机 Comfy MCP 未就绪：{exc}",
+                            )
+                        continue
                     override_name = {
-                        "comfy": "LFO_COMFY_CLI",
                         "ffprobe": "LFO_FFPROBE",
                         "ffmpeg": "LFO_FFMPEG",
                     }.get(executable)

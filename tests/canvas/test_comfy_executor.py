@@ -61,6 +61,20 @@ def _nodes(workflow: dict[str, Any], class_type: str) -> list[dict[str, Any]]:
     return [node for node in workflow.values() if node.get("class_type") == class_type]
 
 
+def test_guard_rejection_is_reported_as_pre_submission_failure(tmp_path, monkeypatch):
+    from lfo.comfy.admission import VideoSubmissionGuard
+    from lfo.comfy.exceptions import LfoComfyError
+
+    def reject(_self):
+        raise LfoComfyError("another local generation holds the lock")
+
+    monkeypatch.setattr(VideoSubmissionGuard, "__enter__", reject)
+    with pytest.raises(executor.ExecutorError, match="holds the lock") as error:
+        executor.execute_snapshot(_snapshot(tmp_path), tmp_path, transport.RuntimeConfig())
+    assert error.value.status == "failed"
+    assert error.value.stage == "input_validation"
+    assert error.value.provider_task_id is None
+
 def test_capability_keeps_example_values_out_of_defaults() -> None:
     capability = json.loads((SKILL_ROOT / "capability.json").read_text(encoding="utf-8"))
     fields = {field["key"]: field for field in capability["fields"]}
@@ -70,7 +84,6 @@ def test_capability_keeps_example_values_out_of_defaults() -> None:
     assert "default" not in fields["megapixels"]
     assert "default" not in fields["steps"]
     assert {mode["id"] for mode in capability["modes"]} == {"t2v", "i2v", "fl2v", "r2v"}
-
 
 def test_prepare_t2v_applies_confirmed_values_without_uploading(tmp_path: pathlib.Path) -> None:
     calls: list[pathlib.Path] = []
@@ -96,7 +109,6 @@ def test_prepare_t2v_applies_confirmed_values_without_uploading(tmp_path: pathli
     assert normalized["mode"] == "t2v"
     assert calls == []
 
-
 @pytest.mark.parametrize("mode", ["i2v", "fl2v"])
 def test_prepare_frame_modes_bind_only_the_declared_frames(
     tmp_path: pathlib.Path, mode: str
@@ -115,7 +127,6 @@ def test_prepare_frame_modes_bind_only_the_declared_frames(
     else:
         assert generator["last_frame"][0] in workflow
         assert len(calls) == 2
-
 
 def test_prepare_r2v_preserves_typed_reference_slots(tmp_path: pathlib.Path) -> None:
     snapshot = _snapshot(tmp_path, "r2v")
@@ -144,7 +155,6 @@ def test_prepare_r2v_preserves_typed_reference_slots(tmp_path: pathlib.Path) -> 
         if isinstance(node, dict)
     )
 
-
 @pytest.mark.parametrize("profile,steps", [("native", 12), ("vdn_turbo", 8)])
 def test_r2v_frame_zero_guide_keeps_reference_and_audio_routes(tmp_path, profile, steps):
     snapshot = _snapshot(tmp_path, "r2v")
@@ -166,7 +176,6 @@ def test_r2v_frame_zero_guide_keeps_reference_and_audio_routes(tmp_path, profile
     assert workflow[generator["ref_audios.ref_audio_0"][0]]["inputs"]["audio"] == "uploaded/voice.wav"
     assert _nodes(workflow, "BasicGuider")[0]["inputs"]["conditioning"] == [guide_id, 0]
     assert _nodes(workflow, "SamplerCustomAdvanced")[0]["inputs"]["latent_image"] == [generator_id, 1]
-
 
 def test_r2v_frame_zero_video_guide_uses_first_video_with_its_audio(tmp_path: pathlib.Path) -> None:
     snapshot = _snapshot(tmp_path, "r2v")
@@ -198,7 +207,6 @@ def test_r2v_frame_zero_video_guide_uses_first_video_with_its_audio(tmp_path: pa
     assert "ref_video_audios.ref_video_audio_0" not in generator
     assert _nodes(workflow, "BasicGuider")[0]["inputs"]["conditioning"] == [guide_id, 0]
 
-
 def test_r2v_without_first_frame_has_no_guide_and_rejects_last_frame(tmp_path):
     snapshot = _snapshot(tmp_path, "r2v")
     workflow, _ = executor.prepare_workflow(snapshot, uploader=lambda path: path.name)
@@ -206,108 +214,6 @@ def test_r2v_without_first_frame_has_no_guide_and_rejects_last_frame(tmp_path):
     snapshot["inputs"]["last_frame"] = _asset(tmp_path, "last.png", "image")
     with pytest.raises(executor.ExecutorError, match="last_frame"):
         executor.normalize_snapshot(snapshot)
-
-
-def test_http_uploader_uses_unique_root_names_without_overwrite(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    first = tmp_path / "one" / "frame.png"
-    second = tmp_path / "two" / "frame.png"
-    first.parent.mkdir()
-    second.parent.mkdir()
-    first.write_bytes(b"first")
-    second.write_bytes(b"second")
-    requests: list[Any] = []
-    uploaded_names: set[str] = set()
-
-    class Response:
-        def __init__(self, payload: dict[str, str]) -> None:
-            self.payload = payload
-
-        def __enter__(self) -> Response:
-            return self
-
-        def __exit__(self, *args: Any) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return json.dumps(self.payload).encode("utf-8")
-
-    def fake_urlopen(request: Any, *, timeout: float) -> Response:
-        del timeout
-        requests.append(request)
-        match = re.search(rb'filename="([^"]+)"', request.data)
-        assert match is not None
-        name = match.group(1).decode("utf-8")
-        assert name not in uploaded_names
-        uploaded_names.add(name)
-        return Response({"name": name, "subfolder": "", "type": "input"})
-
-    monkeypatch.setattr(transport, "urlopen", fake_urlopen)
-    upload = executor._http_uploader("http://127.0.0.1:8188", 5.0)
-
-    first_token = upload(first)
-    second_token = upload(second)
-
-    assert first_token != second_token
-    assert first_token.endswith("-frame.png")
-    assert second_token.endswith("-frame.png")
-    assert "/" not in first_token
-    assert "/" not in second_token
-    assert len(requests) == 2
-    for request in requests:
-        body = request.data
-        assert b'name="type"' in body and b"\r\n\r\ninput\r\n" in body
-        assert b'name="overwrite"' in body and b"\r\n\r\nfalse\r\n" in body
-        assert b"canvas-input" not in body
-
-
-def test_http_uploader_uses_response_name_subfolder_and_type(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    source = tmp_path / "frame.png"
-    source.write_bytes(b"frame")
-
-    class Response:
-        def __enter__(self) -> Response:
-            return self
-
-        def __exit__(self, *args: Any) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return json.dumps(
-                {"name": "server-renamed.png", "subfolder": "server-input", "type": "input"}
-            ).encode("utf-8")
-
-    monkeypatch.setattr(transport, "urlopen", lambda request, timeout: Response())
-    upload = executor._http_uploader("http://127.0.0.1:8188", 5.0)
-
-    assert upload(source) == "server-input/server-renamed.png"
-
-
-def test_http_uploader_rejects_non_input_response_type(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    source = tmp_path / "frame.png"
-    source.write_bytes(b"frame")
-
-    class Response:
-        def __enter__(self) -> Response:
-            return self
-
-        def __exit__(self, *args: Any) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return b'{"name":"frame.png","subfolder":"","type":"output"}'
-
-    monkeypatch.setattr(transport, "urlopen", lambda request, timeout: Response())
-    upload = executor._http_uploader("http://127.0.0.1:8188", 5.0)
-
-    with pytest.raises(executor.ExecutorError, match="unexpected file type"):
-        upload(source)
-
 
 def test_normalize_rejects_missing_required_values_before_upload(tmp_path: pathlib.Path) -> None:
     snapshot = _snapshot(tmp_path)
@@ -318,25 +224,11 @@ def test_normalize_rejects_missing_required_values_before_upload(tmp_path: pathl
             uploader=lambda _: pytest.fail("upload must not run"),
         )
 
-
 def test_normalize_rejects_conflicting_provider_option_copies(tmp_path: pathlib.Path) -> None:
     snapshot = _snapshot(tmp_path)
     snapshot["parameters"]["options"] = {"comfy": {"steps": 8}}
     with pytest.raises(executor.ExecutorError, match="Conflicting Comfy values"):
         executor.normalize_snapshot(snapshot)
-
-
-def test_runtime_config_accepts_legacy_timeout_sec_key(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("LFO_COMFY_TIMEOUT", raising=False)
-    config_path = tmp_path / "comfy.json"
-    config_path.write_text(json.dumps({"timeout_sec": 321}), encoding="utf-8")
-
-    config = executor.load_runtime_config(config_path=config_path)
-
-    assert config.timeout_seconds == 321
-
 
 def test_canvas_request_id_drives_a_safe_workflow_prefix(tmp_path: pathlib.Path) -> None:
     snapshot = _snapshot(tmp_path)
@@ -350,7 +242,6 @@ def test_canvas_request_id_drives_a_safe_workflow_prefix(tmp_path: pathlib.Path)
     prefix = _nodes(workflow, "SaveVideo")[0]["inputs"]["filename_prefix"]
     assert prefix == "canvas/video_node___1/___unsafe_request/video"
     assert normalized["request_id"] == "../unsafe/request"
-
 
 def test_canvas_request_id_prefix_is_bounded_without_changing_the_id(
     tmp_path: pathlib.Path,
@@ -368,199 +259,47 @@ def test_canvas_request_id_prefix_is_bounded_without_changing_the_id(
     assert prefix.split("/") == ["canvas", "video_node___1", "___unsafe_" + "r" * 70, "video"]
     assert normalized["request_id"] == request_id
 
-
-def test_collect_outputs_prefers_nonempty_envelope_over_duplicate_executed_output(
-    tmp_path: pathlib.Path,
-) -> None:
-    absolute_output = str(tmp_path / "clip.mp4")
-    events = [
-        {
-            "type": "executed",
-            "prompt_id": "prompt-absolute",
-            "outputs": [
-                {"filename": "clip.mp4", "subfolder": "canvas", "type": "output"}
-            ],
-        },
-        {
-            "type": "envelope",
-            "ok": True,
-            "data": {
-                "status": "completed",
-                "prompt_id": "prompt-absolute",
-                "outputs": [absolute_output],
-            },
-        },
-    ]
-
-    outputs = executor._collect_outputs(events, "prompt-absolute")
-
-    assert outputs == (executor.OutputRef(absolute_output, file_type="absolute"),)
-
-
-def test_collect_outputs_falls_back_to_executed_when_envelope_outputs_empty() -> None:
-    events = [
-        {
-            "type": "executed",
-            "prompt_id": "prompt-fallback",
-            "outputs": [
-                {"filename": "clip.mp4", "subfolder": "canvas", "type": "output"}
-            ],
-        },
-        {
-            "type": "envelope",
-            "ok": True,
-            "data": {"status": "completed", "prompt_id": "prompt-fallback", "outputs": []},
-        },
-    ]
-
-    outputs = executor._collect_outputs(events, "prompt-fallback")
-
-    assert outputs == (executor.OutputRef("clip.mp4", "canvas", "output"),)
-
-
 def test_video_refs_rejects_two_distinct_video_outputs() -> None:
-    result = executor.CliResult(
+    result = executor.ComfyResult(
         "prompt-two-videos",
         (
             executor.OutputRef("first.mp4"),
             executor.OutputRef("second.mp4"),
         ),
-        (),
     )
 
     with pytest.raises(executor.ExecutorError, match="multiple video outputs"):
         executor._video_refs(result)
 
-
 def test_video_refs_ignores_load_video_intermediate_input() -> None:
-    result = executor.CliResult(
+    result = executor.ComfyResult(
         "prompt-guided-video",
         (
             executor.OutputRef("accepted-tail-22frames.mp4", file_type="input"),
-            executor.OutputRef("video_00001_.mp4", "canvas", "output"),
+            executor.OutputRef("video_00001_.mp4", "output"),
         ),
-        (),
     )
 
     assert executor._video_refs(result) == [
-        executor.OutputRef("video_00001_.mp4", "canvas", "output")
+        executor.OutputRef("video_00001_.mp4", "output")
     ]
-
-
-def test_run_comfy_cli_parses_one_terminal_result_and_command(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
-    workflow_path = tmp_path / "workflow.json"
-    workflow_path.write_text("{}", encoding="utf-8")
-    captured: dict[str, Any] = {}
-    events = [
-        {"schema": "event/1", "type": "queued", "prompt_id": "prompt-1"},
-        {
-            "schema": "event/1",
-            "type": "executed",
-            "prompt_id": "prompt-1",
-            "outputs": [{"filename": "clip.mp4", "subfolder": "canvas", "type": "output"}],
-        },
-        {
-            "schema": "envelope/1",
-            "type": "envelope",
-            "ok": True,
-            "data": {"status": "completed", "prompt_id": "prompt-1", "outputs": []},
-        },
-    ]
-
-    class FakeProcess:
-        def __init__(self) -> None:
-            self.stdout = io.StringIO("\n".join(json.dumps(item) for item in events))
-            self.stderr = io.StringIO("")
-            self.returncode = 0
-
-        def poll(self) -> int:
-            return self.returncode
-
-        def wait(self, timeout: float | None = None) -> int:
-            return self.returncode
-
-        def kill(self) -> None:
-            self.returncode = -9
-
-    def fake_popen(command: list[str], **kwargs: Any) -> FakeProcess:
-        captured["command"] = command
-        captured["kwargs"] = kwargs
-        return FakeProcess()
-
-    monkeypatch.setattr(executor.subprocess, "Popen", fake_popen)
-    result = executor.run_comfy_cli(
-        workflow_path,
-        executor.RuntimeConfig(base_url="http://127.0.0.1:8188", timeout_seconds=120),
-    )
-    assert result.provider_task_id == "prompt-1"
-    assert result.outputs[0].filename == "clip.mp4"
-    assert "--wait" in captured["command"]
-    assert captured["command"][captured["command"].index("--port") + 1] == "8188"
-    assert captured["kwargs"]["text"] is True
-
-
-def test_run_comfy_cli_uses_the_canvas_request_id_for_admission(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    from lfo.comfy import admission
-
-    captured: dict[str, Any] = {}
-
-    class Guard:
-        def __init__(self, base_url: str, *, request_id: str | None = None) -> None:
-            captured.update(base_url=base_url, request_id=request_id)
-
-        def __enter__(self) -> Guard:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def submitted(self, provider_task_id: str | None = None) -> None:
-            captured["provider_task_id"] = provider_task_id
-
-        def finished(self) -> None:
-            captured["finished"] = True
-
-    result = executor.CliResult(
-        "prompt-request",
-        (executor.OutputRef("clip.mp4"),),
-        (),
-    )
-    monkeypatch.setattr(admission, "VideoSubmissionGuard", Guard)
-    monkeypatch.setattr(transport, "_run_comfy_cli", lambda *_args, **_kwargs: result)
-    workflow_path = tmp_path / "workflow.json"
-    workflow_path.write_text("{}", encoding="utf-8")
-
-    actual = executor.run_comfy_cli(
-        workflow_path,
-        executor.RuntimeConfig(),
-        request_id="canvas-request-7",
-    )
-
-    assert actual is result
-    assert captured["request_id"] == "canvas-request-7"
-    assert captured["finished"] is True
-
 
 def test_materialize_video_copies_absolute_provider_output(tmp_path: pathlib.Path) -> None:
     provider_output = tmp_path / "provider-output.mp4"
     provider_output.write_bytes(b"video bytes")
     target_dir = tmp_path / "run"
-    result = executor.CliResult(
+    result = executor.ComfyResult(
         "prompt-absolute",
         (executor.OutputRef(str(provider_output), file_type="absolute"),),
-        (),
     )
     output = executor.materialize_video(
         result,
         target_dir,
-        executor.RuntimeConfig(output_root=tmp_path),
+        executor.RuntimeConfig(),
         probe_fn=lambda _path: {"duration_ms": 1000, "width": 64, "height": 64, "codec": "h264"},
     )
     assert pathlib.Path(output["path"]).read_bytes() == b"video bytes"
     assert output["kind"] == "video"
-
 
 def test_project_probe_uses_lfo_ffprobe_override(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -596,7 +335,6 @@ def test_project_probe_uses_lfo_ffprobe_override(
     assert seen["command"][0] == str(configured)
     assert metadata["duration_ms"] == 1000
 
-
 def test_explicit_ffprobe_bin_takes_priority_over_environment(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -618,153 +356,20 @@ def test_explicit_ffprobe_bin_takes_priority_over_environment(
 
     assert seen["command"][0] == "explicit-ffprobe"
 
-
-def test_run_timeout_is_terminal_and_never_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
-    calls = 0
-
-    class HangingProcess:
-        def __init__(self) -> None:
-            self.stdout = io.StringIO("")
-            self.stderr = io.StringIO("")
-            self.returncode: int | None = None
-
-        def poll(self) -> None:
-            return self.returncode
-
-        def wait(self, timeout: float | None = None) -> int:
-            if self.returncode is None:
-                raise subprocess.TimeoutExpired("comfy", timeout or 0)
-            return self.returncode
-
-        def kill(self) -> None:
-            self.returncode = -9
-
-    def fake_popen(*args: Any, **kwargs: Any) -> HangingProcess:
-        nonlocal calls
-        calls += 1
-        return HangingProcess()
-
-    monkeypatch.setattr(executor.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(transport, "PROCESS_EXIT_GRACE_SECONDS", 0.01)
-    workflow_path = tmp_path / "workflow.json"
-    workflow_path.write_text("{}", encoding="utf-8")
-    with pytest.raises(executor.ExecutorError, match="wall-clock timeout"):
-        executor.run_comfy_cli(
-            workflow_path,
-            executor.RuntimeConfig(timeout_seconds=0.01),
-        )
-    assert calls == 1
-
-
-def test_timeout_preserves_early_provider_id_and_emits_unknown(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    class QueuedThenHangingProcess:
-        def __init__(self) -> None:
-            self.stdout = io.StringIO(
-                json.dumps({"schema": "event/1", "type": "queued", "prompt_id": "prompt-early"})
-            )
-            self.stderr = io.StringIO("")
-            self.returncode: int | None = None
-
-        def poll(self) -> None:
-            return self.returncode
-
-        def wait(self, timeout: float | None = None) -> int:
-            if self.returncode is None:
-                raise subprocess.TimeoutExpired("comfy", timeout or 0)
-            return self.returncode
-
-        def kill(self) -> None:
-            self.returncode = -9
-
-    monkeypatch.setattr(executor.subprocess, "Popen", lambda *args, **kwargs: QueuedThenHangingProcess())
-    monkeypatch.setattr(transport, "PROCESS_EXIT_GRACE_SECONDS", 0.01)
-    events: list[dict[str, Any]] = []
-    workflow_path = tmp_path / "workflow.json"
-    workflow_path.write_text("{}", encoding="utf-8")
-
-    with pytest.raises(executor.ExecutorError) as raised:
-        executor.run_comfy_cli(
-            workflow_path,
-            executor.RuntimeConfig(timeout_seconds=0.01),
-            emit=events.append,
-        )
-
-    assert raised.value.status == "unknown"
-    assert raised.value.provider_task_id == "prompt-early"
-    assert events == [{"event": "queued", "status": "queued", "stage": "generation", "provider_task_id": "prompt-early"}]
-
-
-def test_explicit_provider_failure_is_failed(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
-    terminal = {
-        "schema": "envelope/1",
-        "type": "envelope",
-        "ok": False,
-        "prompt_id": "prompt-failed",
-        "error": {"code": "execution_failed", "message": "custom node failed"},
-    }
-
-    class FailedProcess:
-        def __init__(self) -> None:
-            self.stdout = io.StringIO(json.dumps(terminal))
-            self.stderr = io.StringIO("")
-            self.returncode = 1
-
-        def poll(self) -> int:
-            return self.returncode
-
-        def wait(self, timeout: float | None = None) -> int:
-            return self.returncode
-
-        def kill(self) -> None:
-            self.returncode = -9
-
-    monkeypatch.setattr(executor.subprocess, "Popen", lambda *args, **kwargs: FailedProcess())
-    workflow_path = tmp_path / "workflow.json"
-    workflow_path.write_text("{}", encoding="utf-8")
-    with pytest.raises(executor.ExecutorError) as raised:
-        executor.run_comfy_cli(workflow_path, executor.RuntimeConfig(timeout_seconds=1))
-    assert raised.value.status == "failed"
-    assert raised.value.provider_task_id == "prompt-failed"
-
-
 def test_corrupt_provider_output_is_rejected_and_removed(tmp_path: pathlib.Path) -> None:
     provider_output = tmp_path / "broken.mp4"
     provider_output.write_bytes(b"not a video")
     target_dir = tmp_path / "run"
-    result = executor.CliResult(
+    result = executor.ComfyResult(
         "prompt-broken",
         (executor.OutputRef(str(provider_output), file_type="absolute"),),
-        (),
     )
 
     with pytest.raises(executor.ExecutorError, match="not a readable video"):
         executor.materialize_video(
             result,
             target_dir,
-            executor.RuntimeConfig(output_root=tmp_path),
+            executor.RuntimeConfig(),
             probe_fn=lambda _path: (_ for _ in ()).throw(RuntimeError("moov atom not found")),
         )
     assert not (target_dir / "broken.mp4").exists()
-
-
-def test_preflight_rejects_server_model_constraint_before_submit(tmp_path: pathlib.Path) -> None:
-    workflow, _ = executor.prepare_workflow(
-        _snapshot(tmp_path),
-        uploader=lambda path: f"canvas-input/{path.name}",
-    )
-    object_info = {
-        str(node["class_type"]): {"input": {"required": {}}}
-        for node in workflow.values()
-        if isinstance(node, dict)
-    }
-    object_info["UNETLoader"] = {
-        "input": {"required": {"unet_name": [["some-other-model.safetensors"]]}}
-    }
-    with pytest.raises(executor.ExecutorError, match="rejected workflow inputs"):
-        executor.preflight_workflow(
-            workflow,
-            executor.RuntimeConfig(),
-            object_info=object_info,
-        )

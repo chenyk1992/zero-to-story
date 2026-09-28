@@ -349,10 +349,10 @@ class CanvasStore:
                     f"画布仍有 {len(live)} 个未结束的运行，不能删除："
                     + ", ".join(live[:5])
                 )
-            self._conn().execute("DELETE FROM node_runs WHERE canvas_id = ?", (canvas_id,))
             self._conn().execute(
                 "DELETE FROM run_events WHERE canvas_id = ?", (canvas_id,)
             )
+            self._conn().execute("DELETE FROM node_runs WHERE canvas_id = ?", (canvas_id,))
             self._conn().execute("DELETE FROM continuations WHERE canvas_id = ?", (canvas_id,))
             self._conn().execute("DELETE FROM canvases WHERE id = ?", (canvas_id,))
         return {"id": canvas_id, "name": row["name"], "deleted": True}

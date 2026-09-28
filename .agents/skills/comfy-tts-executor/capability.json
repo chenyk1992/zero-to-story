@@ -7,7 +7,7 @@
   "execution": "script",
   "entrypoint": "scripts/execute.py",
   "requires_executables": [
-    "comfy",
+    "comfy-mcp",
     "ffmpeg",
     "ffprobe"
   ],

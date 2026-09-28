@@ -14,7 +14,7 @@ python .agents/skills/qwen3-tts/scripts/audio_tools.py workflow <草稿.json> --
 
 `eric-smoke.json` 仍可直接校验。Base 模板有意留空参考来源、授权和转写，首次 `validate` 应失败；补齐后才能执行准备。它不是已经可生成的示例。`workflow` 的 schema 必须来自本次服务；离线源码 schema 仅用于测试，不能作为实时预检替代。
 
-Base 工作流还要求 `--uploaded-reference <正式执行器已上传的Comfy文件名>`，工具只验证 LoadAudio 枚举并建图，不上传。正式 Canvas 执行器上传后通过 `/view` 核对 SHA-256；离线准备成功本身不证明服务器上该文件内容相同。保存节点使用本机已核对的 SaveAudio FLAC；节点变更时会失败，应按实际新 schema 更新。
+Base 工作流还要求 `--uploaded-reference <正式执行器已上传的Comfy文件名>`，工具只验证 LoadAudio 枚举并建图，不上传。正式 Canvas 执行器以 MCP 上传成功回执和源文件未变化作为提交条件；离线准备成功本身不证明服务器上该文件内容相同。保存节点使用本机已核对的 SaveAudio FLAC；节点变更时会失败，应按实际新 schema 更新。
 
 ## 验证、登记与单次变速
 

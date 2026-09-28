@@ -16,4 +16,4 @@ description: 由 Canvas 服务执行已确认的本地 Qwen Image 2.1 图片快�
 - 本地图片与 H3 共用 video 资源键和 VideoSubmissionGuard；旧未知回执继续有效。失败不重试、不换模型或后端、不清空占用。
 - 原始运行记录 workflow.json、conditions.json 与真实 PNG 留在当前 run 目录；技术成功不代替角色身份、道具状态和分镜连续性验收。
 
-适配优先复用在线 ComfyUI；本地服务离线时通过官方 comfy-cli 自行启动已配置安装并等待就绪，无需用户另发启动命令或打开 Desktop。启动后预检节点/模型；不自动安装、更新、启动备用实例或改写用户数据库。
+适配优先复用在线 ComfyUI；本地服务离线时由画布通过官方 Comfy MCP 的 `launch_comfyui` 启动已配置安装并等待就绪。后续上传、节点与工作流预检、单次提交、原任务查询和产物取回均通过同一 MCP 会话；不自动安装、更新、启动备用实例或改写用户数据库。

@@ -23,6 +23,6 @@ Canvas 仍使用原来的 `comfy-qwen-tts` 后端和 `qwen3-tts-1.7b-customvoice
 
 `tempo` 默认 1.2，范围 0.5–2，由 FFmpeg 对原始音频做一次保留音高的变速；设为 1 则保持原速。`seed` 未填时执行器生成并记录。`max_new_tokens` 默认 2048；较长台词须实际听审是否完整。CustomVoice 可选表演指令；VoiceDesign 必须填写声音描述。Base 不开放未验证的表演指令。三模式固定 CUDA、bf16、SDPA、top_p 1、top_k 50、repetition_penalty 1.05，生成后卸载模型。
 
-提交前读取本机实时节点及对应权重文件清单，包括每套模型内的 `speech_tokenizer/`，并核对当前 Comfy 安装内的独立 `Qwen3-TTS-Tokenizer-12Hz`；文件存在不等于已通过生成验收。缺失时停止，避免插件隐式下载。克隆参考在确认时冻结，执行器上传后经 `/view` 核对 SHA-256。图片、视频与 TTS 共用机器锁和持久回执；状态未知时依据原任务证据核实，不重提。
+提交前通过 MCP 核对本机实时节点及对应权重文件名清单，包括每套模型内的 `speech_tokenizer/` 和独立 `Qwen3-TTS-Tokenizer-12Hz` 文件名；不直接检查 Tokenizer 文件大小，文件名存在也不等于生成验收通过。缺失时停止，避免插件隐式下载。克隆参考在确认时冻结，以 MCP 上传成功回执及源文件未变化作为提交条件，不读回服务端比较 SHA-256。图片、视频与 TTS 共用机器锁和持久回执；状态未知时依据原任务证据核实，不重提。
 
 每次运行在项目 `outputs/<run_id>/` 保留 `workflow.json`、`conditions.json`、原始 `original.flac`、交付 `speech.flac` 和 `speech.flac.json`。交付记录绑定实际文件哈希、任务 ID、语速和时长，内容听审初始为 `INCONCLUSIVE`。技术成功不表示台词和音色已被接受；声音复用方法见 [Skill 工具参考](../.agents/skills/qwen3-tts/references/tools.md)。

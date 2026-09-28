@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001
 """One machine-wide Comfy submission guard for Canvas image, video and audio execution.
 
 The OS lock protects concurrent processes. A small receipt survives a lost
@@ -89,9 +90,9 @@ def inspect_submission() -> dict[str, Any] | None:
 
 
 def reconcile_submission(request_id: str) -> dict[str, Any]:
-    """Read the original Comfy history; never infer cancellation from an empty queue."""
-    from urllib.parse import quote
-    from urllib.request import urlopen
+    """Read the original job through MCP; never infer completion from an empty queue."""
+    from . import transport
+    from .mcp_client import McpCallError
 
     guard = VideoSubmissionGuard("")
     guard._acquire()
@@ -102,13 +103,17 @@ def reconcile_submission(request_id: str) -> dict[str, Any]:
         task_id = record.get("provider_task_id")
         if not task_id:
             raise ValueError("原提交没有远端编号。无法自动证明远端结束。保持未知占用")
-        with urlopen(
-            record["base_url"].rstrip("/") + "/history/" + quote(task_id, safe=""), timeout=15
-        ) as response:
-            history = json.load(response)
-        item = history.get(task_id, {})
-        status = item.get("status", {})
-        if status.get("completed") is not True and status.get("status_str") != "error":
+        config = transport.load_runtime_config(base_url=record["base_url"])
+        try:
+            with transport._session(config) as session:
+                status = session.call("job", {"action": "status", "prompt_id": task_id})
+        except McpCallError as exc:
+            raise ValueError(f"无法经 MCP 核实原任务，保持未知占用：{exc}") from exc
+        try:
+            verdict = transport._status(status, task_id)
+        except transport.ExecutorError as exc:
+            raise ValueError("远端历史尚未证明该任务结束。保持未知占用") from exc
+        if verdict not in {"completed", "complete", "success", "succeeded", "done", "error", "failed", "cancelled", "canceled"}:
             raise ValueError("远端历史尚未证明该任务结束。保持未知占用")
         guard.finished()
         return {"request_id": request_id, "provider_task_id": task_id, "remote_status": status}
@@ -116,11 +121,94 @@ def reconcile_submission(request_id: str) -> dict[str, Any]:
         guard._lock.close()
 
 
+def reconcile_submission_operator(
+    request_id: str,
+    provider_task_id: str,
+    terminal_status: str,
+    reason: str,
+) -> dict[str, Any]:
+    """Release one receipt after an operator confirms the original job ended.
+
+    This path is intentionally limited to failed/cancelled jobs. It requires
+    both original identifiers and writes an audit record before removing the
+    matching receipt. Missing provider history alone is not confirmation.
+    """
+    if not request_id or not request_id.strip() or not provider_task_id or not provider_task_id.strip():
+        raise ValueError("必须提供原 Canvas 请求编号和原 Comfy 任务编号")
+    if terminal_status not in {"failed", "cancelled"}:
+        raise ValueError("操作员核实只允许 failed 或 cancelled，不能确认成功")
+    clean_reason = reason.strip() if reason else ""
+    if not clean_reason:
+        raise ValueError("操作员核实必须填写非空原因")
+
+    guard = VideoSubmissionGuard("")
+    guard._acquire()
+    try:
+        receipt = inspect_submission()
+        if receipt is None or receipt.get("request_id") != request_id:
+            raise ValueError("原 Canvas 请求编号不匹配")
+        if receipt.get("provider_task_id") != provider_task_id:
+            raise ValueError("原 Comfy 任务编号不匹配")
+
+        audit_directory = guard.folder / "reconciliations"
+        audit_directory.mkdir(parents=True, exist_ok=True)
+        audit_path = audit_directory / (
+            f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S.%fZ')}-{uuid4().hex}.json"
+        )
+        audit = {
+            "source": "operator_confirmation",
+            "request_id": request_id,
+            "provider_task_id": provider_task_id,
+            "terminal_status": terminal_status,
+            "reason": clean_reason,
+            "confirmed_at": datetime.now(UTC).isoformat(),
+            "receipt": receipt,
+        }
+        temporary = audit_path.with_suffix(".tmp")
+        try:
+            temporary.write_text(json.dumps(audit, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(audit_path)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+
+        guard.finished()
+        return {
+            "request_id": request_id,
+            "provider_task_id": provider_task_id,
+            "remote_status": terminal_status,
+            "source": "operator_confirmation",
+            "audit_path": str(audit_path),
+        }
+    finally:
+        guard._lock.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="检查或核实原 Comfy 提交。不生成视频")
-    parser.add_argument("--reconcile", metavar="REQUEST_ID")
+    reconciliation = parser.add_mutually_exclusive_group()
+    reconciliation.add_argument("--reconcile", metavar="REQUEST_ID")
+    reconciliation.add_argument("--operator-reconcile", metavar="REQUEST_ID")
+    parser.add_argument("--provider-task-id")
+    parser.add_argument("--terminal-status", choices=("failed", "cancelled"))
+    parser.add_argument("--reason")
     args = parser.parse_args()
-    result = reconcile_submission(args.reconcile) if args.reconcile else inspect_submission()
+    if args.operator_reconcile:
+        if not args.provider_task_id or not args.terminal_status or not args.reason:
+            parser.error(
+                "--operator-reconcile 需要 --provider-task-id、--terminal-status "
+                "和 --reason"
+            )
+        result = reconcile_submission_operator(
+            args.operator_reconcile,
+            args.provider_task_id,
+            args.terminal_status,
+            args.reason,
+        )
+    else:
+        if args.provider_task_id or args.terminal_status or args.reason:
+            parser.error("这些参数只用于 --operator-reconcile")
+        result = reconcile_submission(args.reconcile) if args.reconcile else inspect_submission()
     print(json.dumps(result, ensure_ascii=False))
 
 

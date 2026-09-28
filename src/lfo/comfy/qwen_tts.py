@@ -9,13 +9,10 @@ import json
 import os
 import secrets
 import shutil
-import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
-from urllib.request import urlopen
 
 from lfo.canvas.input_contract import validate_input_contract
 from lfo.comfy import transport
@@ -159,20 +156,7 @@ def prepare_workflow(
     return workflow, normalized
 
 
-def model_files(config: transport.RuntimeConfig) -> list[str]:
-    """Read the server's registered model inventory; never download or load weights."""
-    try:
-        with urlopen(config.base_url.rstrip("/") + "/models/qwen-tts", timeout=15) as response:
-            values = json.load(response)
-    except (OSError, ValueError) as exc:
-        raise transport.ExecutorError(f"无法核实本机 TTS 模型清单：{exc}") from exc
-    if not isinstance(values, list) or any(not isinstance(v, str) for v in values):
-        raise transport.ExecutorError("TTS 模型清单格式无效")
-    return [value.replace("\\", "/") for value in values]
-
-
-def preflight(workflow: dict[str, Any], config: transport.RuntimeConfig) -> None:
-    transport.preflight_workflow(workflow, config)
+def preflight(workflow: dict[str, Any], workflow_path: Path, session) -> None:
     node_class = workflow["1"]["class_type"]
     model_directory = next(
         (directory for name, directory in MODEL_BY_MODE.values() if name == node_class),
@@ -180,61 +164,32 @@ def preflight(workflow: dict[str, Any], config: transport.RuntimeConfig) -> None
     )
     if model_directory is None:
         raise transport.ExecutorError("不支持的 Qwen3-TTS 节点")
-    files = set(model_files(config))
+    files = set(transport.model_files(session, "qwen-tts"))
     missing = [name for name in REQUIRED_MODEL_FILES if f"{model_directory}/{name}" not in files]
+    missing += [
+        name for name in ("config.json", "model.safetensors", "preprocessor_config.json")
+        if f"Qwen3-TTS-Tokenizer-12Hz/{name}" not in files
+    ]
     if missing:
         raise transport.ExecutorError(
             "本机 TTS 模型文件未就绪，停止提交以避免插件自动下载：" + ", ".join(missing)
         )
-    verify_local_tokenizer(config)
+    transport.preflight_workflow(workflow, workflow_path, session)
 
 
-def upload_reference(path: Path, config: transport.RuntimeConfig) -> str:
-    """Upload frozen audio once and verify the bytes visible to Comfy before submission."""
+def upload_reference(path: Path, session) -> str:
+    """Upload a frozen reference once and ensure the local source did not change."""
     metadata = probe_audio(path)
     if metadata["duration_ms"] <= 0:
         raise ValueError("参考音频时长无效")
     with path.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    token = transport._http_uploader(config.base_url, config.timeout_seconds)(path)
-    relative = Path(token)
-    query = urlencode({
-        "filename": relative.name,
-        "subfolder": relative.parent.as_posix() if relative.parent != Path(".") else "",
-        "type": "input",
-    })
-    with urlopen(config.base_url.rstrip("/") + "/view?" + query, timeout=30) as response:
-        received = hashlib.file_digest(response, "sha256").hexdigest()
+    token = transport.upload_input(path, session)
     with path.open("rb") as stream:
         current = hashlib.file_digest(stream, "sha256").hexdigest()
-    if received != digest or current != digest:
-        raise ValueError("参考音频上传哈希不一致，停止提交")
+    if current != digest:
+        raise ValueError("参考音频在上传期间发生变化，停止提交")
     return token
-
-
-def verify_local_tokenizer(config: transport.RuntimeConfig) -> None:
-    """The plugin also checks its installation's separate tokenizer before loading."""
-    try:
-        result = subprocess.run(
-            [shutil.which(config.cli_binary) or config.cli_binary, "env"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=30,
-            check=False,
-        )
-        workspace = Path(json.loads(result.stdout)["data"]["workspace"]["path"])
-        if result.returncode or not (workspace / "main.py").is_file():
-            raise ValueError("未找到既有 ComfyUI 安装")
-        directory = workspace / "models/qwen-tts/Qwen3-TTS-Tokenizer-12Hz"
-        for name in ("config.json", "model.safetensors", "preprocessor_config.json"):
-            path = directory / name
-            if not path.is_file() or path.stat().st_size == 0:
-                raise ValueError(f"缺少 {path}")
-    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError) as exc:
-        raise transport.ExecutorError(
-            f"独立 Tokenizer 未就绪，停止提交以避免插件自动下载：{exc}"
-        ) from exc
 
 
 def materialize_audio(result, output_dir: Path, config, normalized) -> dict[str, Any]:
@@ -250,10 +205,7 @@ def materialize_audio(result, output_dir: Path, config, normalized) -> dict[str,
     with tempfile.TemporaryDirectory(prefix=".tts-", dir=output_dir) as temporary:
         raw, delivery = Path(temporary) / "original.flac", Path(temporary) / "speech.flac"
         ref = refs[0]
-        if ref.file_type == "absolute":
-            shutil.copyfile(Path(ref.filename).resolve(), raw)
-        else:
-            transport._download_view(config.base_url, ref, raw, config.timeout_seconds)
+        shutil.copyfile(Path(ref.filename).resolve(), raw)
         original = probe_audio(raw)
         if original["codec"] != "flac":
             raise ValueError("TTS 原始输出必须是 FLAC 音频")
@@ -347,27 +299,30 @@ def execute_snapshot(snapshot, output_dir: Path, config, *, emit=None):
         workflow, normalized = prepare_workflow(
             snapshot, reference_token="pending.flac" if clone else None
         )
-        if clone:
-            stage = "reference_upload"
-            emit({"stage": stage})
-            workflow["3"]["inputs"]["audio"] = upload_reference(
-                Path(normalized["reference_path"]), config
-            )
-        preflight(workflow, config)
+        from lfo.comfy.admission import VideoSubmissionGuard
+
         output_dir.mkdir(parents=True, exist_ok=True)
-        workflow_path = output_dir / "workflow.json"
-        workflow_path.write_text(
-            json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
         conditions_path = output_dir / "conditions.json"
         conditions_path.write_text(
             json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        stage = "submit"
-        emit({"stage": stage})
-        result = transport.run_comfy_cli(
-            workflow_path, config, emit=emit, request_id=normalized["request_id"]
-        )
+        with VideoSubmissionGuard(config.base_url, request_id=normalized["request_id"]) as guard, transport.ready_session(config) as session:
+                if clone:
+                    stage = "reference_upload"
+                    emit({"stage": stage})
+                    workflow["3"]["inputs"]["audio"] = upload_reference(
+                        Path(normalized["reference_path"]), session
+                    )
+                workflow_path = output_dir / "workflow.json"
+                workflow_path.write_text(
+                    json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                preflight(workflow, workflow_path, session)
+                stage = "submit"
+                emit({"stage": stage})
+                result = transport.run_workflow(
+                    workflow_path, output_dir, config, session, guard=guard, emit=emit
+                )
         stage = "collection"
         emit({"stage": stage, "remote_finished": True, "provider_task_id": result.provider_task_id})
         output = materialize_audio(result, output_dir, config, normalized)

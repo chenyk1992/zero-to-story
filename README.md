@@ -18,7 +18,7 @@
 
 首次使用先安装项目依赖并构建页面，步骤、对话操作和已知接入边界见[画布使用指南](guides/canvas-guide.md)。新增 Skill、能力描述和 MCP 配置都限定在当前项目。
 
-本地 Comfy 视频走一条固定链路：页面确认后，画布服务冻结输入并创建 `queued` 运行；服务内部脚本 worker 启动 `comfy-video-executor` Python adapter；adapter 通过本地 ComfyUI HTTP 接口上传素材和读取 `/object_info`，再同步调用一次官方 `comfy run --wait --json`；实际视频经过媒体校验后回填画布。Comfy 不是 `pending_agent` 任务，页面确认也不会要求对话 Agent 再 claim 或再次提交。
+本地 Comfy 视频走一条固定链路：页面确认后，画布服务冻结输入并创建 `queued` 运行；服务内部脚本 worker 启动 `comfy-video-executor` Python adapter；adapter 通过官方本地 Comfy MCP 上传、预检、提交一次、查询原任务并取回产物；实际视频经过媒体校验后回填画布。Comfy 不是 `pending_agent` 任务，页面确认也不会要求对话 Agent 再 claim 或再次提交。
 
 画布使用 `VideoSubmissionGuard` 保证本机视频串行；机器级互斥覆盖一次提交和整个等待周期。若执行进程丢失，持久回执会继续阻塞未知任务，直到依据原任务证据核实结束。技术提交成功不等于内容接受；故事生产或明确要求内容验收的媒体任务，必须依据实际视频的实际末态和实际音频证据判断。
 
@@ -49,7 +49,7 @@ cd ../..
 
 从 Git 下载或克隆完整仓库，在 Codex 中将仓库根目录添加为本地项目，并在该项目下开始任务。首次制作建议直接使用这个本地项目目录，让画布、素材和当前任务使用同一工作区。
 
-基本准备包括 Python 3.12、Node.js LTS（满足 20.19+ 或 22.12+）及 npm。视频与后期还需要 FFmpeg、FFprobe、官方 comfy-cli、运行中的 ComfyUI、对应自定义节点和 H3 模型。图片生成需要宿主实际可用的图片工具。可以先让 Agent 检查：
+基本准备包括 Python 3.12、Node.js LTS（满足 20.19+ 或 22.12+）及 npm。本地 Comfy 媒体还需要隔离安装的官方 Comfy MCP、供 MCP 内部使用的官方 comfy-cli、ComfyUI、对应节点和模型；视频与后期还需 FFmpeg、FFprobe。宿主图片生成需要实际可用的图片工具。可以先让 Agent 检查：
 
 ```text
 请检查当前项目在这台 Windows 电脑上的运行条件。

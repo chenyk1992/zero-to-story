@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 import importlib
-import io
 import json
 import os
 import shutil
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -213,9 +213,10 @@ def test_invalid_tts_inputs_are_rejected_before_io(tts, patch):
 
 
 def test_missing_models_stop_before_submission(tts, tmp_path, monkeypatch):
+    monkeypatch.setattr(transport, "ready_session", lambda *a: nullcontext(object()))
     monkeypatch.setattr(transport, "preflight_workflow", lambda *a: None)
-    monkeypatch.setattr(tts, "model_files", lambda *a: [])
-    monkeypatch.setattr(transport, "run_comfy_cli", lambda *a, **k: pytest.fail("must not submit"))
+    monkeypatch.setattr(transport, "model_files", lambda *a: [])
+    monkeypatch.setattr(transport, "run_workflow", lambda *a, **k: pytest.fail("must not submit"))
     with pytest.raises(transport.ExecutorError, match="模型"):
         tts.execute_snapshot(
             snapshot(), tmp_path / "out", transport.RuntimeConfig(), emit=lambda e: None
@@ -226,15 +227,17 @@ def test_unknown_tts_is_submitted_once_and_keeps_task_id(tts, tmp_path, monkeypa
     from lfo.comfy.admission import inspect_submission
 
     calls = []
+    monkeypatch.setattr(transport, "ready_session", lambda *a: nullcontext(object()))
     monkeypatch.setattr(tts, "preflight", lambda *a: None)
 
     def submit(*a, **kw):
+        kw["guard"].submitted("remote")
         calls.append(inspect_submission()["request_id"])
         raise transport.ExecutorError(
             "connection lost", provider_task_id="remote", status="unknown"
         )
 
-    monkeypatch.setattr(transport, "_run_comfy_cli", submit)
+    monkeypatch.setattr(transport, "run_workflow", submit)
     with pytest.raises(transport.ExecutorError) as caught:
         tts.execute_snapshot(
             snapshot(), tmp_path / "out", transport.RuntimeConfig(), emit=lambda e: None
@@ -302,9 +305,10 @@ def test_audio_probe_does_not_trust_header_when_decode_fails(tmp_path, monkeypat
 
 
 def test_completed_generation_with_failed_audio_validation_is_terminal(tts, tmp_path, monkeypatch):
+    monkeypatch.setattr(transport, "ready_session", lambda *a: nullcontext(object()))
     monkeypatch.setattr(tts, "preflight", lambda *a: None)
     monkeypatch.setattr(
-        transport, "run_comfy_cli", lambda *a, **k: transport.CliResult("done", (), ())
+        transport, "run_workflow", lambda *a, **k: transport.ComfyResult("done", ())
     )
     events = []
     with pytest.raises(transport.ExecutorError) as caught:
@@ -342,17 +346,17 @@ def test_audio_confirm_freezes_options_and_shares_gpu_slot(tts, tmp_path, monkey
 
 def test_model_manifest_requires_real_files_not_download_cache(tts, monkeypatch):
     monkeypatch.setattr(transport, "preflight_workflow", lambda *a: None)
-    monkeypatch.setattr(tts, "verify_local_tokenizer", lambda *a: None, raising=False)
     files = [f"Qwen3-TTS-12Hz-1.7B-CustomVoice/{p}" for p in tts.REQUIRED_MODEL_FILES]
-    monkeypatch.setattr(tts, "model_files", lambda *a: files)
+    files += [f"Qwen3-TTS-Tokenizer-12Hz/{p}" for p in ("config.json", "model.safetensors", "preprocessor_config.json")]
+    monkeypatch.setattr(transport, "model_files", lambda *a: files)
     workflow, _ = tts.prepare_workflow(snapshot())
-    tts.preflight(workflow, transport.RuntimeConfig())
+    tts.preflight(workflow, Path("workflow.json"), object())
     files[:] = [
         p.replace("/model.safetensors", "/.cache/download/model.safetensors.metadata")
         for p in files
     ]
     with pytest.raises(transport.ExecutorError, match="模型"):
-        tts.preflight(workflow, transport.RuntimeConfig())
+        tts.preflight(workflow, Path("workflow.json"), object())
 
 
 @pytest.mark.parametrize(
@@ -375,71 +379,40 @@ def test_preflight_checks_selected_model_family(tts, monkeypatch, mode, paramete
         value, reference_token="uploaded.flac" if mode == "clone" else None
     )
     monkeypatch.setattr(transport, "preflight_workflow", lambda *a: None)
-    monkeypatch.setattr(tts, "verify_local_tokenizer", lambda *a: None)
     files = [f"{directory}/{name}" for name in tts.REQUIRED_MODEL_FILES]
-    monkeypatch.setattr(tts, "model_files", lambda *a: files)
-    tts.preflight(workflow, transport.RuntimeConfig())
+    files += [f"Qwen3-TTS-Tokenizer-12Hz/{p}" for p in ("config.json", "model.safetensors", "preprocessor_config.json")]
+    monkeypatch.setattr(transport, "model_files", lambda *a: files)
+    tts.preflight(workflow, Path("workflow.json"), object())
     files.pop()
     with pytest.raises(transport.ExecutorError, match="模型"):
-        tts.preflight(workflow, transport.RuntimeConfig())
+        tts.preflight(workflow, Path("workflow.json"), object())
 
 
-def test_clone_reference_upload_checks_server_bytes(tts, monkeypatch, tmp_path):
+def test_clone_reference_upload_requires_receipt_and_unchanged_source(tts, monkeypatch, tmp_path):
     reference = tmp_path / "reference.flac"
     reference.write_bytes(b"frozen bytes")
     monkeypatch.setattr(tts, "probe_audio", lambda path: {"duration_ms": 1000})
-    monkeypatch.setattr(
-        transport, "_http_uploader", lambda *a: lambda path: "uploaded.flac"
-    )
-    monkeypatch.setattr(tts, "urlopen", lambda *a, **k: io.BytesIO(b"different bytes"))
-    with pytest.raises(ValueError, match="哈希"):
-        tts.upload_reference(reference, transport.RuntimeConfig())
-    monkeypatch.setattr(tts, "urlopen", lambda *a, **k: io.BytesIO(b"frozen bytes"))
-    assert tts.upload_reference(reference, transport.RuntimeConfig()) == "uploaded.flac"
+    monkeypatch.setattr(transport, "upload_input", lambda *a: "uploaded.flac")
+    assert tts.upload_reference(reference, object()) == "uploaded.flac"
+
+    def mutate(_path, _session):
+        reference.write_bytes(b"changed bytes")
+        return "uploaded.flac"
+
+    monkeypatch.setattr(transport, "upload_input", mutate)
+    with pytest.raises(ValueError, match="变化"):
+        tts.upload_reference(reference, object())
 
 
-def test_preflight_checks_independent_tokenizer_before_submission(tts, monkeypatch, tmp_path):
+def test_tokenizer_is_checked_by_mcp_filename_only(tts, monkeypatch):
+    workflow, _ = tts.prepare_workflow(snapshot())
+    files = [f"{tts.MODEL_DIRECTORY}/{name}" for name in tts.REQUIRED_MODEL_FILES]
+    monkeypatch.setattr(transport, "model_files", lambda *a: files)
     monkeypatch.setattr(transport, "preflight_workflow", lambda *a: None)
-    monkeypatch.setattr(
-        tts,
-        "model_files",
-        lambda *a: [f"{tts.MODEL_DIRECTORY}/{name}" for name in tts.REQUIRED_MODEL_FILES],
-    )
-    calls = []
-
-    def missing(*a):
-        calls.append(True)
-        raise transport.ExecutorError("独立 Tokenizer 未就绪")
-
-    monkeypatch.setattr(tts, "verify_local_tokenizer", missing, raising=False)
-    monkeypatch.setattr(transport, "run_comfy_cli", lambda *a, **kw: pytest.fail("must not submit"))
-    with pytest.raises(transport.ExecutorError, match="Tokenizer"):
-        tts.execute_snapshot(
-            snapshot(), tmp_path / "out", transport.RuntimeConfig(), emit=lambda e: None
-        )
-    assert calls == [True]
-
-
-def test_local_tokenizer_requires_files_in_configured_installation(tts, monkeypatch, tmp_path):
-    from types import SimpleNamespace
-
-    (tmp_path / "main.py").write_text("# existing installation", encoding="utf-8")
-    monkeypatch.setattr(
-        "subprocess.run",
-        lambda *a, **kw: SimpleNamespace(
-            returncode=0, stdout=json.dumps({"data": {"workspace": {"path": str(tmp_path)}}})
-        ),
-    )
-    with pytest.raises(transport.ExecutorError, match="Tokenizer"):
-        tts.verify_local_tokenizer(transport.RuntimeConfig())
-    directory = tmp_path / "models/qwen-tts/Qwen3-TTS-Tokenizer-12Hz"
-    directory.mkdir(parents=True)
-    for name in ("config.json", "model.safetensors", "preprocessor_config.json"):
-        (directory / name).write_bytes(b"test fixture")
-    tts.verify_local_tokenizer(transport.RuntimeConfig())
-    (directory / "model.safetensors").write_bytes(b"")
-    with pytest.raises(transport.ExecutorError, match="Tokenizer"):
-        tts.verify_local_tokenizer(transport.RuntimeConfig())
+    with pytest.raises(transport.ExecutorError, match="模型"):
+        tts.preflight(workflow, Path("workflow.json"), object())
+    files += [f"Qwen3-TTS-Tokenizer-12Hz/{p}" for p in ("config.json", "model.safetensors", "preprocessor_config.json")]
+    tts.preflight(workflow, Path("workflow.json"), object())
 
 
 def test_service_rejects_corrupt_audio_even_when_adapter_claims_success(tmp_path, monkeypatch):
@@ -469,7 +442,7 @@ def test_audio_delivery_preserves_original_and_only_returns_processed_audio(
 ):
     raw = tmp_path / "provider.flac"
     raw.write_bytes(b"raw audio")
-    result = transport.CliResult("done", (transport.OutputRef(str(raw), file_type="absolute"),), ())
+    result = transport.ComfyResult("done", (transport.OutputRef(str(raw), file_type="absolute"),))
     calls = []
 
     def process(command):
@@ -527,7 +500,7 @@ def test_delivery_manifest_binds_actual_audio_and_provider_task(tts, tmp_path, m
 def test_original_speed_never_applies_atempo(tts, tmp_path, monkeypatch):
     raw = tmp_path / "provider.flac"
     raw.write_bytes(b"raw audio")
-    result = transport.CliResult("done", (transport.OutputRef(str(raw), file_type="absolute"),), ())
+    result = transport.ComfyResult("done", (transport.OutputRef(str(raw), file_type="absolute"),))
     monkeypatch.setattr(tts, "probe_audio", lambda p: {"codec": "flac", "duration_ms": 2000})
     monkeypatch.setattr(tts, "run_command", lambda *a: pytest.fail("must not change tempo"))
     out = tts.materialize_audio(
@@ -558,8 +531,8 @@ def test_real_audio_tempo_delivery(tts, tmp_path):
             str(source),
         ]
     )
-    result = transport.CliResult(
-        "synthetic-test", (transport.OutputRef(str(source), file_type="absolute"),), ()
+    result = transport.ComfyResult(
+        "synthetic-test", (transport.OutputRef(str(source), file_type="absolute"),)
     )
     output = tts.materialize_audio(
         result, tmp_path / "out", transport.RuntimeConfig(), {"tempo": 1.2, "seed": 1}

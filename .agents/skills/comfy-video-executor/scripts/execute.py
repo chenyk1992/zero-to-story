@@ -1,7 +1,6 @@
 """Execute one confirmed canvas video snapshot through local ComfyUI.
 
-The adapter keeps a narrow provider boundary: local ComfyUI HTTP, the official
-``comfy run`` CLI, and the project's shared admission and media-probe helpers.
+The adapter uses the project's Comfy MCP transport and media-probe helpers.
 """
 
 from __future__ import annotations
@@ -19,19 +18,17 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+from lfo.comfy.exceptions import LfoComfyError
 from lfo.comfy.transport import (
-    CliResult,
+    ComfyResult,
     ExecutorError,
     OutputRef,
     RuntimeConfig,
-    _download_view,
-    _http_uploader,
     load_runtime_config,
     preflight_workflow,
-    run_comfy_cli,
-)
-from lfo.comfy.transport import (
-    _collect_outputs as _collect_outputs,
+    ready_session,
+    run_workflow,
+    upload_input,
 )
 
 SKILL_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -472,7 +469,7 @@ def prepare_workflow(
     return workflow, normalized
 
 
-def _video_refs(result: CliResult) -> list[OutputRef]:
+def _video_refs(result: ComfyResult) -> list[OutputRef]:
     # LoadVideo exposes its source file as an intermediate ``type=input``
     # output when a temporal guide is present. Only SaveVideo/output (or an
     # explicitly resolved absolute path) is a generated result.
@@ -562,7 +559,7 @@ def validate_video_output(
 
 
 def materialize_video(
-    result: CliResult,
+    result: ComfyResult,
     output_dir: pathlib.Path,
     config: RuntimeConfig,
     *,
@@ -576,22 +573,12 @@ def materialize_video(
     if not target.is_relative_to(output_dir.resolve()):
         raise ExecutorError("Comfy output filename escaped the output directory", provider_task_id=result.provider_task_id)
     source = pathlib.Path(reference.filename).expanduser()
-    if reference.file_type == "absolute":
-        if not source.is_file():
-            raise ExecutorError(
-                "Comfy reported an absolute output path that does not exist",
-                provider_task_id=result.provider_task_id,
-            )
-        shutil.copy2(source, target)
-    else:
-        if config.output_root is not None and reference.file_type == "output":
-            local = (config.output_root / reference.subfolder / reference.filename).resolve()
-            if local.is_file():
-                shutil.copy2(local, target)
-            else:
-                _download_view(config.base_url, reference, target, config.timeout_seconds)
-        else:
-            _download_view(config.base_url, reference, target, config.timeout_seconds)
+    if not source.is_file():
+        raise ExecutorError(
+            "Comfy MCP returned an output path that does not exist",
+            provider_task_id=result.provider_task_id,
+        )
+    shutil.copy2(source, target)
     try:
         metadata = validate_video_output(target, probe_fn=probe_fn)
     except ExecutorError as exc:
@@ -615,36 +602,36 @@ def execute_snapshot(
         print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
     stage = "input_validation"
-    result: CliResult | None = None
+    result: ComfyResult | None = None
     try:
+        from lfo.comfy.admission import VideoSubmissionGuard
+
         emit({"stage": stage})
         normalize_snapshot(snapshot)
-        # Ensure the local service is ready before the first media upload.
-        if uploader is None:
-            preflight_workflow({}, config)
-        uploader = uploader or _http_uploader(config.base_url, config.timeout_seconds)
-        with tempfile.TemporaryDirectory(prefix="canvas-comfy-") as temp_dir:
-            stage = "upload"
-            emit({"stage": stage})
-            workflow, normalized = prepare_workflow(snapshot, uploader=uploader)
-            stage = "input_validation"
-            emit({"stage": stage})
-            preflight_workflow(workflow, config)
-            workflow_path = pathlib.Path(temp_dir) / "workflow.json"
-            workflow_path.write_text(json.dumps(workflow, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-            stage = "submit"
-            emit({"stage": stage})
-            result = run_comfy_cli(
-                workflow_path,
-                config,
-                emit=emit,
-                request_id=normalized["request_id"],
-            )
+        request_id = snapshot.get("request_id") if isinstance(snapshot, dict) else None
+        with VideoSubmissionGuard(config.base_url, request_id=request_id) as guard, ready_session(config) as session:
+                upload = uploader or (lambda path: upload_input(path, session))
+                with tempfile.TemporaryDirectory(prefix="canvas-comfy-") as temp_dir:
+                    stage = "upload"
+                    emit({"stage": stage})
+                    workflow, _normalized = prepare_workflow(snapshot, uploader=upload)
+                    stage = "input_validation"
+                    emit({"stage": stage})
+                    workflow_path = pathlib.Path(temp_dir) / "workflow.json"
+                    workflow_path.write_text(
+                        json.dumps(workflow, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+                    )
+                    preflight_workflow(workflow, workflow_path, session)
+                    stage = "submit"
+                    emit({"stage": stage})
+                    result = run_workflow(
+                        workflow_path, output_dir, config, session, guard=guard, emit=emit
+                    )
         stage = "collection"
         emit({"stage": stage, "remote_finished": True, "provider_task_id": result.provider_task_id})
         output = materialize_video(result, output_dir, config)
         return {"status": "succeeded", "stage": "media_validation", "outputs": [output], "provider_task_id": result.provider_task_id}
-    except (OSError, ExecutorError) as exc:
+    except (OSError, ExecutorError, LfoComfyError) as exc:
         if not isinstance(exc, ExecutorError):
             exc = ExecutorError(str(exc), status="unknown" if stage in {"submit", "generation"} else "failed")
         exc.stage = getattr(exc, "stage", stage)
@@ -657,11 +644,6 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Execute one confirmed ComfyUI H3 canvas video node")
     parser.add_argument("--input", required=True, type=pathlib.Path, help="confirmed snapshot JSON")
     parser.add_argument("--output-dir", required=True, type=pathlib.Path, help="existing run output directory")
-    parser.add_argument("--comfy-url", type=str, default=None)
-    parser.add_argument("--comfy-executable", type=str, default=None)
-    parser.add_argument("--timeout", type=float, default=None)
-    parser.add_argument("--config", type=pathlib.Path, default=None)
-    parser.add_argument("--machine-id", type=str, default=None)
     return parser
 
 
@@ -669,13 +651,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         snapshot = json.loads(args.input.read_text(encoding="utf-8-sig"))
-        config = load_runtime_config(
-            config_path=args.config,
-            machine_id=args.machine_id,
-            base_url=args.comfy_url,
-            cli_binary=args.comfy_executable,
-            timeout_seconds=args.timeout,
-        )
+        config = load_runtime_config()
         result = execute_snapshot(snapshot, args.output_dir, config)
         print(json.dumps(result, ensure_ascii=False, separators=(",", ":")), flush=True)
         return 0

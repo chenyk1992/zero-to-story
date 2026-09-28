@@ -1,86 +1,38 @@
-# Local Windows ComfyUI profile
+# 本机 ComfyUI 与画布 MCP
 
-共同的角色、Panel ready、能力选择和实际验收规则见[项目共享生产规则](ai-system-prompt.md)。本文只记录 Canvas Comfy adapter 使用的本机环境，不定义新的授权、重试或恢复流程。
+共同的确认、排队、失败和验收规则见[项目共享生产规则](ai-system-prompt.md)。画布服务持有自己的官方本地 Comfy MCP 会话；不读取宿主的 `.codex/config.toml`。
 
-## 当前机器
+## 当前机器与准备
 
-以下是本项目验证过的一台参考环境，不是安装前提。新用户按实际安装目录、GPU 与模型配置运行，不应照搬盘符或据此假定固定生成时长。
+当前参考安装是 ComfyUI Desktop `D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI`，服务地址 `http://127.0.0.1:8188`，GPU RTX 5080 16GB。新机器应按实际目录配置。官方 `comfy-mcp` 安装在项目隔离环境 `.venv/comfy-mcp/`，它内部调用已安装的官方 `comfy-cli`；具体安装方法见[官方本地 MCP 指南](https://docs.comfy.org/agent-tools/mcp.md#local-comfy-mcp-connection)。项目预检不自动安装或升级依赖。
 
-- ComfyUI Desktop：`D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI`
-- 服务地址：`http://127.0.0.1:8188`
-- `comfy-cli`：独立安装官方版本，并确认支持 `run --wait --json`
-- GPU：RTX 5080 16GB
-- 模型目录：`D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI\models\`
+H3 需要已配置的节点和模型；VDN8 还需要 `ComfyUI-VDN-H3` 与完整 `vdn/stage-dmd-step-250/` bundle。Qwen 图片和 TTS 需要各自节点与模型。每次运行以 MCP 的实时节点、模型文件名及工作流预检为准，不用旧检查记录替代。
 
-如果当前终端找不到 `comfy`，按官方方式安装到画布服务使用的同一执行环境，并核实实际版本：
+## 画布服务配置
 
-```powershell
-python -m pip install comfy-cli
-comfy --version
-comfy env
+在项目根目录创建本机专用、Git 忽略的 `.lfo/comfy-mcp.json`：
+
+```json
+{"comfy_mcp":{"url":"http://127.0.0.1:8188","command":"<项目>/.venv/comfy-mcp/Scripts/comfy-mcp.exe","comfy_bin":"<本机>/Scripts/comfy.exe","timeout_seconds":7200}}
 ```
 
-当前 H3 模型包括：
+也可用 `LFO_COMFY_MCP_URL`、`LFO_COMFY_MCP_COMMAND`、`LFO_COMFY_MCP_COMFY_BIN`、`LFO_COMFY_MCP_TIMEOUT` 与 `LFO_COMFY_MCP_MODEL_VENV` 指定项目服务环境。目标只能是本机回环 HTTP 地址；若配置中的目标互相冲突，执行器会拒绝连接。媒体检查程序仍可用 `LFO_FFMPEG` 与 `LFO_FFPROBE` 指定。
 
-- `minimax_h3_fl2va_pruned_int8_convrot.safetensors`
-- `minimax_h3_ref2va_pruned_int8_convrot.safetensors`
-- `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`
-- `minimax_h3_video_vae_fp16.safetensors`
-- `minimax_h3_audio_vae_fp32.safetensors`
+图片、视频、TTS 均由画布内部 worker 在确认后执行，使用同一 MCP 执行链和机器锁。adapter 以 `upload_file(overwrite=False)` 上传冻结素材，从回执取得实际文件名与子目录；以 `nodes`、`search_models` 和 `validate_workflow` 预检；先写持久提交意图，再调用一次 `run_workflow(wait=False)`。拿到 `prompt_id` 后立即写入回执，随后用 `job` 查询原任务，以 `fetch_outputs` 将产物取回当前运行目录并检查媒体。保存画布本身不会启动生成。
 
-VDN8 还需要 `ComfyUI-VDN-H3` 节点和模型根目录下的 `vdn/stage-dmd-step-250/` bundle。以 adapter 对运行中 `/object_info` 的本次预检为准，不能用旧检查记录代替。
+TTS Base 参考音频要求上传成功回执且源文件在上传前后未变化；不读回服务端文件比较 SHA-256。独立 Tokenizer 只核对 MCP 返回的文件名，不直接检查文件大小。原始 `original.flac` 保留，画布回填按所选语速处理的 `speech.flac`。
 
-## Canvas adapter 配置
+## 诊断与恢复
 
-本地 Qwen 图片入口为 `.agents/skills/comfy-image-executor/scripts/execute.py`，沿用下述 Comfy 提交链，见 [Qwen 图片指南](qwen-image.md)。图片与视频共享机器锁和旧持久回执。图片完整解码额外使用 FFmpeg，可用 `LFO_FFMPEG` 指定已有可执行文件。
-
-本地 Qwen TTS 由画布 `audio` 节点确认后启动内部 `comfy-tts-executor` adapter，沿用同一提交链、机器锁和持久回执。按所选模式需要 CustomVoice、VoiceDesign 或 Base 权重及对应节点，并需要 `SaveAudio`、FFmpeg 和 FFprobe；模型文件清单、语速处理与结果规则见 [Canvas TTS](canvas-tts.md)。
-
-本地 Comfy 视频在页面确认后进入 `queued`。画布服务内部 worker 启动项目 `.agents/skills/comfy-video-executor/scripts/execute.py`；adapter 通过本地 HTTP 上传固定素材、读取 `/object_info`，再同步调用一次官方 `comfy run --wait --json`。这条路径不经过 Agent claim。
-
-adapter 依次读取以下安全连接配置，显式参数优先：
-
-- 可选配置 JSON；
-- `%APPDATA%\LFO` 下已有的全局或机器配置；
-- `LFO_COMFY_BASE_URL`、`LFO_COMFY_CLI`、`LFO_COMFY_TIMEOUT`、`LFO_COMFY_OUTPUT_ROOT`、`LFO_FFPROBE`。
-
-只读取服务 URL、CLI 路径、超时、输出根目录和 ffprobe 路径；凭据及无关字段不会输出。默认服务地址为 `http://127.0.0.1:8188`。如果官方 CLI 返回本地绝对路径，adapter 会从该路径复制；否则通过同一 ComfyUI 服务的 `/view` 下载。可以在启动画布服务的同一 PowerShell 会话设置输出根目录，减少下载：
+`VideoSubmissionGuard` 的机器互斥覆盖提交与原任务等待。进程丢失后，应用数据目录 `zero-to-story/video/submission.json` 的回执继续阻止未知任务；可用 `LFO_VIDEO_STATE` 指定状态目录。只读检查与原任务核实：
 
 ```powershell
-$env:LFO_COMFY_OUTPUT_ROOT = "D:\ComfyUI\Comfy-Desktop\ComfyUI\ComfyUI\output"
+./.venv/Scripts/python.exe -m lfo.comfy.admission
+./.venv/Scripts/python.exe -m lfo.comfy.admission --reconcile <canvas-request-id>
 ```
 
-该值只用于优先读取实际输出和执行路径边界检查，不写入画布提示词。缺少输出根目录不会阻止通过 `/view` 回收结果。
+核实只通过 MCP `job` 查询原编号，不重新提交，也不直接改写画布状态。没有远端编号、空队列、断线或等待超时都不能证明任务已经结束。媒体必须来自本次 `fetch_outputs`，路径位于当前运行目录，且通过图片、视频或音频检查后才能回填。
 
-## 检查与诊断
+本地 ComfyUI 离线时，共享连接层以 MCP `server_info` 获取既有工作区和启动选项，使用该安装的既有模型 Python 环境调用 `launch_comfyui`，再检查服务就绪。可用 `LFO_COMFY_MCP_MODEL_VENV` 指定环境；否则依次寻找安装内 `.venv`、`venv` 和 Desktop 旁的 `standalone-env`。找不到即停止，不继承画布的虚拟环境。启动超时保留 `startup.json`，阻止重复拉起；在线实例直接复用。
 
-启动画布前至少核实：
-
-```powershell
-comfy --version
-ffmpeg -version
-ffprobe -version
-```
-
-页面能力目录还会检查 `comfy` 与 `ffprobe` 是否可执行；真实提交前 adapter 会检查 ComfyUI `/object_info`、必需节点以及服务声明的模型和枚举值。检查失败会结束当前 run，不会切换模型、删引用或自动重提。
-
-Canvas Comfy 视频只接受本次 CLI 结果中唯一、明确且可读取的视频。adapter 会把它复制或下载到当前 run 输出目录，并用 ffprobe 检查视频流、时长、尺寸和编码。技术成功后由画布服务回填实际媒体；故事生产仍需基于实际画面和声音作内容验收。
-
-机器级提交由 `VideoSubmissionGuard` 串行保护，互斥覆盖该次提交和整个同步等待周期。持久回执位于应用数据目录 `zero-to-story/video/`，可用 `LFO_VIDEO_STATE` 指定；执行进程丢失后，它继续阻塞未知任务，直到依据原任务证据核实结束。回执编号与对应 Canvas run 的 `request_id` 一致。诊断或核实原任务时运行：
-
-```powershell
-python -m lfo.comfy.admission
-python -m lfo.comfy.admission --reconcile <canvas-request-id>
-```
-
-第二条命令只读取原 Comfy `/history`，不会重新提交，也不会直接改写画布状态。没有远端编号、空队列或本地停止等待都不能证明原任务已经结束。
-
-真实视频生成只在页面已经确认当前 run 且 provider 集成确有需要时执行。环境检查、文档维护和测试不触发生成。
-
-## 自动启动已有服务
-
-本地服务离线时，图片、视频和 TTS 共用连接层自动通过 `comfy launch` 启动已配置安装，等待 `/object_info` 就绪后才上传和提交。无需 ComfyUI Desktop 或用户另发命令。在线实例直接复用；远程地址不会触发本机启动。
-
-安装路径和原启动选项来自 `comfy env`；Python 环境依次使用 `LFO_COMFY_VENV`、安装内 `.venv` / `venv` 或 Desktop 安装旁已有的 `standalone-env`，不会继承画布自己的虚拟环境。未发现独立环境时沿用 CLI 的系统解释器。地址、端口与提交配置一致。可以用 `LFO_COMFY_VENV` 指定已有模型环境，不会自动安装依赖。
-
-启动与生成共用机器互斥，未知提交回执仍阻止操作。启动最长等待 180 秒，超时保留 startup.json 防止重复拉起；日志为应用状态目录 video/startup.log。服务就绪后启动记录解除；失败时核实原进程和日志，不清理用户数据库、不换备用配置。
+真实生成只执行已确认且输入明确的画布请求。环境检查、文档维护和自动测试不启动真实媒体生成。

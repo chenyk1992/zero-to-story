@@ -2,7 +2,7 @@
 
 ## 来源与适用版本
 
-准备参数依据 2026-09-14 读取的上游源码；运行时以安装版本和 `/object_info` 为准。
+准备参数依据 2026-09-14 读取的上游源码；运行时以安装版本和 MCP `nodes` / `validate_workflow` 的实时结果为准。
 
 - [Qwen3-TTS 官方模型和音色说明](https://github.com/QwenLM/Qwen3-TTS)：Eric 为四川方言成都男声；1.7B CustomVoice 支持指令控制。
 - [插件说明](https://github.com/flybirdxx/ComfyUI-Qwen-TTS)：安装、模型搜索和 attention 选项。
