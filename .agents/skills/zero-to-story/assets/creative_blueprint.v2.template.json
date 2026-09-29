@@ -81,6 +81,7 @@
         "visual_asset_policy": "storyboard_board",
         "storyboard_layout": "2x2",
         "first_frame_source": null,
+        "first_frame_guide_source": null,
         "last_frame_source": null,
         "runtime_input_keys": ["storyboard_board.P001"],
         "planning_only_asset_keys": [],

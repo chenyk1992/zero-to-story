@@ -100,6 +100,33 @@ def test_reference_pixel_budget_preserves_aspect(tmp_path):
     assert (result["width"], result["height"]) == (1216, 864)
 
 
+@pytest.mark.parametrize("mode", ["reference", "edit"])
+@pytest.mark.parametrize("cache_device", [None, "auto", "off"])
+def test_reference_cache_control_is_frozen_and_wired(tmp_path, mode, cache_device):
+    value = snapshot(tmp_path, mode, 1)
+    if mode == "edit":
+        value["parameters"] = {"seed": 42}
+    value["parameters"]["cache_device"] = cache_device
+    workflow, normalized = qwen.prepare_workflow(
+        value, uploader=lambda p: p.name, inspect_fn=inspect
+    )
+    expected = cache_device or "auto"
+    assert normalized["cache_device"] == expected
+    assert workflow["9"]["inputs"]["device"] == expected
+    assert workflow["6"]["inputs"]["model"] == ["9", 0]
+    assert workflow["4"]["inputs"]["prompt"] == value["prompt"]
+
+
+@pytest.mark.parametrize("mode,device", [("create", "off"), ("reference", "invalid")])
+def test_invalid_cache_control_stops_before_upload(tmp_path, mode, device):
+    value = snapshot(tmp_path, mode, int(mode == "reference"))
+    value["parameters"]["cache_device"] = device
+    calls = []
+    with pytest.raises(ValueError):
+        qwen.prepare_workflow(value, uploader=lambda p: calls.append(p), inspect_fn=inspect)
+    assert not calls
+
+
 def test_defaults_and_seed_are_recorded(tmp_path):
     value = snapshot(tmp_path)
     del value["parameters"]["seed"]
@@ -110,6 +137,38 @@ def test_defaults_and_seed_are_recorded(tmp_path):
     assert workflow["6"]["inputs"]["cfg"] == 1
     assert 0 <= normalized["seed"] <= 2**53 - 1
     assert workflow["6"]["inputs"]["seed"] == normalized["seed"]
+
+
+@pytest.mark.parametrize("mode", ["create", "reference", "edit"])
+@pytest.mark.parametrize("backend", [None, "default", "pytorch"])
+def test_attention_backend_preserves_reference_chain(tmp_path, mode, backend):
+    value = snapshot(tmp_path, mode, int(mode != "create"))
+    if mode == "edit":
+        value["parameters"] = {"seed": 42}
+    value["parameters"]["attention_backend"] = backend
+    workflow, normalized = qwen.prepare_workflow(
+        value, uploader=lambda p: p.name, inspect_fn=inspect
+    )
+    model = ["1" if mode == "create" else "9", 0]
+    assert normalized["attention_backend"] == (backend or "default")
+    if backend == "pytorch":
+        assert workflow["6"]["inputs"]["model"] == ["10", 0]
+        assert workflow["10"]["inputs"] == {
+            "model": model, "attention": "pytorch attention"
+        }
+    else:
+        assert "10" not in workflow
+        assert workflow["6"]["inputs"]["model"] == model
+    assert workflow["4"]["inputs"]["prompt"] == value["prompt"]
+
+
+def test_invalid_attention_backend_stops_before_upload(tmp_path):
+    value = snapshot(tmp_path, "reference", 1)
+    value["parameters"]["attention_backend"] = "invalid"
+    calls = []
+    with pytest.raises(ValueError):
+        qwen.prepare_workflow(value, uploader=lambda p: calls.append(p), inspect_fn=inspect)
+    assert not calls
 
 
 @pytest.mark.parametrize("empty", [None, ""])

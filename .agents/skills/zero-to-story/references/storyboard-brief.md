@@ -32,7 +32,7 @@
 - 每个边界登记唯一的 `transition ownership`：共享动作只能由前一个或后一个 Panel 完成；另一段只承接完成后的状态。
 - 边界选择与声音归属按[连续场景的分段](storyboard-production.md#连续场景的分段)处理，写入现有转场、声音与连续性字段；画面切点不强制等于对白或 BGM 的终点。
 - 后一个 Panel 的首个有效动作必须从边界锚点立即推进，禁止倒带、重置、回到动作起点或复演上一段收尾。
-- 同场连续接力优先 I2VA + 上一段真实尾帧首帧锁；同时硬锁首尾才用 FL2VA；需要分镜板承载强一致性控制或明确硬切时才用 R2V。R2V 只使用 `placement: "fixed"` 与明确的 `ref_image_N`、`ref_video_N` 或 `ref_audio_N` 槽位，参考图不等于精确首帧锁。
+- 同场连续接力按[控制方式](storyboard-production.md#选择控制方式)选最少的有效输入。只需精确开场且首帧信息足够时可用 I2VA；还需人物身份或声音参考时，核对本地 R2V 加可选首帧引导。R2V 的普通参考占明确的 `ref_image_N`、`ref_video_N` 或 `ref_audio_N` 槽位，不冒充首帧引导；引导也不承诺像素级锁定。
 - 每个实际版本按共享规则做一次内容验收；仅下游需要时从 `ACCEPT` 视频提取真实尾帧。
 - 完整成片只对已接受的 Canvas 输出做确定性媒体处理；`match-cut` 是剪辑关系。淡化、黑场和声音桥接须由单个 Clip 完整持有，或在最终时间线中以已确认的确定性处理实现，不触发生成模型。
 
@@ -74,7 +74,7 @@
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C001 | P001 | [0–x s] | B001、B002 | 开场 | [内容] | [左/右/N/A] | [内容] | [对象/N/A] | [左→右/N/A] | [词典词] | [内容] | [内容] |
 
-涉及追逐、对话、交接、主观视角或前后景关系时，机位、轴线侧、人物朝向、目标/视线和屏幕运动不得省略。空镜和纯物件特写可明确写 `N/A`。`光照意图` 写逐镜主光方向、色温与时段变化；与场景基调一致可写"同场景基调"，与前镜相同可写"同前"；[画面与声音接缝](video-qc.md#画面与声音接缝)的光线检查以此为据。
+涉及追逐、对话、交接、主观视角或前后景关系时，机位、轴线侧、人物朝向、目标/视线和屏幕运动不得省略。空镜和纯物件特写可明确写 `N/A`。`光照意图` 按目标媒介写关键主体的受光或明暗关系；画面有明确光源时再写方向、色温和相关变化。与场景基调一致可写“同场景基调”，与前镜相同可写“同前”；[画面与声音接缝](video-qc.md#画面与声音接缝)的光线检查以此为据。
 
 每行 Beat 仍只表达一个可见变化或表演时刻。`锁定末态` 只写动作完成后的可见状态，不写无法拍摄的抽象情绪。`运镜` 使用 [creative-assets.md 的运镜词典](creative-assets.md#运镜词汇与摄影动作词典)，在同一栏补充叙事作用、触发与结束构图；不只填写术语。机位/景别栏可按需补焦距、景深与构图意图（如 "85mm 浅景深"、"前景遮挡"），术语见同一词典。
 
@@ -88,24 +88,24 @@
 
 | Panel | Operation | STEP 3 资产策略 | R2V 分镜布局 | 精确首帧来源 | 精确尾帧来源 | Runtime inputs | Planning only | 连续/硬切 | 选择理由 |
 |---|---|---|---|---|---|---|---|---|---|
-| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | `none` / `storyboard_board` / `reference_assets` / `scene_keyframe` / `last_frame` | [`1x2` / `2x2` / `2x3` 等；无分镜板时为无] | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key] | [仅用于审阅、不传入的 key] | [连续/硬切] | [一句话] |
+| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | `none` / `storyboard_board` / `reference_assets` / `scene_keyframe` / `last_frame` | [`1x2` / `2x2` / `2x3` 等；无分镜板时为无] | [I2V/FL2V 的 asset key / 无] | [asset key / 无] | [真正传入视频模型的 key；R2V 有首帧引导时先列引导] | [仅用于审阅、不传入的 key] | [连续/硬切] | [一句话；R2V 如用首帧引导，写明来源和用途] |
 
 `visual_asset_policy` 只描述 STEP 3 需要补齐的资产：
 
 - `none`：不调用图片模型；用于 T2V，或等待上一 Clip 通过版真实尾帧的连续 I2V。
-- `storyboard_board`：R2V 在 STEP 1 先确定 `rowsxcolumns` 布局，格数为 2–6；STEP 3 一次生成或复用一张完整电影画面分镜板，不逐格生成，不后期拼接。
+- `storyboard_board`：R2V 在 STEP 1 先确定 `rowsxcolumns` 布局，格数为 2–6；STEP 3 一次生成或复用一张符合目标媒介的完整分镜板，不逐格生成，不后期拼接。
 - `reference_assets`：R2V 复用已明确用途的普通参考，各自占一个 typed fixed 槽位；不强制分镜板，不声称精确首帧锁。
-- `scene_keyframe`：生成或复用一张彩色场景/首帧关键帧，用于新场景 I2V。
+- `scene_keyframe`：生成或复用一张符合目标媒介的场景/首帧关键帧，用于新场景 I2V。
 - `last_frame`：为 FL2V 生成一张精确目标尾帧；首帧通常来自上一 Clip 的通过版真实尾帧。
 
 模式只按控制需求选择，不按题材标签选择：
 
 - `T2V`：没有精确帧或不可替代的身份参考，适合空镜、氛围、一次性环境和弱身份远景；必须使用需要的角色/场景文本锚点。
-- `I2V`：需要从上一真实尾帧或批准彩色关键帧准确起步；首帧应已包含必须一致的主要人物和场景。
+- `I2V`：需要从上一真实尾帧或已确认的关键帧起步；首帧应已包含必须一致的主要人物和场景。
 - `FL2V`：首尾状态都必须准确，且主体是单条连续运动路径。
-- `R2V`：强一致性、多状态参考或明确进入新机位的硬切；可用一张自包含电影画面分镜板或用途明确的普通参考，不能声称普通参考是精确首帧。
+- `R2V`：强一致性、多状态参考或明确进入新机位的硬切；可用一张自包含分镜板或用途明确的普通参考，不能声称普通参考是精确首帧。
 
-蓝图中 `runtime_input_keys` 必须等于该 Panel 所有 Setup `reference_keys` 的有序并集，且与 `planning_only_asset_keys` 不重叠。I2V 只能有唯一 `first_frame_source`；FL2V 只能依次有 `first_frame_source` 和 `last_frame_source`；T2V 不带视觉引用；R2V 至少要有当前 Panel 明确规划的 typed reference：选择 `storyboard_board` 时恰有一个 `storyboard_board.<panel>` 分镜板 key，选择 `reference_assets` 时使用已列出的普通参考。生成分镜板时使用的角色卡、场景图和板内格子不自动再次加入 H3；只有另有不可替代用途的非分镜参考才可显式追加。若模式与素材能力冲突，退回故事板修正，不让提示词阶段静默换模式或丢弃参考。
+蓝图中 `runtime_input_keys` 按顺序列出该 Panel 的运行时素材：R2V 如有首帧引导，先列 `first_frame_guide_source`，再列所有 Setup `reference_keys` 的有序并集；同一素材只列一次。其他模式按各自首尾帧和引用规则填写。它不能与 `planning_only_asset_keys` 重叠。I2V 只能有唯一 `first_frame_source`；FL2V 只能依次有 `first_frame_source` 和 `last_frame_source`；T2V 不带视觉引用。R2V 除可选引导外，仍至少要有一项普通参考：选择 `storyboard_board` 时恰有一个 `storyboard_board.<panel>` 分镜板 key，选择 `reference_assets` 时使用已列出的普通参考。生成分镜板时使用的角色卡、场景图和板内格子不自动再次加入 H3；只有另有不可替代用途的非分镜参考才可显式追加。若模式与素材能力冲突，退回故事板修正，不让提示词阶段静默换模式或丢弃参考。
 
 ### Panel ready
 

@@ -1,5 +1,5 @@
 # GPT-6 适配变更说明：已授权且输入充分时直接推进；保留 R2V 单板、六 Beat 语义映射、Panel 串行和 Canvas 固定快照边界。
 interface:
   display_name: "从零故事分镜"
-  short_description: "完成故事板、可变网格电影画面分镜板与逐 Panel Canvas 交接"
-  default_prompt: "使用 $zero-to-story 将我的故事整理成故事板、必要视觉资产和逐 Panel Canvas 交接；需要分镜板时，采用与目标成片一致的电影画面风格。"
+  short_description: "完成故事板、必要视觉资产与逐 Panel Canvas 交接"
+  default_prompt: "使用 $zero-to-story 将我的故事整理成故事板、必要视觉资产和逐 Panel Canvas 交接；需要分镜板时，沿用目标成片的媒介和画风。"

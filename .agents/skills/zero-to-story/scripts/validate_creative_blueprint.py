@@ -540,6 +540,14 @@ def _validate_panel_plans(
         if first_frame_source is not None and not _is_nonempty_text(first_frame_source):
             issues.append(Issue(f"{path}.first_frame_source", "must be non-empty text or null"))
             first_frame_source = None
+        first_frame_guide_source = plan.get("first_frame_guide_source")
+        if first_frame_guide_source is not None and not _is_nonempty_text(first_frame_guide_source):
+            issues.append(Issue(f"{path}.first_frame_guide_source", "must be non-empty text or null"))
+            first_frame_guide_source = None
+        if isinstance(first_frame_guide_source, str) and first_frame_guide_source.startswith(
+            ("storyboard_board.", "storyboard_frame.")
+        ):
+            issues.append(Issue(f"{path}.first_frame_guide_source", "cannot use a storyboard board or cell as a first-frame guide"))
         last_frame_source = plan.get("last_frame_source")
         if last_frame_source is not None and not _is_nonempty_text(last_frame_source):
             issues.append(Issue(f"{path}.last_frame_source", "must be non-empty text or null"))
@@ -583,12 +591,21 @@ def _validate_panel_plans(
                 for reference in references:
                     if _is_nonempty_text(reference) and reference not in shot_reference_keys:
                         shot_reference_keys.append(reference)
-        if runtime_input_keys != shot_reference_keys:
+        expected_runtime_input_keys = [
+            *([first_frame_guide_source] if _is_nonempty_text(first_frame_guide_source) else []),
+            *shot_reference_keys,
+        ]
+        expected_runtime_input_keys = list(dict.fromkeys(expected_runtime_input_keys))
+        if runtime_input_keys != expected_runtime_input_keys:
+            requirement = (
+                "must exactly match the ordered first-frame guide and Setup reference union: "
+                if first_frame_guide_source is not None
+                else "must exactly match the Panel's ordered Setup reference union: "
+            )
             issues.append(
                 Issue(
                     f"{path}.runtime_input_keys",
-                    "must exactly match the Panel's ordered Setup reference union: "
-                    + (", ".join(shot_reference_keys) or "(none)"),
+                    requirement + (", ".join(expected_runtime_input_keys) or "(none)"),
                 )
             )
         planning_setup_overlap = sorted(
@@ -603,15 +620,16 @@ def _validate_panel_plans(
                 )
             )
 
+        reference_count = len(shot_reference_keys if operation == "video.reference_to_video" else runtime_input_keys)
         if (
             isinstance(reference_limit, int)
             and not isinstance(reference_limit, bool)
-            and len(runtime_input_keys) > reference_limit
+            and reference_count > reference_limit
         ):
             issues.append(
                 Issue(
                     f"{path}.runtime_input_keys",
-                    f"has {len(runtime_input_keys)} Clip references but the budget is {reference_limit}",
+                    f"has {reference_count} Clip references but the budget is {reference_limit}",
                 )
             )
 
@@ -741,6 +759,8 @@ def _validate_panel_plans(
                 )
 
         if operation == "video.text_to_video":
+            if first_frame_guide_source is not None:
+                issues.append(Issue(f"{path}.first_frame_guide_source", "is only supported for reference-to-video"))
             if first_frame_source is not None or last_frame_source is not None:
                 issues.append(Issue(path, "text-to-video cannot declare first or last frame sources"))
             if runtime_input_keys:
@@ -748,6 +768,8 @@ def _validate_panel_plans(
             if policy != "none":
                 issues.append(Issue(f"{path}.visual_asset_policy", "must be 'none' for text-to-video"))
         elif operation == "video.image_to_video":
+            if first_frame_guide_source is not None:
+                issues.append(Issue(f"{path}.first_frame_guide_source", "is only supported for reference-to-video"))
             if not _is_nonempty_text(first_frame_source):
                 issues.append(Issue(f"{path}.first_frame_source", "is required for image-to-video"))
             if last_frame_source is not None:
@@ -768,6 +790,8 @@ def _validate_panel_plans(
                     )
                 )
         elif operation == "video.first_last_frame":
+            if first_frame_guide_source is not None:
+                issues.append(Issue(f"{path}.first_frame_guide_source", "is only supported for reference-to-video"))
             if not _is_nonempty_text(first_frame_source):
                 issues.append(Issue(f"{path}.first_frame_source", "is required for first/last-frame video"))
             if not _is_nonempty_text(last_frame_source):
@@ -794,9 +818,9 @@ def _validate_panel_plans(
         elif operation == "video.reference_to_video":
             if first_frame_source is not None or last_frame_source is not None:
                 issues.append(Issue(path, "reference-to-video cannot declare exact frame sources"))
-            if not runtime_input_keys:
+            if not shot_reference_keys:
                 issues.append(
-                    Issue(f"{path}.runtime_input_keys", "must contain at least one fixed reference")
+                    Issue(f"{path}.runtime_input_keys", "must contain at least one fixed reference besides any first-frame guide")
                 )
             if policy not in {"storyboard_board", "reference_assets"}:
                 issues.append(

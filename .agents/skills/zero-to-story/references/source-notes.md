@@ -13,3 +13,9 @@
 本项目主动未采用外部资料中的固定节奏、固定镜头/动作数量、强制换机位、全局 Asset-First 门禁、会话命令和“用户裁定”等流程约束。这里的文字、案例、字段映射和生产边界均按本项目现有契约重新编写，不能替代 Canvas 就绪检查或实际视频验收。
 
 随该来源保留的 MIT 许可证见 [LICENSE.manju-laoli](../LICENSE.manju-laoli)。完整归属也登记在仓库根目录的 `THIRD_PARTY_NOTICES.md`。
+
+## 视觉流程参考
+
+本轮审查了 [ZY / popopo-99 的 zy-cinematic-realism](https://github.com/popopo-99/zy-cinematic-realism/tree/e78c9669d84373e60c2c9d60cf578184ae4b8c3a) 固定版本，参考其将画面风格落实到摄影位置、光源、材质、参考素材用途和结果局部诊断的思路。项目在原有 Style Brief、Medium Lock、Camera Setup、资产用途与 Canvas 交接中重新组织这些通用方法，没有引入该仓库的 Skill、卡片库、模板、模型适配器或代码，也不把非写实画风改成默认摄影写实。
+
+该仓库采用 [CC BY-NC 4.0](https://github.com/popopo-99/zy-cinematic-realism/blob/e78c9669d84373e60c2c9d60cf578184ae4b8c3a/LICENSE)，与上文 MIT 来源不同。若以后需要直接复制或改编其受保护文本、模板或卡片，应单独核对实际用途和授权，不能沿用上文 MIT 声明。

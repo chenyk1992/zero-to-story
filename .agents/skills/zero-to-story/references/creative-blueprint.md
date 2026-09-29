@@ -74,9 +74,11 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 `storyboard_board` 是 R2V 的分镜板策略，使用时必须在 STEP 1 写入规范的 `storyboard_layout: "rowsxcolumns"`，例如 `1x2`、`2x2` 或 `2x3`，且行数乘列数为 2–6；其他策略的该字段必须为 `null` 或省略。STEP 3 按此布局一次生成或复用一张 `storyboard_board.<panel>`，不能生成 `storyboard_frame.*` 独立格子，也不能在事后拼板。
 
-`reference_assets` 用于已明确选择且各有用途的 typed 图片、视频或声音参考。每项按 `kind` 绑定 `reference_image`、`reference_video` 或 `reference_audio` 槽位，列入 `runtime_input_keys`，Setup 引用的有序并集必须相同；不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；开始画面只作为构图/状态参考，不承诺像素级首帧锁。Canvas 槽位按实际 `kind` 和能力说明检查，不能把嵌入视频音轨伪造成独立声音参考。
+`reference_assets` 用于已明确选择且各有用途的 typed 图片、视频或声音参考。每项按 `kind` 绑定 `reference_image`、`reference_video` 或 `reference_audio` 槽位，列入 `runtime_input_keys`，不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；普通参考只提供构图或状态依据，不承诺像素级首帧锁。Canvas 槽位按实际 `kind` 和能力说明检查，不能把嵌入视频音轨伪造成独立声音参考。
 
-`storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。`generation.limits.reference_slots` 统计最终实际输入数，确认 Canvas 请求前仍须核对所选能力。
+本地 R2V 确有首帧引导需要时，可在 `generation.panel_plans` 填 `first_frame_guide_source`；其他模式须为 `null` 或省略。它指向独立的 `first_frame` 输入，不等于 I2VA/FL2VA 的 `first_frame_source`，也不占 `reference_slots`。`runtime_input_keys` 依次记录引导素材和各 Setup 普通参考的有序并集，同一素材承担两种用途时只列一次；Setup 的 `reference_keys` 仍只记录普通参考。如果引导只承担第 0 帧作用，不给它虚构 `<Picture N>` 标签；确实也作为普通参考时才占相应槽位。分镜板整图不能作首帧引导。选择与交接仍须核对 Canvas 当前能力及实际素材来源，规划中的尾帧不冒充已接受的真实尾帧。
+
+`storyboard_board.<panel>` 在 `runtime_input_keys` 中只出现一次，并等于一个 H3 fixed image reference；同一 Panel 所有 Setup 需要使用它时，在各自 `reference_keys` 中复用同一 key。有明确且不可替代用途的声音或其他参考仍可加入，但生成分镜板时使用的角色卡、场景图和板内格子不会自动继续传给 H3。R2V 的 `generation.limits.reference_slots` 只统计普通参考槽，不计独立首帧引导；确认 Canvas 请求前仍须核对所选能力。
 
 ## 接力与 Canvas 交接
 

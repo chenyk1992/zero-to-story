@@ -155,6 +155,8 @@ def normalize_snapshot(snapshot: dict[str, Any], *, inspect_fn=None) -> dict[str
         "width": width,
         "height": height,
         "reference_resolution": resolution,
+        "cache_device": params.get("cache_device", "auto"),
+        "attention_backend": params.get("attention_backend", "default"),
         "seed": int(params.get("seed", secrets.randbelow(2**53))),
         "steps": int(params.get("steps", 25)),
         "transparent": params.get("transparent", False),
@@ -180,7 +182,7 @@ def prepare_workflow(snapshot, *, uploader, inspect_fn=None):
     if normalized["paths"]:
         workflow["9"] = {
             "class_type": "QwenImage21Cache",
-            "inputs": {"model": ["1", 0], "device": "auto", "dtype": "default"},
+            "inputs": {"model": ["1", 0], "device": normalized["cache_device"], "dtype": "default"},
         }
         workflow["6"]["inputs"]["model"] = ["9", 0]
         workflow["4"]["inputs"]["vae"] = ["3", 0]
@@ -190,6 +192,15 @@ def prepare_workflow(snapshot, *, uploader, inspect_fn=None):
         workflow["4"]["inputs"][f"images.image_{index}"] = [node_id, 0]
     if normalized["mode"] == "edit":
         workflow["6"]["inputs"]["latent_image"] = ["4", 2]
+    if normalized["attention_backend"] == "pytorch":
+        workflow["10"] = {
+            "class_type": "ModelAttentionBackend",
+            "inputs": {
+                "model": workflow["6"]["inputs"]["model"],
+                "attention": "pytorch attention",
+            },
+        }
+        workflow["6"]["inputs"]["model"] = ["10", 0]
     return workflow, normalized
 
 

@@ -23,12 +23,14 @@
 - 目标画幅：[W:H]
 - 项目生成参数：[用户选择的 megapixels；sampler_profile（vdn_turbo / native）与 steps；选择依据及适用范围。最迟首包前补齐，后续 Panel 继承；不要从输出尺寸或仅凭步数猜测模式。]
 - Medium Lock：[成片媒介及排除项]
-- Style Brief：[用简短导演阐述说明本章视点、情绪转折，以及色彩、光线、质感、镜头和声音如何服务它；光色随情绪弧有方向性变化（如冷蓝→暖金），全章不是一个调子]
+- Style Brief：[简述本章视点，以及色彩、光线、质感、镜头和声音如何服务叙事；只在剧情需要时安排可见变化，允许全章保持稳定视觉基调]
 - 声音原则：[对白、环境声、动作声、空间声、静默和音乐策略；叙事声音：纯画面 / 第一人称旁白 / 混合，及旁白与画面的分工]
 - 字幕策略：[无 / 外挂 / 烧录 / 两者；锁定对白为单一内容来源，统一样式与安全区，按实际发声定时；烧录只在最终时间线进行]
 - 关键接受要求：[只列影响本片用途的事实；实际验收统一写回 Canvas]
 
 > `creative_blueprint.json` 与本文件在 STEP 1 同步编译并预检。它是机器可读索引，不新增用户审批节点；两者冲突时以本文件为准并重新编译。
+
+本文件保留 Medium Lock、Style Brief 和逐镜光照意图；蓝图只索引结构与素材。准备单 Panel 时，从本文件取当前镜头必要的视觉事实，不假定蓝图已保存这些说明。
 
 ## Panel ready
 
@@ -106,7 +108,7 @@ Panel 的自身事实、时长、Camera Setup、operation、提示词输入、�
 - 氛围：[可见或可听依据]
 - 连续性锚点：[门窗、灯、家具、道路、道具固定位置]
 - 场景文本锚点：[跨镜稳定的空间、材质、主色、光源和天气描述；按需供 T2V/I2V 复用]
-- 场景关键帧：[如需严格布局连续，记录已确认彩色关键帧；否则写“无”]
+- 场景关键帧：[如需严格布局连续，记录与目标媒介一致的已确认关键帧；否则写“无”]
 
 ## 全章节奏图
 
@@ -120,7 +122,7 @@ Panel 的自身事实、时长、Camera Setup、operation、提示词输入、�
 
 | Setup | Panel | 时间范围 | 覆盖 Beat | 与前 Setup | 机位 / 景别 | 轴线侧 | 人物朝向 | 目标 / 视线 | 屏幕运动 | 运镜 | 光照意图 | 声音与锁定末态 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C001 | P001 | [0–x s] | B001、B002 | 开场 | [内容] | [左/右/N/A] | [内容] | [对象/N/A] | [左→右/N/A] | [词典词、叙事作用、触发与结束构图] | [主光方向/色温/时段变化；同场景基调或同前镜可简写] | [内容] |
+| C001 | P001 | [0–x s] | B001、B002 | 开场 | [内容] | [左/右/N/A] | [内容] | [对象/N/A] | [左→右/N/A] | [词典词、叙事作用、触发与结束构图] | [按媒介写受光或明暗关系；明确光源的方向/色温/变化按需填写；同场景基调或同前镜可简写] | [内容] |
 
 关键移动、接触和交接在相应 Beat / 状态中写清起点、路径、接触与完成依据。同场不等于同一个连续镜头；先决定拍法，再选择首尾帧或参考控制方式。
 
@@ -144,10 +146,11 @@ Panel 的自身事实、时长、Camera Setup、operation、提示词输入、�
 
 | Panel | Operation | Board layout (`rowsxcolumns`) | STEP 3 资产策略 | 精确首帧来源 | 精确尾帧来源 | Runtime inputs | Planning only | 连续 / 硬切 | 选择理由 |
 |---|---|---|---|---|---|---|---|---|---|
-| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | [采用分镜板的 R2V 填 `1x2` / `2x2` / `2x3`；格数 2–6；普通参考或非 R2V 写“无”] | `none` / `storyboard_board` / `reference_assets` / `scene_keyframe` / `last_frame` | [asset key / 无] | [asset key / 无] | [真正传入视频模型的 key；R2V 按策略列出分镜板或普通参考] | [仅规划审阅、不传入的 key] | [连续/硬切] | [一句话] |
+| P001 | `video.text_to_video` / `video.image_to_video` / `video.first_last_frame` / `video.reference_to_video` | [采用分镜板的 R2V 填 `1x2` / `2x2` / `2x3`；格数 2–6；普通参考或非 R2V 写“无”] | `none` / `storyboard_board` / `reference_assets` / `scene_keyframe` / `last_frame` | [I2V/FL2V 的 asset key / 无] | [asset key / 无] | [真正传入视频模型的 key；R2V 有首帧引导时先列引导，再列普通参考] | [仅规划审阅、不传入的 key] | [连续/硬切] | [一句话；R2V 如用首帧引导，在此写来源与用途] |
 
-> 先按控制需求选 operation，再决定 STEP 3 资产；不得因为已有分镜板就选 R2V。选择 `storyboard_board` 的 R2V 才在 STEP 1 锁定一个 `rowsxcolumns` 布局（行数 × 列数为 2–6），并把它写入 `storyboard_layout`；STEP 3 只调用一次图片生成，直接输出一张准确网格、准确格数、按从左到右再从上到下排列的自包含电影画面分镜板，不生成独立分镜帧、不后期拼接。资产 key 为 `storyboard_board.<panel>`，H3 将整板作为一张参考，必要时加入用途明确的其他参考；`reference_assets` 选择已明确用途的普通参考，各占一个 typed fixed 槽位，不强制分镜板。
+> 先按控制需求选 operation，再决定 STEP 3 资产；不得因为已有分镜板就选 R2V。选择 `storyboard_board` 的 R2V 才在 STEP 1 锁定一个 `rowsxcolumns` 布局（行数 × 列数为 2–6），并把它写入 `storyboard_layout`；STEP 3 只调用一次图片生成，直接输出一张准确网格、准确格数、按从左到右再从上到下排列且符合目标媒介的分镜板，不生成独立分镜帧、不后期拼接。资产 key 为 `storyboard_board.<panel>`，H3 将整板作为一张参考，必要时加入用途明确的其他参考；`reference_assets` 选择已明确用途的普通参考，各占一个 typed fixed 槽位，不强制分镜板。
 > `none` 不调用图片模型，`storyboard_board` 只与 R2V 配合，`reference_assets` 只与普通参考 R2V 配合，`last_frame` 只与 FL2V 配合。板内格位按顺序映射选定的 Beat、Setup 和每格唯一新增信息；六个 Beat 仍是语义映射，不等于固定格数。I2V 只传首帧，FL2V 只传首帧和尾帧，`Planning only` 素材默认不生成且禁止进入视频模型。
+> R2V 的可选首帧引导在蓝图中写 `first_frame_guide_source`，与普通参考独立，不写入“精确首帧来源”或虚构参考图号；只使用已确认的实际素材或被接受后才可用的真实尾帧。
 
 ## Panel 映射表
 

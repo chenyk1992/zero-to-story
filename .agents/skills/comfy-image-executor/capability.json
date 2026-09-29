@@ -119,6 +119,27 @@
       "integer": true
     },
     {
+      "key": "cache_device",
+      "label": "参考缓存（关闭用于排查，生成更慢）",
+      "type": "select",
+      "group": "advanced",
+      "modes": ["reference", "edit"],
+      "options": [
+        {"value": "auto", "label": "自动（默认）"},
+        {"value": "off", "label": "关闭"}
+      ]
+    },
+    {
+      "key": "attention_backend",
+      "label": "注意力计算（用于画质排查）",
+      "type": "select",
+      "group": "advanced",
+      "options": [
+        {"value": "default", "label": "服务默认"},
+        {"value": "pytorch", "label": "PyTorch"}
+      ]
+    },
+    {
       "key": "reference_resolution",
       "label": "参考图预算边长（默认 0 保持原尺寸）",
       "type": "number",

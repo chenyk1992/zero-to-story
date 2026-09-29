@@ -462,6 +462,72 @@ def test_r2v_accepts_scene_and_identity_references_without_board() -> None:
     assert MODULE.validate_blueprint(_configure_reference_assets()) == []
 
 
+def test_r2v_accepts_separate_first_frame_guide_without_using_reference_slot() -> None:
+    blueprint = _configure_reference_assets()
+    plan = blueprint["generation"]["panel_plans"][0]
+    plan["first_frame_guide_source"] = "scene.guide"
+    plan["runtime_input_keys"] = ["scene.guide", "scene.opening", "character.teacher"]
+    blueprint["generation"]["limits"]["reference_slots"] = 2
+
+    assert MODULE.validate_blueprint(blueprint) == []
+
+
+def test_r2v_guide_may_also_be_an_explicit_picture_reference() -> None:
+    blueprint = _configure_reference_assets()
+    plan = blueprint["generation"]["panel_plans"][0]
+    plan["first_frame_guide_source"] = "scene.opening"
+
+    assert MODULE.validate_blueprint(blueprint) == []
+
+
+def test_r2v_guide_shared_with_later_reference_is_listed_once_first() -> None:
+    blueprint = _configure_reference_assets()
+    plan = blueprint["generation"]["panel_plans"][0]
+    plan["first_frame_guide_source"] = "character.teacher"
+    plan["runtime_input_keys"] = ["character.teacher", "scene.opening"]
+    blueprint["generation"]["limits"]["reference_slots"] = 2
+
+    assert MODULE.validate_blueprint(blueprint) == []
+
+
+def test_r2v_guide_must_be_a_real_runtime_input() -> None:
+    blueprint = _configure_reference_assets()
+    blueprint["generation"]["panel_plans"][0]["first_frame_guide_source"] = "scene.guide"
+
+    issues = MODULE.validate_blueprint(blueprint)
+    assert any("ordered first-frame guide and Setup reference union" in issue.message
+               for issue in issues)
+
+
+def test_r2v_guide_alone_does_not_satisfy_reference_requirement() -> None:
+    blueprint = _configure_reference_assets()
+    plan = blueprint["generation"]["panel_plans"][0]
+    plan["first_frame_guide_source"] = "scene.guide"
+    plan["runtime_input_keys"] = ["scene.guide"]
+    blueprint["generation"]["shots"][0]["reference_keys"] = []
+
+    issues = MODULE.validate_blueprint(blueprint)
+    assert any("at least one fixed reference besides any first-frame guide" in issue.message
+               for issue in issues)
+
+
+def test_first_frame_guide_is_only_for_r2v_and_not_a_storyboard_board() -> None:
+    blueprint = _valid_blueprint()
+    blueprint["generation"]["panel_plans"][1]["first_frame_guide_source"] = "scene.guide"
+    assert any("only supported for reference-to-video" in issue.message
+               for issue in MODULE.validate_blueprint(blueprint))
+
+    blueprint = _valid_blueprint()
+    plan = blueprint["generation"]["panel_plans"][0]
+    plan["first_frame_guide_source"] = "storyboard_board.P001"
+    assert any("cannot use a storyboard board or cell" in issue.message
+               for issue in MODULE.validate_blueprint(blueprint))
+
+    plan["first_frame_guide_source"] = "storyboard_frame.P001.1"
+    assert any("cannot use a storyboard board or cell" in issue.message
+               for issue in MODULE.validate_blueprint(blueprint))
+
+
 def test_reference_assets_cannot_claim_exact_first_frame() -> None:
     blueprint = _configure_reference_assets()
     blueprint["generation"]["panel_plans"][0]["first_frame_source"] = "scene.opening"
