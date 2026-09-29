@@ -6,6 +6,11 @@
 | --- | --- | --- |
 | 故事、角色、章节、分集剧本 | `short-drama-screenwriter` | 剧情、人物、对白和分集文本；不直接执行视频 |
 | 故事板、角色视觉资产、Panel 交接 | `zero-to-story` | 故事板、视觉控制资产和已确定的 Panel 输入；不编写 H3 提示词 |
+| 宫崎骏／吉卜力启发的手绘动画、未来科幻短片，或其人物/环境参考图；点名 miyazaki-inspired-animation / future-sci-fi-cinematic-generator 的项目方法 | `zero-to-story` 的视觉风格分支 | 以实际参考图确定美术方向并交接到当前视频流程；只要参考图就止于图片。歌曲驱动 MV 仍由 `music-video-creator` 主导 |
+| 歌曲驱动的 MV、音乐时间轴与镜头方案 | `music-video-creator` | 独立 MV 导演方案、必要视觉资产与 Panel 交接；按实际歌曲安排后期 |
+| 歌词贴字、空间文字或复古拼贴 MV；点名 music-video-subtitle-generator / cool-music-video 的项目方法 | `music-video-creator` 的文字/拼贴路线 | 在分镜前确定文字系统、音乐事件响应与表演空间；按需读取项目内对应参考，不以普通字幕或风格标签替代 |
+| 只写歌词、制作歌曲或纯器乐 | `music-video-creator` 的音乐分支 | 只交歌词则止于文本；音频生成交 Canvas，止于真实音频与听审，不扩成 MV |
+| 为已锁定画面配乐 | 原故事/视频主 Skill；复用 `music-video-creator` 的音乐方向 | 画面和对白时点保持锁定；准备音乐要求、实际音轨与后期安排，不以歌曲重排画面 |
 | 单个 Panel 的 MiniMax H3 提示词 | `h3-prompt-writing` | 一份完整提示词；不执行生成或编排运行时 |
 | 节点画布的故事、资产和待办 | `canvas-workspace` | 读取最新画布、保存编辑、领取已确认请求、回填实际媒体；不改画布 API 之外的运行时状态 |
 | 已确认的本地 Comfy 视频快照执行 | `comfy-video-executor` | 按固定快照执行一次并返回实际文件与结果；不写创意、不改冻结输入、不自动重提 |
@@ -18,13 +23,14 @@
 | 明确要 MiniMax voice id 的音色克隆 | `voice-clone` | 授权检查、音频校验和 MiniMax voice id；不替代本地 Qwen3-TTS |
 | 本地多语言语音、Eric 成都男声、声音设计或参考音色复用 | `qwen3-tts` | Qwen3-TTS 三模式的台词、参考转写、授权和听审准备；生成交给 Canvas 音频节点 |
 | 已确认的本地 Qwen3-TTS 音频快照执行 | `comfy-tts-executor` | 由画布 worker 单次执行 CustomVoice、VoiceDesign 或 Base，保留原始音频并回填交付 FLAC |
+| 已确认的本地 MiniMax Music 3 音乐快照执行 | `comfy-music-executor` | 由画布 worker 单次执行并回填实际音乐 FLAC；不编写歌词或重复提交 |
 | 中英文文本去模板化 | `shuorenhua` | 文本审校和改写；不改变事实、责任主体或视频执行契约 |
 
 ## 如何交接
 
 先选负责当前交付物的 Skill，完成这一阶段后才加载下游。已有事实、参数与授权直接沿用，只传当前 Panel 所需信息。创作、执行和验收的共同规则只在共享生产规则维护；字段与接口按需读[画布指南](canvas-guide.md)。
 
-例如“给逐字稿做 B-roll 方案，先别生成”只走 B-roll 规划；明确授权生产后才交 H3 写作和 Canvas。“把已有 H3 提示词放入画布”直接走 Canvas，不再触发创作或提示词优化。Comfy 是服务执行的脚本能力，Agent 不另行启动。
+例如“给逐字稿做 B-roll 方案，先别生成”只走 B-roll 规划；明确授权生产后才交 H3 写作和 Canvas。歌曲、节奏、歌词或演唱主导的 MV 走 `music-video-creator`；普通剧情片带背景音乐仍走故事分镜。“把已有 H3 提示词放入画布”直接走 Canvas，不再触发创作或提示词优化。Comfy 是服务执行的脚本能力，Agent 不另行启动。
 
 ## 外部 Skill
 

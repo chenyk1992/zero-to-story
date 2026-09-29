@@ -145,6 +145,10 @@ describe('canvas graph contract', () => {
     expect(isValidConnection({ source: video.id, sourceHandle: 'output', target: clone.id, targetHandle: 'reference_audio' }, [video, clone])).toBe(false);
     expect(isValidConnection({ source: image.id, sourceHandle: 'output', target: voice.id, targetHandle: 'reference_audio' }, [image, voice])).toBe(false);
 
+    const music = createFlowNode('audio' as never, { x: 640, y: 180 }, 'music');
+    Object.assign(music.data, { provider: 'comfy-minimax-music', mode: 'song' });
+    expect(isValidConnection({ source: voice.id, sourceHandle: 'output', target: music.id, targetHandle: 'reference_audio' }, [voice, music])).toBe(false);
+
     const graph = serializeGraph([voice, video], [], { x: 0, y: 0, zoom: 1 }, []);
     expect(graph.nodes[0]).toMatchObject({ type: 'audio', data: { prompt: '请沿用逐字台词', provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts' } });
     expect(toFlowNode(graph.nodes[0]).data.options).toEqual({ 'comfy-qwen-tts': { speaker: 'Eric', language: 'Chinese', tempo: 1.2 } });

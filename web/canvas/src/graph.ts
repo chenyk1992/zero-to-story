@@ -17,7 +17,7 @@ const LABELS: Record<CanvasNodeType, string> = {
   asset: '素材',
   image: '图片',
   video: '视频',
-  audio: '语音',
+  audio: '音频',
 };
 
 export function newId(prefix: string): string {
@@ -226,6 +226,7 @@ export function isValidConnection(connection: Connection, nodes: FlowNode[]): bo
   }
   if (targetHandle === 'reference_video') return sourceMatches(source, connection.sourceHandle, 'video');
   if (targetHandle === 'reference_audio') {
+    if (target.data.nodeType === 'audio' && target.data.provider === 'comfy-minimax-music') return false;
     if (target.data.nodeType === 'audio' && source.data.nodeType !== 'audio' && source.data.nodeType !== 'asset') return false;
     const outputKind = knownKind(outputForNode(source, connection.sourceHandle || SOURCE_HANDLE));
     return outputKind ? outputKind === 'audio' : source.data.nodeType === 'video' || sourceMatches(source, connection.sourceHandle, 'audio');

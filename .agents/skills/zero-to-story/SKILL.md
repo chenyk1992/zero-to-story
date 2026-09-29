@@ -1,6 +1,6 @@
 ---
 name: zero-to-story
-description: 将灵感、小说、剧本或短剧交接转成故事板、角色与必要视觉资产，再按 Panel 交给 H3 提示词和 Canvas 生产。用于故事分镜与视频创作交接；不直接编写 H3 提示词或调用视频提供方。
+description: 将灵感、小说、剧本或短剧交接转成故事板、角色与必要视觉资产，再按 Panel 交给 H3 提示词和 Canvas 生产。用于故事分镜、宫崎骏／吉卜力启发的手绘动画、未来科幻短片及其视觉资产；不直接编写 H3 提示词或调用视频提供方。
 ---
 
 # 故事到分镜与视频交接
@@ -15,7 +15,9 @@ description: 将灵感、小说、剧本或短剧交接转成故事板、角色�
 | --- | --- |
 | 剧本、改编与叙事声音 | 读[剧本与改编层](references/script-adaptation.md)，再进入故事板设计 |
 | 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
+| 宫崎骏／吉卜力启发的手绘动画，或未来科幻短片与参考图 | 按需读[视觉风格参考](references/visual-style-profiles.md)的对应分支，将具体美术规则写回风格与资产字段；项目采用方法涵盖 miyazaki-inspired-animation / future-sci-fi-cinematic-generator，不启动其外部生产流程 |
 | 细化当前镜头的动作或表演 | 仅按需要读[动作导演参考](references/action-direction.md)或[表演导演参考](references/performance-direction.md)，再写回已有的 Setup、状态与转场字段 |
+| 为已锁定画面制作配乐 | 保持本故事流程，只复用[音乐方向的锁定画面分支](../music-video-creator/references/music-direction.md#锁定画面配乐)，保留画面、对白与动作时点 |
 | 完整故事生产的结构化蓝图 | 从故事板编译时读[创作蓝图](references/creative-blueprint.md) |
 | 角色图、分镜板、关键帧 | 只在准备相应资产时读[视觉资产](references/creative-assets.md) |
 | 单 Panel 提示词和生成交接 | 输入准备好后读[Panel 交接](references/panel-execution.md)，调用 [h3-prompt-writing](../h3-prompt-writing/SKILL.md) |

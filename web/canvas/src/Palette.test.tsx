@@ -39,7 +39,7 @@ describe('asset navigation', () => {
     const onAdd = vi.fn(); const onToggle = vi.fn();
     await act(async () => root.render(<Palette nodes={[]} collapsed onToggle={onToggle} onAdd={onAdd} onSelect={vi.fn()} />));
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加视频"]')!.click());
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加语音"]')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加音频"]')!.click());
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="展开资产栏"]')!.click());
     expect(onAdd).toHaveBeenCalledWith('video');
     expect(onAdd).toHaveBeenCalledWith('audio');

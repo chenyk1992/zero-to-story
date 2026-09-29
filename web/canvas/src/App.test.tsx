@@ -409,12 +409,12 @@ describe('App responsive workspace', () => {
     await act(async () => root.render(<App />));
     await settleApp();
 
-    const addVoice = container.querySelector<HTMLButtonElement>('[aria-label="添加语音"]');
+    const addVoice = container.querySelector<HTMLButtonElement>('[aria-label="添加音频"]');
     expect(addVoice).not.toBeNull();
     await act(async () => addVoice?.click());
 
     const routeSelects = container.querySelectorAll<HTMLSelectElement>('.route-section select');
-    expect(container.querySelector('.inspector h2')?.textContent).toContain('语音');
+    expect(container.querySelector('.inspector h2')?.textContent).toContain('音频');
     expect(routeSelects[0]?.value).toBe('comfy-qwen-tts');
     expect(routeSelects[1]?.value).toBe('qwen3-tts-1.7b-customvoice');
     expect(routeSelects[2]?.value).toBe('tts');

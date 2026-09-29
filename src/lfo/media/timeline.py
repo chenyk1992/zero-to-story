@@ -8,6 +8,7 @@ the ``concat`` filter with full re-encoding.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
@@ -26,8 +27,15 @@ class ClipSegment:
     audio_mix: dict[str, object] | None = None
     transition_in: str | None = None
     has_audio: bool | None = None
+    target_frame_count: int | None = None
 
     def edited_duration_ms(self) -> int:
+        if self.target_frame_count is not None and (
+            isinstance(self.target_frame_count, bool)
+            or not isinstance(self.target_frame_count, int)
+            or self.target_frame_count <= 0
+        ):
+            raise ValueError(f"Invalid target_frame_count for clip {self.clip_id}")
         if self.duration_ms <= 0:
             raise ValueError(f"Invalid duration for clip {self.clip_id}")
         if self.source_in_ms < 0:
@@ -195,6 +203,7 @@ class TimelineAssembler:
         if (
             probes is not None
             and not any(s.has_trim for s in spec.segments)
+            and not any(s.target_frame_count is not None for s in spec.segments)
             and self._all_segments_compatible(probes, spec)
         ):
             return self._build_copy_command(spec, output)
@@ -205,7 +214,7 @@ class TimelineAssembler:
         if probes is not None:
             for segment, probed in zip(spec.segments, probes, strict=True):
                 segment.has_audio = probed.get("has_audio", False)
-        command = ["ffmpeg", "-y"]
+        command = [os.environ.get("LFO_FFMPEG") or "ffmpeg", "-y"]
         include_audio = any(segment.has_audio is not False for segment in spec.segments)
         video_indices: list[int] = []
         audio_indices: list[int | None] = []
@@ -259,6 +268,10 @@ class TimelineAssembler:
                 )
             if target_fps > 0:
                 video_chain.append(f"fps={target_fps:g}")
+            if segment.target_frame_count is not None:
+                if target_fps <= 0:
+                    raise ValueError("target_frame_count requires a positive output_fps")
+                video_chain.extend([f"trim=end_frame={segment.target_frame_count}", "setpts=PTS-STARTPTS"])
             video_chain.extend(["setsar=1", "format=yuv420p"])
             video_label = f"[v{index}]"
             filter_parts.append(f"[{video}:v]{','.join(video_chain)}{video_label}")
@@ -287,9 +300,12 @@ class TimelineAssembler:
                         "asetpts=PTS-STARTPTS",
                         "aresample=48000",
                         "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo",
-                        f"apad=whole_dur={segment.edited_duration_ms() / 1000:.3f}",
                     ]
                 )
+                audio_duration = (segment.target_frame_count / target_fps
+                                  if segment.target_frame_count is not None else segment.edited_duration_ms() / 1000)
+                audio_chain.extend([f"apad=whole_dur={audio_duration:.6f}",
+                                    f"atrim=duration={audio_duration:.6f}"])
                 audio_label = f"[a{index}]"
                 filter_parts.append(f"[{audio}:a]{','.join(audio_chain)}{audio_label}")
                 audio_labels.append(audio_label)
@@ -345,7 +361,7 @@ class TimelineAssembler:
                 escaped = Path(segment.file_path).resolve().as_posix().replace("'", "'\\''")
                 fh.write(f"file '{escaped}'\n")
         return [
-            "ffmpeg", "-y",
+            os.environ.get("LFO_FFMPEG") or "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list),

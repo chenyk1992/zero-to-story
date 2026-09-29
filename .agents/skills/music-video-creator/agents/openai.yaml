@@ -1,0 +1,4 @@
+interface:
+  display_name: "音乐与 MV 创作"
+  short_description: "创作歌词与音乐，按实际音轨编排 MV 表演、空间歌词、拼贴镜头与后期"
+  default_prompt: "使用 $music-video-creator，按我要求的范围创作音乐或 MV；需要 MV 时让实际歌曲驱动表演、镜头和文字，并落实我指定的视觉方法。"

@@ -76,4 +76,13 @@ describe('media card controls', () => {
     expect(card.textContent).toContain('我会按原文说完。');
     expect(card.textContent).toContain('语音合成');
   });
+
+  it('does not offer an unsupported audio reference on Music 3 cards', () => {
+    const node = createFlowNode('audio' as never, { x: 0, y: 0 }, 'music');
+    node.data.provider = 'comfy-minimax-music';
+    node.data.mode = 'song';
+    expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['related']);
+    node.data.mode = 'instrumental';
+    expect([...render(node).querySelectorAll('[data-handle-type="target"]')].map((port) => port.getAttribute('data-handle'))).toEqual(['related']);
+  });
 });

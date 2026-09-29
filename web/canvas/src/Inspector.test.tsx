@@ -59,6 +59,19 @@ function ttsCapability(): Capability {
   };
 }
 
+function musicCapability(): Capability {
+  return {
+    id: 'comfy-minimax-music', label: 'MiniMax Music 3', node_types: ['audio'],
+    execution: 'script', available: true, installed: true,
+    models: [{ id: 'minimax-music-3', label: 'Music 3' }],
+    modes: [{ id: 'song', label: '歌曲' }, { id: 'instrumental', label: '纯器乐' }],
+    fields: [
+      { key: 'lyrics', label: '歌词', type: 'text', group: 'specs', modes: ['song'], required: true, multiline: true },
+      { key: 'max_duration', label: '最长生成时长（秒）', type: 'number', group: 'specs', required: true, min: 0.04, max: 360 },
+    ],
+  };
+}
+
 function makeVideo(overrides: Partial<FlowNode['data']> = {}) {
   const node = createFlowNode('video', { x: 0, y: 0 }, 'video-test');
   node.data.label = '夜站镜头';
@@ -120,6 +133,22 @@ async function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe('Inspector editing behavior', () => {
+  it('edits Music 3 caption and multiline lyrics separately without submitting', async () => {
+    const node = makeAudio({ provider: 'comfy-minimax-music', model: 'minimax-music-3', mode: 'song', prompt: '温柔的钢琴流行', options: { 'comfy-minimax-music': { lyrics: '[Verse]\n雨停了。', max_duration: 60 } } });
+    const events = await renderInspector(node, [musicCapability(), ttsCapability()]);
+    const fields = [...container.querySelectorAll<HTMLLabelElement>('label.field')];
+    const caption = fields.find((field) => field.textContent?.includes('音乐描述'))?.querySelector('textarea');
+    const lyrics = fields.find((field) => field.textContent?.includes('歌词'))?.querySelector('textarea');
+    expect(caption?.value).toBe('温柔的钢琴流行');
+    expect(lyrics?.value).toBe('[Verse]\n雨停了。');
+    expect(container.textContent).toContain('音乐规格');
+    expect(container.textContent).not.toContain('语速倍率');
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    setter?.call(lyrics, '[Chorus]\n天亮了！');
+    await act(async () => lyrics!.dispatchEvent(new Event('input', { bubbles: true })));
+    expect(events.onUpdateOptions).toHaveBeenCalledWith('comfy-minimax-music', 'lyrics', '[Chorus]\n天亮了！');
+    expect(events.onExecute).not.toHaveBeenCalled();
+  });
   it('immediately marks reordered references as draft changes until a new run', async () => {
     const node = makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v', duration: undefined, aspect_ratio: undefined });
     const run: Run = { id: 'queued', node_id: node.id, status: 'queued', outputs: [], created_at: '2026-09-22T00:00:00Z',

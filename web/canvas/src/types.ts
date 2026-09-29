@@ -124,6 +124,7 @@ export interface CapabilityField {
   min?: number;
   max?: number;
   integer?: boolean;
+  multiline?: boolean;
   values?: (string | number)[];
   modes?: string[];
   default?: string | number | boolean;

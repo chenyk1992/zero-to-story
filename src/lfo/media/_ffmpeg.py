@@ -15,7 +15,7 @@ class MediaCommandError(RuntimeError):
 
 
 def run_command(
-    command: list[str], *, timeout_s: float = 300.0
+    command: list[str], *, timeout_s: float = 300.0, cwd: str | Path | None = None
 ) -> subprocess.CompletedProcess[str]:
     """Run a media command without a shell and retain a useful error summary."""
     try:
@@ -26,6 +26,7 @@ def run_command(
             text=True,
             timeout=timeout_s,
             shell=False,
+            cwd=cwd,
         )
     except FileNotFoundError as exc:
         raise MediaCommandError(f"Media executable not found: {command[0]}") from exc

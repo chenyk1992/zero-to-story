@@ -29,7 +29,7 @@ const NODE_LABELS: Record<string, string> = {
   asset: '素材',
   image: '图片',
   video: '视频',
-  audio: '语音',
+  audio: '音频',
   document: '文档',
   section: '分区',
 };
@@ -85,6 +85,7 @@ function providerLabel(data: StoryNodeData): string {
   const normalized = provider.toLowerCase().replace(/[_\s-]/g, '');
   if (provider === 'comfy-qwen-image') return 'Qwen 2.1';
   if (provider === 'comfy-qwen-tts') return 'Qwen3-TTS';
+  if (provider === 'comfy-minimax-music') return 'Music 3';
   if (normalized.includes('imagegen')) return '内置生图';
   if (normalized.includes('comfy')) return 'Comfy / H3';
   if (!provider) return data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio' ? '请选择生成方式' : '未选择生成方式';
@@ -122,7 +123,10 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
   const data = rawData as StoryNodeData;
   const kind = data.nodeType;
   const isMedia = kind === 'image' || kind === 'video' || kind === 'audio';
-  const targets = (TARGETS[kind] || []).filter((target) => kind !== 'video' || !data.mode || videoTargetIds(data).includes(target.id));
+  const targets = (TARGETS[kind] || []).filter((target) => {
+    if (kind === 'audio' && data.provider === 'comfy-minimax-music') return false;
+    return kind !== 'video' || !data.mode || videoTargetIds(data).includes(target.id);
+  });
   const derivedOutputs = data.derived_outputs || [];
   const targetSignature = `${targets.map((target) => target.id).join('|')}::${derivedOutputs.map((output) => output.id).join('|')}`;
   const isRunning = data.runStatus === 'queued' || data.runStatus === 'pending_agent' || data.runStatus === 'running';
@@ -196,7 +200,7 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
             {prompt ? <button className={`node-prompt-summary${promptExpanded ? ' expanded' : ''}`} type="button" onClick={(event) => { event.stopPropagation(); setPromptExpanded((value) => !value); }} aria-expanded={promptExpanded}>
               <span className="node-prompt-copy"><Icon name={kind === 'audio' ? 'audio' : 'film'} size={12} /><span>{promptCaption}</span></span>
               <b>{promptExpanded ? '收起' : '展开'}<Icon name={promptExpanded ? 'chevronUp' : 'chevronDown'} size={12} /></b>
-            </button> : <div className="node-prompt-empty"><Icon name="info" size={13} /><span>{kind === 'audio' ? '未填写逐字台词' : '未填写提示词'}</span></div>}
+            </button> : <div className="node-prompt-empty"><Icon name="info" size={13} /><span>{kind === 'audio' ? data.provider === 'comfy-minimax-music' ? '未填写音乐描述' : '未填写逐字台词' : '未填写提示词'}</span></div>}
             <div className="node-meta" aria-label="生成规格">
               <span className="node-provider">{providerLabel(data)}</span>
               {data.mode && <span>{MODE_LABELS[data.mode] || data.mode}</span>}

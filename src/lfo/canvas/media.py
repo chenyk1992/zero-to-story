@@ -220,12 +220,19 @@ class CanvasMedia:
                 )
                 shutil.copyfile(source, target)
             asset: dict[str, Any] = self.asset(target, output.get("name"))
+            with target.open("rb") as stream:
+                asset["sha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
             if isinstance(output.get("metadata"), dict):
+                declared_digest = output["metadata"].get("sha256")
+                if declared_digest is not None and declared_digest != asset["sha256"]:
+                    raise ValueError("输出媒体 SHA-256 与执行回执不符")
                 asset["metadata"] = {
                     key: output["metadata"][key]
                     for key in ("duration_ms", "width", "height", "codec", "fps", "has_audio", "has_alpha", "has_transparency", "has_visible_pixels", "seed", "steps", "sample_rate", "channels", "tempo", "raw_duration_ms", "audio_codec")
                     if key in output["metadata"]
                 }
+                if output["metadata"].get("listening_status") == "INCONCLUSIVE":
+                    asset["metadata"]["listening_status"] = "INCONCLUSIVE"
             result.append(asset)
         return result
 

@@ -34,7 +34,7 @@ const KIND_LABELS: Record<CanvasNodeType, string> = {
   asset: '素材组件',
   image: '图片创作卡',
   video: '视频创作卡',
-  audio: '语音生成卡',
+  audio: '音频生成卡',
 };
 const STORY_KIND_LABELS: Record<StoryNodeType, string> = { ...KIND_LABELS, document: '文档组件', section: '分区组件' };
 
@@ -277,7 +277,7 @@ function CapabilityFieldEditor({ field, value, onChange }: { field: CapabilityFi
   if (field.type === 'number') {
     return <NumberField label={field.label} value={typeof effectiveValue === 'number' ? effectiveValue : effectiveValue === undefined || effectiveValue === '' ? undefined : Number(effectiveValue)} min={field.min} max={field.max} step={field.integer ? 1 : undefined} placeholder={field.required ? defaultHint : undefined} onChange={onChange} optional={!field.required} required={field.required} />;
   }
-  return <TextField label={field.label} value={String(effectiveValue ?? '')} onChange={onChange} placeholder={field.required ? defaultHint : undefined} optional={!field.required} required={field.required} />;
+  return <TextField label={field.label} value={String(effectiveValue ?? '')} onChange={onChange} placeholder={field.required ? defaultHint : undefined} multiline={field.multiline} optional={!field.required} required={field.required} />;
 }
 
 export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, saveBlocked, onUpdate, onUpdateOptions, onMoveReference, onSelectNode, onRemove, onExecute, onUploadAsset, onImportAssetPath, onCompositionChange, onOpenPreview, onOpenMedia, onClose }: InspectorProps) {
@@ -339,6 +339,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
   }
 
   const data = node.data as unknown as StoryNodeData;
+  const isMusic = data.nodeType === 'audio' && data.provider === 'comfy-minimax-music';
   const referenceRunKey = orderedLatestRun ? `${node.id}:${orderedLatestRun.id}` : undefined;
   const draftChanged = Boolean((referenceRunKey && reorderedRun === referenceRunKey) || data.resultChanged || draftDiffersFromRun(data, orderedLatestRun));
   const latestRunLabel = orderedLatestRun ? (RUN_STATUS_LABELS[orderedLatestRun.status] || orderedLatestRun.status) : '';
@@ -396,7 +397,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
 
         {(data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio') && (
           <Section title="提示词" className="prompt-section">
-            <TextField label={data.nodeType === 'image' ? '图片提示词' : data.nodeType === 'audio' ? '逐字台词' : '视频提示词'} value={data.prompt} onChange={updatePrompt} placeholder={data.nodeType === 'image' ? '描述想要的画面…' : data.nodeType === 'audio' ? '输入需要合成的台词，保持文字原样…' : '描述主体、动作、镜头运动和风格…'} multiline rows={6} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
+            <TextField label={data.nodeType === 'image' ? '图片提示词' : isMusic ? '音乐描述' : data.nodeType === 'audio' ? '逐字台词' : '视频提示词'} value={data.prompt} onChange={updatePrompt} placeholder={data.nodeType === 'image' ? '描述想要的画面…' : isMusic ? '描述曲风、人声、编曲和情绪变化…' : data.nodeType === 'audio' ? '输入需要合成的台词，保持文字原样…' : '描述主体、动作、镜头运动和风格…'} multiline rows={6} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
             <p className="field-help prompt-help">保存会更新草稿；确认执行后才会固定本次输入。</p>
           </Section>
         )}
@@ -443,13 +444,13 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
             </Section>}
             {(data.nodeType === 'video' || data.nodeType === 'image' || data.nodeType === 'audio') && (
               <>
-                <Section title={data.nodeType === 'video' ? '视频规格' : data.nodeType === 'audio' ? '语音规格' : '图片规格'} className="specs-section">
+                <Section title={data.nodeType === 'video' ? '视频规格' : isMusic ? '音乐规格' : data.nodeType === 'audio' ? '语音规格' : '图片规格'} className="specs-section">
                   <div className="field-grid two-cols">
                     {data.nodeType === 'video' && <NumberField label="时长（秒）" value={data.duration} min={durationField?.min ?? 1} max={durationField?.max ?? 60} step={durationField?.integer ? 1 : 0.1} onChange={(duration) => onUpdate({ duration })} optional={!durationField?.required} required={durationField?.required} />}
                     {data.nodeType !== 'audio' && (!aspectField || applicable(aspectField)) && (aspectField?.options?.length ? <SelectField label="画幅比例" value={data.aspect_ratio || ''} options={[{ value: '', label: aspectField.required ? '请选择' : '未设置' }, ...aspectField.options]} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} optional={!aspectField.required} required={aspectField.required} /> : <TextField label="画幅比例" value={data.aspect_ratio || ''} onChange={(aspect_ratio) => onUpdate({ aspect_ratio })} placeholder="9:16" optional={!aspectField?.required} required={aspectField?.required} />)}
                   </div>
                   {data.nodeType !== 'audio' && (data.nodeType === 'video' || megapixelsField && applicable(megapixelsField)) && <NumberField label="生成像素预算（MP）" value={data.megapixels} min={megapixelsField?.min ?? 0.01} max={megapixelsField?.max ?? 10} step={0.01} onChange={(megapixels) => onUpdate({ megapixels })} placeholder={megapixelsField?.required ? '请输入像素预算' : '由生成方式决定'} optional={!megapixelsField?.required} required={megapixelsField?.required} />}
-                  {data.nodeType === 'audio' ? <p className="field-help">按原文合成台词；语音角色、语言和语速由当前能力设置。</p> : <p className="field-help">{data.nodeType === 'video' ? '画幅比例和像素预算是两项设置。当前方式将按能力信息判断必填项。' : data.provider === 'comfy-qwen-image' ? (data.mode === 'edit' ? '编辑沿用第 1 张图处理后的尺寸，并对齐 32 像素；无需设置新画幅。' : '画幅与像素预算共同决定输出尺寸，并对齐 32 像素。1 MP 为约 1024×1024 像素；默认 25 步。') : '选择图片画幅偏好；连接参考图后，请在“模式”中选择参考图片编辑。'}</p>}
+                  {data.nodeType === 'audio' ? <p className="field-help">{isMusic ? '音乐描述与歌词分别保存；最长生成时长是上限，采用实际歌曲前请听审。' : '按原文合成台词；语音角色、语言和语速由当前能力设置。'}</p> : <p className="field-help">{data.nodeType === 'video' ? '画幅比例和像素预算是两项设置。当前方式将按能力信息判断必填项。' : data.provider === 'comfy-qwen-image' ? (data.mode === 'edit' ? '编辑沿用第 1 张图处理后的尺寸，并对齐 32 像素；无需设置新画幅。' : '画幅与像素预算共同决定输出尺寸，并对齐 32 像素。1 MP 为约 1024×1024 像素；默认 25 步。') : '选择图片画幅偏好；连接参考图后，请在“模式”中选择参考图片编辑。'}</p>}
                   {data.nodeType !== 'audio' && unsupportedCommonFields.map((key) => <div className="unsupported-field-warning" key={key}>当前方式不支持{key === 'megapixels' ? '生成像素预算' : key === 'duration' ? '时长' : '画幅比例'}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdate({ [key]: undefined })}>清空</button></div>)}
                   {dynamicSpecFields.map((field) => <CapabilityFieldEditor key={field.key} field={field} value={data.options[data.provider]?.[field.key]} onChange={(value) => onUpdateOptions(data.provider, field.key, value)} />)}
                 </Section>

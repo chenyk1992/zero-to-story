@@ -23,6 +23,8 @@ storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_
 
 must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事件可以在创作阶段删减。场景内文字要么写进已确认 H3 提示词，要么在故事板中明确标记确定性后期；台词字幕单独沿用逐字对白和 Canvas 后期责任，不要求生成模型烧录。导演决策复用已有 purpose、visible_proof、状态、运镜和 reason 等字段，不为审美判断增加 Schema 字段或静态评分。
 
+无人物、无对白的自然片可使用空 `cast`、空 `critical_characters` 和空 `dialogue`；`max_critical_characters` 是容量上限，不是必须出场人数。coverage、动作与状态可记录可观察的环境变化；场景 `turn` 可描述注意力或环境状态变化，末场 `next_obligation` 写已定收束和无后续义务。六 Beat 仍为语义时刻，单个 Setup 可覆盖全段；不为通过结构检查新增剧情或人物。无媒体控制需求时可用 T2V、`none` 和空运行时引用。
+
 ## 编译顺序
 
 1. 从原文建立 source.conflicts，先解决人物、版本、道具和结尾等歧义。

@@ -1,0 +1,28 @@
+{
+  "id": "comfy-minimax-music",
+  "label": "本地 MiniMax Music 3（ComfyUI）",
+  "node_types": ["audio"],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": ["comfy-mcp", "ffmpeg", "ffprobe"],
+  "resource": {"key": "video", "capacity": 1},
+  "models": [{"id": "minimax-music-3", "label": "MiniMax Music 3"}],
+  "modes": [
+    {"id": "song", "label": "歌曲"},
+    {"id": "instrumental", "label": "纯器乐"}
+  ],
+  "fields": [
+    {"key": "lyrics", "label": "歌词", "type": "text", "group": "specs", "modes": ["song"], "required": true, "multiline": true},
+    {"key": "max_duration", "label": "最长生成时长（秒）", "type": "number", "group": "specs", "required": true, "default": 60, "min": 0.04, "max": 360},
+    {"key": "seed", "label": "种子", "type": "number", "group": "advanced", "integer": true, "min": 0, "max": 9007199254740991},
+    {"key": "steps", "label": "采样步数", "type": "number", "group": "advanced", "integer": true, "default": 30, "min": 1, "max": 100},
+    {"key": "cfg", "label": "采样引导", "type": "number", "group": "advanced", "default": 1.7, "min": 0, "max": 100},
+    {"key": "text_cfg", "label": "文本引导", "type": "number", "group": "advanced", "default": 1.7, "min": 0, "max": 100},
+    {"key": "top_k", "label": "文本 Top K", "type": "number", "group": "advanced", "integer": true, "default": 50, "min": 1, "max": 16384},
+    {"key": "tiled_decode", "label": "分块解码", "type": "boolean", "group": "advanced", "default": true},
+    {"key": "unet_name", "label": "音乐扩散模型", "type": "select", "group": "advanced", "default": "minimax_music3_dit_fp16.safetensors", "options": [{"value": "minimax_music3_dit_fp16.safetensors", "label": "Music 3 FP16"}]},
+    {"key": "clip_name", "label": "音乐文本编码器", "type": "select", "group": "advanced", "default": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors", "options": [{"value": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors", "label": "Music 3 Text Encoder"}]},
+    {"key": "vae_name", "label": "音乐解码器", "type": "select", "group": "advanced", "default": "minimax_music3_dav.safetensors", "options": [{"value": "minimax_music3_dav.safetensors", "label": "Music 3 DAV"}]}
+  ],
+  "input_rules": {"song": {"allowed": []}, "instrumental": {"allowed": []}}
+}

@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
 
 
 class TestAudioMixer:
+    def test_uses_configured_ffmpeg_executable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LFO_FFMPEG", "C:/Media Tools/ffmpeg.exe")
+        command = AudioMixer().build_command(AudioMixRequest(tracks=[AudioTrack("song.flac", "music")]), "input.mp4", "output.mp4")
+        assert command[0] == "C:/Media Tools/ffmpeg.exe"
+
     def test_preserve_native_only(self) -> None:
         mixer = AudioMixer()
         req = AudioMixRequest(native_audio_present=True, native_audio_strategy="preserve")

@@ -28,6 +28,7 @@ Panel 指一段独立生成的视频。它的时长、动作、提示词、必�
 - **本地 Comfy 视频**：确认后为 `queued`，由服务内部 worker 原子领取并启动项目 `comfy-video-executor` adapter。adapter 使用画布自己的官方本地 Comfy MCP 会话上传、预检、单次提交、查询原任务和取回产物。它不经过 Agent claim，对话不能重复启动脚本。
 - **本地 Qwen 图片**：选择 `comfy-qwen-image` 后同样为 `queued`，由 worker 启动项目 `comfy-image-executor`，共用 MCP 执行链。与本地视频共用资源和机器锁，无需宿主图片工具。输入规范见 [Qwen 图片指南](qwen-image.md)。
 - **本地 Qwen TTS**：`audio` 节点选择 `comfy-qwen-tts`，确认后由 worker 启动 `comfy-tts-executor`，共用 Comfy 提交链、资源与机器锁。原始音频保留，节点回填按所选语速处理后的实际音频；见 [Canvas TTS](canvas-tts.md)。
+- **本地 Music 3**：`audio` 节点选择 `comfy-minimax-music`，确认后由 worker 启动 `comfy-music-executor`，共用 Comfy 提交链、资源与机器锁；保存真实 FLAC 与实际时长。`max_duration` 是上限，采用前须听审；见 [Canvas Music 3](canvas-music.md)。
 - **失败或未知**：停止受影响单元及其依赖，核实原请求；不自动重提、换提供方或把失败候选登记为正式产物。其他独立工作继续。
 
 本地 ComfyUI 离线时，共享 MCP 连接层调用 `launch_comfyui` 启动已配置安装并等待就绪，无需用户另外启动 Desktop。启动使用同一回环地址与既有模型环境；已有服务直接复用，启动超时保留启动标记，不重复创建实例。此授权不包含安装、更新、替换模型或重复提交生成。
@@ -48,7 +49,7 @@ Comfy 的 `VideoSubmissionGuard` 以机器级互斥覆盖提交和整个等待�
 
 有关键疑点时只对该窗口做一次局部复核；仍不清楚就保留未知。轻微且不影响用途的差异直接注明即可。默认不打分、不多模型投票、不反复自审、不写重复 QC 报告。抽帧、轨道存在、模型描述和不确定的 ASR 不能冒充实际视听证据；工具无法验证的项目如实说明。
 
-仅在下游需要精确首帧时，从已 `ACCEPT` 的实际采用视频提取真实尾帧。后期修改会产生新版本，应检查改动及受影响的接缝；旧版本结论不能替代新文件检查。最终成片完成全部后期后做一次完整视听检查，详见按需读取的[视频验收](../.agents/skills/zero-to-story/references/video-qc.md)。
+仅在下游需要精确首帧时，从已 `ACCEPT` 的实际采用视频提取真实尾帧。后期修改会产生新版本，应检查改动及受影响的接缝；旧版本结论不能替代新文件检查。最终成片完成全部后期后做一次完整视听检查：故事分镜按需读[故事视频验收](../.agents/skills/zero-to-story/references/video-qc.md)，MV 按需读[MV 后期与验收](../.agents/skills/music-video-creator/references/finishing-and-review.md)。
 
 确定性编辑只处理已有授权内、执行者已核实可以删除的静音区间，保留受保护对白和句尾余量；ASR/VAD 只用于定位。编辑后核对受影响的字幕、画面、声音和同步，不为每个静音区间增加审批。
 

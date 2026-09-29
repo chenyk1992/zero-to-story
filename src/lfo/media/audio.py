@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
@@ -32,6 +33,7 @@ class AudioMixRequest:
     clip_duration_ms: int = 0
     source_video_path: str | None = None
     output_path: str | None = None
+    normalize_inputs: bool = True
 
 
 @dataclass
@@ -96,7 +98,7 @@ class AudioMixer:
         self, request: AudioMixRequest, source_video: str | Path, output: str | Path
     ) -> list[str]:
         """Build the exact FFmpeg argv without invoking a shell."""
-        command = ["ffmpeg", "-y", "-i", str(source_video)]
+        command = [os.environ.get("LFO_FFMPEG") or "ffmpeg", "-y", "-i", str(source_video)]
         for track in request.tracks:
             command += ["-i", track.asset_key]
         has_native = request.native_audio_present and request.native_audio_strategy in {
@@ -144,8 +146,10 @@ class AudioMixer:
             filters.append(f"[{index}:a]{','.join(chain)}[{label}]")
             labels.append(f"[{label}]")
         mix_chain = (
-            "".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0"
+            "".join(labels) + f"amix=inputs={len(labels)}:duration=longest:dropout_transition=0:normalize={int(request.normalize_inputs)}"
         )
+        if not request.normalize_inputs:
+            mix_chain += ",alimiter=limit=0.95:level=false:latency=1"
         mix_chain += f",aformat=sample_rates={request.target_sample_rate}:channel_layouts={'mono' if request.output_channels == 1 else 'stereo'}"
         if target_duration is not None:
             mix_chain += f",atrim=duration={target_duration}"

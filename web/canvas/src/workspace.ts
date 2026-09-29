@@ -62,7 +62,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   board: '电影画面分镜板',
   image: '图片',
   video: '视频',
-  audio: '语音',
+  audio: '音频',
   document: '文档',
 };
 
@@ -73,7 +73,7 @@ export const CATEGORY_OPTIONS = [
   { value: 'board', label: '电影画面分镜板' },
   { value: 'image', label: '图片' },
   { value: 'video', label: '视频' },
-  { value: 'audio', label: '语音' },
+  { value: 'audio', label: '音频' },
   { value: 'document', label: '文档' },
 ];
 

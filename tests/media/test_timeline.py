@@ -193,3 +193,27 @@ class TestTimelineAssembler:
         assert not result.success
         assert result.error is not None
         assert "actual media duration" in result.error
+
+    def test_frame_budget_forces_filter_even_when_clip_is_copy_compatible(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "clip.mp4"
+        source.touch()
+        monkeypatch.setattr("lfo.media.timeline.probe", lambda _path: {
+            "duration_ms": 1_000, "width": 320, "height": 240, "fps": 25.0,
+            "codec": "h264", "has_audio": True, "audio_codec": "aac",
+            "sample_rate": 48_000, "channels": 2,
+        })
+        command = TimelineAssembler().build_command(TimelineSpec(
+            segments=[ClipSegment("shot", str(source), 1_000, target_frame_count=20)],
+            output_width=320, output_height=240, output_fps=25,
+        ))
+        assert "-filter_complex" in command
+        assert "trim=end_frame=20" in command[command.index("-filter_complex") + 1]
+
+    def test_uses_configured_ffmpeg_executable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LFO_FFMPEG", "C:/Media Tools/ffmpeg.exe")
+        command = TimelineAssembler().build_command(TimelineSpec(
+            segments=[ClipSegment("shot", "/missing/shot.mp4", 1_000, has_audio=False)],
+        ))
+        assert command[0] == "C:/Media Tools/ffmpeg.exe"
