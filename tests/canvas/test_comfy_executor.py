@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import io
 import json
 import pathlib
-import re
 import subprocess
 import sys
 from typing import Any
@@ -13,8 +11,8 @@ import pytest
 SKILL_ROOT = pathlib.Path(__file__).resolve().parents[2] / ".agents" / "skills" / "comfy-video-executor"
 sys.path.insert(0, str(SKILL_ROOT))
 
-from scripts import execute as executor
 from lfo.comfy import transport
+from scripts import execute as executor
 
 
 def _asset(tmp_path: pathlib.Path, name: str, kind: str) -> dict[str, str]:

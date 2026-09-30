@@ -8,6 +8,7 @@ build/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 

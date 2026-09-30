@@ -198,7 +198,10 @@ class CanvasMedia:
                 return all(visit(item) for item in value.values())
             return True
 
-        return visit(snapshot.get("inputs", {}))
+        context = snapshot.get("production_context") or {}
+        if not isinstance(context, dict):
+            return False
+        return visit(snapshot.get("inputs", {})) and visit(context.get("media_versions", []))
 
     def collect_outputs(
         self, outputs: list[dict[str, Any]], canvas_id: str, run_id: str

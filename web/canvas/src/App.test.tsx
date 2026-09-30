@@ -2,7 +2,7 @@
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Canvas, Capability } from './types';
+import type { Canvas, Capability, ProductionSummary } from './types';
 
 vi.mock('@xyflow/react', async () => {
   const { createElement, Fragment } = await import('react');
@@ -63,6 +63,7 @@ const api = vi.hoisted(() => ({
   getCanvases: vi.fn(),
   getCapabilities: vi.fn(),
   getContinuations: vi.fn(),
+  getProductionMetrics: vi.fn(),
   getRuns: vi.fn(),
   importAssetPath: vi.fn(),
   mediaUrl: (path: string) => `/media/${path}`,
@@ -160,6 +161,54 @@ const connectionCanvas: Canvas = {
     selection: ['source-node'],
   },
 };
+
+const secondCanvas: Canvas = { ...canvas, id: 'canvas-second', name: '第二画布' };
+
+function productionSummary(canvasId = 'canvas-test', segments = 47): ProductionSummary {
+  return {
+    as_of: '2026-09-30T10:00:00Z',
+    canvas_id: canvasId,
+    scope_note: '制作统计覆盖当前整张画布；最近更新计划仅用于接续提示。',
+    scope_node_ids: ['shot-1'],
+    run_counts: {
+      total: { value: 2, state: 'observed', sources: ['run:r1', 'run:r2'] },
+      by_status: {
+        running: { value: 1, state: 'observed', sources: ['run:r1:status'] },
+        succeeded: { value: 1, state: 'observed', sources: ['run:r2:status'] },
+        failed: { value: 0, state: 'observed', sources: [] },
+        unknown: { value: 0, state: 'observed', sources: [] },
+      },
+      by_attention: { active: { value: 2, state: 'observed', sources: [] } },
+    },
+    review_counts: {
+      ACCEPT: { value: 1, state: 'observed', sources: ['run:r2:review'] },
+      REJECT: { value: 0, state: 'observed', sources: [] },
+      pending: { value: 0, state: 'observed', sources: [] },
+    },
+    current_stages: [{ stage: 'generation', label: '生成中', count: 1 }],
+    continuation: { state: 'active' },
+    blockers: [],
+    timings: {
+      timeline_elapsed: { state: 'observed', seconds: 120, observed_runs: 2, unknown_runs: 0, sources: [] },
+      cumulative_task_time: { state: 'partial', seconds: 90, observed_runs: 1, unknown_runs: 1, sources: [] },
+      phases: {
+        generation: { state: 'observed', seconds: 75, observed_runs: 1, unknown_runs: 1, sources: [] },
+      },
+    },
+    production_counts: {
+      requests: { value: 2, state: 'observed', sources: [] },
+      accepted_sources: { value: 1, state: 'observed', sources: [] },
+      segments: { value: segments, state: 'observed', sources: [] },
+    },
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
 
 function ttsCapability(): Capability {
   return {
@@ -523,5 +572,102 @@ describe('App continuation status', () => {
     expect(container.querySelector('[data-testid="fake-react-flow"]')).not.toBeNull();
     expect(container.querySelector('.connection-overlay')).toBeNull();
     expect(container.querySelector('.continuation-trigger')?.textContent).toContain('接续状态不可用');
+  });
+
+  it('loads and displays production metrics beside continuation status', async () => {
+    api.getProductionMetrics.mockResolvedValue(productionSummary());
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    expect(api.getProductionMetrics).toHaveBeenCalledWith('canvas-test');
+    const trigger = container.querySelector<HTMLButtonElement>('.continuation-trigger');
+    expect(trigger?.textContent).toContain('制作进度：生成中');
+    await act(async () => trigger?.click());
+    const panel = container.querySelector('.continuation-popover');
+    expect(panel?.textContent).toContain('运行请求 2');
+    expect(panel?.textContent).toContain('片段 47');
+    expect(panel?.textContent).toContain('已接受来源 1');
+    expect(panel?.textContent).toContain('时间线跨度 2分0秒');
+    expect(panel?.textContent).toContain('当前整张画布');
+    expect(api.getProductionMetrics).toHaveBeenCalledTimes(1);
+    await act(async () => panel?.querySelector<HTMLButtonElement>('.continuation-refresh')?.click());
+    await settleApp();
+    expect(api.getProductionMetrics).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes production metrics every 15 seconds while continuation polling stays at 3.5 seconds', async () => {
+    api.getProductionMetrics.mockResolvedValue(productionSummary());
+    const intervals: Array<{ delay: number; run: () => void | Promise<void> }> = [];
+    const intervalSpy = vi.spyOn(window, 'setInterval').mockImplementation((handler, timeout) => {
+      if (typeof handler === 'function') {
+        intervals.push({ delay: timeout ?? 0, run: handler as () => void | Promise<void> });
+      }
+      return intervals.length as unknown as number;
+    });
+    try {
+      await act(async () => root.render(<App />));
+      await settleApp();
+      const continuationPoll = intervals.find((interval) => interval.delay === 3500);
+      const productionPoll = intervals.find((interval) => interval.delay === 15000);
+      expect(continuationPoll).toBeDefined();
+      expect(productionPoll).toBeDefined();
+      expect(api.getProductionMetrics).toHaveBeenCalledTimes(1);
+      await act(async () => { await continuationPoll?.run(); await settleApp(); });
+      expect(api.getProductionMetrics).toHaveBeenCalledTimes(1);
+      await act(async () => { await productionPoll?.run(); await settleApp(); });
+      expect(api.getProductionMetrics).toHaveBeenCalledTimes(2);
+    } finally {
+      intervalSpy.mockRestore();
+    }
+  });
+
+  it('keeps continuation available when the production metrics endpoint fails', async () => {
+    api.getContinuations.mockResolvedValue({ plans: [{
+      id: 'plan-1',
+      canvas_id: 'canvas-test',
+      node_ids: ['shot-1'],
+      state: 'active',
+      revision: 1,
+      summary: {
+        status: 'waiting', actions: [], blocked_items: [], nodes: [], allow_stop: false,
+        reason: '等待一个已确认的执行结果',
+      },
+    }] });
+    api.getProductionMetrics.mockRejectedValueOnce(new Error('metrics offline'));
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    expect(container.querySelector('.continuation-trigger')?.textContent).toContain('接续进行中');
+    await act(async () => container.querySelector<HTMLButtonElement>('.continuation-trigger')?.click());
+    expect(container.querySelector('.continuation-popover')?.textContent).toContain('等待一个已确认的执行结果');
+    expect(container.querySelector('.continuation-popover')?.textContent).not.toContain('制作进度');
+    expect(container.querySelector('[data-testid="fake-react-flow"]')).not.toBeNull();
+  });
+
+  it('ignores a late production response from a canvas that is no longer active', async () => {
+    const firstMetrics = deferred<ProductionSummary>();
+    api.getCanvases.mockResolvedValue({ canvases: [canvas, secondCanvas] });
+    api.getCanvas.mockImplementation(async (id: string) => id === secondCanvas.id ? secondCanvas : canvas);
+    api.getProductionMetrics.mockImplementation((id: string) => id === canvas.id
+      ? firstMetrics.promise
+      : Promise.resolve(productionSummary(id, 88)));
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    const switcher = container.querySelector<HTMLSelectElement>('[aria-label="选择画布"]');
+    expect(switcher?.value).toBe(canvas.id);
+    if (!switcher) throw new Error('画布选择器未渲染');
+    switcher.value = secondCanvas.id;
+    await act(async () => switcher.dispatchEvent(new Event('change', { bubbles: true })));
+    await settleApp();
+    expect(switcher.value).toBe(secondCanvas.id);
+
+    await act(async () => firstMetrics.resolve(productionSummary(canvas.id, 47)));
+    await settleApp();
+    const trigger = container.querySelector<HTMLButtonElement>('.continuation-trigger');
+    expect(trigger?.textContent).toContain('制作进度：生成中');
+    await act(async () => trigger?.click());
+    expect(container.querySelector('.continuation-popover')?.textContent).toContain('片段 88');
+    expect(container.querySelector('.continuation-popover')?.textContent).not.toContain('片段 47');
   });
 });

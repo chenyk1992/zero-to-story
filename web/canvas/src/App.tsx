@@ -35,6 +35,7 @@ import {
   getCanvases,
   getCapabilities,
   getContinuations,
+  getProductionMetrics,
   getRuns,
   importAssetPath,
   mediaUrl,
@@ -53,7 +54,7 @@ import {
   sortRuns,
   toFlowNode,
 } from './graph';
-import type { AssetRef, Canvas, CanvasNodeData, CanvasNodeType, Capability, FlowNode, Run, RunOutput } from './types';
+import type { AssetRef, Canvas, CanvasNodeData, CanvasNodeType, Capability, FlowNode, Run, RunOutput, ProductionSummary } from './types';
 import type { PreviewInfo } from './types';
 import { ContinuationStatus, type ContinuationLoadState, type ContinuationSummary } from './ContinuationStatus';
 import { summarizeContinuations } from './continuations';
@@ -231,6 +232,7 @@ function App() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [continuationState, setContinuationState] = useState<ContinuationLoadState>('loading');
   const [continuationSummary, setContinuationSummary] = useState<ContinuationSummary>();
+  const [productionSummary, setProductionSummary] = useState<ProductionSummary>();
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState('');
@@ -250,6 +252,7 @@ function App() {
   const runsRef = useRef(runs);
   const runsRequestRef = useRef(0);
   const continuationsRequestRef = useRef(0);
+  const productionRequestRef = useRef(0);
   const viewportRef = useRef(viewport);
   const selectedIdRef = useRef(selectedId);
   const dirtyRef = useRef(dirty);
@@ -282,8 +285,10 @@ function App() {
       activeIdRef.current = canvas.id;
       runsRequestRef.current += 1;
       continuationsRequestRef.current += 1;
+      productionRequestRef.current += 1;
       setRuns([]);
       setContinuationSummary(undefined);
+      setProductionSummary(undefined);
       setContinuationState('loading');
     }
     setActiveId(canvas.id);
@@ -346,16 +351,26 @@ function App() {
 
   const refreshContinuations = useCallback(async (canvasId: string) => {
     const requestNumber = ++continuationsRequestRef.current;
-    try {
-      const response = await getContinuations(canvasId);
-      if (activeIdRef.current !== canvasId || requestNumber !== continuationsRequestRef.current) return;
-      const summary = summarizeContinuations(response);
-      setContinuationSummary(summary);
+    const continuations = await Promise.allSettled([getContinuations(canvasId)]);
+    if (activeIdRef.current !== canvasId || requestNumber !== continuationsRequestRef.current) return;
+    if (continuations[0].status === 'fulfilled') {
+      setContinuationSummary(summarizeContinuations(continuations[0].value));
       setContinuationState('available');
-    } catch {
-      if (activeIdRef.current !== canvasId || requestNumber !== continuationsRequestRef.current) return;
+    } else {
       setContinuationSummary(undefined);
       setContinuationState('unavailable');
+    }
+  }, []);
+
+  const refreshProductionSummary = useCallback(async (canvasId: string) => {
+    const requestNumber = ++productionRequestRef.current;
+    try {
+      const production = await getProductionMetrics(canvasId);
+      if (activeIdRef.current !== canvasId || requestNumber !== productionRequestRef.current) return;
+      setProductionSummary(production);
+    } catch {
+      if (activeIdRef.current !== canvasId || requestNumber !== productionRequestRef.current) return;
+      setProductionSummary(undefined);
     }
   }, []);
 
@@ -378,6 +393,7 @@ function App() {
             if (!cancelled) {
               applyCanvas(full);
               await Promise.all([refreshRuns(full.id), refreshContinuations(full.id)]);
+              void refreshProductionSummary(full.id);
             }
           } catch {
             if (!cancelled) setConnectionError('无法打开第一个画布。请检查本地服务状态。');
@@ -389,6 +405,7 @@ function App() {
               setCanvases([created]);
               applyCanvas(created);
               await refreshContinuations(created.id);
+              void refreshProductionSummary(created.id);
             }
           } catch {
             if (!cancelled) setConnectionError('还没有画布，点击“新建画布”后可以重试。');
@@ -400,7 +417,7 @@ function App() {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [applyCanvas, refreshContinuations, refreshRuns]);
+  }, [applyCanvas, refreshContinuations, refreshProductionSummary, refreshRuns]);
 
   const markDirty = useCallback(() => {
     draftRevisionRef.current += 1;
@@ -544,6 +561,14 @@ function App() {
     return () => window.clearInterval(timer);
   }, [activeId, applyCanvas, refreshContinuations, refreshRuns]);
 
+  useEffect(() => {
+    if (!activeId) return;
+    const timer = window.setInterval(() => {
+      void refreshProductionSummary(activeId);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [activeId, refreshProductionSummary]);
+
   const updateSelected = useCallback((patch: StoryNodePatch) => {
     const id = selectedIdRef.current;
     if (!id) return;
@@ -605,11 +630,12 @@ function App() {
       applyCanvas(created);
       updateWorkspace({ story: '新故事', chapter: '第1章', summary: '' });
       await refreshContinuations(created.id);
+      void refreshProductionSummary(created.id);
       setConnectionError('');
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : '新建画布失败');
     }
-  }, [applyCanvas, refreshContinuations, updateWorkspace]);
+  }, [applyCanvas, refreshContinuations, refreshProductionSummary, updateWorkspace]);
 
   const handleSelectCanvas = useCallback(async (canvasId: string) => {
     if (canvasId === activeIdRef.current) return;
@@ -621,10 +647,11 @@ function App() {
       const canvas = await getCanvas(canvasId);
       applyCanvas(canvas);
       await Promise.all([refreshRuns(canvas.id), refreshContinuations(canvas.id)]);
+      void refreshProductionSummary(canvas.id);
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : '打开画布失败');
     }
-  }, [applyCanvas, refreshContinuations, refreshRuns]);
+  }, [applyCanvas, refreshContinuations, refreshProductionSummary, refreshRuns]);
 
   const handleNameChange = (name: string) => {
     setCanvasName(name);
@@ -711,7 +738,9 @@ function App() {
         <div className="topbar-actions">
           {connectionError && <span className="connection-note" title={connectionError}>服务提示</span>}
           <span className={`save-indicator ${statusClass}`} role="status" title={saveState === 'saved' ? `已自动保存 ${nowLabel(currentCanvas?.updated_at)}` : saveError || statusLabel}><Icon name={saveState === 'saved' ? 'check' : saveState === 'error' || saveState === 'conflict' ? 'alert' : 'history'} size={14} /><span>{statusLabel}</span></span>
-          <ContinuationStatus state={continuationState} summary={continuationSummary} onRefresh={activeId ? () => void refreshContinuations(activeId) : undefined} />
+          <ContinuationStatus state={continuationState} summary={continuationSummary} productionSummary={productionSummary} onRefresh={activeId ? () => {
+            void Promise.all([refreshContinuations(activeId), refreshProductionSummary(activeId)]);
+          } : undefined} />
           <button className={`inspector-toggle${storyInfoOpen ? ' active' : ''}`} type="button" onClick={() => setStoryInfoOpen((open) => !open)} aria-label="章节信息" aria-expanded={storyInfoOpen} title="编辑故事与章节信息"><Icon name="info" /><span>章节信息</span></button>
           <button className={`inspector-toggle${inspectorOpen ? ' active' : ''}`} type="button" onClick={() => setInspectorOpen((open) => !open)} aria-label={inspectorOpen ? '收起编辑栏' : '展开编辑栏'} title={inspectorOpen ? '收起编辑栏' : '展开编辑栏'}><Icon name="panelRight" /></button>
           {saveError && <button className="save-error-button" type="button" title={saveError} onClick={() => { setSaveBlocked(false); void saveCanvas(true); }}>重试</button>}

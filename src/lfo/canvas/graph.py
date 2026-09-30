@@ -351,6 +351,74 @@ def resolve_snapshot(
     }
 
 
+def resolve_input_bindings(
+    canvas: Mapping[str, Any], node_id: str, runs: Iterable[Mapping[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Resolve media inputs with the graph edge that supplied each asset.
+
+    This is provider-neutral provenance for production preflight.  It follows
+    the same source selection rules as :func:`resolve_snapshot`; related edges
+    are ignored and never count as executable inputs.
+    """
+
+    if not isinstance(canvas, Mapping):
+        raise SnapshotResolutionError("canvas must be an object", code="canvas_type")
+    graph = validate_graph(_as_mapping(canvas.get("graph"), "canvas.graph"))
+    node = _find_node(graph["nodes"], node_id)
+    if node["type"] not in GENERATION_NODE_TYPES:
+        raise SnapshotResolutionError(
+            f"node {node_id} is not a generation node", code="not_generation_node"
+        )
+
+    canvas_id = canvas.get("id")
+    run_list = [
+        run for run in (runs or []) if canvas_id is None or run.get("canvas_id") == canvas_id
+    ]
+    result: list[dict[str, Any]] = []
+    for edge in graph["edges"]:
+        if edge["target"] != node_id or edge["targetHandle"] == "related":
+            continue
+        source = _find_node(graph["nodes"], edge["source"])
+        assets = _resolve_source_assets(
+            source,
+            run_list,
+            graph,
+            source_handle=edge["sourceHandle"],
+            source_run_id=edge.get("source_run_id"),
+            require_accept=edge.get("require_accept", False),
+        )
+        selected = _select_assets(assets, edge["targetHandle"])
+        slot = (
+            "reference_images"
+            if edge["targetHandle"] == "reference_image"
+            else edge["targetHandle"]
+        )
+        selected_run_id = edge.get("source_run_id")
+        if selected_run_id is None and source["type"] in GENERATION_NODE_TYPES:
+            source_runs = [
+                run
+                for run in run_list
+                if run.get("node_id") == source["id"]
+                and run.get("status") in OUTPUT_STATUSES
+            ]
+            if source_runs:
+                source_runs.sort(key=_run_sort_key)
+                selected_run_id = source_runs[-1].get("id")
+        for asset in selected:
+            result.append(
+                {
+                    "edge_id": edge["id"],
+                    "slot": slot,
+                    "source_node_id": source["id"],
+                    "source_run_id": selected_run_id or asset.get("source_run_id"),
+                    "source_handle": edge["sourceHandle"],
+                    "require_accept": bool(edge.get("require_accept", False)),
+                    "asset": dict(asset),
+                }
+            )
+    return result
+
+
 def _validate_node_data(data: Mapping[str, Any], index: int, node_type: str) -> None:
     for field in ("label", "prompt", "provider", "model", "mode"):
         if field in data and data[field] is not None and not isinstance(data[field], str):

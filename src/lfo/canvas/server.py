@@ -252,6 +252,8 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 self._json(service.store.delete_canvas(segments[2]))
             else:
                 self._not_found()
+        elif len(segments) == 4 and segments[:2] == ["api", "canvases"] and segments[3] == "production" and method == "GET":
+            self._json(service.production_summary(segments[2]))
         elif len(segments) == 4 and segments[:2] == ["api", "canvases"] and segments[3] == "runs":
             if method == "GET":
                 runs = (

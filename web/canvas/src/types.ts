@@ -244,3 +244,49 @@ export interface ContinuationPlan {
 export interface ContinuationsResponse {
   plans: ContinuationPlan[];
 }
+
+export interface ProductionCountMetric {
+  value: number | null;
+  state: 'observed' | 'partial' | 'unknown';
+  sources: string[];
+  note?: string;
+}
+
+export interface ProductionTimingMetric {
+  state: 'observed' | 'partial' | 'unknown';
+  seconds: number | null;
+  observed_runs: number;
+  unknown_runs: number;
+  sources: string[];
+  note?: string;
+  ongoing?: boolean;
+}
+
+/** Read-only evidence-based production summary returned by the Canvas API. */
+export interface ProductionSummary {
+  canvas_id?: string;
+  canvas_version?: number;
+  scope_note?: string;
+  manifest_error?: string | null;
+  as_of: string;
+  scope_node_ids: string[] | null;
+  run_counts: {
+    total: ProductionCountMetric;
+    by_status: Record<string, ProductionCountMetric>;
+    by_attention: Record<string, ProductionCountMetric>;
+  };
+  review_counts: Record<string, ProductionCountMetric>;
+  current_stages: Array<{ stage: string; label: string; count: number }>;
+  continuation: { state: 'active' | 'paused' | 'unknown'; reason?: string | null };
+  blockers: Array<{ node_id: string; reason: string; kind: string; source: string }>;
+  timings: {
+    timeline_elapsed: ProductionTimingMetric;
+    cumulative_task_time: ProductionTimingMetric;
+    phases: Record<string, ProductionTimingMetric>;
+  };
+  production_counts: {
+    requests: ProductionCountMetric;
+    accepted_sources: ProductionCountMetric;
+    segments: ProductionCountMetric;
+  };
+}

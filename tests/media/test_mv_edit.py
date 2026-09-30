@@ -20,26 +20,62 @@ def digest(path: Path) -> str:
 
 def fixtures(tmp_path: Path):
     song = tmp_path / "song.flac"
-    run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-f", "lavfi",
-                 "-i", "sine=frequency=330:duration=3", "-c:a", "flac", str(song)])
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=330:duration=3",
+            "-c:a",
+            "flac",
+            str(song),
+        ]
+    )
     timeline = inspect_music(song, start_ms=500, end_ms=2500)
     timeline_path = tmp_path / "music_timeline.json"
     timeline_path.write_text(json.dumps(timeline, ensure_ascii=False), encoding="utf-8")
     clips = []
     for index, color in enumerate(("red", "blue"), start=1):
         clip = tmp_path / f"clip{index}.mp4"
-        run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-f", "lavfi",
-                     "-i", f"color=c={color}:s=320x240:r=25:d=1.6", "-c:v", "libx264",
-                     "-pix_fmt", "yuv420p", str(clip)])
+        run_command(
+            [
+                os.environ.get("LFO_FFMPEG") or "ffmpeg",
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                f"color=c={color}:s=320x240:r=25:d=1.6",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                str(clip),
+            ]
+        )
         clips.append(clip)
     edit = {
-        "schema": "lfo.mv.edit.v1", "music_timeline": str(timeline_path),
-        "width": 320, "height": 240, "fps": 25,
-        "native_audio_strategy": "replace", "sound_effects": [], "text_events": [],
+        "schema": "lfo.mv.edit.v1",
+        "music_timeline": str(timeline_path),
+        "width": 320,
+        "height": 240,
+        "fps": 25,
+        "native_audio_strategy": "replace",
+        "sound_effects": [],
+        "text_events": [],
         "segments": [
-            {"run_id": f"run-{index}", "path": str(clip), "sha256": digest(clip),
-             "source_in_ms": 0, "source_out_ms": 1000, "timeline_start_ms": (index - 1) * 1000,
-             "transition": "cut"}
+            {
+                "run_id": f"run-{index}",
+                "path": str(clip),
+                "sha256": digest(clip),
+                "source_in_ms": 0,
+                "source_out_ms": 1000,
+                "timeline_start_ms": (index - 1) * 1000,
+                "transition": "cut",
+            }
             for index, clip in enumerate(clips, start=1)
         ],
     }
@@ -73,14 +109,38 @@ def test_render_cut_edit_with_middle_song_window_and_verified_lyrics(tmp_path):
 
     edit, clips, song = fixtures(tmp_path)
     effect = tmp_path / "effect.flac"
-    run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-f", "lavfi",
-                 "-i", "sine=frequency=990:duration=0.3", "-c:a", "flac", str(effect)])
-    edit["sound_effects"] = [{"path": str(effect), "sha256": digest(effect), "source_in_ms": 0,
-                              "source_out_ms": 300, "timeline_start_ms": 1300, "gain_db": -12}]
-    edit["text_events"] = [{"start_ms": 800, "end_ms": 1400, "text": "天亮了！", "kind": "lyric", "status": "verified"}]
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=990:duration=0.3",
+            "-c:a",
+            "flac",
+            str(effect),
+        ]
+    )
+    edit["sound_effects"] = [
+        {
+            "path": str(effect),
+            "sha256": digest(effect),
+            "source_in_ms": 0,
+            "source_out_ms": 300,
+            "timeline_start_ms": 1300,
+            "gain_db": -12,
+        }
+    ]
+    edit["text_events"] = [
+        {"start_ms": 800, "end_ms": 1400, "text": "天亮了！", "kind": "lyric", "status": "verified"}
+    ]
     output = tmp_path / "mv.mp4"
     result = render_edit(edit, output)
     assert output.is_file() and result["sha256"] == digest(output)
+    assert result["schema"] == "lfo.mv.render-receipt.v1"
+    assert result["purpose"] == "final-render"
     assert result["listening_status"] == "INCONCLUSIVE"
     assert 1900 <= probe(output)["duration_ms"] <= 2100
     assert probe(output)["has_audio"] is True
@@ -88,9 +148,26 @@ def test_render_cut_edit_with_middle_song_window_and_verified_lyrics(tmp_path):
     sampled = []
     for index, second in enumerate((0.2, 1.2)):
         pixel = tmp_path / f"pixel-{index}.rgb"
-        run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-ss", str(second),
-                     "-i", str(output), "-frames:v", "1", "-vf", "crop=2:2:0:0",
-                     "-pix_fmt", "rgb24", "-f", "rawvideo", str(pixel)])
+        run_command(
+            [
+                os.environ.get("LFO_FFMPEG") or "ffmpeg",
+                "-v",
+                "error",
+                "-ss",
+                str(second),
+                "-i",
+                str(output),
+                "-frames:v",
+                "1",
+                "-vf",
+                "crop=2:2:0:0",
+                "-pix_fmt",
+                "rgb24",
+                "-f",
+                "rawvideo",
+                str(pixel),
+            ]
+        )
         sampled.append(pixel.read_bytes()[:3])
     assert sampled[0][0] > sampled[0][2] and sampled[1][2] > sampled[1][0]
     with pytest.raises(ValueError, match="覆盖"):
@@ -101,7 +178,9 @@ def test_unverified_lyric_cannot_be_rendered(tmp_path):
     from lfo.media.mv_edit import validate_edit
 
     edit, _, _ = fixtures(tmp_path)
-    edit["text_events"] = [{"start_ms": 800, "end_ms": 1400, "text": "也许", "kind": "lyric", "status": "candidate"}]
+    edit["text_events"] = [
+        {"start_ms": 800, "end_ms": 1400, "text": "也许", "kind": "lyric", "status": "candidate"}
+    ]
     with pytest.raises(ValueError, match="核对"):
         validate_edit(edit)
 
@@ -111,16 +190,35 @@ def test_many_short_cuts_follow_cumulative_frame_boundaries(tmp_path):
 
     edit, clips, song = fixtures(tmp_path)
     timeline = inspect_music(song, start_ms=500, end_ms=1600)
-    Path(edit["music_timeline"]).write_text(json.dumps(timeline, ensure_ascii=False), encoding="utf-8")
+    Path(edit["music_timeline"]).write_text(
+        json.dumps(timeline, ensure_ascii=False), encoding="utf-8"
+    )
     edit["segments"] = [
-        {"run_id": f"run-{index}", "path": str(clips[0]), "sha256": digest(clips[0]),
-         "source_in_ms": 0, "source_out_ms": 110, "timeline_start_ms": index * 110,
-         "transition": "cut"}
+        {
+            "run_id": f"run-{index}",
+            "path": str(clips[0]),
+            "sha256": digest(clips[0]),
+            "source_in_ms": 0,
+            "source_out_ms": 110,
+            "timeline_start_ms": index * 110,
+            "transition": "cut",
+        }
         for index in range(10)
     ]
     result = render_edit(edit, tmp_path / "short-cuts.mp4")
     assert result["video_frame_count"] == 28
-    assert [part["output_frame_count"] for part in result["segments"]] == [3, 3, 2, 3, 3, 2, 3, 3, 3, 3]
+    assert [part["output_frame_count"] for part in result["segments"]] == [
+        3,
+        3,
+        2,
+        3,
+        3,
+        2,
+        3,
+        3,
+        3,
+        3,
+    ]
 
 
 def test_non_frame_aligned_source_in_is_snapped_and_reported(tmp_path):
@@ -128,11 +226,19 @@ def test_non_frame_aligned_source_in_is_snapped_and_reported(tmp_path):
 
     edit, clips, song = fixtures(tmp_path)
     timeline = inspect_music(song, start_ms=500, end_ms=700)
-    Path(edit["music_timeline"]).write_text(json.dumps(timeline, ensure_ascii=False), encoding="utf-8")
+    Path(edit["music_timeline"]).write_text(
+        json.dumps(timeline, ensure_ascii=False), encoding="utf-8"
+    )
     edit["segments"] = [
-        {"run_id": f"run-{index}", "path": str(clips[0]), "sha256": digest(clips[0]),
-         "source_in_ms": 20, "source_out_ms": 120, "timeline_start_ms": index * 100,
-         "transition": "cut"}
+        {
+            "run_id": f"run-{index}",
+            "path": str(clips[0]),
+            "sha256": digest(clips[0]),
+            "source_in_ms": 20,
+            "source_out_ms": 120,
+            "timeline_start_ms": index * 100,
+            "transition": "cut",
+        }
         for index in range(2)
     ]
     result = render_edit(edit, tmp_path / "unaligned.mp4")
@@ -146,13 +252,37 @@ def test_rejects_source_range_longer_than_video_stream(tmp_path):
 
     edit, clips, _ = fixtures(tmp_path)
     long_audio = tmp_path / "long-audio.mp4"
-    run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-f", "lavfi",
-                 "-i", "color=c=red:s=320x240:r=25:d=1", "-f", "lavfi",
-                 "-i", "sine=frequency=330:duration=3", "-c:v", "libx264",
-                 "-c:a", "aac", str(long_audio)])
-    edit["segments"] = [{"run_id": "long-audio", "path": str(long_audio), "sha256": digest(long_audio),
-                         "source_in_ms": 0, "source_out_ms": 2000, "timeline_start_ms": 0,
-                         "transition": "cut"}]
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=320x240:r=25:d=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=330:duration=3",
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            str(long_audio),
+        ]
+    )
+    edit["segments"] = [
+        {
+            "run_id": "long-audio",
+            "path": str(long_audio),
+            "sha256": digest(long_audio),
+            "source_in_ms": 0,
+            "source_out_ms": 2000,
+            "timeline_start_ms": 0,
+            "transition": "cut",
+        }
+    ]
     with pytest.raises(ValueError, match="视频流|源片"):
         validate_edit(edit)
 
@@ -161,7 +291,9 @@ def test_subtitle_renders_beneath_apostrophe_parent(tmp_path):
     from lfo.media.mv_edit import render_edit
 
     edit, _, _ = fixtures(tmp_path)
-    edit["text_events"] = [{"start_ms": 800, "end_ms": 1400, "text": "灯亮了", "kind": "lyric", "status": "verified"}]
+    edit["text_events"] = [
+        {"start_ms": 800, "end_ms": 1400, "text": "灯亮了", "kind": "lyric", "status": "verified"}
+    ]
     folder = tmp_path / "O'Brien"
     folder.mkdir()
     result = render_edit(edit, folder / "mv.mp4")
@@ -177,20 +309,468 @@ def test_sound_effect_does_not_lower_the_whole_master_song(tmp_path):
     with_effect = tmp_path / "with-effect.mp4"
     render_edit(edit, plain)
     effect = tmp_path / "effect.flac"
-    run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-f", "lavfi",
-                 "-i", "sine=frequency=990:duration=0.3", "-c:a", "flac", str(effect)])
-    edit["sound_effects"] = [{"path": str(effect), "sha256": digest(effect), "source_in_ms": 0,
-                              "source_out_ms": 300, "timeline_start_ms": 1300, "gain_db": -6}]
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=990:duration=0.3",
+            "-c:a",
+            "flac",
+            str(effect),
+        ]
+    )
+    edit["sound_effects"] = [
+        {
+            "path": str(effect),
+            "sha256": digest(effect),
+            "source_in_ms": 0,
+            "source_out_ms": 300,
+            "timeline_start_ms": 1300,
+            "gain_db": -6,
+        }
+    ]
     render_edit(edit, with_effect)
 
     def rms(path: Path) -> float:
         pcm = tmp_path / f"{path.stem}.wav"
-        run_command([os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-ss", "0.2",
-                     "-t", "0.6", "-i", str(path), "-vn", "-ar", "16000", "-ac", "1",
-                     "-c:a", "pcm_s16le", str(pcm)])
+        run_command(
+            [
+                os.environ.get("LFO_FFMPEG") or "ffmpeg",
+                "-v",
+                "error",
+                "-ss",
+                "0.2",
+                "-t",
+                "0.6",
+                "-i",
+                str(path),
+                "-vn",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-c:a",
+                "pcm_s16le",
+                str(pcm),
+            ]
+        )
         with wave.open(str(pcm), "rb") as stream:
             samples = array("h")
             samples.frombytes(stream.readframes(stream.getnframes()))
         return math.sqrt(sum(sample * sample for sample in samples) / len(samples))
 
     assert abs(20 * math.log10(rms(with_effect) / rms(plain))) < 0.75
+
+
+def test_segmented_renderer_handles_55_cuts_with_source_rate_conversion(tmp_path):
+    from lfo.media.mv_edit import render_edit
+
+    song = tmp_path / "long-song.flac"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=330:duration=7",
+            "-c:a",
+            "flac",
+            str(song),
+        ]
+    )
+    timeline = inspect_music(song, start_ms=500, end_ms=4900)
+    timeline_path = tmp_path / "long-timeline.json"
+    timeline_path.write_text(json.dumps(timeline, ensure_ascii=False), encoding="utf-8")
+    source = tmp_path / "source-25fps.mp4"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=green:s=320x240:r=25:d=1.6",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(source),
+        ]
+    )
+    edit = {
+        "schema": "lfo.mv.edit.v1",
+        "music_timeline": str(timeline_path),
+        "width": 320,
+        "height": 240,
+        "fps": 50,
+        "native_audio_strategy": "replace",
+        "sound_effects": [],
+        "text_events": [],
+        "segments": [
+            {
+                "run_id": f"shot-{index}",
+                "path": str(source),
+                "sha256": digest(source),
+                "source_in_ms": 0,
+                "source_out_ms": 80,
+                "timeline_start_ms": index * 80,
+                "transition": "cut",
+            }
+            for index in range(55)
+        ],
+    }
+    result = render_edit(edit, tmp_path / "55-cut.mp4")
+    assert result["video_frame_count"] == 220
+    assert len(result["segments"]) == 55
+    assert all(part["source_fps"] == pytest.approx(25.0) for part in result["segments"])
+    assert all(part["output_frame_count"] == 4 for part in result["segments"])
+    assert result["native_audio_segment_count"] == 0
+
+
+def test_segmented_renderer_trims_high_fps_source_using_its_actual_rate(tmp_path):
+    from lfo.media.mv_edit import render_edit
+
+    edit, _, _ = fixtures(tmp_path)
+    high_fps = tmp_path / "source-50fps.mp4"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=purple:s=320x240:r=50:d=2.4",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(high_fps),
+        ]
+    )
+    edit["segments"] = [
+        {
+            "run_id": "high-rate",
+            "path": str(high_fps),
+            "sha256": digest(high_fps),
+            "source_in_ms": 120,
+            "source_out_ms": 2120,
+            "timeline_start_ms": 0,
+            "transition": "cut",
+        }
+    ]
+    result = render_edit(edit, tmp_path / "high-rate-cut.mp4")
+    assert result["video_frame_count"] == 50
+    assert result["segments"][0]["source_fps"] == pytest.approx(50.0)
+    assert result["segments"][0]["source_frame_start"] == 6
+    assert result["segments"][0]["source_frame_end"] == 106
+
+
+def test_cache_reuses_verified_segments_and_rebuilds_corrupt_entry(tmp_path):
+    from lfo.media.mv_edit import render_edit
+
+    edit, _, _ = fixtures(tmp_path)
+    cache_dir = tmp_path / "render-cache"
+    first = render_edit(edit, tmp_path / "first.mp4", cache_dir=cache_dir)
+    second = render_edit(edit, tmp_path / "second.mp4", cache_dir=cache_dir)
+    assert first["cache_hits"] == 0 and first["cache_misses"] == 2
+    assert second["cache_hits"] == 2 and second["cache_misses"] == 0
+    damaged = next(cache_dir.glob("segment-*.mp4"))
+    damaged.write_bytes(b"broken cached segment")
+    third = render_edit(edit, tmp_path / "third.mp4", cache_dir=cache_dir)
+    assert third["cache_hits"] == 1 and third["cache_misses"] == 1
+    assert third["cache_rebuilt"]
+
+
+def test_cache_reuses_segment_when_only_its_timeline_placement_changes(tmp_path):
+    from lfo.media.mv_render import render_visual_segments
+
+    _, clips, _ = fixtures(tmp_path)
+    cache_dir = tmp_path / "placement-cache"
+
+    def timeline(durations: list[int]) -> list[dict[str, object]]:
+        items = []
+        start = 0
+        for index, duration in enumerate(durations):
+            clip = clips[index % len(clips)]
+            items.append(
+                {
+                    "kind": "video",
+                    "timeline_start_ms": start,
+                    "duration_ms": duration,
+                    "path": str(clip),
+                    "sha256": digest(clip),
+                    "source_in_ms": 0,
+                    "source_out_ms": duration,
+                }
+            )
+            start += duration
+        return items
+
+    render_visual_segments(
+        timeline([600, 600, 800]),
+        width=320,
+        height=240,
+        fps=25,
+        cache_dir=cache_dir,
+    )
+    shifted = render_visual_segments(
+        timeline([640, 600, 760]),
+        width=320,
+        height=240,
+        fps=25,
+        cache_dir=cache_dir,
+    )
+
+    assert shifted["cache_hits"] == 1
+    assert shifted["cache_misses"] == 2
+    assert [segment["cache_hit"] for segment in shifted["segments"]] == [False, True, False]
+
+
+def test_cache_invalidates_on_source_hash_and_recovers_corrupt_manifest(tmp_path):
+    from lfo.media.mv_edit import render_edit
+
+    edit, clips, _ = fixtures(tmp_path)
+    cache_dir = tmp_path / "content-cache"
+    render_edit(edit, tmp_path / "original.mp4", cache_dir=cache_dir)
+    replacement = tmp_path / "replacement.mp4"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=yellow:s=320x240:r=25:d=1.6",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(replacement),
+        ]
+    )
+    changed = json.loads(json.dumps(edit))
+    changed["segments"][0]["path"] = str(replacement)
+    changed["segments"][0]["sha256"] = digest(replacement)
+    second = render_edit(changed, tmp_path / "changed-source.mp4", cache_dir=cache_dir)
+    assert second["cache_hits"] == 1 and second["cache_misses"] == 1
+    (cache_dir / "manifest.json").write_text("not json", encoding="utf-8")
+    third = render_edit(changed, tmp_path / "recovered-manifest.mp4", cache_dir=cache_dir)
+    assert third["cache_hits"] == 0 and third["cache_misses"] == 2
+    assert len(third["cache_rebuilt"]) == 2
+    assert digest(clips[1]) == edit["segments"][1]["sha256"]
+
+
+def test_interrupted_render_resumes_from_completed_segment_cache(tmp_path, monkeypatch):
+    import lfo.media.mv_render as mv_render
+    from lfo.media.mv_edit import render_edit
+
+    edit, _, _ = fixtures(tmp_path)
+    cache_dir = tmp_path / "resume-cache"
+    actual = mv_render._render_segment
+    failed = False
+
+    def fail_second(item, source, span, video_temp, audio_temp, **kwargs):
+        nonlocal failed
+        if kwargs["index"] == 2 and not failed:
+            failed = True
+            raise RuntimeError("simulated process interruption")
+        return actual(item, source, span, video_temp, audio_temp, **kwargs)
+
+    monkeypatch.setattr(mv_render, "_render_segment", fail_second)
+    with pytest.raises(RuntimeError, match="interruption"):
+        render_edit(edit, tmp_path / "interrupted.mp4", cache_dir=cache_dir)
+    monkeypatch.setattr(mv_render, "_render_segment", actual)
+    resumed = render_edit(edit, tmp_path / "resumed.mp4", cache_dir=cache_dir)
+    assert resumed["cache_hits"] == 1
+    assert resumed["cache_misses"] == 1
+
+
+def test_mix_preserves_native_audio_only_when_requested(tmp_path):
+    from lfo.media.mv_edit import render_edit
+
+    edit, clips, _ = fixtures(tmp_path)
+    voiced = tmp_path / "voice-with-video.mp4"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=320x240:r=25:d=1.6",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=990:duration=1.6",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            str(voiced),
+        ]
+    )
+    edit["segments"] = [
+        {
+            "run_id": "voice",
+            "path": str(voiced),
+            "sha256": digest(voiced),
+            "source_in_ms": 0,
+            "source_out_ms": 1000,
+            "timeline_start_ms": 0,
+            "transition": "cut",
+        },
+        {
+            "run_id": "silent",
+            "path": str(clips[1]),
+            "sha256": digest(clips[1]),
+            "source_in_ms": 0,
+            "source_out_ms": 1000,
+            "timeline_start_ms": 1000,
+            "transition": "cut",
+        },
+    ]
+    edit["native_audio_strategy"] = "mix"
+    mixed = render_edit(edit, tmp_path / "mixed-native.mp4")
+    assert mixed["native_audio_segment_count"] == 2
+    assert probe(tmp_path / "mixed-native.mp4")["has_audio"]
+    edit["native_audio_strategy"] = "replace"
+    replaced = render_edit(edit, tmp_path / "replaced-native.mp4")
+    assert replaced["native_audio_segment_count"] == 0
+
+
+def test_preview_accepts_stills_and_explicit_placeholders_but_formal_edit_rejects_it(tmp_path):
+    from lfo.media.mv_edit import render_preview, validate_edit
+    from lfo.media.mv_preview import validate_preview
+
+    edit, clips, _ = fixtures(tmp_path)
+    image = tmp_path / "still.png"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=gold:s=320x240",
+            "-frames:v",
+            "1",
+            str(image),
+        ]
+    )
+    preview = {
+        "schema": "lfo.mv.preview.v1",
+        "music_timeline": edit["music_timeline"],
+        "width": 320,
+        "height": 240,
+        "fps": 25,
+        "segments": [
+            {
+                "timeline_start_ms": 0,
+                "duration_ms": 500,
+                "media": {"type": "image", "path": str(image), "sha256": digest(image)},
+            },
+            {
+                "timeline_start_ms": 500,
+                "duration_ms": 500,
+                "media": {"type": "placeholder", "label": "橋面副歌人物鏡頭待生成"},
+            },
+            {
+                "timeline_start_ms": 1000,
+                "duration_ms": 1000,
+                "media": {
+                    "type": "video",
+                    "path": str(clips[0]),
+                    "sha256": digest(clips[0]),
+                    "source_in_ms": 0,
+                    "source_out_ms": 1000,
+                },
+            },
+        ],
+    }
+    assert validate_preview(preview)["segments"][1]["kind"] == "placeholder"
+    with pytest.raises(ValueError, match="MV 编辑清单"):
+        validate_edit(preview)
+    result = render_preview(preview, tmp_path / "preview.mp4")
+    assert result["purpose"] == "rough-cut-preview"
+    assert result["placeholder_count"] == 1
+    assert result["video_frame_count"] == 50
+    assert result["cache_misses"] == 3
+    placeholder_frame = tmp_path / "placeholder.rgb"
+    run_command(
+        [
+            os.environ.get("LFO_FFMPEG") or "ffmpeg",
+            "-v",
+            "error",
+            "-ss",
+            "0.7",
+            "-i",
+            str(tmp_path / "preview.mp4"),
+            "-frames:v",
+            "1",
+            "-vf",
+            "crop=320:240",
+            "-pix_fmt",
+            "rgb24",
+            "-f",
+            "rawvideo",
+            str(placeholder_frame),
+        ]
+    )
+    assert any(value > 100 for value in placeholder_frame.read_bytes())
+
+
+def test_preview_rejects_gaps_in_slot_schedule_and_overwrite(tmp_path):
+    from lfo.media.mv_edit import render_preview
+    from lfo.media.mv_preview import validate_preview
+
+    edit, _, _ = fixtures(tmp_path)
+    preview = {
+        "schema": "lfo.mv.preview.v1",
+        "music_timeline": edit["music_timeline"],
+        "width": 320,
+        "height": 240,
+        "fps": 25,
+        "segments": [
+            {
+                "timeline_start_ms": 0,
+                "duration_ms": 500,
+                "media": {"type": "placeholder", "label": "待生成镜头"},
+            },
+            {
+                "timeline_start_ms": 600,
+                "duration_ms": 1500,
+                "media": {"type": "placeholder", "label": "另一待生成镜头"},
+            },
+        ],
+    }
+    with pytest.raises(ValueError, match="空洞|重叠"):
+        validate_preview(preview)
+    preview["segments"][1]["timeline_start_ms"] = 500
+    output = tmp_path / "preview.mp4"
+    render_preview(preview, output)
+    with pytest.raises(ValueError, match="已有文件"):
+        render_preview(preview, output)
+
+
+def test_formal_render_refuses_to_replace_an_existing_output(tmp_path):
+    from lfo.media.mv_edit import render_edit
+
+    edit, _, _ = fixtures(tmp_path)
+    output = tmp_path / "already-there.mp4"
+    output.write_bytes(b"preserve existing file")
+    with pytest.raises(ValueError, match="已有成片"):
+        render_edit(edit, output)
+    assert output.read_bytes() == b"preserve existing file"

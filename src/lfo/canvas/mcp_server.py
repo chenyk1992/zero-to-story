@@ -42,6 +42,11 @@ def create_mcp(settings: CanvasSettings):
         )
 
     @mcp.tool()
+    def canvas_production_summary(canvas_id: str) -> dict[str, Any]:
+        """读取当前画布范围的真实运行计数、阶段观察跨度与阻塞；缺失时间保留未知。"""
+        return client.request("GET", f"/api/canvases/{canvas_id}/production")
+
+    @mcp.tool()
     def canvas_create(name: str) -> dict[str, Any]:
         """创建空画布。"""
         return client.request("POST", "/api/canvases", {"name": name})

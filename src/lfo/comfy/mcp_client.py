@@ -9,11 +9,12 @@ import threading
 from concurrent.futures import Future
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from anyio.from_thread import start_blocking_portal
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.types import TextContent
 
 REQUIRED_TOOLS = frozenset(
     {
@@ -89,7 +90,7 @@ class ComfyMcpSession:
                         )
                         if result.isError:
                             detail = "; ".join(
-                                block.text for block in result.content
+                                cast(TextContent, block).text for block in result.content
                                 if getattr(block, "type", None) == "text"
                             )
                             raise McpCallError(
@@ -104,7 +105,7 @@ class ComfyMcpSession:
                             if len(blocks) != 1:
                                 raise McpCallError(f"Comfy MCP {name} 返回无法解析的内容")
                             try:
-                                value = json.loads(blocks[0].text)
+                                value = json.loads(cast(TextContent, blocks[0]).text)
                             except (ValueError, TypeError) as exc:
                                 raise McpCallError(f"Comfy MCP {name} 未返回 JSON") from exc
                         reply.set_result(value)

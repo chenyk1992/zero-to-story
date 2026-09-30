@@ -1,4 +1,4 @@
-import type { Canvas, Capability, CanvasGraph, Run, AssetRef, ContinuationsResponse } from './types';
+import type { Canvas, Capability, CanvasGraph, Run, AssetRef, ContinuationsResponse, ProductionSummary } from './types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '');
 
@@ -68,6 +68,10 @@ export function getRuns(id: string): Promise<{ runs: Run[] }> {
 
 export function getContinuations(id: string): Promise<ContinuationsResponse> {
   return request(`/continuations?canvas_id=${encodeURIComponent(id)}`);
+}
+
+export function getProductionMetrics(id: string): Promise<ProductionSummary> {
+  return request(`/canvases/${encodeURIComponent(id)}/production`);
 }
 
 export function executeNode(id: string, nodeId: string, version: number, requestId: string): Promise<Run> {

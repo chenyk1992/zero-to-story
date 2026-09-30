@@ -8,6 +8,7 @@ from lfo.canvas.graph import (
     GraphValidationError,
     MissingInputError,
     SnapshotResolutionError,
+    resolve_input_bindings,
     resolve_snapshot,
     validate_graph,
 )
@@ -471,3 +472,30 @@ def test_explicit_derived_run_cannot_select_another_runs_frame(require_accept):
         with pytest.raises(MissingInputError) as missing_digest:
             resolve_snapshot(_canvas(nodes, [edge]), "next", [run])
         assert missing_digest.value.code == "derived_digest_missing"
+
+
+def test_resolve_input_bindings_keeps_source_slot_and_ignores_related_edges():
+    image = _node("opening", "asset", {"asset": {"path": "opening.png", "kind": "image"}})
+    note = _node("note", "asset", {"asset": {"path": "lyrics.png", "kind": "image"}})
+    video = _node("video", "video", {"prompt": "animate", "mode": "i2v"})
+    canvas = _canvas(
+        [image, note, video],
+        [
+            _edge("frame", "opening", "video", "first_frame"),
+            _edge("annotation", "note", "video", "related"),
+        ],
+    )
+
+    resolved = resolve_input_bindings(canvas, "video")
+
+    assert resolved == [
+        {
+            "edge_id": "frame",
+            "slot": "first_frame",
+            "source_node_id": "opening",
+            "source_run_id": None,
+            "source_handle": "output",
+            "require_accept": False,
+            "asset": {"path": "opening.png", "kind": "image"},
+        }
+    ]

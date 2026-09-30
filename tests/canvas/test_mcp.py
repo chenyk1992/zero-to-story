@@ -53,13 +53,17 @@ def test_stdio_mcp_reads_and_edits_the_same_http_canvas(tmp_path):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 listing = await session.list_tools()
-                assert {"canvas_read", "canvas_edit", "canvas_claim", "canvas_complete"}.issubset(
+                assert {"canvas_read", "canvas_edit", "canvas_claim", "canvas_complete", "canvas_production_summary"}.issubset(
                     {tool.name for tool in listing.tools}
                 )
                 created = await session.call_tool("canvas_create", {"name": "MCP 画布"})
                 assert not created.isError
                 canvas = created.structuredContent
                 assert canvas is not None
+                statistics = await session.call_tool("canvas_production_summary", {"canvas_id": canvas["id"]})
+                assert not statistics.isError
+                assert statistics.structuredContent["canvas_id"] == canvas["id"]
+                assert statistics.structuredContent["run_counts"]["total"]["value"] == 0
                 edited = await session.call_tool(
                     "canvas_edit",
                     {

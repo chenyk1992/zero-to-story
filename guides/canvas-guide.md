@@ -156,6 +156,10 @@ Comfy 的 `VideoSubmissionGuard` 使用机器级串行互斥，覆盖该次提�
 
 ## 数据与验证范围
 
+制作进度使用只读 `GET /api/canvases/{id}/production` 或 `canvas_production_summary`：统计覆盖当前整张画布，运行数与接受数来自当前 run，阶段观察跨度来自持久事件；缺少边界保留 unknown，部分可得保留 partial，不推测 ETA。接续提示明确来自最近更新计划，不代表整张画布状态。成片片段和采用来源数仅从当前项目目录内、不超过 4 MiB 的明确编辑清单及匹配 review 推导，清单引用存于 `graph.workspace.production_summary`，必填 `edit_manifest_path` 和 `edit_manifest_sha256`，对同一字节校验再解析；不可核实时页面显示原因。
+
+新 MV 可在 `graph.workspace.mv_production` 登记逐视频节点生产关联，readiness 和 confirm 检查歌曲采用版本、相关脚本片段、模式与真实素材绑定。检查只适用于明确登记的 Panel，不升级普通视频或旧画布要求；缺口阻止当前请求创建，不自动生成或重试。结构及预览操作见[MV 生产检查](../.agents/skills/music-video-creator/references/production-checks.md)。
+
 内部 SQLite、快照、事件和临时输入位于配置的应用数据目录；媒体位于 `workspace/assets/uploads/` 与 `workspace/projects/<canvas_id>/outputs/<run_id>/`。数据库通过增量迁移保留历史请求、媒体路径和状态；旧成功记录不自动变成 `ACCEPT`。不整理或重建用户数据来完成升级。
 
 事件记录阶段和接手时间，固定快照记录后端、参数与引用，Comfy 成品保存探测到的时长和尺寸。资源状态、模型用量只记录实际取得的数据；普通等待秒数不能换算成 token，单次成功不能证明性能原因。

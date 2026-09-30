@@ -7,6 +7,8 @@ import hashlib
 import json
 import math
 import os
+import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -26,6 +28,8 @@ from lfo.canvas.continuation import (
 )
 from lfo.canvas.graph import CanvasError, resolve_snapshot
 from lfo.canvas.media import CanvasMedia, creative_snapshot
+from lfo.canvas.mv_preflight import inspect_mv_panel, mv_metadata_fingerprint
+from lfo.canvas.production_metrics import summarize_production
 from lfo.canvas.settings import CanvasSettings
 from lfo.canvas.store import CanvasStore, ContinuationRevisionError
 from lfo.media._ffmpeg import probe, probe_audio, run_command
@@ -70,6 +74,7 @@ class CanvasService:
         runs = self.store.list_runs(canvas_id)
         canvases: dict[str, Any] = {}
         snapshots: dict[tuple[str, str], dict[str, Any]] = {}
+        fingerprints: dict[tuple[str, str], str | None] = {}
         result = []
         for original in runs:
             run = copy.deepcopy(self._public_run(original))
@@ -80,7 +85,19 @@ class CanvasService:
                 key = (run["canvas_id"], run["node_id"])
                 if key not in snapshots:
                     snapshots[key] = resolve_snapshot(canvases[run["canvas_id"]], run["node_id"], runs)
-                current = snapshots[key]
+                current = copy.deepcopy(snapshots[key])
+                stored_context = run["snapshot"].get("production_context")
+                if key not in fingerprints:
+                    fingerprints[key] = mv_metadata_fingerprint(canvases[run["canvas_id"]], run["node_id"], runs)
+                fingerprint = fingerprints[key]
+                if stored_context is not None:
+                    if not isinstance(stored_context, dict) or stored_context.get("declaration_fingerprint") != fingerprint:
+                        result.append(run)
+                        continue
+                    current["production_context"] = stored_context
+                elif fingerprint is not None:
+                    result.append(run)
+                    continue
                 run["matches_current"] = creative_snapshot(current) == creative_snapshot(
                     run["snapshot"]
                 ) and self.media.inputs_unchanged(run["snapshot"])
@@ -122,6 +139,14 @@ class CanvasService:
                 )
             snapshot = resolve_snapshot(canvas, node_id, runs)
             capability = self.catalog.validate(snapshot)
+            production = inspect_mv_panel(canvas, node_id, snapshot, runs, self.media)
+            if not production["ready"]:
+                raise CanvasError(
+                    "; ".join(issue["message"] for issue in production["issues"]),
+                    code="mv_preflight_failed", status=400,
+                )
+            if production.get("context") is not None:
+                snapshot["production_context"] = copy.deepcopy(production["context"])
             frozen = self.media.freeze(snapshot, request_id)
             status = "pending_agent" if capability["execution"] == "agent" else "queued"
             resource = capability.get("resource", {})
@@ -439,9 +464,68 @@ class CanvasService:
                             inspect(item)
 
             inspect(snapshot["inputs"])
+            production = inspect_mv_panel(canvas, node_id, snapshot, runs, self.media, verify_files=False)
+            if not production["ready"]:
+                return {"ready": False, "version": canvas["version"],
+                        "reason": "; ".join(issue["message"] for issue in production["issues"]),
+                        "issues": production["issues"], "mv_applicable": production["applicable"]}
         except (ValueError, KeyError) as exc:
             return {"ready": False, "version": canvas["version"], "reason": str(exc)}
         return {"ready": True, "version": canvas["version"], "provider": snapshot["provider"]}
+
+    def production_summary(self, canvas_id: str) -> dict[str, Any]:
+        """Derive whole-Canvas metrics from durable events without changing runs."""
+        canvas = self.store.get_canvas(canvas_id)
+        runs = [self._public_run(run) for run in self.store.list_runs(canvas_id)]
+        events: list[dict[str, Any]] = []
+        cursor = 0
+        while batch := self.store.list_events(after=cursor, canvas_id=canvas_id, limit=100):
+            events.extend(batch)
+            cursor = batch[-1]["id"]
+        plans = self.store.list_continuations(canvas_id=canvas_id)
+        continuation = max(plans, key=lambda plan: (plan.get("updated_at", ""), plan["id"])) if plans else None
+        graph = canvas["graph"]
+        workspace = graph.get("workspace", {})
+        descriptor = workspace.get("production_summary", {}) if isinstance(workspace, dict) else {}
+        manifest = None
+        manifest_error = None
+        if isinstance(descriptor, dict) and descriptor.get("edit_manifest_path"):
+            try:
+                path = Path(descriptor["edit_manifest_path"]).resolve(strict=True)
+                project_media = (self.settings.media_root / "projects" / canvas_id).resolve()
+                if not path.is_relative_to(project_media) or path.suffix.lower() != ".json":
+                    raise ValueError("编辑清单必须位于当前项目媒体目录")
+                expected_digest = descriptor.get("edit_manifest_sha256")
+                if not isinstance(expected_digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", expected_digest):
+                    raise ValueError("编辑清单缺少有效的 SHA-256 版本绑定，采用数量暂不可核实")
+                manifest_limit = 4 * 1024 * 1024
+                with path.open("rb") as stream:
+                    metadata = os.fstat(stream.fileno())
+                    if not stat.S_ISREG(metadata.st_mode):
+                        raise ValueError("编辑清单必须是普通文件")
+                    if metadata.st_size > manifest_limit:
+                        raise ValueError("编辑清单超过 4 MiB 读取上限，采用数量暂不可核实")
+                    content = stream.read(manifest_limit)
+                    if os.fstat(stream.fileno()).st_size > manifest_limit:
+                        raise ValueError("编辑清单超过 4 MiB 读取上限，采用数量暂不可核实")
+                if len(content) > manifest_limit:
+                    raise ValueError("编辑清单超过 4 MiB 读取上限，采用数量暂不可核实")
+                actual_digest = hashlib.sha256(content).hexdigest()
+                if actual_digest.lower() != expected_digest.lower():
+                    raise ValueError("编辑清单版本已变化，采用数量暂不可核实")
+                manifest = json.loads(content)
+            except (OSError, ValueError, TypeError) as exc:
+                manifest_error = str(exc)
+        metric_continuation = dict(continuation) if continuation is not None else None
+        if metric_continuation is not None:
+            # The selected plan contributes its explicit pause/blocker state,
+            # while production counts and timings always cover the full Canvas.
+            metric_continuation.pop("node_ids", None)
+        summary = summarize_production(runs, events, canvas_id=canvas_id,
+                                       continuation=metric_continuation, edit_manifest=manifest)
+        return {**summary, "canvas_id": canvas_id, "canvas_version": canvas["version"],
+                "scope_note": "制作统计覆盖当前整张画布；下方接续提示来自最近更新的计划。",
+                "manifest_error": manifest_error}
 
     # ------------------------------------------------------------------
     # Opt-in continuation hand-off
