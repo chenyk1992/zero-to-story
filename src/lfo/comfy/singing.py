@@ -23,9 +23,11 @@ def prepare_workflow(snapshot: dict[str, Any], tokens: list[str]) -> tuple[dict,
         "audio", "comfy-singing", "melband-seedvc-44k"
     ):
         raise ValueError("Expected a Canvas Comfy singing audio request")
+    mode = snapshot.get("mode")
+    if not isinstance(mode, str):
+        raise ValueError("Singing mode must be separate or convert")
     capability = json.loads((SKILL_ROOT / "capability.json").read_text(encoding="utf-8"))
     validate_input_contract(snapshot, capability)
-    mode = snapshot.get("mode")
     expected = {"separate": 1, "convert": 2}.get(mode)
     refs = snapshot.get("inputs", {}).get("reference_audios", [])
     if expected is None or len(refs) != expected or len(tokens) != expected:

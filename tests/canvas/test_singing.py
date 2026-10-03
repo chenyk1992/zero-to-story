@@ -40,6 +40,10 @@ def test_separation_saves_distinct_outputs():
 
 
 @pytest.mark.parametrize("patch", [
+    {"mode": None},
+    {"mode": 123},
+    {"mode": []},
+    {"mode": {}},
     {"inputs": {"reference_audios": [{"path": "source.flac", "kind": "audio"}]}},
     {"parameters": {"authorization": ""}},
     {"parameters": {"authorization": "yes", "pitch_shift": 25}},
