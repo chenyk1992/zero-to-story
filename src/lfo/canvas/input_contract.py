@@ -76,6 +76,9 @@ def validate_input_contract(snapshot: dict[str, Any], capability: dict[str, Any]
         if counts.get(key, 0) != 1:
             raise ValueError(f"{labels.get(key, key)}为 {counts.get(key, 0)}，{snapshot['mode']} 需要 1 个")
     any_of = rules.get("any_of", [])
+    for key, minimum in rules.get("min_counts", {}).items():
+        if counts.get(key, 0) < minimum:
+            raise ValueError(f"{labels.get(key, key)}至少需要 {minimum} 项")
     for key, maximum in rules.get("max_counts", {}).items():
         if counts.get(key, 0) > maximum:
             raise ValueError(f"{labels.get(key, key)}最多支持 {maximum} 项")

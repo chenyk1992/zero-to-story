@@ -57,6 +57,8 @@ class RuntimeConfig:
 class OutputRef:
     filename: str
     file_type: str = "absolute"
+    node_id: str | None = None
+    source_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -385,5 +387,8 @@ def run_workflow(
         if not path.is_relative_to(fetched_dir.resolve()) or not path.is_file() or path in seen:
             raise ExecutorError("Comfy 产物位置越界、重复或不存在", provider_task_id=prompt_id)
         seen.add(path)
-        refs.append(OutputRef(str(path)))
+        node_id = item.get("node_id")
+        source_url = item.get("url")
+        refs.append(OutputRef(str(path), node_id=str(node_id) if node_id is not None else None,
+                              source_url=source_url if isinstance(source_url, str) else None))
     return ComfyResult(prompt_id, tuple(refs))

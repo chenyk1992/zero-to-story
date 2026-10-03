@@ -9,6 +9,7 @@
 - `script`：画布 document 节点 ID 和创作版本。每个 Panel 保存源正文中确实存在的 `script_excerpt`，只绑定相关镜头片段；其他章节修订不使该镜头自动过期。
 - `song`：实际采用音频的节点、来源、SHA-256 与真实时长。生成歌曲引用成功 run 的当前 ACCEPT 文件；导入歌曲绑定音频 asset，并以 `imported_selection` 记录 `decision: ACCEPT`、`asset_sha256`、`source`、`evidence`（选定版本及实际听审依据），不伪造 run。
 - `panels[node_id]`：`shot_id`、`song_window_ms: {start,end}`、模式和 `input_bindings`。逐项记录绑定 ID、真实槽位、来源节点/run、SHA-256 与用途。无参考的 T2V 可为空数组；`related` 资料边不算生成输入。
+- 人工核对可见演唱或说唱的 Panel：当前模式须为 R2V，确认前核对画布连线与当前输入确有同一歌曲窗口的 `reference_audio`，确认后再核对冻结快照；首帧可另作为 R2V 第 0 帧引导。若缺少音频或窗口不符，该 Panel 不提交；纯动作、空镜和不需张口的镜头不强加此项。当前 `input_bindings` 只枚举图片输入，结构检查不会替代这一音频与镜头语义核对。
 - `text_events`：只有交给 H3 生成的上屏原文才要求准确事件图 `binding_id` 和 `visual_check`，其中 `decision: ACCEPT`、`asset_sha256`、原文 UTF-8 的 `text_sha256` 与实际可读性 `evidence` 对应；`post` 后期文字不要求 H3 图片。检查器核对声明及文件，不能读取像素、判断排版或替代人眼验收。
 - `continuity`：真实连续动作才引用已 ACCEPT 前片的实际尾帧、来源 run 和摘要，并作为下一段 `first_frame`。换场硬切不建立尾帧依赖。
 - 首次代表试片可标 `representative: true`，先生成、检查再记录实际证据；后续同类扩展标 `requires_representative: true`，使用 `representative_evidence` 引用已采用样片，写明模式及 `scope` 的 `shot_ids`、`roles`、`sample_window_ms`，绑定歌曲、相关脚本片段与真实图片版本。不能把一次试片的证据套用于所有新歌词、新构图或新动作。

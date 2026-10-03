@@ -81,7 +81,7 @@ Skill 是 Agent 按需读取的专业工作说明，可以包含模板、参考�
 | 制作 MG 产品讲解动画 | `mg-voiceover-animation-generator` | “根据产品内容和讲解重点，设计 MG 口播动画方案。” |
 | 为讲稿安排 B-roll 副镜头 | `transcript-broll-planner` | “为这份逐字稿规划 B-roll，保留原有事实。” |
 | 拆解参考视频 | `video-deconstruct-analyzer` | “分析这个视频的镜头、节奏和声音。” |
-| 用 MiMo 理解视频 | `mimo-video-understanding` | “用 MiMo 分析视频中人物动作的时间顺序。” |
+| 用 MiMo 理解音频与视频 | `mimo-video-understanding` | “用 MiMo Flash 分析这首歌的段落和结尾。”或“用 MiMo 分析视频中人物动作的时间顺序。” |
 | 克隆已获授权的声音 | `voice-clone` | “我有权使用这段参考音频，请检查音色克隆条件。” |
 | 改善文本表达 | `shuorenhua` | “清理这段口播稿的模板腔，保留事实。” |
 

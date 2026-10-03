@@ -1,0 +1,35 @@
+{
+  "id": "comfy-upscale",
+  "label": "本地视频超分（SeedVR2）",
+  "node_types": ["video"],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": ["comfy-mcp", "ffmpeg", "ffprobe"],
+  "resource": {"key": "video", "capacity": 1},
+  "models": [{"id": "seedvr2-3b-int8", "label": "SeedVR2 3B INT8"}],
+  "modes": [{"id": "upscale", "label": "视频超分"}],
+  "fields": [
+    {"key": "start_frame", "label": "起始帧", "type": "number", "integer": true, "min": 0},
+    {"key": "frame_count", "label": "处理帧数", "type": "number", "integer": true, "min": 1},
+    {"key": "target_width", "label": "输出宽度", "type": "number", "integer": true, "values": [1920]},
+    {"key": "target_height", "label": "输出高度", "type": "number", "integer": true, "values": [1066]},
+    {
+      "key": "chunk_mode",
+      "label": "显存分块模式",
+      "type": "select",
+      "options": [
+        {"value": "auto", "label": "自动按可用显存分块"},
+        {"value": "manual", "label": "保守分块（9 像素帧）"}
+      ]
+    },
+    {"key": "temporal_chunk_frames", "label": "手动分块帧数", "type": "number", "integer": true, "min": 9, "max": 9, "values": [9]}
+  ],
+  "input_rules": {
+    "upscale": {
+      "allowed": ["reference_videos"],
+      "required": ["reference_videos"],
+      "max_counts": {"reference_videos": 1},
+      "file_extensions": {"reference_videos": [".mp4", ".mov", ".mkv", ".webm"]}
+    }
+  }
+}
