@@ -24,6 +24,8 @@ import { Icon } from './Icon';
 import { connectionPresentation } from './connectionFocus';
 import { autoCapabilityForNode, hasExecutableSelection, isCapabilitySelectable } from './capabilities';
 import { Palette } from './Palette';
+import { NodeEditingProvider } from './NodeEditing';
+import { ShotOverview } from './ShotOverview';
 import { CanvasNode, nodeTypes } from './CanvasNode';
 import { Inspector } from './Inspector';
 import { importedAssetPatch, sameImportRequest } from './imports';
@@ -241,7 +243,10 @@ function App() {
   const [connectionError, setConnectionError] = useState('');
   const [previewRun, setPreviewRun] = useState<Run>();
   const [previewMedia, setPreviewMedia] = useState<RunOutput>();
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [isComposing, setIsComposing] = useState(false);
+  const composingNodesRef = useRef(new Set<string>());
+  const submissionsRef = useRef(new Set<string>());
+  const [submittingNodes, setSubmittingNodes] = useState(new Set<string>());
   const [storyInfoOpen, setStoryInfoOpen] = useState(false);
 
   const versionRef = useRef(version);
@@ -277,10 +282,13 @@ function App() {
   selectedIdRef.current = selectedId;
   dirtyRef.current = dirty;
 
-  const selectedNode = nodes.find((node) => node.id === selectedId);
+
 
   const applyCanvas = useCallback((canvas: Canvas, preserveSelection = false) => {
     if (activeIdRef.current !== canvas.id) {
+      composingNodesRef.current.clear();
+      composingRef.current = false;
+      setIsComposing(false);
       pendingAudioDefaultsRef.current.clear();
       activeIdRef.current = canvas.id;
       runsRequestRef.current += 1;
@@ -311,6 +319,7 @@ function App() {
     const nextSelection = preserveSelection && selectedIdRef.current && nextNodes.some((node) => node.id === selectedIdRef.current) ? selectedIdRef.current : Array.isArray(rawGraph.selection) ? rawGraph.selection[0] as string | undefined : undefined;
     selectedIdRef.current = nextSelection;
     setSelectedId(nextSelection);
+
     if (typeof window !== 'undefined' && window.history?.replaceState) {
       const url = new URL(window.location.href);
       url.searchParams.set('canvas', canvas.id);
@@ -428,7 +437,7 @@ function App() {
   }, []);
 
   const selectNode = useCallback((id?: string) => {
-    if (id) setInspectorOpen(true);
+
     if (selectedIdRef.current === id) return;
     selectedIdRef.current = id;
     setSelectedId(id);
@@ -544,14 +553,14 @@ function App() {
   useEffect(() => {
     if (!activeId) return;
     const timer = window.setInterval(async () => {
-      if (dirtyRef.current || savePromisesRef.current.has(activeId)) {
+      if (dirtyRef.current || composingRef.current || savePromisesRef.current.has(activeId)) {
         await Promise.all([refreshRuns(activeId), refreshContinuations(activeId)]);
         return;
       }
       try {
         const remote = await getCanvas(activeId);
         if (activeIdRef.current !== activeId) return;
-        if (remote.version > versionRef.current && !dirtyRef.current && !savePromisesRef.current.has(activeId)) applyCanvas(remote, true);
+        if (remote.version > versionRef.current && !dirtyRef.current && !composingRef.current && !savePromisesRef.current.has(activeId)) applyCanvas(remote, true);
       } catch {
         // Polling is best-effort and must never replace a local draft.
       }
@@ -569,39 +578,38 @@ function App() {
     return () => window.clearInterval(timer);
   }, [activeId, refreshProductionSummary]);
 
-  const updateSelected = useCallback((patch: StoryNodePatch) => {
-    const id = selectedIdRef.current;
-    if (!id) return;
+  const updateNodeById = useCallback((id: string, patch: StoryNodePatch) => {
     const selected = nodesRef.current.find((node) => node.id === id);
-    const changedAudioProvider = selected?.data.nodeType === 'audio'
-      && patch.provider !== undefined
-      && patch.provider !== selected.data.provider;
+    if (!selected) return;
+    const changedAudioProvider = selected.data.nodeType === 'audio'
+      && patch.provider !== undefined && patch.provider !== selected.data.provider;
     if (changedAudioProvider) pendingAudioDefaultsRef.current.delete(id);
-    setNodes((current) => {
-      return current.map((node) => {
-        if (node.id !== id) return node;
-        const updated = { ...node, data: { ...node.data, ...patch, resultChanged: Boolean(node.data.latestSuccessfulRun) } };
-        return changedAudioProvider ? applyAudioCapabilityDefaults(updated, capabilities) : updated;
-      });
+    const next = nodesRef.current.map((node) => {
+      if (node.id !== id) return node;
+      const updated = { ...node, data: { ...node.data, ...patch, resultChanged: Boolean(node.data.latestSuccessfulRun) } };
+      return changedAudioProvider ? applyAudioCapabilityDefaults(updated, capabilities) : updated;
     });
+    nodesRef.current = next;
+    setNodes(next);
     markDirty();
   }, [capabilities, markDirty]);
 
-  const updateNodeById = useCallback((nodeId: string, patch: StoryNodePatch) => {
-    setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, data: { ...node.data, ...patch, resultChanged: Boolean(node.data.latestSuccessfulRun) } } : node));
-    markDirty();
-  }, [markDirty]);
+  const updateNodeOptions = useCallback((id: string, provider: string, key: string, value: string | number | boolean | undefined) => {
+    const node = nodesRef.current.find((item) => item.id === id);
+    if (!node) return;
+    updateNodeById(id, { options: { ...node.data.options, [provider]: { ...node.data.options[provider], [key]: value } } });
+  }, [updateNodeById]);
 
-  const updateSelectedOptions = useCallback((provider: string, key: string, value: string | number | boolean | undefined) => {
-    const id = selectedIdRef.current;
-    if (!id) return;
-    setNodes((current) => current.map((node) => node.id === id ? {
-      ...node,
-      data: { ...node.data, options: { ...node.data.options, [provider]: { ...(node.data.options[provider] || {}), [key]: value } }, resultChanged: Boolean(node.data.latestSuccessfulRun) },
-    } : node));
-    markDirty();
-  }, [markDirty]);
-
+  const setNodeComposing = useCallback((id: string, composing: boolean) => {
+    if (composing) composingNodesRef.current.add(id);
+    else composingNodesRef.current.delete(id);
+    composingRef.current = composingNodesRef.current.size > 0;
+    setIsComposing(composingRef.current);
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    if (!composingRef.current && dirtyRef.current) {
+      saveTimerRef.current = window.setTimeout(() => void saveCanvasRef.current?.(), 250);
+    }
+  }, []);
   const addNodeAt = useCallback((nodeType: StoryNodeType, position: { x: number; y: number }) => {
     const routed = applyCapabilityDefaults(createWorkspaceNode(nodeType, position), capabilities);
     const node = applyAudioCapabilityDefaults(routed, capabilities);
@@ -609,17 +617,16 @@ function App() {
     setNodes((current) => [...current, node]);
     selectedIdRef.current = node.id;
     setSelectedId(node.id);
-    setInspectorOpen(true);
+
     markDirty();
   }, [capabilities, markDirty]);
 
-  const removeSelected = useCallback(() => {
-    const id = selectedIdRef.current;
-    if (!id) return;
+  const removeNodeById = useCallback((id: string) => {
     setNodes((current) => current.filter((node) => node.id !== id));
     setEdges((current) => current.filter((edge) => edge.source !== id && edge.target !== id));
     selectedIdRef.current = undefined;
     setSelectedId(undefined);
+
     markDirty();
   }, [markDirty]);
 
@@ -639,7 +646,7 @@ function App() {
 
   const handleSelectCanvas = useCallback(async (canvasId: string) => {
     if (canvasId === activeIdRef.current) return;
-    if (dirtyRef.current) {
+    if (dirtyRef.current || composingRef.current) {
       const confirmed = window.confirm('当前画布有未保存改动。切换后会放弃这些改动，是否继续？');
       if (!confirmed) return;
     }
@@ -659,16 +666,19 @@ function App() {
     markDirty();
   };
 
-  const handleExecute = useCallback(async () => {
-    const nodeId = selectedIdRef.current;
+  const handleExecute = useCallback(async (nodeId: string) => {
     const node = nodesRef.current.find((item) => item.id === nodeId);
     const canvasId = activeIdRef.current;
     if (!node || !canvasId || !GENERATION_KINDS.has(node.data.nodeType) || saveBlocked || composingRef.current) return;
     if (NON_REEXECUTABLE_STATUSES.has(latestRun(runsRef.current, node.id)?.status || node.data.runStatus || '')) return;
-    const saved = await saveCanvas(true);
-    if (activeIdRef.current !== canvasId || !saved || dirtyRef.current || saveBlocked) return;
-    const savedVersion = versionRef.current;
+    const submissionKey = `${canvasId}:${nodeId}`;
+    if (submissionsRef.current.has(submissionKey)) return;
+    submissionsRef.current.add(submissionKey);
+    setSubmittingNodes(new Set(submissionsRef.current));
     try {
+      const saved = await saveCanvas(true);
+      if (activeIdRef.current !== canvasId || !saved || dirtyRef.current || saveBlocked || composingRef.current) return;
+      const savedVersion = versionRef.current;
       const run = await executeNode(canvasId, node.id, savedVersion, requestId());
       if (activeIdRef.current !== canvasId) return;
       setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
@@ -677,11 +687,13 @@ function App() {
       if (activeIdRef.current !== canvasId) return;
       const message = error instanceof Error ? error.message : '执行请求失败';
       setNodes((current) => current.map((item) => item.id === node.id ? { ...item, data: { ...item.data, runStatus: 'failed', runError: message } } : item));
+    } finally {
+      submissionsRef.current.delete(submissionKey);
+      setSubmittingNodes(new Set(submissionsRef.current));
     }
   }, [saveBlocked, saveCanvas]);
 
-  const handleUploadAsset = useCallback(async (file: File) => {
-    const nodeId = selectedIdRef.current;
+  const handleUploadAsset = useCallback(async (nodeId: string, file: File) => {
     const canvasId = activeIdRef.current;
     if (!nodeId || !canvasId) return;
     if (latestSuccessfulRun(runsRef.current, nodeId)) {
@@ -696,8 +708,7 @@ function App() {
     if (patch) updateNodeById(nodeId, patch);
   }, [updateNodeById]);
 
-  const handleImportPath = useCallback(async () => {
-    const nodeId = selectedIdRef.current;
+  const handleImportPath = useCallback(async (nodeId: string) => {
     const canvasId = activeIdRef.current;
     if (!nodeId || !canvasId) return;
     if (latestSuccessfulRun(runsRef.current, nodeId)) {
@@ -705,7 +716,7 @@ function App() {
       return;
     }
     const node = nodesRef.current.find((item) => item.id === nodeId);
-    const path = node?.data.import_path || node?.data.asset?.path;
+    const path = node?.data.import_path ?? node?.data.asset?.path;
     if (!path) return;
     if (node && sameImportRequest(node.data as unknown as StoryNodeData, path)) return;
     try {
@@ -720,6 +731,30 @@ function App() {
     }
   }, [updateNodeById]);
 
+  // Keep an unmount/blur from an old canvas from editing a reused node ID.
+  const updateCurrentCanvasNode = (id: string, patch: StoryNodePatch) => {
+    if (activeIdRef.current === activeId) updateNodeById(id, patch);
+  };
+  const setCurrentCanvasComposing = (id: string, composing: boolean) => {
+    if (activeIdRef.current === activeId) setNodeComposing(id, composing);
+  };
+  const renderNodeSettings = (id: string) => {
+    const node = nodes.find((item) => item.id === id);
+    if (!node) return null;
+    return <Inspector key={`${activeId}:${id}`} embedded node={node} nodes={nodes} edges={edges} capabilities={capabilities} runs={runs}
+      canExecute={Boolean(activeId && !isComposing && !submittingNodes.has(`${activeId}:${id}`) && GENERATION_KINDS.has(node.data.nodeType) && hasExecutableSelection(node.data.provider, node.data.model, node.data.mode, node.data.nodeType, capabilities, node.data.options[node.data.provider] || {}))}
+      saveBlocked={saveBlocked}
+      onUpdate={(patch) => updateCurrentCanvasNode(id, patch)}
+      onUpdateOptions={(provider, key, value) => updateNodeOptions(id, provider, key, value)}
+      onMoveReference={(edgeId, direction) => { setEdges((current) => moveReferenceEdge(current, edgeId, direction)); markDirty(); }}
+      onSelectNode={selectNode}
+      onRemove={() => removeNodeById(id)}
+      onExecute={() => void handleExecute(id)}
+      onUploadAsset={(file) => handleUploadAsset(id, file)}
+      onImportAssetPath={() => handleImportPath(id)}
+      onCompositionChange={(composing) => setCurrentCanvasComposing(id, composing)}
+      onOpenPreview={(run) => setPreviewRun(run)} onOpenMedia={(output) => setPreviewMedia(output)} />;
+  };
   const currentCanvas = canvases.find((canvas) => canvas.id === activeId);
   const statusLabel = saveState === 'saving' ? '保存中' : saveState === 'dirty' ? '待保存' : saveState === 'conflict' ? '版本冲突' : saveState === 'error' ? '保存失败' : '已保存';
   const statusClass = saveState === 'saved' ? 'status-saved' : saveState === 'conflict' || saveState === 'error' ? 'status-error' : saveState === 'saving' ? 'status-saving' : 'status-dirty';
@@ -727,7 +762,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="topbar-title"><div className="app-mark"><Icon name="film" size={20} /></div><strong>故事画布</strong></div>
+        <div className="topbar-title"><div className="app-mark"><Icon name="film" size={20} /></div><strong>导演工作台</strong></div>
         <div className="canvas-switcher">
           <select value={activeId || ''} onChange={(event) => void handleSelectCanvas(event.target.value)} disabled={!canvases.length} aria-label="选择画布">
             {!canvases.length && <option value="">未连接</option>}
@@ -742,7 +777,6 @@ function App() {
             void Promise.all([refreshContinuations(activeId), refreshProductionSummary(activeId)]);
           } : undefined} />
           <button className={`inspector-toggle${storyInfoOpen ? ' active' : ''}`} type="button" onClick={() => setStoryInfoOpen((open) => !open)} aria-label="章节信息" aria-expanded={storyInfoOpen} title="编辑故事与章节信息"><Icon name="info" /><span>章节信息</span></button>
-          <button className={`inspector-toggle${inspectorOpen ? ' active' : ''}`} type="button" onClick={() => setInspectorOpen((open) => !open)} aria-label={inspectorOpen ? '收起编辑栏' : '展开编辑栏'} title={inspectorOpen ? '收起编辑栏' : '展开编辑栏'}><Icon name="panelRight" /></button>
           {saveError && <button className="save-error-button" type="button" title={saveError} onClick={() => { setSaveBlocked(false); void saveCanvas(true); }}>重试</button>}
         </div>
       </header>
@@ -753,18 +787,18 @@ function App() {
         <span className="story-meta-count">{nodes.filter((node) => !isSectionNode(node)).length} 个组件 · {nodes.reduce((count, node) => count + mediaCountForNode({ data: node.data as unknown as StoryNodeData }), 0)} 份已有媒体 · {nodes.filter((node) => isSectionNode(node)).length} 个分区</span>
       </section>}
       <div className="workspace">
-        <ReactFlowProvider>
+        <NodeEditingProvider value={{ updateNode: updateCurrentCanvasNode, setComposing: setCurrentCanvasComposing, renderSettings: renderNodeSettings, finishEditing: () => selectNode(undefined) }}><ReactFlowProvider>
           <Workspace
             key={activeId}
             nodes={nodes}
             edges={edges}
+            runs={runs}
             viewport={viewport}
             selectedId={selectedId}
             onAddNode={addNodeAt}
             onSelectNode={selectNode}
             onFocusNode={selectNode}
-            inspectorOpen={inspectorOpen}
-            onDismissInspector={() => setInspectorOpen(false)}
+            onPreview={(_id, output) => { if (output) setPreviewMedia(output); }}
             onNodesChange={(changes) => {
               setNodes((current) => applyNodeChanges(changes, current) as FlowNode[]);
               const selectionChanges = changes.filter((change) => change.type === 'select');
@@ -808,49 +842,7 @@ function App() {
             }}
             onDeleteNodes={(deleted) => { const deletedIds = new Set(deleted.map((node) => node.id)); setEdges((current) => current.filter((edge) => !deletedIds.has(edge.source) && !deletedIds.has(edge.target))); if (deletedIds.has(selectedIdRef.current || '')) { selectedIdRef.current = undefined; setSelectedId(undefined); } markDirty(); }}
           />
-          {inspectorOpen && <Inspector
-            onClose={() => setInspectorOpen(false)}
-            node={selectedNode}
-            nodes={nodes}
-            edges={edges}
-            capabilities={capabilities}
-            runs={runs}
-            canExecute={Boolean(
-              activeId
-              && selectedNode
-              && GENERATION_KINDS.has(selectedNode.data.nodeType)
-              && hasExecutableSelection(
-                selectedNode.data.provider,
-                selectedNode.data.model,
-                selectedNode.data.mode,
-                selectedNode.data.nodeType,
-                capabilities,
-                selectedNode.data.options[selectedNode.data.provider] || {},
-              )
-            )}
-            saveBlocked={saveBlocked}
-            onUpdate={updateSelected}
-            onUpdateOptions={updateSelectedOptions}
-            onMoveReference={(edgeId, direction) => {
-              setEdges((current) => moveReferenceEdge(current, edgeId, direction));
-              markDirty();
-            }}
-            onSelectNode={selectNode}
-            onRemove={removeSelected}
-            onExecute={() => void handleExecute()}
-            onUploadAsset={handleUploadAsset}
-            onImportAssetPath={handleImportPath}
-            onCompositionChange={(composing) => {
-              composingRef.current = composing;
-              if (!composing && dirtyRef.current) {
-                if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-                saveTimerRef.current = window.setTimeout(() => void saveCanvasRef.current?.(), 250);
-              }
-            }}
-            onOpenPreview={(run) => setPreviewRun(run)}
-            onOpenMedia={(output) => setPreviewMedia(output)}
-          />}
-        </ReactFlowProvider>
+        </ReactFlowProvider></NodeEditingProvider>
       </div>
       {loading && <div className="loading-overlay"><div className="loader-ring" /><span>正在打开画布…</span></div>}
       {connectionError && !activeId && !loading && <div className="connection-overlay"><div className="connection-card"><div className="connection-icon"><Icon name="link" size={28} /></div><h2>画布服务暂时未连接</h2><p>{connectionError}</p><button type="button" onClick={() => window.location.reload()}>重新连接</button></div></div>}
@@ -863,13 +855,13 @@ function App() {
 interface WorkspaceProps {
   nodes: FlowNode[];
   edges: Edge[];
+  runs: Run[];
   viewport: Viewport;
   selectedId?: string;
   onAddNode: (type: StoryNodeType, position: { x: number; y: number }) => void;
   onSelectNode: (id?: string) => void;
   onFocusNode: (id: string) => void;
-  inspectorOpen: boolean;
-  onDismissInspector: () => void;
+  onPreview: (id: string, output?: RunOutput) => void;
   onNodesChange: (changes: NodeChange<FlowNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -882,6 +874,14 @@ function Workspace(props: WorkspaceProps) {
   const flowShellRef = useRef<HTMLElement>(null);
   const [paletteCollapsed, setPaletteCollapsed] = useState(() => window.innerWidth <= 1050);
   const [minimapOpen, setMinimapOpen] = useState(false);
+  const [view, setView] = useState<'canvas' | 'shots'>('canvas');
+  const [tool, setTool] = useState<'select' | 'hand'>('select');
+  const [searchRequest, setSearchRequest] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const shortcutButtonRef = useRef<HTMLButtonElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const [connectionFocus, setConnectionFocus] = useState<{ id: string; pulse: number }>();
   const presentation = useMemo(() => connectionPresentation(
     props.nodes.map((node) => ({ ...node, selected: node.id === props.selectedId })),
@@ -891,7 +891,7 @@ function Workspace(props: WorkspaceProps) {
   const clearConnectionFocus = useCallback(() => setConnectionFocus(undefined), []);
   const highlightConnection = (id: string) => {
     setConnectionFocus((current) => ({ id, pulse: (current?.pulse || 0) + 1 }));
-    props.onDismissInspector();
+    props.onSelectNode(undefined);
   };
   useEffect(() => {
     if (!focusedConnection) return;
@@ -907,14 +907,12 @@ function Workspace(props: WorkspaceProps) {
     query.addEventListener('change', handleResize);
     return () => query.removeEventListener('change', handleResize);
   }, []);
-  useEffect(() => {
-    if (props.inspectorOpen && window.innerWidth <= 1050) setPaletteCollapsed(true);
-  }, [props.inspectorOpen]);
   const focusNode = (id: string) => {
+    setView('canvas');
     clearConnectionFocus();
     if (window.innerWidth <= 1050) setPaletteCollapsed(true);
     props.onFocusNode(id);
-    // Let the inspector reopen before measuring the available canvas width.
+    // Allow the inline editor to mount before focusing the card.
     window.requestAnimationFrame(() => void fitView({ nodes: [{ id }], padding: 0.3, maxZoom: 1.05, duration: 280 }));
   };
   const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -929,17 +927,81 @@ function Workspace(props: WorkspaceProps) {
     const bounds = flowShellRef.current?.getBoundingClientRect();
     if (!bounds) return;
     clearConnectionFocus();
+    setView('canvas');
+    setAddMenuOpen(false);
     if (window.innerWidth <= 1050) setPaletteCollapsed(true);
-    const center = screenToFlowPosition({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
+    // The canvas renderer can be hidden in shot overview. Use its visible shell
+    // and the shared viewport instead of measuring the hidden React Flow DOM.
+    const center = { x: (bounds.width / 2 - props.viewport.x) / props.viewport.zoom, y: (bounds.height / 2 - props.viewport.y) / props.viewport.zoom };
     props.onAddNode(type, { x: center.x - 160, y: center.y - 80 });
   };
+  const openSearch = () => {
+    setPaletteCollapsed(false);
+    setSearchRequest((request) => request + 1);
+  };
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('[aria-modal="true"]')) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+      if (event.key === 'Escape') {
+        if (shortcutsOpen) { setShortcutsOpen(false); shortcutButtonRef.current?.focus(); }
+        if (addMenuOpen) { setAddMenuOpen(false); addButtonRef.current?.focus(); }
+        return;
+      }
+      if (event.key === '/') { event.preventDefault(); openSearch(); }
+      else if (event.key === '?') { event.preventDefault(); setShortcutsOpen((open) => !open); setAddMenuOpen(false); }
+      else if (view === 'canvas' && !event.repeat) {
+        const key = event.key.toLowerCase();
+        if (key === 'v') setTool('select');
+        else if (key === 'h') setTool('hand');
+        else if (key === 'f') {
+          event.preventDefault();
+          void fitView({ ...(event.shiftKey && props.selectedId ? { nodes: [{ id: props.selectedId }], maxZoom: 1.05 } : {}), padding: 0.2, duration: 280 });
+        }
+        else if (event.key === '0') { event.preventDefault(); void zoomTo(1, { duration: 220 }); }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [view, shortcutsOpen, addMenuOpen, props.selectedId, fitView, zoomTo]);
+  useEffect(() => {
+    if (!shortcutsOpen && !addMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !toolbarRef.current?.contains(event.target)) { setShortcutsOpen(false); setAddMenuOpen(false); }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [shortcutsOpen, addMenuOpen]);
   return (
     <>
-      <Palette nodes={props.nodes} selectedId={props.selectedId} onAdd={addFromPalette} onSelect={focusNode} collapsed={paletteCollapsed} onToggle={() => {
-        if (paletteCollapsed && window.innerWidth <= 1050) props.onDismissInspector();
+      <Palette nodes={props.nodes} selectedId={props.selectedId} searchRequest={searchRequest} onAdd={addFromPalette} onSelect={focusNode} collapsed={paletteCollapsed} onToggle={() => {
         setPaletteCollapsed((collapsed) => !collapsed);
       }} />
+      <div className="workbench-stage">
+      <div className="workspace-toolbar" ref={toolbarRef}>
+        <div className="workspace-view-switch" role="group" aria-label="工作区视图">
+          <button type="button" className={view === 'canvas' ? 'active' : ''} aria-pressed={view === 'canvas'} onClick={() => setView('canvas')}><Icon name="grid" size={16} />节点画布</button>
+          <button type="button" className={view === 'shots' ? 'active' : ''} aria-pressed={view === 'shots'} onClick={() => { setView('shots'); clearConnectionFocus(); }}><Icon name="storyboard" size={16} />镜头总览</button>
+        </div>
+        <div className="workspace-toolbar-actions">
+          <button type="button" onClick={openSearch} aria-label="查找组件" title="查找组件 /"><Icon name="search" size={16} /><span>查找</span><kbd>/</kbd></button>
+          <button ref={shortcutButtonRef} type="button" aria-label="快捷键帮助" title="快捷键 ?" aria-expanded={shortcutsOpen} onClick={() => { setShortcutsOpen((open) => !open); setAddMenuOpen(false); }}><Icon name="keyboard" size={17} /></button>
+          <button ref={addButtonRef} className="workspace-add-button" type="button" aria-expanded={addMenuOpen} onClick={() => { setAddMenuOpen((open) => !open); setShortcutsOpen(false); }}><Icon name="plus" size={16} /><span>添加</span><Icon name="chevronDown" size={12} /></button>
+        </div>
+        {addMenuOpen && <div className="workspace-add-menu" aria-label="添加组件">
+          {(['document', 'section', 'asset', 'image', 'video', 'audio'] as const).map((type, index) => <button type="button" key={type} onClick={() => addFromPalette(type)}><Icon name={type} size={17} /><span>{['故事文档', '镜头分区', '参考素材', '图片创作', '视频镜头', '音乐与配音'][index]}</span></button>)}
+          <small>添加后编辑草稿，再确认生成</small>
+        </div>}
+        {shortcutsOpen && <div className="shortcut-popover" aria-label="画布快捷键">
+          <div className="shortcut-popover-head"><strong>更顺手地创作</strong><button type="button" aria-label="关闭快捷键帮助" onClick={() => { setShortcutsOpen(false); shortcutButtonRef.current?.focus(); }}><Icon name="close" size={16} /></button></div>
+          <dl>{[['V', '选择与移动组件'], ['H', '抓手平移画布'], ['Space', '按住临时平移'], ['F', '查看全部组件'], ['Shift F', '定位选中组件'], ['0', '恢复 100%'], ['/', '搜索组件'], ['Delete', '删除选中组件或连线']].map(([key, label]) => <div key={key}><dt>{label}</dt><dd><kbd>{key}</kbd></dd></div>)}</dl>
+          <p>编辑文字时不会触发画布快捷键。</p>
+        </div>}
+      </div>
       <section ref={flowShellRef} className="flow-shell" style={{ '--overview-label-size': `${Math.min(96, 10 / props.viewport.zoom)}px`, '--connection-ring': `${2 / props.viewport.zoom}px`, '--connection-gap': `${5 / props.viewport.zoom}px`, '--connection-label-size': `${11 / props.viewport.zoom}px`, '--connection-label-offset': `${27 / props.viewport.zoom}px` } as CSSProperties} onDrop={onDrop} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }}>
+        {view === 'shots' && <ShotOverview nodes={props.nodes} edges={props.edges} runs={props.runs} selectedId={props.selectedId} onSelect={focusNode} onLocate={focusNode} onPreview={props.onPreview} onAdd={() => addFromPalette('video')} />}
+        <div className="flow-viewport" hidden={view !== 'canvas'}>
         <ReactFlow<FlowNode, Edge>
           nodes={presentation.nodes}
           edges={presentation.edges}
@@ -961,29 +1023,41 @@ function Workspace(props: WorkspaceProps) {
           connectionMode={ConnectionMode.Strict}
           minZoom={0.04}
           maxZoom={2}
-          deleteKeyCode={['Backspace', 'Delete']}
+          deleteKeyCode={view === 'canvas' && !shortcutsOpen && !addMenuOpen ? ['Backspace', 'Delete'] : null}
           snapToGrid
           snapGrid={[16, 16]}
+          nodesDraggable={tool === 'select'}
+          nodesConnectable={tool === 'select'}
+          panOnDrag={tool === 'hand' ? true : [1, 2]}
+          selectionOnDrag={tool === 'select'}
+          panActivationKeyCode="Space"
+          selectionKeyCode="Shift"
           viewport={props.viewport}
           fitView={false}
           proOptions={{ hideAttribution: true }}
           className={`main-flow${props.viewport.zoom < 0.4 ? ' is-overview' : ''}${focusedConnection ? ' has-connection-focus' : ''}`}
         >
           <FlowInternalsSync nodes={props.nodes} />
-          <Background color="#39423f" gap={24} size={1} />
+          <Background color="#3a3e45" gap={24} size={1} />
+          <Panel position="top-left" className="canvas-tool-modes" role="group" aria-label="画布工具">
+            <button type="button" aria-label="选择工具" aria-pressed={tool === 'select'} title="选择与移动 · V" onClick={() => setTool('select')}><Icon name="cursor" size={17} /></button>
+            <button type="button" aria-label="抓手工具" aria-pressed={tool === 'hand'} title="抓手平移 · H" onClick={() => setTool('hand')}><Icon name="hand" size={17} /></button>
+            <span>{tool === 'select' ? '选择' : '平移'}</span>
+          </Panel>
           <Panel position="bottom-left" className="view-controls">
             <button type="button" onClick={() => void zoomOut({ duration: 180 })} aria-label="缩小" title="缩小"><Icon name="zoomOut" /></button>
             <button type="button" onClick={() => void zoomTo(1, { duration: 220 })} className="zoom-value" title="恢复 100%" aria-label="恢复 100%">{Math.round(props.viewport.zoom * 100)}%</button>
             <button type="button" onClick={() => void zoomIn({ duration: 180 })} aria-label="放大" title="放大"><Icon name="zoomIn" /></button>
             <span className="control-divider" />
             <button type="button" onClick={() => void fitView({ padding: 0.12, duration: 320 })} aria-label="全局概览" title="全局概览"><Icon name="fit" /></button>
+            <button type="button" disabled={!props.selectedId} onClick={() => { if (props.selectedId) focusNode(props.selectedId); }} aria-label="定位选中组件" title="定位选中 · Shift F"><Icon name="search" size={16} /></button>
             <button type="button" onClick={() => setMinimapOpen((open) => !open)} aria-label="缩略地图" aria-pressed={minimapOpen} title="缩略地图"><Icon name="layers" /></button>
           </Panel>
           {minimapOpen && <MiniMap nodeColor={(node) => {
             const kind = (node.data as unknown as { nodeType?: string } | undefined)?.nodeType;
-            return kind === 'video' ? '#9daca5' : kind === 'image' ? '#82a89d' : kind === 'audio' ? '#c18e5b' : kind === 'asset' ? '#b3a286' : kind === 'document' ? '#8e98ae' : '#394443';
-          }} maskColor="rgba(15, 19, 20, 0.72)" position="bottom-right" />}
-          <Panel position="top-left" className="canvas-toolbar"><Icon name="grid" size={16} /><strong>创作画布</strong><span>{props.nodes.filter((node) => !isSectionNode(node)).length} 张卡片</span><span className="canvas-toolbar-separator" /><span className="connection-legend"><i className="input-line" />实际输入<i className="reference-line" />资料关联</span></Panel>
+            return kind === 'video' ? '#b8a5db' : kind === 'image' ? '#9cbddc' : kind === 'audio' ? '#d5ae76' : kind === 'asset' ? '#b3a286' : kind === 'document' ? '#8e98ae' : '#465160';
+          }} maskColor="rgba(21, 23, 25, 0.72)" position="bottom-right" />}
+          <Panel position="bottom-right" className="canvas-statusbar"><span>{props.nodes.filter((node) => !isSectionNode(node)).length} 张卡片</span><span className="connection-legend"><i className="input-line" />实际输入<i className="reference-line" />资料关联</span></Panel>
           {focusedConnection && <Panel position="top-left" className="connection-focus-panel">
             <div className="connection-focus-heading"><span><Icon name="link" size={15} />{focusedConnection.related ? '资料关联' : '实际输入'}</span><button type="button" className="icon-button" onClick={clearConnectionFocus} aria-label="取消连线高亮" title="取消高亮 · Esc"><Icon name="close" size={15} /></button></div>
             <div className="connection-endpoints" role="status">
@@ -994,7 +1068,10 @@ function Workspace(props: WorkspaceProps) {
             <div className="connection-focus-footer"><span>{focusedConnection.related ? '仅作资料关联，不参与生成输入' : '起点的输出作为终点的生成输入'}</span><button type="button" onClick={() => void fitView({ nodes: [{ id: focusedConnection.source.id }, { id: focusedConnection.target.id }], padding: { top: '230px', bottom: '60px', left: '50px', right: '50px' }, maxZoom: 1, duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 360 })}><Icon name="fit" size={14} />查看两端</button></div>
           </Panel>}
         </ReactFlow>
+        {!props.nodes.length && <div className="canvas-empty-state"><div className="empty-state-icon"><Icon name="film" size={32} /></div><small>从一个想法，开始一场创作</small><h2>你的下一个故事，从这里开始</h2><p>先写故事、放入参考，或直接创建第一个镜头。<br />用连线把创作需要的内容连接起来。</p><div className="empty-actions"><button type="button" onClick={() => addFromPalette('document')}><Icon name="document" />写故事</button><button type="button" onClick={() => addFromPalette('asset')}><Icon name="asset" />添加参考</button><button type="button" onClick={() => addFromPalette('video')}><Icon name="video" />创建镜头</button></div><span>自动保存草稿 · 确认后才会生成</span></div>}
+        </div>
       </section>
+      </div>
     </>
   );
 }

@@ -8,8 +8,8 @@ vi.mock('@xyflow/react', async () => {
   const { createElement, Fragment } = await import('react');
   const passthrough = ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children);
   const panel = ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => createElement('div', props, children);
-  const fakeReactFlow = (props: any) => createElement('div', { className: props.className, 'data-testid': 'fake-react-flow' }, [
-    createElement('div', { key: 'nodes', 'data-testid': 'fake-nodes' }, (props.nodes || []).map((node: any) => createElement('button', {
+  const fakeReactFlow = (props: any) => createElement('div', { className: props.className, 'data-testid': 'fake-react-flow', 'data-nodes-draggable': String(props.nodesDraggable), 'data-pan-on-drag': String(props.panOnDrag), 'data-delete-keys': JSON.stringify(props.deleteKeyCode) }, [
+    createElement('div', { key: 'nodes', 'data-testid': 'fake-nodes' }, (props.nodes || []).map((node: any) => createElement('div', {
       key: node.id,
       type: 'button',
       'data-testid': `fake-node-${node.id}`,
@@ -17,7 +17,7 @@ vi.mock('@xyflow/react', async () => {
       'data-position-x': node.position?.x,
       'data-position-y': node.position?.y,
       onClick: () => props.onNodeClick?.({}, node),
-    }, node.data?.label || node.id))),
+    }, createElement(props.nodeTypes.canvas, { id: node.id, data: node.data, selected: node.selected })))),
     createElement('div', { key: 'edges', 'data-testid': 'fake-edges' }, (props.edges || []).map((edge: any) => createElement('button', {
       key: edge.id,
       type: 'button',
@@ -34,6 +34,8 @@ vi.mock('@xyflow/react', async () => {
     applyEdgeChanges: (_changes: unknown, edges: unknown[]) => edges,
     applyNodeChanges: (_changes: unknown, nodes: unknown[]) => nodes,
     Background: () => null,
+    Handle: () => null,
+    Position: { Left: 'left', Right: 'right' },
     ConnectionMode: { Strict: 'strict' },
     MiniMap: () => null,
     Panel: panel,
@@ -50,11 +52,6 @@ vi.mock('@xyflow/react', async () => {
     useUpdateNodeInternals: () => vi.fn(),
   };
 });
-
-vi.mock('./CanvasNode', () => ({
-  CanvasNode: () => null,
-  nodeTypes: { canvas: () => null },
-}));
 
 const api = vi.hoisted(() => ({
   createCanvas: vi.fn(),
@@ -280,23 +277,188 @@ async function renderConnectionCanvas() {
   await settleApp();
 }
 
-describe('App inspector navigation', () => {
-  it('reopens the inspector when the selected card is clicked from asset navigation', async () => {
+describe('App inline card editing', () => {
+  it.each(['asset', 'image', 'video', 'audio'] as const)('keeps the %s current media while clearing or replacing its import path', async (kind) => {
+    const importedCanvas = structuredClone(canvas);
+    const node = importedCanvas.graph.nodes[0];
+    node.type = kind;
+    node.data.nodeType = kind;
+    node.data.asset = { path: 'media/original.png', name: '原素材', kind: 'image' };
+    node.data.import_path = 'C:\\素材\\original.png';
+    api.getCanvases.mockResolvedValue({ canvases: [importedCanvas] });
+    api.getCanvas.mockResolvedValue(importedCanvas);
+    const importing = deferred<any>();
+    api.importAssetPath.mockReturnValue(importing.promise);
     await act(async () => root.render(<App />));
     await settleApp();
-
-    expect(container.querySelector('.inspector')).not.toBeNull();
-    const closeButton = container.querySelector<HTMLButtonElement>('.inspector [aria-label="收起编辑栏"]');
-    expect(closeButton).not.toBeNull();
-    await act(async () => closeButton?.click());
+    const button = (label: string) => [...container.querySelectorAll<HTMLButtonElement>('.is-editing button')].find((item) => item.textContent?.includes(label))!;
+    if (kind === 'asset') {
+      await act(async () => button('路径导入').click());
+    } else {
+      await act(async () => container.querySelector<HTMLElement>('.node-info-details > summary')!.click());
+      await act(async () => button('展开导入已有成品').click());
+    }
+    const field = container.querySelector<HTMLInputElement>(kind === 'asset' ? '.asset-path-import input' : '.media-import-section input:not([type="file"])')!;
+    const setPath = async (value: string) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, value);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    await setPath('');
+    expect(field.value).toBe('');
+    expect(button('导入路径').disabled).toBe(true);
+    await act(async () => button('导入路径').click());
+    expect(api.importAssetPath).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLImageElement>('.is-editing .current-output img')?.src).toContain('/media/media/original.png');
+    await setPath('C:\\素材\\replacement.png');
+    await act(async () => button('导入路径').click());
+    expect(api.importAssetPath).toHaveBeenCalledWith('C:\\素材\\replacement.png');
+    expect(container.querySelector<HTMLImageElement>('.is-editing .current-output img')?.src).toContain('/media/media/original.png');
+    await act(async () => importing.resolve({ path: 'media/replacement.png', name: '新素材', kind: 'image' }));
+    expect(container.querySelector<HTMLImageElement>('.is-editing .current-output img')?.src).toContain('/media/media/replacement.png');
+    expect(api.executeNode).not.toHaveBeenCalled();
+  });
+  it('never flushes an abandoned IME draft into the same node id on a different canvas', async () => {
+    const other = structuredClone(secondCanvas);
+    other.graph.nodes[0].data.prompt = '另一张画布的独立台词';
+    api.getCanvases.mockResolvedValue({ canvases: [canvas, other] });
+    api.getCanvas.mockImplementation(async (id: string) => id === other.id ? other : canvas);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      await act(async () => root.render(<App />));
+      await settleApp();
+      const prompt = container.querySelector<HTMLTextAreaElement>('[aria-label="视频提示词"]')!;
+      await act(async () => {
+        prompt.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(prompt, '尚未结束的输入');
+        prompt.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+      });
+      const selector = container.querySelector<HTMLSelectElement>('[aria-label="选择画布"]')!;
+      await act(async () => { selector.value = other.id; selector.dispatchEvent(new Event('change', { bubbles: true })); });
+      await settleApp();
+      expect(confirm).toHaveBeenCalled();
+      expect(container.querySelector<HTMLTextAreaElement>('[aria-label="视频提示词"]')?.value).toBe('另一张画布的独立台词');
+      expect(container.querySelector('.save-indicator')?.textContent).toBe('已保存');
+    } finally { confirm.mockRestore(); }
+  });
+  it('submits a card only once while its confirmation is still in flight', async () => {
+    api.getCapabilities.mockResolvedValue({ capabilities: [{ id: 'comfy', label: '本地视频', node_types: ['video'], execution: 'script', available: true, installed: true, models: [{ id: 'h3', label: 'H3' }], modes: [{ id: 't2v', label: '文生视频' }], fields: [] }] });
+    const execution = deferred<any>();
+    api.executeNode.mockReturnValue(execution.promise);
+    await act(async () => root.render(<App />));
+    await settleApp();
+    const confirm = container.querySelector<HTMLButtonElement>('.is-editing .execute-button')!;
+    expect(confirm?.disabled).toBe(false);
+    await act(async () => { confirm.click(); confirm.click(); });
+    await settleApp();
+    expect(api.executeNode).toHaveBeenCalledOnce();
+    expect(api.executeNode.mock.calls[0].slice(0, 2)).toEqual(['canvas-test', 'shot-1']);
+    await act(async () => execution.resolve({ id: 'run-once', node_id: 'shot-1', status: 'queued', snapshot: { prompt: '人物在雨夜站台回头', parameters: {}, inputs: {} }, outputs: [] }));
+    expect(container.querySelector<HTMLButtonElement>('.execute-button')?.disabled).toBe(true);
+  });
+  it('saves the final IME text through the original canvas API without serializing editor callbacks', async () => {
+    vi.useFakeTimers();
+    try {
+      await act(async () => root.render(<App />));
+      await settleApp();
+      const prompt = container.querySelector<HTMLTextAreaElement>('[aria-label="视频提示词"]')!;
+      expect(prompt).not.toBeNull();
+      const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+      await act(async () => {
+        prompt.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+        setValue.call(prompt, '输入中的 zhong');
+        prompt.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      expect(api.updateCanvas).not.toHaveBeenCalled();
+      await act(async () => {
+        setValue.call(prompt, '完整中文台词：她在雨后回到车站。');
+        prompt.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+      const graph = api.updateCanvas.mock.calls.at(-1)?.[2];
+      expect(graph.nodes.find((node: { id: string }) => node.id === 'shot-1').data.prompt).toBe('完整中文台词：她在雨后回到车站。');
+      expect(graph.nodes[0].data).not.toHaveProperty('renderSettings');
+      expect(graph.nodes[0].data).not.toHaveProperty('updateNode');
+      expect(api.executeNode).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+  it('edits the selected card in place with no right-hand panel and preserves changes across selection', async () => {
+    await act(async () => root.render(<App />));
+    await settleApp();
+    expect(container.querySelector('.workspace > .inspector')).toBeNull();
+    const card = container.querySelector('[data-testid="fake-node-shot-1"]');
+    const title = card?.querySelector<HTMLTextAreaElement>('[aria-label="卡片名称"]');
+    expect(title).not.toBeNull();
+    expect(card?.querySelector('.inspector-inline')).not.toBeNull();
+    expect(container.querySelector('[aria-label="收起编辑栏"]')).toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(title, '改好的镜头名称');
+      title?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="完成卡片编辑"]')?.click());
+    expect(container.querySelector('[aria-label="卡片名称"]')).toBeNull();
+    await act(async () => container.querySelector<HTMLElement>('.asset-list-item')?.click());
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="卡片名称"]')?.value).toBe('改好的镜头名称');
+    expect(api.executeNode).not.toHaveBeenCalled();
+  });
+});
+describe('Director workspace navigation', () => {
+  it('gives an unselected canvas the full workspace instead of an empty editing rail', async () => {
+    const unselected = { ...canvas, graph: { ...canvas.graph, selection: [] } };
+    api.getCanvases.mockResolvedValue({ canvases: [unselected] });
+    api.getCanvas.mockResolvedValue(unselected);
+    await act(async () => root.render(<App />));
+    await settleApp();
     expect(container.querySelector('.inspector')).toBeNull();
-
-    const assetCard = container.querySelector<HTMLButtonElement>('.asset-list-item');
-    expect(assetCard?.textContent).toContain('夜站镜头');
-    await act(async () => assetCard?.click());
-
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="fake-node-shot-1"]')?.click());
     expect(container.querySelector('.inspector')).not.toBeNull();
-    expect(container.querySelector('.inspector-node-label')?.textContent).toBe('夜站镜头');
+  });
+  it('switches between selection and hand tools without editing the graph', async () => {
+    await act(async () => root.render(<App />));
+    await settleApp();
+    const hand = container.querySelector<HTMLButtonElement>('[aria-label="抓手工具"]');
+    expect(hand).not.toBeNull();
+    await act(async () => hand?.click());
+    expect(container.querySelector('[data-testid="fake-react-flow"]')?.getAttribute('data-nodes-draggable')).toBe('false');
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' })));
+    expect(container.querySelector('[data-testid="fake-react-flow"]')?.getAttribute('data-nodes-draggable')).toBe('true');
+    expect(api.updateCanvas).not.toHaveBeenCalled();
+    expect(api.executeNode).not.toHaveBeenCalled();
+  });
+
+  it('does not intercept typing, composing, or modified keyboard shortcuts', async () => {
+    await act(async () => root.render(<App />));
+    await settleApp();
+    const prompt = container.querySelector<HTMLTextAreaElement>('textarea');
+    await act(async () => {
+      prompt?.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', isComposing: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true }));
+    });
+    expect(container.querySelector('[aria-label="选择工具"]')?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' })));
+    expect(container.querySelector('.shortcut-popover')).not.toBeNull();
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(container.querySelector('.shortcut-popover')).toBeNull();
+  });
+
+  it('opens a shared shot overview without saving or generating and locates the original card', async () => {
+    await act(async () => root.render(<App />));
+    await settleApp();
+    const overview = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '镜头总览');
+    expect(overview).toBeDefined();
+    await act(async () => overview?.click());
+    expect(container.querySelector('.shot-overview')).not.toBeNull();
+    expect(container.querySelector('[data-testid="fake-react-flow"]')?.getAttribute('data-delete-keys')).toBe('null');
+    expect(api.updateCanvas).not.toHaveBeenCalled();
+    expect(api.executeNode).not.toHaveBeenCalled();
+    const locate = container.querySelector<HTMLButtonElement>('.shot-overview [aria-label^="在画布中定位"]');
+    expect(locate).not.toBeNull();
+    await act(async () => locate?.click());
+    expect(container.querySelector('.shot-overview')).toBeNull();
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="卡片名称"]')?.value).toBe('夜站镜头');
   });
 });
 
@@ -370,40 +532,18 @@ describe('App connection focus', () => {
 });
 
 describe('App responsive workspace', () => {
-  it('keeps the narrow palette and inspector mutually exclusive', async () => {
+  it('keeps editing inside the canvas when the narrow palette is toggled', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: (query: string) => ({
-        matches: query.includes('max-width: 1050px'),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      }),
-    });
     await renderConnectionCanvas();
-
     expect(container.querySelector('.palette')?.className).toContain('palette-collapsed');
-    expect(container.querySelector('.inspector')).not.toBeNull();
-
+    expect(container.querySelector('.workspace > .inspector')).toBeNull();
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="展开资产栏"]')?.click());
     expect(container.querySelector('.palette')?.className).not.toContain('palette-collapsed');
-    expect(container.querySelector('.inspector')).toBeNull();
-
     await act(async () => container.querySelector<HTMLButtonElement>('.asset-list-item')?.click());
     expect(container.querySelector('.palette')?.className).toContain('palette-collapsed');
-    expect(container.querySelector('.inspector')).not.toBeNull();
-
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="收起编辑栏"]')?.click());
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="展开资产栏"]')?.click());
-    expect(container.querySelector('.palette')?.className).not.toContain('palette-collapsed');
-    expect(container.querySelector('.inspector')).toBeNull();
-
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="展开编辑栏"]')?.click());
-    expect(container.querySelector('.inspector')).not.toBeNull();
-    expect(container.querySelector('.palette')?.className).toContain('palette-collapsed');
+    expect(container.querySelector('.inspector-inline')).not.toBeNull();
   });
-
-  it('places a palette-created node from the flow-shell bounds', async () => {
+  it.each(['节点画布', '镜头总览'])('places a new node in the visible center from %s', async (viewLabel) => {
     await act(async () => root.render(<App />));
     await settleApp();
 
@@ -421,10 +561,12 @@ describe('App responsive workspace', () => {
       toJSON: () => ({}),
     } as DOMRect);
 
+    await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === viewLabel)?.click());
+
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加视频"]')?.click());
 
     const createdNode = Array.from(container.querySelectorAll<HTMLElement>('[data-testid^="fake-node-"]'))
-      .find((item) => item.dataset.positionX === '260' && item.dataset.positionY === '200');
+      .find((item) => item.dataset.positionX === '140' && item.dataset.positionY === '120');
     expect(createdNode).not.toBeUndefined();
   });
 
@@ -463,7 +605,7 @@ describe('App responsive workspace', () => {
     await act(async () => addVoice?.click());
 
     const routeSelects = container.querySelectorAll<HTMLSelectElement>('.route-section select');
-    expect(container.querySelector('.inspector h2')?.textContent).toContain('音频');
+    expect(container.querySelector('.is-editing .node-eyebrow')?.textContent).toContain('音频');
     expect(routeSelects[0]?.value).toBe('comfy-qwen-tts');
     expect(routeSelects[1]?.value).toBe('qwen3-tts-1.7b-customvoice');
     expect(routeSelects[2]?.value).toBe('tts');
@@ -517,12 +659,18 @@ describe('App responsive workspace', () => {
     expect(container.querySelector<HTMLButtonElement>('.execute-button')?.disabled).toBe(true);
   });
 
-  it('plays a generated FLAC audio run from its result preview', async () => {
+  it.each([
+    ['audio', 'audio/flac', 'audio/voice.flac', 'audio'],
+    ['image', 'image/png', 'image/frame.png', 'img'],
+    ['video', 'video/mp4', 'video/shot.mp4', 'video'],
+  ] as const)('opens the generated %s output from the single primary card preview', async (kind, mime, path, element) => {
     const currentAudioCanvas = audioCanvas('comfy-qwen-tts');
+    currentAudioCanvas.graph.nodes[0].type = kind;
+    currentAudioCanvas.graph.nodes[0].data.nodeType = kind;
     const run = {
       id: 'tts-run', node_id: 'voice-1', status: 'succeeded' as const,
-      snapshot: { node_id: 'voice-1', node_type: 'audio' as never, provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', prompt: '请按原文读。', parameters: {}, inputs: {} },
-      outputs: [{ path: 'audio/voice.flac', kind: 'audio/flac', name: '旁白.flac', metadata: { duration_ms: 2450 } }],
+      snapshot: { node_id: 'voice-1', node_type: kind, provider: 'comfy-qwen-tts', model: 'qwen3-tts-1.7b-customvoice', mode: 'tts', prompt: '请按原文读。', parameters: {}, inputs: {} },
+      outputs: [{ path, kind: mime, name: path, metadata: { duration_ms: 2450 } }],
     };
     api.getCanvases.mockResolvedValue({ canvases: [currentAudioCanvas] });
     api.getCanvas.mockResolvedValue(currentAudioCanvas);
@@ -530,10 +678,13 @@ describe('App responsive workspace', () => {
     await act(async () => root.render(<App />));
     await settleApp();
 
-    const outputPreview = container.querySelector<HTMLButtonElement>('.preview-card');
-    expect(outputPreview?.textContent).toContain('播放音频');
+    expect(container.querySelector('.inspector-inline .preview-section')).toBeNull();
+    const previews = container.querySelectorAll<HTMLButtonElement>('.node-preview.current-output');
+    expect(previews).toHaveLength(1);
+    const outputPreview = previews[0];
+    expect(outputPreview.getAttribute('aria-label')).toContain('生成成品');
     await act(async () => outputPreview?.click());
-    expect(container.querySelector<HTMLAudioElement>('.preview-modal audio')?.src).toContain('/media/audio/voice.flac');
+    expect(container.querySelector<HTMLMediaElement>(`.preview-modal ${element}`)?.src).toContain(`/media/${path}`);
   });
 });
 

@@ -37,7 +37,10 @@ export type IconName =
   | 'trash'
   | 'audio'
   | 'film'
-  | 'info';
+  | 'info'
+  | 'cursor'
+  | 'hand'
+  | 'keyboard';
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name' | 'title'> {
   name: IconName;
@@ -46,6 +49,9 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name' | 'title
 }
 
 const PATHS: Record<IconName, string[]> = {
+  cursor: ['m5 3 14 9-7 1-3 7L5 3Z'],
+  hand: ['M8 12V6a2 2 0 0 1 4 0v5-7a2 2 0 0 1 4 0v7-5a2 2 0 0 1 4 0v8c0 4-2 7-6 7h-1c-3 0-4-2-6-4l-4-5a2 2 0 0 1 3-2l2 2Z'],
+  keyboard: ['M4 5h16v14H4V5Z', 'M7 9h.01M10 9h.01M14 9h.01M17 9h.01M7 12h.01M10 12h.01M14 12h.01M17 12h.01M8 16h8'],
   image: [
     'M4 4.5A1.5 1.5 0 0 1 5.5 3h13A1.5 1.5 0 0 1 20 4.5v15a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-15Z',
     'm5 17 4.2-4.2a1.2 1.2 0 0 1 1.7 0l2.3 2.3 1.6-1.6a1.2 1.2 0 0 1 1.7 0L19 16.2',

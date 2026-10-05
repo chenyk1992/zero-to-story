@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, type ComponentProps } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Inspector } from './Inspector';
@@ -103,7 +103,7 @@ function callbacks() {
   };
 }
 
-async function renderInspector(node: FlowNode, caps = [capability()], runs: Run[] = []) {
+async function renderInspector(node: FlowNode, caps = [capability()], runs: Run[] = [], options: Partial<ComponentProps<typeof Inspector>> = {}) {
   const events = callbacks();
   await act(async () => root.render(
     <Inspector
@@ -115,6 +115,7 @@ async function renderInspector(node: FlowNode, caps = [capability()], runs: Run[
       canExecute
       saveBlocked={false}
       {...events}
+      {...options}
     />,
   ));
   return events;
@@ -133,6 +134,243 @@ async function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe('Inspector editing behavior', () => {
+  it('keeps embedded settings interactions away from canvas dragging and deletion shortcuts', async () => {
+    await renderInspector(makeVideo(), [capability()], [], { embedded: true });
+    const outside = vi.fn();
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', outside);
+    try {
+      const summary = container.querySelector<HTMLElement>('.node-settings-details > summary')!;
+      await act(async () => {
+        summary.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        summary.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      });
+      expect(outside).not.toHaveBeenCalled();
+      expect(container.querySelector('.inspector-inline')?.classList.contains('nodrag')).toBe(true);
+      expect(container.querySelector('.inspector-inline')?.classList.contains('nowheel')).toBe(true);
+    } finally {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', outside);
+    }
+  });
+  it('keeps embedded settings collapsed and leaves the confirmation available without repeating card fields', async () => {
+    const node = makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v' });
+    const events = await renderInspector(node, [capability()], [], { embedded: true });
+    const details = container.querySelector<HTMLDetailsElement>('.node-settings-details');
+
+    expect(container.querySelector('aside')).toBeNull();
+    expect(container.querySelector('[aria-label="卡片设置"]')).not.toBeNull();
+    expect(container.querySelector('.inspector-topline')).toBeNull();
+    expect(container.querySelector('.inspector-section-nav')).toBeNull();
+    expect(container.querySelector('.identity-section')).toBeNull();
+    expect(container.querySelector('.prompt-section')).toBeNull();
+    expect(details).not.toBeNull();
+    expect(details?.open).toBe(false);
+    expect(details?.querySelector('summary')?.textContent).toContain('生成设置');
+    expect(details?.querySelector('.input-section')).not.toBeNull();
+    const information = container.querySelector<HTMLDetailsElement>('.node-info-details');
+    expect(information?.open).toBe(false);
+    expect(information?.querySelector('[aria-label="删除组件"]')).not.toBeNull();
+    expect(details?.querySelector('.story-section')).toBeNull();
+    const execute = buttonWithText('确认执行');
+    expect(execute.closest('details')).toBeNull();
+    expect(execute.disabled).toBe(false);
+    await act(async () => execute.click());
+    expect(events.onExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['video', 'image', 'tts', 'music'] as const)('keeps %s generation method and dependent fields editable inside embedded settings', async (kind) => {
+    const image = createFlowNode('image', { x: 0, y: 0 }, 'image-test');
+    Object.assign(image.data, { provider: 'comfy-qwen-image', model: 'qwen-image-2.1', mode: 'create' });
+    const imageCap: Capability = { ...capability(), id: 'comfy-qwen-image', node_types: ['image'], models: [{ id: 'qwen-image-2.1', label: 'Qwen' }], modes: [{ id: 'create', label: '文生图' }], fields: [{ key: 'megapixels', label: '生成像素预算（MP）', type: 'number', group: 'specs' }] };
+    const [node, cap, fieldLabel] = kind === 'video' ? [makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v' }), capability(), '时长（秒）']
+      : kind === 'image' ? [image, imageCap, '生成像素预算（MP）']
+        : kind === 'tts' ? [makeAudio(), ttsCapability(), '声音角色']
+          : [makeAudio({ provider: 'comfy-minimax-music', model: 'minimax-music-3', mode: 'song' }), musicCapability(), '歌词'];
+    const events = await renderInspector(node, [cap], [], { embedded: true });
+    const details = container.querySelector<HTMLDetailsElement>('.node-settings-details');
+    expect(details).not.toBeNull();
+    await act(async () => details!.querySelector('summary')!.click());
+    expect(details?.open).toBe(true);
+    const selectors = [...details!.querySelectorAll<HTMLSelectElement>('.route-section select')];
+    expect(selectors.map((select) => select.value)).toEqual([node.data.provider, node.data.model, node.data.mode]);
+    expect(details?.querySelector('.specs-section')?.textContent).toContain(fieldLabel);
+    expect(details?.querySelector('.media-import-section')).toBeNull();
+    expect(details?.querySelector('.story-section')).toBeNull();
+    expect(container.querySelector<HTMLDetailsElement>('.node-info-details')?.open).toBe(false);
+    await act(async () => {
+      selectors[2].value = '';
+      selectors[2].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(events.onUpdate).toHaveBeenCalledWith({ mode: '' });
+    expect(events.onExecute).not.toHaveBeenCalled();
+  });
+
+  it('keeps embedded execution blocked for saving and active runs while frozen input stays folded', async () => {
+    const node = makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v' });
+    await renderInspector(node, [capability()], [], { embedded: true, saveBlocked: true });
+    expect(buttonWithText('确认执行').disabled).toBe(true);
+    expect(container.querySelector('.inspector-action')?.textContent).toContain('版本冲突');
+    const run: Run = { id: 'inline-running', node_id: node.id, status: 'running', outputs: [], snapshot: { node_id: node.id, node_type: 'video', provider: 'comfy', model: 'h3', mode: 't2v', prompt: '冻结输入', parameters: {}, inputs: {} } };
+    const events = await renderInspector(node, [capability()], [run], { embedded: true });
+    expect(buttonWithText('生成中…').disabled).toBe(true);
+    expect(container.querySelector('.run-summary')?.closest('details')).toBeNull();
+    expect(container.querySelector('.snapshot-body')).toBeNull();
+    expect(container.querySelector('.snapshot-frozen-note')).toBeNull();
+    await act(async () => buttonWithText('任务记录').click());
+    expect(container.querySelector('.snapshot-body')?.textContent).toContain('冻结输入');
+    expect(events.onExecute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ review: { decision: 'REJECT', evidence: [], end_state: {}, unverified: [] } }, '需要修复'],
+    [{ review: { decision: 'INCONCLUSIVE', evidence: [], end_state: {}, unverified: [] } }, '需要局部复核'],
+    [{ attention_state: 'paused', attention_reason: '等待听审' }, '已暂停：等待听审'],
+  ] satisfies Array<[Partial<Run>, string]>)('keeps actionable result status visible while task records are collapsed: %s', async (status, label) => {
+    const node = makeVideo({ provider: 'comfy', model: 'h3', mode: 't2v' });
+    const run: Run = { id: 'review-result', node_id: node.id, status: 'succeeded', outputs: [{ path: 'media/clip.mp4', kind: 'video' }], snapshot: { node_id: node.id, node_type: 'video', provider: 'comfy', model: 'h3', mode: 't2v', prompt: node.data.prompt, parameters: {}, inputs: {} }, ...status };
+    await renderInspector(node, [capability()], [run], { embedded: true });
+    expect(container.querySelector('.run-summary')?.textContent).toContain(label);
+    expect(container.querySelector('.run-summary')?.closest('details')).toBeNull();
+    expect(container.querySelector('.snapshot-body')).toBeNull();
+    expect(buttonWithText('任务记录').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it.each(['image', 'video', 'audio'] as const)('exposes %s asset upload and path import without repeating its preview in embedded settings', async (kind) => {
+    const node = createFlowNode('asset', { x: 0, y: 0 }, 'inline-asset');
+    node.data.import_path = 'C:\\素材\\reference.png';
+    node.data.asset = { path: 'C:\\素材\\reference.png', name: 'reference.png', kind };
+    const events = await renderInspector(node, [], [], { embedded: true });
+    expect(container.querySelector('.preview-section')).toBeNull();
+    expect(container.querySelector<HTMLDetailsElement>('.node-settings-details')?.open).toBe(false);
+    expect(buttonWithText('替换素材').disabled).toBe(false);
+    expect(buttonWithText('替换素材').closest('details')).toBeNull();
+    expect(container.querySelector('input[placeholder="C:\\\\素材\\\\reference.png"]')).toBeNull();
+    const pathToggle = buttonWithText('路径导入');
+    expect(pathToggle.getAttribute('aria-expanded')).toBe('false');
+    const file = new File(['image'], 'reference.png', { type: 'image/png' });
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    await act(async () => fileInput.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(events.onUploadAsset).toHaveBeenCalledWith(file);
+    await act(async () => pathToggle.click());
+    expect(pathToggle.getAttribute('aria-expanded')).toBe('true');
+    const pathInput = container.querySelector<HTMLInputElement>('.asset-path-import input')!;
+    expect(pathInput.value).toBe('C:\\素材\\reference.png');
+    await setInputValue(pathInput, 'C:\\素材\\replacement.png');
+    expect(events.onUpdate).toHaveBeenCalledWith({ import_path: 'C:\\素材\\replacement.png' });
+    await act(async () => buttonWithText('导入路径').click());
+    expect(events.onImportAssetPath).toHaveBeenCalledTimes(1);
+    expect(events.onExecute).not.toHaveBeenCalled();
+  });
+
+  it.each(['image', 'video', 'audio'] as const)('keeps the %s current output out of embedded settings for imported and generated media', async (kind) => {
+    const node = createFlowNode(kind, { x: 0, y: 0 }, `inline-${kind}`);
+    node.data.asset = { path: `media/imported.${kind}`, name: '导入素材', kind };
+    await renderInspector(node, [], [], { embedded: true });
+    expect(container.querySelector('.preview-section')).toBeNull();
+    const run: Run = {
+      id: 'current-run', node_id: node.id, status: 'succeeded',
+      outputs: [{ path: `media/generated.${kind}`, kind }],
+      snapshot: { node_id: node.id, node_type: kind, provider: '', model: '', mode: '', prompt: '', parameters: {}, inputs: {} },
+    };
+    await renderInspector(node, [], [run], { embedded: true });
+    expect(container.querySelector('.preview-section')).toBeNull();
+    expect(container.querySelector('.run-summary')).toBeNull();
+    expect(container.querySelector('.snapshot-body')).toBeNull();
+    await act(async () => buttonWithText('任务记录').click());
+    expect(container.querySelector('.run-summary')?.textContent).toContain('生成完成');
+    expect(container.querySelector('.snapshot-body')).not.toBeNull();
+  });
+
+  it('retains document source, classification and section dimensions without repeating the document body', async () => {
+    const documentNode = createFlowNode('document' as never, { x: 0, y: 0 }, 'inline-document');
+    Object.assign(documentNode.data, { content: '正文只在卡片显示', source_path: 'story.md' });
+    await renderInspector(documentNode, [], [], { embedded: true });
+    expect([...container.querySelectorAll('textarea')].map((field) => field.value)).not.toContain('正文只在卡片显示');
+    expect(container.querySelector('.node-settings-details')?.textContent).toContain('来源文件');
+    await act(async () => buttonWithText('展开故事信息').click());
+    expect(container.querySelector('.node-settings-details')?.textContent).toContain('资产分类');
+
+    const section = createFlowNode('section' as never, { x: 0, y: 0 }, 'inline-section');
+    Object.assign(section.data, { width: 640, height: 320 });
+    const events = await renderInspector(section, [], [], { embedded: true });
+    const labels = [...container.querySelectorAll('label.field')];
+    const width = labels.find((label) => label.textContent === '宽度')?.querySelector<HTMLInputElement>('input');
+    const height = labels.find((label) => label.textContent === '高度')?.querySelector<HTMLInputElement>('input');
+    expect(width?.value).toBe('640');
+    expect(height?.value).toBe('320');
+    await setInputValue(width!, '800');
+    expect(events.onUpdate).toHaveBeenCalledWith({ width: 800 });
+  });
+
+  it.each(['asset', 'video', 'section'] as const)('does not repeat the %s card description in embedded settings', async (kind) => {
+    const node = createFlowNode(kind as never, { x: 0, y: 0 }, `inline-${kind}`);
+    Object.assign(node.data, { description: '说明在卡片上直接编辑' });
+    await renderInspector(node, [], [], { embedded: true });
+    if (kind !== 'section') {
+      await act(async () => buttonWithText('展开故事信息').click());
+      expect(container.querySelector('.story-fields')?.textContent).toContain('资产分类');
+      expect(container.querySelector('.story-fields')?.textContent).toContain('镜头 / 角色编号');
+    }
+    expect([...container.querySelectorAll('textarea')].map((field) => field.value)).not.toContain('说明在卡片上直接编辑');
+  });
+
+  it('scrolls shortcuts to their own sections without remounting fields or editing the draft', async () => {
+    const node = makeVideo({ asset: { path: 'clip.mp4', kind: 'video', name: '夜站成品' } });
+    const original = structuredClone(node);
+    const events = await renderInspector(node);
+    const prompt = container.querySelector<HTMLTextAreaElement>('.prompt-section textarea');
+    const decoy = document.createElement('section');
+    decoy.className = 'prompt-section';
+    const decoyScroll = vi.fn();
+    decoy.scrollIntoView = decoyScroll;
+    container.prepend(decoy);
+    const destinations = [
+      ['创作', '.prompt-section'],
+      ['输入', '.input-section'],
+      ['参数', '.route-section'],
+      ['成品', '.preview-section'],
+    ];
+    const nav = container.querySelector('.inspector-section-nav');
+    expect(nav).not.toBeNull();
+    for (const [label, selector] of destinations) {
+      const target = container.querySelector<HTMLElement>(`.inspector-scroll ${selector}`)!;
+      const scroll = vi.fn();
+      target.scrollIntoView = scroll;
+      const button = [...nav!.querySelectorAll<HTMLButtonElement>('button')].find((item) => item.textContent === label);
+      expect(button).toBeDefined();
+      await act(async () => button!.click());
+      expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: 'start', container: 'nearest' }));
+    }
+    expect(decoyScroll).not.toHaveBeenCalled();
+    expect(container.querySelector('.inspector-scroll .prompt-section textarea')).toBe(prompt);
+    expect(prompt?.value).toBe('人物在雨夜站台回头');
+    expect(events.onUpdate).not.toHaveBeenCalled();
+    expect(events.onUpdateOptions).not.toHaveBeenCalled();
+    expect(events.onExecute).not.toHaveBeenCalled();
+    expect(node).toEqual(original);
+  });
+
+  it('only offers shortcuts for sections present on the selected generation card', async () => {
+    await renderInspector(makeAudio(), [ttsCapability()]);
+    const nav = container.querySelector('.inspector-section-nav');
+    expect(nav).not.toBeNull();
+    expect([...nav!.querySelectorAll('button')].map((button) => button.textContent)).toEqual(['创作', '参数']);
+    expect(container.querySelector('.input-section')).toBeNull();
+    expect(container.querySelector('.preview-section')).toBeNull();
+
+    await renderInspector(createFlowNode('asset', { x: 0, y: 0 }, 'asset'));
+    expect(container.querySelector('.inspector-section-nav')).toBeNull();
+  });
+
+  it('presents the generation method before its dependent specification fields', async () => {
+    await renderInspector(makeVideo());
+    const route = container.querySelector('.route-section')!;
+    const specs = container.querySelector('.specs-section')!;
+    expect(route.compareDocumentPosition(specs) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  });
+
   it('edits Music 3 caption and multiline lyrics separately without submitting', async () => {
     const node = makeAudio({ provider: 'comfy-minimax-music', model: 'minimax-music-3', mode: 'song', prompt: '温柔的钢琴流行', options: { 'comfy-minimax-music': { lyrics: '[Verse]\n雨停了。', max_duration: 60 } } });
     const events = await renderInspector(node, [musicCapability(), ttsCapability()]);

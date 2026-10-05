@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode, type Ref } from 'react';
 import type { Edge } from '@xyflow/react';
 import { capabilityLabel, hasExecutableSelection, isCapabilitySelectable } from './capabilities';
 import { assetToOutput, resolveMediaOutput, sortRuns } from './graph';
@@ -9,6 +9,7 @@ import { Icon } from './Icon';
 import './inspector.css';
 
 interface InspectorProps {
+  embedded?: boolean;
   node?: FlowNode;
   nodes: FlowNode[];
   edges: Edge[];
@@ -89,9 +90,9 @@ function FieldLabel({ children, optional = false, required = false }: { children
   return <span className="field-label">{children}{required && <em className="required-mark">必填</em>}{optional && <em>可选</em>}</span>;
 }
 
-function Section({ title, children, collapsed = false, className = '' }: { title: string; children: ReactNode; collapsed?: boolean; className?: string }) {
+function Section({ title, children, collapsed = false, className = '', sectionRef }: { title: string; children: ReactNode; collapsed?: boolean; className?: string; sectionRef?: Ref<HTMLElement> }) {
   return (
-    <section className={`inspector-section${collapsed ? ' section-collapsed' : ''}${className ? ` ${className}` : ''}`}>
+    <section ref={sectionRef} className={`inspector-section${collapsed ? ' section-collapsed' : ''}${className ? ` ${className}` : ''}`}>
       <div className="section-title">
         <h3>{title}</h3>
       </div>
@@ -240,7 +241,7 @@ function RelatedComponents({ node, nodes, edges, onSelectNode }: Pick<InspectorP
 
   return (
     <Section title={`关联组件${related.length ? `（${related.length}）` : ''}`} className="related-section">
-      <button className="collapse-button related-toggle" type="button" onClick={() => setCollapsed((value) => !value)}>
+      <button className="collapse-button related-toggle" type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed}>
         <span>{collapsed ? '展开关联组件' : '收起关联组件'}</span><Icon name={collapsed ? 'chevronDown' : 'chevronUp'} size={15} />
       </button>
       {!collapsed && (related.length ? (
@@ -280,14 +281,29 @@ function CapabilityFieldEditor({ field, value, onChange }: { field: CapabilityFi
   return <TextField label={field.label} value={String(effectiveValue ?? '')} onChange={onChange} placeholder={field.required ? defaultHint : undefined} multiline={field.multiline} optional={!field.required} required={field.required} />;
 }
 
-export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, saveBlocked, onUpdate, onUpdateOptions, onMoveReference, onSelectNode, onRemove, onExecute, onUploadAsset, onImportAssetPath, onCompositionChange, onOpenPreview, onOpenMedia, onClose }: InspectorProps) {
+function SettingsDetails({ embedded, title, className = '', children }: { embedded: boolean; title: string; className?: string; children: ReactNode }) {
+  return embedded ? (
+    <details className={`node-settings-details ${className}`}>
+      <summary>{title}</summary>
+      {children}
+    </details>
+  ) : children;
+}
+
+export function Inspector({ embedded = false, node, nodes, edges, capabilities, runs, canExecute, saveBlocked, onUpdate, onUpdateOptions, onMoveReference, onSelectNode, onRemove, onExecute, onUploadAsset, onImportAssetPath, onCompositionChange, onOpenPreview, onOpenMedia, onClose }: InspectorProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLElement>(null);
+  const inputRef = useRef<HTMLElement>(null);
+  const routeRef = useRef<HTMLElement>(null);
+  const outputRef = useRef<HTMLElement>(null);
   const [reorderedRun, setReorderedRun] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showStoryboard, setShowStoryboard] = useState(false);
   const [showMediaImport, setShowMediaImport] = useState(false);
   const [showStoryContext, setShowStoryContext] = useState(false);
+  const [showAssetPath, setShowAssetPath] = useState(false);
   const [composing, setComposing] = useState(false);
 
   const providerCaps = useMemo(() => capabilities.filter((capability) => capability.node_types.includes((node?.data.nodeType || 'video') as CanvasNodeType)), [capabilities, node?.data.nodeType]);
@@ -327,26 +343,29 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
   const linkedMedia = useMemo(() => node ? resolveMediaOutput(node.id, nodes, edges, runs) : undefined, [node, nodes, edges, runs]);
 
   if (!node) {
+    if (embedded) return null;
     return (
       <aside className="inspector empty-inspector">
         <div className="empty-inspector-art"><Icon name="panelRight" size={22} /></div>
         <h2>选中一个组件</h2>
         <p>从左侧拖入组件，或者点击组件将它放到画布中央。</p>
-        <div className="shortcut-note"><Icon name="grid" size={14} />拖动空白处可以平移画布</div>
+        <div className="shortcut-note"><Icon name="hand" size={14} />使用抓手，或按住空格拖动来平移画布</div>
         {onClose && <button className="empty-close-button" type="button" onClick={onClose}><Icon name="close" size={15} />关闭编辑栏</button>}
       </aside>
     );
   }
 
   const data = node.data as unknown as StoryNodeData;
+  const isGeneration = data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio';
+  const hasInputSection = isGeneration && (data.nodeType !== 'audio' || data.mode === 'clone' || edges.some((edge) => edge.target === node.id && edge.targetHandle === 'reference_audio'));
   const isMusic = data.nodeType === 'audio' && data.provider === 'comfy-minimax-music';
   const referenceRunKey = orderedLatestRun ? `${node.id}:${orderedLatestRun.id}` : undefined;
   const draftChanged = Boolean((referenceRunKey && reorderedRun === referenceRunKey) || data.resultChanged || draftDiffersFromRun(data, orderedLatestRun));
-  const latestRunLabel = orderedLatestRun ? (RUN_STATUS_LABELS[orderedLatestRun.status] || orderedLatestRun.status) : '';
   const effectiveRunStatus = orderedLatestRun?.status || data.runStatus;
   const effectiveRunError = orderedLatestRun?.error || data.runError;
   const selectionReady = hasExecutableSelection(data.provider, data.model, data.mode, data.nodeType as CanvasNodeType, capabilities, data.options[data.provider] || {});
   const currentOutput = orderedLatestSuccess?.outputs[0] || linkedMedia;
+  const importPath = data.import_path ?? data.asset?.path ?? '';
   const historyEntries: HistoryEntry[] = [
     ...(data.history || []),
     ...(data.runHistory || [])
@@ -375,10 +394,39 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
 
   const beginComposition = () => { setComposing(true); onCompositionChange(true); };
   const endComposition = () => { setComposing(false); onCompositionChange(false); };
+  const scrollToSection = (target: HTMLElement | null) => {
+    if (!target || !scrollRef.current?.contains(target)) return;
+    const options: ScrollIntoViewOptions & { container: 'nearest' } = {
+      block: 'start', inline: 'nearest', container: 'nearest',
+      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    };
+    target.scrollIntoView(options);
+  };
+  const Container = embedded ? 'div' : 'aside';
+  const information = <>
+    {data.nodeType !== 'section' && (
+      <Section title="故事关联" className="story-section">
+        <button className="collapse-button" type="button" onClick={() => setShowStoryContext((value) => !value)} aria-expanded={showStoryContext}>
+          <span>{showStoryContext ? '收起故事信息' : data.category || data.panel_id || data.description ? '展开故事信息（已有内容）' : '展开故事信息'}</span>
+          <Icon name={showStoryContext ? 'chevronUp' : 'chevronDown'} size={15} />
+        </button>
+        {showStoryContext && <div className="story-fields">
+          <SelectField label="资产分类" value={data.category || ''} options={CATEGORY_OPTIONS} onChange={(category) => onUpdate({ category })} />
+          <TextField label="镜头 / 角色编号" value={data.panel_id || ''} onChange={(panel_id) => onUpdate({ panel_id })} placeholder="例如：P06 / 林默" optional />
+          {!embedded && <TextField label="说明" value={data.description || ''} onChange={(description) => onUpdate({ description })} placeholder="它在这一章里的用途或状态" multiline rows={3} optional onCompositionStart={beginComposition} onCompositionEnd={endComposition} />}
+        </div>}
+      </Section>
+    )}
+    {data.nodeType !== 'section' && <RelatedComponents node={node} nodes={nodes} edges={edges} onSelectNode={onSelectNode} />}
+    {embedded && <button className="inline-remove-button danger-hover" type="button" onClick={onRemove} aria-label="删除组件"><Icon name="trash" size={13} />删除组件</button>}
+  </>;
 
   return (
-    <aside className="inspector" aria-label="组件编辑栏">
-      <div className="inspector-topline">
+    <Container className={`inspector${embedded ? ' inspector-inline nodrag nowheel' : ''}`} aria-label={embedded ? '卡片设置' : '组件编辑栏'}
+      onPointerDown={embedded ? (event) => event.stopPropagation() : undefined}
+      onKeyDown={embedded ? (event) => event.stopPropagation() : undefined}
+      onClick={embedded ? (event) => event.stopPropagation() : undefined}>
+      {!embedded && <div className="inspector-topline">
         <div className="inspector-title-wrap">
           <span className={`inspector-kind-icon kind-${data.nodeType}`}>
             <Icon name={data.nodeType === 'image' ? 'image' : data.nodeType === 'video' ? 'video' : data.nodeType === 'audio' ? 'audio' : data.nodeType === 'asset' ? 'asset' : data.nodeType === 'document' ? 'document' : 'section'} size={17} />
@@ -389,14 +437,32 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
           {onClose && <button className="icon-button" type="button" onClick={onClose} title="收起编辑栏" aria-label="收起编辑栏"><Icon name="close" size={16} /></button>}
           <button className="icon-button danger-hover" type="button" onClick={onRemove} title="删除组件" aria-label="删除组件"><Icon name="trash" size={16} /></button>
         </div>
-      </div>
-      <div className="inspector-scroll">
-        <Section title="基本信息" className="identity-section">
+      </div>}
+      {!embedded && isGeneration && <nav className="inspector-section-nav" aria-label="编辑栏快捷导航">
+        <button type="button" onClick={() => scrollToSection(promptRef.current)}>创作</button>
+        {hasInputSection && <button type="button" onClick={() => scrollToSection(inputRef.current)}>输入</button>}
+        <button type="button" onClick={() => scrollToSection(routeRef.current)}>参数</button>
+        {currentOutput && <button type="button" onClick={() => scrollToSection(outputRef.current)}>成品</button>}
+      </nav>}
+      {embedded && data.nodeType === 'asset' && <div className="inline-asset-controls">
+        <div className="upload-row">
+          <button className="outline-button" type="button" onClick={() => fileRef.current?.click()} disabled={uploading || Boolean(orderedLatestSuccess)}><Icon name="upload" size={14} />{uploading ? '上传中…' : data.asset ? '替换素材' : '上传素材'}</button>
+          <button className="asset-path-toggle" type="button" onClick={() => setShowAssetPath((value) => !value)} aria-expanded={showAssetPath}>路径导入<Icon name={showAssetPath ? 'chevronUp' : 'chevronDown'} size={13} /></button>
+        </div>
+        <input ref={fileRef} className="visually-hidden" type="file" accept="image/*,video/*,audio/*" onChange={handleAssetUpload} />
+        {showAssetPath && <div className="asset-path-import">
+          <TextField label="本地文件路径" value={importPath} onChange={(import_path) => onUpdate({ import_path })} placeholder="C:\\素材\\reference.png" />
+          <button className="outline-button" type="button" onClick={() => void onImportAssetPath()} disabled={uploading || Boolean(orderedLatestSuccess) || !importPath}><Icon name="link" size={14} />导入路径</button>
+        </div>}
+      </div>}
+      <SettingsDetails embedded={embedded && !isGeneration} title={data.nodeType === 'section' ? '分区设置' : '更多信息'} className="node-info-details">
+      <div ref={scrollRef} className="inspector-scroll">
+        {!embedded && <Section title="基本信息" className="identity-section">
           <TextField label="组件名称" value={data.label} onChange={updateLabel} placeholder={STORY_KIND_LABELS[data.nodeType] || '组件'} />
-        </Section>
+        </Section>}
 
-        {(data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio') && (
-          <Section title="提示词" className="prompt-section">
+        {!embedded && isGeneration && (
+          <Section title="提示词" className="prompt-section" sectionRef={promptRef}>
             <TextField label={data.nodeType === 'image' ? '图片提示词' : isMusic ? '音乐描述' : data.nodeType === 'audio' ? '逐字台词' : '视频提示词'} value={data.prompt} onChange={updatePrompt} placeholder={data.nodeType === 'image' ? '描述想要的画面…' : isMusic ? '描述曲风、人声、编曲和情绪变化…' : data.nodeType === 'audio' ? '输入需要合成的台词，保持文字原样…' : '描述主体、动作、镜头运动和风格…'} multiline rows={6} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
             <p className="field-help prompt-help">保存会更新草稿；确认执行后才会固定本次输入。</p>
           </Section>
@@ -404,7 +470,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
 
         {data.nodeType === 'document' && (
           <Section title="文档内容">
-            <TextField label="文档正文" value={data.content || ''} onChange={(content) => onUpdate({ content })} placeholder="输入故事板、电影画面分镜板或章节说明…" multiline rows={16} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
+            {!embedded && <TextField label="文档正文" value={data.content || ''} onChange={(content) => onUpdate({ content })} placeholder="输入故事板、电影画面分镜板或章节说明…" multiline rows={16} onCompositionStart={beginComposition} onCompositionEnd={endComposition} />}
             <TextField label="来源文件" value={data.source_path || ''} onChange={(source_path) => onUpdate({ source_path })} placeholder="可选的原始文件路径" optional />
             <p className="field-help">文档只保存到当前画布引用，编辑不会改写原始文件。</p>
           </Section>
@@ -412,7 +478,7 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
 
         {data.nodeType === 'section' && (
           <Section title="分区设置">
-            <TextField label="分区说明" value={data.description || ''} onChange={(description) => onUpdate({ description })} placeholder="例如：P06 · 车站月台" multiline rows={3} optional onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
+            {!embedded && <TextField label="分区说明" value={data.description || ''} onChange={(description) => onUpdate({ description })} placeholder="例如：P06 · 车站月台" multiline rows={3} optional onCompositionStart={beginComposition} onCompositionEnd={endComposition} />}
             <div className="field-grid two-cols">
               <NumberField label="宽度" value={data.width} min={240} max={2400} step={16} onChange={(width) => onUpdate({ width })} />
               <NumberField label="高度" value={data.height} min={160} max={1800} step={16} onChange={(height) => onUpdate({ height })} />
@@ -421,21 +487,24 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
           </Section>
         )}
 
-        {data.nodeType === 'asset' && (
+        {data.nodeType === 'asset' && !embedded && (
           <Section title="素材内容">
-              <div className="upload-row"><button className="outline-button" type="button" onClick={() => fileRef.current?.click()} disabled={uploading || Boolean(orderedLatestSuccess)}><Icon name="upload" size={14} />{uploading ? '上传中…' : '上传文件'}</button><button className="outline-button" type="button" onClick={() => void onImportAssetPath()} disabled={uploading || Boolean(orderedLatestSuccess) || !(data.import_path || data.asset?.path)}><Icon name="link" size={14} />导入路径</button><span>或填写本地路径</span></div>
+              <div className="upload-row"><button className="outline-button" type="button" onClick={() => fileRef.current?.click()} disabled={uploading || Boolean(orderedLatestSuccess)}><Icon name="upload" size={14} />{uploading ? '上传中…' : '上传文件'}</button><button className="outline-button" type="button" onClick={() => void onImportAssetPath()} disabled={uploading || Boolean(orderedLatestSuccess) || !importPath}><Icon name="link" size={14} />导入路径</button><span>或填写本地路径</span></div>
             <input ref={fileRef} className="visually-hidden" type="file" accept="image/*,video/*,audio/*" onChange={handleAssetUpload} />
-            <TextField label="导入路径" value={data.import_path || data.asset?.path || ''} onChange={(import_path) => onUpdate({ import_path, asset: undefined })} placeholder="C:\\素材\\reference.png" optional />
+            <TextField label="导入路径" value={importPath} onChange={(import_path) => onUpdate({ import_path })} placeholder="C:\\素材\\reference.png" optional />
             {data.asset && <div className="asset-status"><span className="status-dot success" />{data.asset.name}<small>{data.asset.kind}</small></div>}
-            {linkedMedia && <OutputPreview output={linkedMedia} title="素材预览" status="可预览" help="点击查看这份已导入的素材。" onOpen={() => onOpenMedia(linkedMedia)} />}
+            {!embedded && linkedMedia && <OutputPreview output={linkedMedia} title="素材预览" status="可预览" help="点击查看这份已导入的素材。" onOpen={() => onOpenMedia(linkedMedia)} />}
             {data.generation_snapshot && <SnapshotDetails snapshot={data.generation_snapshot as GenerationSnapshot} title="原成品使用的参数" />}
-            <p className="field-help">服务端会校验路径范围。拖拽文件到画布会先上传，再写入这个节点。</p>
+            <p className="field-help">点击“上传文件”添加素材，或填写本地路径后点击“导入路径”。素材会保存到当前节点。</p>
           </Section>
         )}
+        {data.nodeType === 'asset' && embedded && data.generation_snapshot && <SnapshotDetails snapshot={data.generation_snapshot as GenerationSnapshot} title="原成品使用的参数" />}
 
         {(data.nodeType === 'image' || data.nodeType === 'video' || data.nodeType === 'audio') && (
           <>
-            {(data.nodeType !== 'audio' || data.mode === 'clone' || edges.some((edge) => edge.target === node?.id && edge.targetHandle === 'reference_audio')) && <Section title="输入素材" className="input-section">
+            <SettingsDetails embedded={embedded} title="生成设置">
+            <div className="node-generation-fields">
+            {hasInputSection && <Section title="输入素材" className="input-section" sectionRef={inputRef}>
               <IncomingSources node={node} nodes={nodes} edges={edges} runs={runs} onSelectNode={onSelectNode} onMoveReference={onMoveReference ? (edgeId, direction) => {
                 setReorderedRun(referenceRunKey);
                 onMoveReference(edgeId, direction);
@@ -444,6 +513,14 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
             </Section>}
             {(data.nodeType === 'video' || data.nodeType === 'image' || data.nodeType === 'audio') && (
               <>
+                <Section title="生成方式" className="route-section" sectionRef={routeRef}>
+                  <SelectField label={embedded ? '生成服务' : '后端'} value={data.provider} options={providerOptions} onChange={(provider) => onUpdate({ provider, model: '', mode: '' })} />
+                  {currentCapability?.reason && !currentCapability.available && <p className="capability-warning">{currentCapability.reason}</p>}
+                  {modelOptions.length > 0 && <SelectField label="模型" value={data.model} options={[{ value: '', label: modelOptions.length === 1 ? '请选择模型' : '请选择模型' }, ...modelOptions]} onChange={(model) => onUpdate({ model })} optional={modelOptions.length !== 1} required={!data.model} />}
+                  {modeOptions.length > 0 && <SelectField label="模式" value={data.mode} options={[{ value: '', label: '请选择模式' }, ...modeOptions]} onChange={(mode) => onUpdate({ mode })} optional={!data.mode} required={!data.mode} />}
+                  {!currentCapability && <p className="field-help">能力信息尚未返回时只保留通用配置；执行前服务端仍会再次校验。</p>}
+                  {inactiveFields.map((field) => <div className="unsupported-field-warning" key={field.key}>当前模式不支持{field.label}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdateOptions(data.provider, field.key, undefined)}>清空</button></div>)}
+                </Section>
                 <Section title={data.nodeType === 'video' ? '视频规格' : isMusic ? '音乐规格' : data.nodeType === 'audio' ? '语音规格' : '图片规格'} className="specs-section">
                   <div className="field-grid two-cols">
                     {data.nodeType === 'video' && <NumberField label="时长（秒）" value={data.duration} min={durationField?.min ?? 1} max={durationField?.max ?? 60} step={durationField?.integer ? 1 : 0.1} onChange={(duration) => onUpdate({ duration })} optional={!durationField?.required} required={durationField?.required} />}
@@ -454,35 +531,31 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
                   {data.nodeType !== 'audio' && unsupportedCommonFields.map((key) => <div className="unsupported-field-warning" key={key}>当前方式不支持{key === 'megapixels' ? '生成像素预算' : key === 'duration' ? '时长' : '画幅比例'}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdate({ [key]: undefined })}>清空</button></div>)}
                   {dynamicSpecFields.map((field) => <CapabilityFieldEditor key={field.key} field={field} value={data.options[data.provider]?.[field.key]} onChange={(value) => onUpdateOptions(data.provider, field.key, value)} />)}
                 </Section>
-                <Section title="生成方式" className="route-section">
-                  <SelectField label="后端" value={data.provider} options={providerOptions} onChange={(provider) => onUpdate({ provider, model: '', mode: '' })} />
-                  {currentCapability?.reason && !currentCapability.available && <p className="capability-warning">{currentCapability.reason}</p>}
-                  {modelOptions.length > 0 && <SelectField label="模型" value={data.model} options={[{ value: '', label: modelOptions.length === 1 ? '请选择模型' : '请选择模型' }, ...modelOptions]} onChange={(model) => onUpdate({ model })} optional={modelOptions.length !== 1} required={!data.model} />}
-                  {modeOptions.length > 0 && <SelectField label="模式" value={data.mode} options={[{ value: '', label: '请选择模式' }, ...modeOptions]} onChange={(mode) => onUpdate({ mode })} optional={!data.mode} required={!data.mode} />}
-                  {!currentCapability && <p className="field-help">能力信息尚未返回时只保留通用配置；执行前服务端仍会再次校验。</p>}
-                  {inactiveFields.map((field) => <div className="unsupported-field-warning" key={field.key}>当前模式不支持{field.label}。已保留当前值；请清空后再执行。<button type="button" onClick={() => onUpdateOptions(data.provider, field.key, undefined)}>清空</button></div>)}
-                </Section>
                 {(advancedFields.length > 0 || data.options[data.provider] && Object.keys(data.options[data.provider]).length > 0) && (
                   <Section title="高级参数" collapsed={!showAdvanced} className="advanced-section">
-                    <button className="collapse-button" type="button" onClick={() => setShowAdvanced((value) => !value)}><span>{showAdvanced ? '收起高级参数' : `展开高级参数（${advancedFields.length}项）`}</span><Icon name={showAdvanced ? 'chevronUp' : 'chevronDown'} size={15} /></button>
+                    <button className="collapse-button" type="button" onClick={() => setShowAdvanced((value) => !value)} aria-expanded={showAdvanced}><span>{showAdvanced ? '收起高级参数' : `展开高级参数（${advancedFields.length}项）`}</span><Icon name={showAdvanced ? 'chevronUp' : 'chevronDown'} size={15} /></button>
                     {showAdvanced && <div className="advanced-fields">{advancedFields.map((field) => <CapabilityFieldEditor key={field.key} field={field} value={data.options[data.provider]?.[field.key]} onChange={(value) => onUpdateOptions(data.provider, field.key, value)} />)}</div>}
                   </Section>
                 )}
               </>
             )}
-            {currentOutput && <OutputPreview output={currentOutput} title={orderedLatestSuccess ? '最近成功成品' : '当前成品'} status={orderedLatestSuccess ? '已完成' : '已导入素材'} help="编辑只影响下一次生成，已有成品保留原参数。" onOpen={() => orderedLatestSuccess ? onOpenPreview(orderedLatestSuccess) : onOpenMedia(currentOutput)} />}
+            {!embedded && currentOutput && <OutputPreview sectionRef={outputRef} output={currentOutput} title={orderedLatestSuccess ? '最近成功成品' : '当前成品'} status={orderedLatestSuccess ? '已完成' : '已导入素材'} help="编辑只影响下一次生成，已有成品保留原参数。" onOpen={() => orderedLatestSuccess ? onOpenPreview(orderedLatestSuccess) : onOpenMedia(currentOutput)} />}
+            </div>
+            </SettingsDetails>
+            <SettingsDetails embedded={embedded} title="更多信息" className="node-info-details">
+            <div className="node-information-fields">
             {data.asset && !orderedLatestSuccess && !data.generation_snapshot && <p className="field-help import-provenance-note">原提示词未记录；这份内容仅作为导入素材保存。</p>}
-            <Section title="导入现有成品">
-              <button className="collapse-button" type="button" onClick={() => setShowMediaImport((value) => !value)}><span>{showMediaImport ? '收起导入设置' : '展开导入已有成品'}</span><Icon name={showMediaImport ? 'chevronUp' : 'chevronDown'} size={15} /></button>
+            <Section title="导入现有成品" className="media-import-section">
+              <button className="collapse-button" type="button" onClick={() => setShowMediaImport((value) => !value)} aria-expanded={showMediaImport}><span>{showMediaImport ? '收起导入设置' : '展开导入已有成品'}</span><Icon name={showMediaImport ? 'chevronUp' : 'chevronDown'} size={15} /></button>
               {showMediaImport && <>
-              <div className="upload-row"><button className="outline-button" type="button" onClick={() => fileRef.current?.click()} disabled={uploading || Boolean(orderedLatestSuccess)}><Icon name="upload" size={14} />{uploading ? '上传中…' : '上传文件'}</button><button className="outline-button" type="button" onClick={() => void onImportAssetPath()} disabled={uploading || Boolean(orderedLatestSuccess) || !(data.import_path || data.asset?.path)}><Icon name="link" size={14} />导入路径</button><span>只写入当前成品</span></div>
+              <div className="upload-row"><button className="outline-button" type="button" onClick={() => fileRef.current?.click()} disabled={uploading || Boolean(orderedLatestSuccess)}><Icon name="upload" size={14} />{uploading ? '上传中…' : '上传文件'}</button><button className="outline-button" type="button" onClick={() => void onImportAssetPath()} disabled={uploading || Boolean(orderedLatestSuccess) || !importPath}><Icon name="link" size={14} />导入路径</button><span>只写入当前成品</span></div>
                 <input ref={fileRef} className="visually-hidden" type="file" accept="image/*,video/*,audio/*" onChange={handleAssetUpload} />
-                <TextField label="本地文件路径" value={data.import_path || data.asset?.path || ''} onChange={(import_path) => onUpdate({ import_path })} placeholder="C:\\素材\\existing.mp4" optional />
+                <TextField label="本地文件路径" value={importPath} onChange={(import_path) => onUpdate({ import_path })} placeholder="C:\\素材\\existing.mp4" optional />
                 <p className="field-help">{orderedLatestSuccess ? '已有成功成品，当前导入已暂停；请新建媒体组件保留另一份成品。' : '导入仅保存素材，不会提交生成，也不会改变当前生成方式。'}</p>
               </>}
             </Section>
             <Section title="镜头故事板">
-              <button className="collapse-button" type="button" onClick={() => setShowStoryboard((value) => !value)}><span>{showStoryboard ? '收起镜头故事板' : data.content ? '展开镜头故事板（已有正文）' : '展开镜头故事板'}</span><Icon name={showStoryboard ? 'chevronUp' : 'chevronDown'} size={15} /></button>
+              <button className="collapse-button" type="button" onClick={() => setShowStoryboard((value) => !value)} aria-expanded={showStoryboard}><span>{showStoryboard ? '收起镜头故事板' : data.content ? '展开镜头故事板（已有正文）' : '展开镜头故事板'}</span><Icon name={showStoryboard ? 'chevronUp' : 'chevronDown'} size={15} /></button>
               {showStoryboard && <>
                 <TextField label="镜头故事板" value={data.content || ''} onChange={(content) => onUpdate({ content })} placeholder="记录这一个镜头的起止状态、动作和对白…" multiline rows={12} optional onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
                 <TextField label="故事来源文件" value={data.story_source_path || data.source_path || ''} onChange={(story_source_path) => onUpdate({ story_source_path })} placeholder="可选的原始故事板文件" optional />
@@ -492,48 +565,57 @@ export function Inspector({ node, nodes, edges, capabilities, runs, canExecute, 
             {data.generation_snapshot && <SnapshotDetails snapshot={data.generation_snapshot as GenerationSnapshot} title="原成品使用的参数" />}
             {historyEntries.length ? <HistoryPreviewList entries={historyEntries} onOpen={onOpenMedia} /> : null}
             {data.derived_outputs?.length ? <DerivedOutputList outputs={data.derived_outputs} onOpen={onOpenMedia} /> : null}
+            {information}
+            </div>
+            </SettingsDetails>
           </>
         )}
 
-        {data.nodeType !== 'section' && (
-          <Section title="故事关联" className="story-section">
-            <button className="collapse-button" type="button" onClick={() => setShowStoryContext((value) => !value)}>
-              <span>{showStoryContext ? '收起故事信息' : data.category || data.panel_id || data.description ? '展开故事信息（已有内容）' : '展开故事信息'}</span>
-              <Icon name={showStoryContext ? 'chevronUp' : 'chevronDown'} size={15} />
-            </button>
-            {showStoryContext && <div className="story-fields">
-              <SelectField label="资产分类" value={data.category || ''} options={CATEGORY_OPTIONS} onChange={(category) => onUpdate({ category })} />
-              <TextField label="镜头 / 角色编号" value={data.panel_id || ''} onChange={(panel_id) => onUpdate({ panel_id })} placeholder="例如：P06 / 林默" optional />
-              <TextField label="说明" value={data.description || ''} onChange={(description) => onUpdate({ description })} placeholder="它在这一章里的用途或状态" multiline rows={3} optional onCompositionStart={beginComposition} onCompositionEnd={endComposition} />
-            </div>}
-          </Section>
-        )}
-
-        {data.nodeType !== 'section' && <RelatedComponents node={node} nodes={nodes} edges={edges} onSelectNode={onSelectNode} />}
-
+        {!isGeneration && information}
       </div>
+      </SettingsDetails>
       {(data.nodeType === 'video' || data.nodeType === 'image' || data.nodeType === 'audio') && (
         <div className="inspector-action">
           {effectiveRunStatus === 'failed' && <div className="run-error">{effectiveRunError || '上一次执行失败'}</div>}
-          {draftChanged && <div className="stale-note">当前草稿已有修改，尚未用于生成。已有任务继续使用确认时的输入。</div>}
+          {draftChanged && (!embedded || !data.resultChanged) && <div className="stale-note">当前草稿已有修改，尚未用于生成。已有任务继续使用确认时的输入。</div>}
           <button className="execute-button" type="button" onClick={onExecute} disabled={!canExecute || !selectionReady || saveBlocked || composing || ['pending_agent', 'queued', 'running', 'unknown'].includes(effectiveRunStatus || '')}>
             <span>{effectiveRunStatus === 'pending_agent' ? '待 Agent 接手' : effectiveRunStatus === 'queued' ? '等待执行' : effectiveRunStatus === 'running' ? '生成中…' : effectiveRunStatus === 'unknown' ? '等待核实原任务' : '确认执行'}</span><Icon name={effectiveRunStatus === 'succeeded' ? 'check' : 'arrowUpRight'} size={17} />
           </button>
           {saveBlocked && <p className="action-help error-text">当前画布版本冲突，已保留草稿；解决保存冲突后才能执行。</p>}
           {!saveBlocked && !selectionReady && <p className="action-help">请选择可用的生成方式、模型和模式后再确认执行。</p>}
-          {!saveBlocked && <p className="action-help">执行前会先保存当前输入。任务提交后参数会固定。</p>}
-          {orderedLatestRun && <RunSummary run={orderedLatestRun} />}
-          {orderedLatestRun && <SnapshotDetails
+          {!saveBlocked && (!embedded || selectionReady && !['queued', 'pending_agent', 'running', 'unknown'].includes(effectiveRunStatus || '')) && <p className="action-help">{embedded ? '确认后开始生成，修改会自动保存。' : '执行前会先保存当前输入。任务提交后参数会固定。'}</p>}
+          {orderedLatestRun && <TaskRecords
             key={orderedLatestRun.id}
-            snapshot={orderedLatestRun.snapshot}
-            title={`本次任务实际使用的输入 · ${latestRunLabel}`}
-            frozen
-            initialExpanded={['queued', 'pending_agent', 'running', 'unknown'].includes(orderedLatestRun.status) || draftChanged}
+            run={orderedLatestRun}
+            embedded={embedded}
+            initialExpanded={!embedded && (['queued', 'pending_agent', 'running', 'unknown'].includes(orderedLatestRun.status) || draftChanged)}
           />}
         </div>
       )}
-    </aside>
+    </Container>
   );
+}
+
+function TaskRecords({ run, embedded, initialExpanded }: { run: Run; embedded: boolean; initialExpanded: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const label = RUN_STATUS_LABELS[run.status] || run.status;
+  if (!embedded) return <>
+    <RunSummary run={run} />
+    <SnapshotDetails snapshot={run.snapshot} title={`本次任务实际使用的输入 · ${label}`} frozen initialExpanded={initialExpanded} />
+  </>;
+  const showStatus = run.status !== 'succeeded' || run.review && run.review.decision !== 'ACCEPT' || run.attention_state && run.attention_state !== 'active';
+  return <>
+    {showStatus && <RunSummary run={run} />}
+    <div className="node-task-records">
+      <button type="button" className="snapshot-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-label={`任务记录：${label}`}>
+        <span><Icon name="history" size={14} />任务记录</span><small>{label}<Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={14} /></small>
+      </button>
+      {expanded && <div className="node-task-body">
+        {!showStatus && <RunSummary run={run} />}
+        <SnapshotDetails snapshot={run.snapshot} frozen contentOnly />
+      </div>}
+    </div>
+  </>;
 }
 
 function RunSummary({ run }: { run: Run }) {
@@ -546,13 +628,13 @@ function RunSummary({ run }: { run: Run }) {
   return <div className={`run-summary run-${run.status}`}><span className="run-summary-dot" /><span>{RUN_STATUS_LABELS[run.status] || run.status}{run.stage ? ` · ${stages[run.stage] || run.stage}` : ''}{run.review ? ` · ${decisions[run.review.decision]}` : ''}{attention}</span>{run.outputs?.length > 0 && <small>{run.outputs.length} 个输出</small>}</div>;
 }
 
-function OutputPreview({ output, title, status, help, onOpen }: { output: Run['outputs'][number]; title: string; status: string; help: string; onOpen: () => void }) {
+function OutputPreview({ output, title, status, help, onOpen, sectionRef }: { output: Run['outputs'][number]; title: string; status: string; help: string; onOpen: () => void; sectionRef?: Ref<HTMLElement> }) {
   if (!output) return null;
   const isImage = output.kind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(output.path);
   const isAudio = output.kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path);
   const durationMs = output.metadata?.duration_ms;
   return (
-    <section className="preview-section">
+    <section ref={sectionRef} className="preview-section">
       <div className="section-title"><h3><Icon name={isImage ? 'image' : isAudio ? 'audio' : 'film'} size={15} />{title}</h3><span className="success-badge">{status}</span></div>
       <button className="preview-card" type="button" onClick={onOpen}>
         {isImage ? <img src={mediaUrl(output.path)} alt={output.name || '生成图片'} /> : isAudio ? <span className="preview-audio-placeholder"><Icon name="audio" size={32} /><span>{output.name || '音频素材'}</span></span> : <video src={mediaUrl(output.path)} muted preload="metadata" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.duration > 0) video.currentTime = Math.min(0.05, video.duration / 2); }} />}
@@ -571,7 +653,7 @@ function HistoryPreviewList({ entries, onOpen }: { entries: HistoryEntry[]; onOp
   if (!usable.length) return null;
   return (
     <Section title={`历史版本（${usable.length}）`} className="archive-section history-section">
-      <button className="collapse-button archive-toggle" type="button" onClick={() => setExpanded((value) => !value)}><span>{expanded ? '收起历史版本' : '展开历史版本'}</span><Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} /></button>
+      <button className="collapse-button archive-toggle" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}><span>{expanded ? '收起历史版本' : '展开历史版本'}</span><Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} /></button>
       {expanded && <div className="history-inspector-list">
         {usable.map((entry) => {
           const output = assetToOutput(entry.asset);
@@ -592,7 +674,7 @@ function DerivedOutputList({ outputs, onOpen }: { outputs: StoryNodeData['derive
   if (!usable.length) return null;
   return (
     <Section title={`派生输出（${usable.length}）`} className="archive-section derived-section">
-      <button className="collapse-button archive-toggle" type="button" onClick={() => setExpanded((value) => !value)}><span>{expanded ? '收起派生输出' : '展开派生输出'}</span><Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} /></button>
+      <button className="collapse-button archive-toggle" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}><span>{expanded ? '收起派生输出' : '展开派生输出'}</span><Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={15} /></button>
       {expanded && <div className="history-inspector-list">
         {usable.map((entry) => {
           const output = assetToOutput(entry.asset);
@@ -608,13 +690,14 @@ function DerivedOutputList({ outputs, onOpen }: { outputs: StoryNodeData['derive
 
 type SnapshotView = GenerationSnapshot | Run['snapshot'];
 
-function SnapshotDetails({ snapshot, title = '本次成品使用的参数', frozen = false, initialExpanded = false }: { snapshot: SnapshotView; title?: string; frozen?: boolean; initialExpanded?: boolean }) {
-  const [expanded, setExpanded] = useState(initialExpanded);
+function SnapshotDetails({ snapshot, title = '本次成品使用的参数', frozen = false, initialExpanded = false, contentOnly = false }: { snapshot: SnapshotView; title?: string; frozen?: boolean; initialExpanded?: boolean; contentOnly?: boolean }) {
+  const [open, setOpen] = useState(initialExpanded);
+  const expanded = contentOnly || open;
   const parameters = snapshot.parameters || {};
   return (
     <div className="snapshot-details">
-      <button type="button" className="snapshot-toggle" onClick={() => setExpanded((value) => !value)}><span><Icon name="settings" size={14} />{title}</span><small>{expanded ? '收起' : '查看'}<Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={14} /></small></button>
-      {frozen && <p className="snapshot-frozen-note">以下内容是任务确认时保存的冻结输入，状态更新不会改变它。</p>}
+      {!contentOnly && <button type="button" className="snapshot-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={expanded}><span><Icon name="settings" size={14} />{title}</span><small>{expanded ? '收起' : '查看'}<Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={14} /></small></button>}
+      {frozen && expanded && <p className="snapshot-frozen-note">以下是本次任务确认时保存的冻结输入，后续修改不会改变它。</p>}
       {expanded && <div className="snapshot-body"><div><b>提示词</b><p>{typeof snapshot.prompt === 'string' && snapshot.prompt.trim() ? snapshot.prompt : '原提示词未记录'}</p></div><FriendlySnapshot title="生成方式" values={{ provider: snapshot.provider, model: snapshot.model, mode: snapshot.mode }} /><FriendlySnapshot title="规格与参数" values={parameters} /><FriendlySnapshot title="输入素材" values={snapshot.inputs || {}} /></div>}
     </div>
   );
