@@ -128,7 +128,7 @@ class CanvasHandler(BaseHTTPRequestHandler):
         service = self.canvas_server.service
         url = urlsplit(self.path)
         path = unquote(url.path)
-        query = parse_qs(url.query)
+        query = parse_qs(url.query, keep_blank_values=True)
         segments = path.strip("/").split("/")
         method = self.command
         if method == "GET" and path == "/api/health":
@@ -158,6 +158,12 @@ class CanvasHandler(BaseHTTPRequestHandler):
                     canvas_id=query.get("canvas_id", [None])[0],
                 )
             )
+        elif method == "GET" and path == "/api/continuations/next":
+            self._json(service.next_work(
+                query["canvas_id"][0], query["session_id"][0],
+                limit=int(query.get("limit", ["6"])[0]),
+                wait_seconds=float(query.get("wait_seconds", ["0"])[0]),
+            ))
         elif method == "POST" and path == "/api/continuations":
             body = self._body()
             payload = service.configure_continuation(
@@ -223,24 +229,12 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 self._not_found()
         elif len(segments) == 3 and segments[:2] == ["api", "canvases"]:
             if method == "GET":
-                canvas = service.store.get_canvas(segments[2])
-                if query.get("node_id"):
-                    node_id = query["node_id"][0]
-                    edges = [edge for edge in canvas["graph"]["edges"] if edge["target"] == node_id]
-                    ids = {node_id, *(edge["source"] for edge in edges)}
-                    nodes = [node for node in canvas["graph"]["nodes"] if node["id"] in ids]
-                    if not any(node["id"] == node_id for node in nodes):
-                        raise ValueError("没有找到该组件")
-                    self._json(
-                        {
-                            "id": canvas["id"],
-                            "version": canvas["version"],
-                            "nodes": nodes,
-                            "edges": edges,
-                        }
-                    )
-                else:
-                    self._json(canvas)
+                self._json(service.read_canvas(
+                    segments[2], view=query.get("view", ["full"])[0],
+                    node_id=query.get("node_id", [None])[0], node_ids=query.get("node_ids"),
+                    limit=int(query.get("limit", ["50"])[0]), offset=int(query.get("offset", ["0"])[0]),
+                    expected_version=int(query["expected_version"][0]) if query.get("expected_version") else None,
+                ))
             elif method == "PUT":
                 body = self._body()
                 self._json(

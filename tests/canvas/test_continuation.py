@@ -62,6 +62,104 @@ def _configure(
     )
 
 
+def test_returned_media_has_priority_before_claims_and_action_truncation(service):
+    nodes = [_node(f"n-{i}") for i in range(150)]
+    canvas = service.store.create_canvas("long", _graph(nodes))
+    plan = _configure(service, canvas, [n["id"] for n in nodes])
+    for node in nodes:
+        service.store.create_run(canvas["id"], node["id"], canvas["version"], f"request-{node['id']}", {"node_id": node["id"], "node_type": "image"}, status="succeeded" if node is nodes[-1] else "pending_agent")
+    summary = service._continuation_summary(service.store.get_continuation(plan["id"]))
+    assert summary["actions"][0]["type"] == "review"
+    assert summary["actions"][0]["node_id"] == "n-149"
+    assert summary["actions_total"] == 150 and summary["actions_truncated"] is True
+
+
+def test_next_work_is_bounded_read_only_and_cannot_inherit_another_session(service):
+    nodes = [_node(f"n-{i}") for i in range(40)]
+    canvas = service.store.create_canvas("long", _graph(nodes))
+    plan = _configure(service, canvas, [n["id"] for n in nodes])
+    before = service.store.get_continuation(plan["id"])
+    packet = service.next_work(canvas["id"], "sess", limit=3)
+    assert len(packet["actions"]) == 3 and packet["actions_total"] == 40
+    assert packet["remaining_actions"] == 37
+    assert packet["scope_count"] == 40
+    assert len(json.dumps(packet)) < 4500
+    assert "prompt" not in json.dumps(packet) and "authorization" not in packet
+    assert service.store.list_runs(canvas["id"]) == []
+    assert service.store.get_continuation(plan["id"]) == before
+    assert service.next_work(canvas["id"], "other")["status"] == "unregistered"
+    service.update_continuation_state(plan["id"], plan["revision"], "paused", "用户暂停")
+    packet = service.next_work(canvas["id"], "sess", wait_seconds=1)
+    assert packet["status"] == "paused" and packet["actions"] == []
+
+
+def test_next_work_wait_wakes_on_completion_without_polling_full_canvas(service):
+    import threading
+
+    canvas = service.store.create_canvas("wait", _graph([_node("a")]))
+    _configure(service, canvas, ["a"])
+    run = service.store.create_run(canvas["id"], "a", canvas["version"], "request", {"node_id": "a", "node_type": "image"}, status="running")
+    started = threading.Event()
+    original = service._continuation_summary
+    def observe(plan):
+        summary = original(plan)
+        started.set()
+        return summary
+    service._continuation_summary = observe
+    returned = []
+    waiter = threading.Thread(target=lambda: returned.append(service.next_work(canvas["id"], "sess", wait_seconds=5)))
+    waiter.start()
+    assert started.wait(1)
+    service.store.update_run(run["id"], status="succeeded")
+    service._notify()
+    waiter.join(1)
+    assert not waiter.is_alive()
+    assert returned[0]["actions"][0]["type"] == "review"
+
+
+def test_next_work_does_not_duplicate_a_claimed_review_or_hide_auxiliary_blocks(service):
+    canvas = service.store.create_canvas("review", _graph([_node("a")]))
+    plan = _configure(service, canvas, ["a"])
+    run = service.store.create_run(canvas["id"], "a", canvas["version"], "request", {"node_id": "a", "node_type": "image"}, status="succeeded")
+    owner = service.store.claim_review(run["id"])
+    packet = service.next_work(canvas["id"], "sess")
+    assert packet["status"] == "waiting" and packet["actions"] == []
+    assert owner not in json.dumps(packet)
+    service.update_continuation_unit(plan["id"], plan["revision"], "audio-inspection", "blocked", reason="工具不可用")
+    packet = service.next_work(canvas["id"], "sess")
+    # The auxiliary blocker and its effect on the node are both retained.
+    assert packet["blocked_total"] == 2
+    assert packet["blocked_items"][0]["reason"] == "工具不可用"
+
+
+def test_next_work_wait_wakes_when_user_pauses_scope(service):
+    import threading
+    canvas = service.store.create_canvas("pause", _graph([_node("a")]))
+    plan = _configure(service, canvas, ["a"])
+    service.store.create_run(canvas["id"], "a", canvas["version"], "request", {"node_id": "a", "node_type": "image"}, status="running")
+    started = threading.Event()
+    original = service._continuation_summary
+    def observe(plan):
+        summary = original(plan)
+        started.set()
+        return summary
+    service._continuation_summary = observe
+    returned = []
+    waiter = threading.Thread(target=lambda: returned.append(service.next_work(canvas["id"], "sess", wait_seconds=5)))
+    waiter.start()
+    assert started.wait(1)
+    service.update_continuation_state(plan["id"], plan["revision"], "paused", "用户暂停")
+    waiter.join(1)
+    assert not waiter.is_alive() and returned[0]["status"] == "paused"
+
+
+def test_next_work_rejects_unbounded_requests(service):
+    canvas = service.store.create_canvas("bounds", _graph([_node("a")]))
+    for kwargs in ({"limit": 21}, {"limit": 0}, {"wait_seconds": 26}, {"wait_seconds": float("nan")}):
+        with pytest.raises(ValueError):
+            service.next_work(canvas["id"], "sess", **kwargs)
+
+
 def test_configuration_is_opt_in_persistent_and_revision_cas(tmp_path: Path) -> None:
     db_path = tmp_path / "canvas.sqlite3"
     with CanvasStore(db_path) as store:

@@ -27,6 +27,7 @@
 | --- | --- | --- |
 | `canvas_continuation_configure` | `POST /api/continuations` | `canvas_id`、`canvas_version`、真实 `session_id`、明确的 `node_ids`、已有 `authorization` 原文；变更已有范围时附当前 `revision` |
 | `canvas_continuation_read` | `GET /api/continuations` | 可按 `session_id`、`canvas_id` 查询；同时提供时取交集 |
+| `canvas_next` | `GET /api/continuations/next` | 真实 `session_id`、`canvas_id`；默认 `limit=6`、最多20项，`wait_seconds=0–25` |
 | `canvas_continuation_unit` | `POST /api/continuations/{id}/units` | 当前 `revision`、`unit_id`、`state`，以及实际 `agent_id`、可选 `turn_id` / `node_id` / `run_id` / `reason` |
 | `canvas_continuation_state` | `POST /api/continuations/{id}/state` | 当前 `revision`、`state: active 或 paused`；暂停附具体 `reason` |
 | `canvas_continuation_hook` | `POST /api/continuations/hook` | 宿主事件提供的 `session_id`、`event`，适用时附 `agent_id`、`turn_id` |
@@ -34,6 +35,12 @@
 读取返回 `{ "plans": [...] }`，每项包含自身 `id`、`revision`、`state`、`units` 和嵌套的 `summary`。摘要的 `status` 为 `actionable`、`waiting`、`blocked`、`complete` 或 `paused`；`actions` 指出下一步，`blocked_items` 保留阻塞，`stalled` 表示连续无进展。画布展示这些状态，但页面读取不会增加或清空结束检查次数。
 
 每次交接先读当前计划；真实派发成功后登记新的 `dispatched` 单元。收到完成通知后核对实际结果，确认已登记为 `result_ready`，处理完毕再用最新 `revision` 写 `handled` 或 `blocked`。版本冲突时重读并核对，不覆盖另一执行者的状态。范围登记和草稿变更都不会创建生成请求。
+
+日常交接优先使用 `canvas_next` 的小批量待办。它先返回已完成执行单元和已生成待审媒体，再返回领取、执行前授权核对和准备动作；排序发生在截断前，因此后排结果不会被大量准备项挤掉。响应只携带本会话登记范围、当前版本、计划 revision、状态计数、少量动作/阻塞和 `remaining_actions`；完整授权与单元绑定仍按需读原接口。已有审查持有者时等待原审查，不重复接手。读取不会增加 Stop 计数，也不领取、生成或自动恢复暂停。
+
+长视频用分页目录建立场景索引，每批只精读当前所需节点与直接输入，处理后再取下一批。已有结果时先完成必要处理，再开始下一次长阻塞调用；独立宿主素材工作按已确认范围交给真实执行单元，主会话保持可以处理结果。仅有进行中工作时可用 `canvas_next(..., wait_seconds=25)` 有界等待，完成、单元返回和暂停会通知等待者。项目通知不会中断宿主已经阻塞的工具，也不能代替官方空闲唤醒；不承诺无宿主支持的即时/无人值守验收。
+
+一个接续范围最多 256 个媒体节点、512 个执行单元，这是当前批次上限，不是整部视频的场景上限。较大的项目按章节或场景批次，在最新 `revision` 下更新范围；处理完的节点可以移出，运行中或结果未处理的单元仍须保留。范围更新会移除不属于新范围的节点单元，实际运行与采用记录仍保留在原节点/原 run。场景辅助工作绑定对应 `node_id`，全局单元只用于确实跨场景的交接，避免无限积累。
 
 `canvas_version` 只用于登记范围时的画布版本检查，不冻结整段故事之后的草稿编辑。输入仍由原生成请求固定。节点有明确单元 `run_id` 时，以最近登记的绑定运行判断进度；没有绑定时读取共享画布中该节点的最近运行，允许复用已接受产物。`session_id` 用于事件路由，不是鉴权凭据；本机 API 沿用单用户画布的访问边界，不宣称它能隔离互不信任的调用方。
 

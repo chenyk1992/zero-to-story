@@ -2,7 +2,9 @@
 
 ## 通用导入、编辑与真实尾帧
 
-完整故事图使用本 Skill 的 `scripts/import_workspace.py` 及 JSON manifest，先 `--dry-run` 验证稳定节点 ID、素材路径和连线，再导入。已有画布使用 `CanvasClient.edit(canvas_id, version, operations)` 精确更新；版本冲突后重新读取完整画布并重新应用本次操作，不用新版本号提交旧图，不以历史 Markdown 覆盖当前提示词。
+完整故事图使用本 Skill 的 `scripts/import_workspace.py` 及 JSON manifest，先 `--dry-run` 验证稳定节点 ID、素材路径和连线，再导入。已有画布使用 `CanvasClient.edit(canvas_id, version, operations)` 精确更新；版本冲突后重新读取当前版本与本次操作所需范围并重新应用，不用新版本号提交旧图，不以历史 Markdown 覆盖当前提示词。
+
+MCP `canvas_read` 默认返回分页概览，每页默认 50、最多 100 个节点，不返回长正文和历史。后续页带首读版本 `expected_version`，版本变化后重读目录；`node_ids` 一次精读最多 20 个目标及其直接上游，`view="full"` 显式读取整图。MCP `canvas_edit` 默认仅返回版本和改动回执，必要时用 `full=True`；HTTP 页面保存仍返回完整画布。每次接续先用 `canvas_next` 读取当前会话的少量待办，优先处理已经完成的结果，再精读本批节点。
 
 R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序。项目 `scripts/r2v_wire.py` 要求显式画布 ID，冲突即停止保存；替换图片引用时保留其他组件、视口、选择和工作空间信息。`related` 不参与生成。
 
@@ -25,6 +27,8 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 | 可用能力与字段 | GET /api/capabilities |
 | 画布列表、新建 | GET /api/canvases；POST /api/canvases，正文 name |
 | 读取当前配置 | GET /api/canvases/{id} |
+| 读取分页概览 | GET /api/canvases/{id}?view=overview&limit=50；后续页附 offset、expected_version |
+| 精读多个节点 | GET /api/canvases/{id}?node_ids={id1}&node_ids={id2}；最多 20 个目标及直接上游 |
 | 保存配置 | PUT /api/canvases/{id}，正文 version、graph、可选 name |
 | 导入本地媒体 | POST /api/assets/import，正文 path |
 | 确认生成 | POST /api/canvases/{id}/runs，正文 node_id、version、request_id |
@@ -40,6 +44,7 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 | 回填内容审片 | POST /api/runs/{id}/review，正文 `owner_token`、`decision`、`output_path`、`evidence`，可选 `end_state`、`unverified` |
 | 登记接续范围 | POST /api/continuations，正文 `canvas_id`、`canvas_version`、`session_id`、`node_ids`、`authorization`，变更附当前 `revision` |
 | 只读接续检查 | GET /api/continuations，可按 `session_id`、`canvas_id` 同时筛选；返回 `plans[].summary` |
+| 只读下一批待办 | GET /api/continuations/next，必填 canvas_id、session_id；limit 默认 6、最多 20，wait_seconds 最多 25 |
 | 记录真实单元交接 | POST /api/continuations/{id}/units，正文 `revision`、`unit_id`、`state`，实际 `agent_id` 与可选 `turn_id`、`node_id`、`run_id`、`reason` |
 | 暂停或恢复接续 | POST /api/continuations/{id}/state，正文 `revision`、`state`，暂停附 `reason` |
 

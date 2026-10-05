@@ -109,15 +109,25 @@ class CanvasClient:
         raise ValueError("画布启动超时，请检查本地端口是否可用")
 
     def edit(
-        self, canvas_id: str, version: int, operations: list[dict[str, Any]]
+        self, canvas_id: str, version: int, operations: list[dict[str, Any]], *,
+        compact: bool = False,
     ) -> dict[str, Any]:
         canvas = self.request("GET", f"/api/canvases/{canvas_id}")
         if canvas["version"] != version:
             raise ValueError("画布已有新版本，请重新读取后应用修改")
         graph = copy.deepcopy(canvas["graph"])
         name = canvas["name"]
+        affected_node_ids: set[str] = set()
         for operation in operations:
             action = operation["op"]
+            if compact and action in {"remove_node", "disconnect"}:
+                for edge in graph["edges"]:
+                    removes_edge = (
+                        edge["id"] == operation["edge_id"] if action == "disconnect"
+                        else operation["node_id"] in {edge["source"], edge["target"]}
+                    )
+                    if removes_edge:
+                        affected_node_ids.update((edge["source"], edge["target"]))
             if action == "add_node":
                 graph["nodes"].append(operation["node"])
             elif action == "update_node":
@@ -178,6 +188,11 @@ class CanvasClient:
                     graph.pop("workspace", None)
             else:
                 raise ValueError(f"不支持的画布操作：{action}")
-        return self.request(
+        result = self.request(
             "PUT", f"/api/canvases/{canvas_id}", {"version": version, "graph": graph, "name": name}
         )
+        if compact:
+            from lfo.canvas.views import edit_receipt
+
+            return edit_receipt(result, operations, affected_node_ids=affected_node_ids)
+        return result

@@ -32,6 +32,7 @@ from lfo.canvas.mv_preflight import inspect_mv_panel, mv_metadata_fingerprint
 from lfo.canvas.production_metrics import summarize_production
 from lfo.canvas.settings import CanvasSettings
 from lfo.canvas.store import CanvasStore, ContinuationRevisionError
+from lfo.canvas.views import canvas_view
 from lfo.media._ffmpeg import probe, probe_audio, run_command
 
 
@@ -48,6 +49,7 @@ class CanvasService:
         self._executions: dict[str, threading.Thread] = {}
         self._execution_lock = threading.Lock()
         self._changes = threading.Condition()
+        self._change_sequence = 0
         if start_worker:
             self.start_worker()
 
@@ -105,6 +107,9 @@ class CanvasService:
                 pass
             result.append(run)
         return result
+
+    def read_canvas(self, canvas_id: str, **options: Any) -> dict[str, Any]:
+        return canvas_view(self.store.get_canvas(canvas_id), **options)
 
     def confirm(
         self, canvas_id: str, node_id: str, version: int, request_id: str
@@ -408,6 +413,7 @@ class CanvasService:
     def _notify(self) -> None:
         self._wake.set()
         with self._changes:
+            self._change_sequence += 1
             self._changes.notify_all()
 
     def run_summary(self, run_id: str) -> dict[str, Any]:
@@ -584,6 +590,7 @@ class CanvasService:
         )
         payload = self._continuation_payload(plan)
         payload["created"] = existing is None
+        self._notify()
         return payload
 
     def read_continuations(
@@ -602,10 +609,56 @@ class CanvasService:
             ]
         }
 
+    def next_work(self, canvas_id: str, session_id: str, *, limit: int = 6, wait_seconds: float = 0) -> dict[str, Any]:
+        """Return a bounded result-first packet for only this registered scope.
+
+        Snapshot outside the condition: readiness takes the confirmation lock,
+        while confirmation notifies this condition. The sequence prevents lost
+        notifications without reversing that lock order.
+        """
+        if type(limit) is not int or not 1 <= limit <= 20 or not 0 <= wait_seconds <= 25:
+            raise ValueError("limit 需要在 1–20 之间，等待时间需要在 0–25 秒之间")
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            with self._changes:
+                observed = self._change_sequence
+            canvas = self.store.get_canvas(canvas_id)
+            plans = self.store.list_continuations(session_id=session_id, canvas_id=canvas_id, limit=1)
+            packet: dict[str, Any] = {
+                "canvas_id": canvas_id, "canvas_version": canvas["version"],
+                "session_id": session_id, "status": "unregistered", "actions": [],
+                "actions_total": 0, "remaining_actions": 0, "scope_count": 0,
+                "blocked_items": [], "blocked_total": 0,
+            }
+            if plans:
+                plan = plans[0]
+                summary = self._continuation_summary(plan)
+                counts: dict[str, int] = {}
+                for record in summary["nodes"]:
+                    state = record["state"]
+                    counts[state] = counts.get(state, 0) + 1
+                total = summary.get("actions_total", len(summary["actions"]))
+                packet.update({
+                    "continuation_id": plan["id"], "revision": plan["revision"],
+                    "status": summary["status"], "reason": summary["reason"],
+                    "scope_count": len(plan["node_ids"]), "counts": counts,
+                    "actions": summary["actions"][:limit], "actions_total": total,
+                    "remaining_actions": max(0, total - limit),
+                    "blocked_items": summary["blocked_items"][:limit],
+                    "blocked_total": summary.get("blocked_total", len(summary["blocked_items"])),
+                })
+            if packet["status"] != "waiting" or self._stop.is_set() or time.monotonic() >= deadline:
+                return packet
+            with self._changes:
+                if observed != self._change_sequence:
+                    continue
+                self._changes.wait(max(0, deadline - time.monotonic()))
+
     def update_continuation_state(
         self, continuation_id: str, revision: int, state: str, reason: str | None = None
     ) -> dict[str, Any]:
         plan = self.store.update_continuation_state(continuation_id, revision, state, reason)
+        self._notify()
         return self._continuation_payload(plan)
 
     def update_continuation_unit(
@@ -632,6 +685,7 @@ class CanvasService:
             turn_id=turn_id,
             reason=reason,
         )
+        self._notify()
         return self._continuation_payload(plan)
 
     def continuation_hook(
@@ -673,6 +727,7 @@ class CanvasService:
             }
         if event == "SubagentStop":
             self.store.mark_subagent_result_ready(session_id, agent_id, turn_id)
+            self._notify()
             return {}
         if event == "Interrupt":
             changed = self.store.pause_continuations_for_session(
@@ -680,6 +735,7 @@ class CanvasService:
             )
             if not changed:
                 return {}
+            self._notify()
             return {"systemMessage": "已暂停当前会话的画布接续计划；恢复前不会领取或提交新单元"}
         return self._continuation_stop_hook(session_id)
 

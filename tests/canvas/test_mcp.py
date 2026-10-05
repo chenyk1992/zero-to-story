@@ -53,7 +53,7 @@ def test_stdio_mcp_reads_and_edits_the_same_http_canvas(tmp_path):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 listing = await session.list_tools()
-                assert {"canvas_read", "canvas_edit", "canvas_claim", "canvas_complete", "canvas_production_summary"}.issubset(
+                assert {"canvas_read", "canvas_edit", "canvas_claim", "canvas_complete", "canvas_production_summary", "canvas_next"}.issubset(
                     {tool.name for tool in listing.tools}
                 )
                 created = await session.call_tool("canvas_create", {"name": "MCP 画布"})
@@ -88,6 +88,8 @@ def test_stdio_mcp_reads_and_edits_the_same_http_canvas(tmp_path):
                     },
                 )
                 assert not edited.isError
+                assert "graph" not in edited.structuredContent
+                assert edited.structuredContent["changed_node_ids"] == ["image-one"]
                 actual = service.store.get_canvas(canvas["id"])
                 assert actual["graph"]["nodes"][0]["data"]["prompt"] == "对话写入的提示词"
                 workspace_edit = await session.call_tool(
@@ -118,6 +120,17 @@ def test_stdio_mcp_reads_and_edits_the_same_http_canvas(tmp_path):
                 assert updated["graph"]["edges"] == actual["graph"]["edges"]
                 assert updated["graph"]["viewport"] == actual["graph"]["viewport"]
                 assert service.store.list_runs() == []
+                overview = await session.call_tool("canvas_read", {"canvas_id": canvas["id"]})
+                assert overview.structuredContent["view"] == "overview"
+                assert "prompt" not in overview.structuredContent["nodes"][0]["data"]
+                exact = await session.call_tool("canvas_read", {"canvas_id": canvas["id"], "node_ids": ["image-one"]})
+                assert exact.structuredContent["nodes"][0]["data"]["prompt"] == "对话写入的提示词"
+                full = await session.call_tool("canvas_read", {"canvas_id": canvas["id"], "view": "full"})
+                assert full.structuredContent == updated
+                stale_page = await session.call_tool("canvas_read", {"canvas_id": canvas["id"], "offset": 1, "expected_version": canvas["version"]})
+                assert stale_page.isError
+                next_packet = await session.call_tool("canvas_next", {"canvas_id": canvas["id"], "session_id": "other-session"})
+                assert next_packet.structuredContent["status"] == "unregistered"
                 run = service.confirm(updated["id"], "image-one", updated["version"], "review-mcp")
                 claimed = service.claim_agent(run["id"], ["image_gen"])
                 output = tmp_path / "original.png"

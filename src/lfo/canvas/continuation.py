@@ -219,15 +219,19 @@ def build_continuation_summary(
                     }
                 )
             elif decision is None:
-                record["state"] = "actionable"
-                action = _action(
-                    "review",
-                    node_id=node_id,
-                    run_id=latest.get("id"),
-                    reason="先审查实际产物并记录 ACCEPT/REJECT/INCONCLUSIVE",
-                )
-                actions.append(action)
-                record["reason"] = action["reason"]
+                if latest.get("review_owner_token"):
+                    record["state"] = "waiting"
+                    record["reason"] = "实际产物审查已被接手，等待原审查结果"
+                else:
+                    record["state"] = "actionable"
+                    action = _action(
+                        "review",
+                        node_id=node_id,
+                        run_id=latest.get("id"),
+                        reason="先审查实际产物并记录 ACCEPT/REJECT/INCONCLUSIVE",
+                    )
+                    actions.append(action)
+                    record["reason"] = action["reason"]
             else:
                 record["state"] = "blocked"
                 record["reason"] = _short_reason(
@@ -333,6 +337,11 @@ def build_continuation_summary(
     # Keep the response deterministic and bounded even if a caller supplied a
     # large but valid plan.  The persisted records remain available for the
     # explicit unit API; the check response is intentionally concise.
+    priority = {"handle_unit": 0, "review": 1, "claim_agent": 2, "execute_after_authorization_check": 3, "prepare": 4}
+    actions.sort(key=lambda action: priority.get(action.get("type", ""), 5))
+    common["actions_total"] = len(actions)
+    common["actions_truncated"] = len(actions) > MAX_ACTIONS
+    common["blocked_total"] = len(blocked_items)
     actions = actions[:MAX_ACTIONS]
     blocked_items = blocked_items[:MAX_BLOCKED_ITEMS]
     common["actions"] = actions

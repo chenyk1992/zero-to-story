@@ -34,17 +34,36 @@ def create_mcp(settings: CanvasSettings):
         return {"url": client.ensure_server(), **client.request("GET", "/api/canvases")}
 
     @mcp.tool()
-    def canvas_read(canvas_id: str | None = None, node_id: str | None = None) -> dict[str, Any]:
-        """读取最新画布。给 node_id 只读取当前组件和直接输入；省略画布 ID 列出画布。"""
+    def canvas_read(
+        canvas_id: str | None = None, node_id: str | None = None, node_ids: list[str] | None = None,
+        view: str = "overview", limit: int = 50, offset: int = 0, expected_version: int | None = None,
+    ) -> dict[str, Any]:
+        """默认读分页目录，无长提示词。node_id/node_ids精读目标和直接上游（最多20个目标）；view=full显式读取全图。后续目录分页带expected_version。"""
         path = f"/api/canvases/{canvas_id}" if canvas_id else "/api/canvases"
+        if not canvas_id:
+            return client.request("GET", path)
+        query: dict[str, Any] = {"view": view, "limit": limit, "offset": offset}
+        if node_id is not None:
+            query["node_id"] = node_id
+        if node_ids is not None:
+            if not node_ids:
+                raise ValueError("node_ids 不能为空")
+            query["node_ids"] = node_ids
+        if expected_version is not None:
+            query["expected_version"] = expected_version
         return client.request(
-            "GET", path + ("?" + urlencode({"node_id": node_id}) if canvas_id and node_id else "")
+            "GET", path + "?" + urlencode(query, doseq=True)
         )
 
     @mcp.tool()
     def canvas_production_summary(canvas_id: str) -> dict[str, Any]:
         """读取当前画布范围的真实运行计数、阶段观察跨度与阻塞；缺失时间保留未知。"""
         return client.request("GET", f"/api/canvases/{canvas_id}/production")
+
+    @mcp.tool()
+    def canvas_next(canvas_id: str, session_id: str, limit: int = 6, wait_seconds: float = 0) -> dict[str, Any]:
+        """只读当前会话登记范围的下一批待办。先返回已完成待处理结果，默认最多6项，不返回全图/长提示词；可等待0–25秒的状态变化。不领取、不生成、不唤醒空闲宿主。"""
+        return client.request("GET", "/api/continuations/next?" + urlencode({"canvas_id": canvas_id, "session_id": session_id, "limit": limit, "wait_seconds": wait_seconds}))
 
     @mcp.tool()
     def canvas_create(name: str) -> dict[str, Any]:
@@ -58,7 +77,7 @@ def create_mcp(settings: CanvasSettings):
 
     @mcp.tool()
     def canvas_edit(
-        canvas_id: str, version: int, operations: list[dict[str, Any]]
+        canvas_id: str, version: int, operations: list[dict[str, Any]], full: bool = False,
     ) -> dict[str, Any]:
         """按版本更新画布，不生成。
 
@@ -67,7 +86,7 @@ def create_mcp(settings: CanvasSettings):
         select(node_ids), rename(name), workspace(patch)。workspace
         操作只合并 graph.workspace 元数据；传 null 可移除字段。
         """
-        return client.edit(canvas_id, version, operations)
+        return client.edit(canvas_id, version, operations, compact=not full)
 
     @mcp.tool()
     def canvas_import_media(path: str) -> dict[str, Any]:
