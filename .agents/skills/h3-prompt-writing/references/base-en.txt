@@ -24,7 +24,7 @@ For the target video, at 0.00 seconds into the target video, <Picture 1> (from [
 How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
 ```
 
-Here, `N` is the index of the actual final shot, and `S.SS` is the effective video duration formatted to exactly two decimal places. The instruction must be the first line of the final prompt, followed by one blank line before the core fields.
+Here, `N` is the index of the approved final shot, and `S.SS` is the current Canvas `duration` parameter formatted to exactly two decimal places. This is the planned alignment time in the prompt, not a guarantee of the generated file's duration; use the actual output for finishing and frame extraction. The instruction must be the first line of the final prompt, followed by one blank line before the core fields.
 
 ### 2.2 Part Two Contains the Three Core Fields
 

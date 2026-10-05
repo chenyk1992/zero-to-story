@@ -15,6 +15,8 @@ description: 将灵感、小说、剧本或短剧交接转成故事板、角色�
 | --- | --- |
 | 剧本、改编与叙事声音 | 读[剧本与改编层](references/script-adaptation.md)，再进入故事板设计 |
 | 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
+| 只修改某个 Panel 的拍法 | 读[局部改拍](references/storyboard-production.md#局部改拍)，依据当前创作源修改，保留未受影响的剧情、对白和 ID |
+| 下一集复用人物，或角色有别名、年龄与服装变化 | 读[角色身份与造型复用](references/creative-assets.md#角色身份与造型复用)，先匹配故事身份，再选择本镜适用的资产 |
 | 宫崎骏／吉卜力启发的手绘动画，或未来科幻短片与参考图 | 按需读[视觉风格参考](references/visual-style-profiles.md)的对应分支，将具体美术规则写回风格与资产字段；项目采用方法涵盖 miyazaki-inspired-animation / future-sci-fi-cinematic-generator，不启动其外部生产流程 |
 | 细化当前镜头的动作或表演 | 仅按需要读[动作导演参考](references/action-direction.md)或[表演导演参考](references/performance-direction.md)，再写回已有的 Setup、状态与转场字段 |
 | 为已锁定画面制作配乐 | 保持本故事流程，只复用[音乐方向的锁定画面分支](../music-video-creator/references/music-direction.md#锁定画面配乐)，保留画面、对白与动作时点 |

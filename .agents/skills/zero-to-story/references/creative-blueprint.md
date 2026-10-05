@@ -50,7 +50,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - 同场相邻 Panel 的状态链相接；换场有明确桥接，不能无解释跳转。
 - 对白顺序、Setup 归属和已确认的文字策略可执行。
 - 每个 Panel 恰好一条 `generation.panel_plans`；operation、首尾帧和引用槽位相互一致。
-- I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 在创作阶段明确选择分镜板或有明确用途的普通参考素材，不能声明精确首尾帧。
+- I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 明确选择分镜板或有用途的普通参考，`first_frame_source` / `last_frame_source` 为 `null`。本地 R2V 可另用 `first_frame_guide_source` 提供首帧引导，不接尾帧，也不承诺像素级首帧锁。
 
 预检不做最终视频评分，不计算对白关键路径、不要求形容词计数，也不生成候选片、恢复记录或独立锁文件。
 

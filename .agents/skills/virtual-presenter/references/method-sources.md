@@ -1,0 +1,11 @@
+# 口播方法来源与采纳边界
+
+只在维护或审查本 Skill 时读取。下表归纳官方仓库、源码、论文和模型卡的只读研究，访问日期 **2026-10-04**。方法借鉴不证明当前宿主具备外部模型或工具；生产仍走 Canvas 与已选 H3/ComfyUI 链路。本文自主归纳方法，不复制外部提示词、代码或模型。
+
+| 官方项目与证据 | 采纳到本 Skill 的方法 | 未采纳的模型/执行机制 | 许可边界 |
+|---|---|---|---|
+| [MuseTalk](https://github.com/TMElyralab/MuseTalk)：[音频帧映射及左右上下文](https://github.com/TMElyralab/MuseTalk/blob/main/musetalk/utils/audio_processor.py#L13)、[人脸缺失与区域检查](https://github.com/TMElyralab/MuseTalk/blob/main/musetalk/utils/preprocessing.py#L77) | 从实际音频时长与对白区间规划，分段保护词音/句尾；仅在影响口型或表情表达时检查脸/嘴可见性。这是前期与观察方法的推导，不把特征切块当视频 Panel 切点 | 音频特征驱动的局部嘴部重绘、脸部遮罩参数、avatar latent 缓存与实时推理；不把其帧率、上下文长度或检测器变成 H3 参数/验收门槛 | [代码 LICENSE](https://github.com/TMElyralab/MuseTalk/blob/main/LICENSE) 为 MIT；[官方声明](https://github.com/TMElyralab/MuseTalk#disclaimerlicense)允许自有训练权重用于包括商业在内的用途，依赖模型分别遵守许可，测试素材限非商业研究 |
+| [LiveTalking](https://github.com/lipku/LiveTalking)：[分句](https://github.com/lipku/LiveTalking/blob/main/llm.py#L56)、[音频起止事件](https://github.com/lipku/LiveTalking/blob/main/avatars/base_avatar.py#L124)、[音视频时间戳](https://github.com/lipku/LiveTalking/blob/main/server/webrtc.py#L29) | 保持句与来源音频窗的对应关系，区分来源时间、Panel 时间与成片偏移；字幕依实际采用音轨，后期改变后复核受影响窗口 | 标点/字符数分块、20ms 实时音频队列、实时打断与 WebRTC/RTMP；不新增推流或调度系统，不照搬其切块尾部处理，也不宣称这些机制提供词级字幕对齐 | [框架代码](https://github.com/lipku/LiveTalking/blob/main/LICENSE)为 Apache-2.0，集成权重无统一许可；默认 wav2lip256 权重的独立许可未确认，原 [Wav2Lip 官方限制](https://github.com/Rudrabha/Wav2Lip#disclaimer)为非商业用途。LiveTalking [README 另有发布视频水印声明](https://github.com/lipku/LiveTalking#8-声明)；此处只借鉴方法，不集成框架/模型 |
+| [EchoMimicV2](https://github.com/antgroup/echomimic_v2)：[实际音频/姿态覆盖与长度处理](https://github.com/antgroup/echomimic_v2/blob/main/infer.py#L144)、[论文](https://arxiv.org/html/2411.10061v1) | 对应语音重音写少量动作进入/强调/收束；核对有效对白是否被实际片段完整覆盖，分开观察身份、口型、手势和接缝，不以一项成立代替全部 | 音频/手部姿态条件、模型内部重叠 context 窗与预测平均、训练损失和机器评价指标；不将其具体手势控制当作 H3 能力，不凭内部窗口机制承诺多次生成无缝 | [代码 LICENSE](https://github.com/antgroup/echomimic_v2/blob/main/LICENSE) 为 Apache-2.0；[官方权重卡](https://huggingface.co/BadToBest/EchoMimicV2)未标明独立模型 license，且写学术研究定位，权重商业授权未确认；基础模型许可另行核实 |
+
+这些方法写入现有声音、表演、验收和成片字段；声音用途及记录方式见 [Shot Contract](presenter-plan-shot-contract.md#声音与动作按需记录)，可执行约束见 [H3 控制与后期责任](../../h3-prompt-writing/references/control-boundaries.md)。外部模型与执行机制未纳入生产依赖。

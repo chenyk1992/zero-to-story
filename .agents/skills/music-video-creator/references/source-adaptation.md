@@ -35,3 +35,15 @@
 原文没有完整的 I2V/R2V 模式选择表或提供方槽位协议；明确写出的 I2V 用途包括连续动作的尾帧接续。项目按真实接口补足“多卡制作首帧后 I2V”与“普通 R2V 分槽引用”，区分资料关联、提示词说明和实际输入，沿用用户对精确首帧优先 I2V 的偏好。源模板的全局参考说明与逐镜文字/动作/音乐事实保留，编译成项目 H3 官方格式；不照抄原外壳、固定字符数或未证实的输入上限。
 
 功能迁移的证据包括：原有创作要求能进入完整 H3 输入、对应资产能按真实槽位传递、生成产物能进入主音轨剪辑与路线验收。仅补文档不证明真实成片通过；同时，尚未试生成也不能被误写成“必须先开发空间后期才具备这条路线”。原文提及的调速、全局 LUT/颗粒属于另外的后期操作，是否采用按实际作品决定；需要执行时核实具体工具和效果，不宣称基础编辑清单已支持。
+
+## 音频事件与曲线方法补充
+
+以下公开项目于 **2026-10-04** 查阅作者仓库、说明与相关源码；仅提炼创作方法，未安装、运行或复制外部代码。上面的原 Skill 来源与生成式文字路线继续保留。
+
+| 来源与代码许可 | 采纳的方法及项目落点 | 不采纳的实现或约束 |
+| --- | --- | --- |
+| [Parseq](https://github.com/rewbs/sd-parseq)，[MIT](https://github.com/rewbs/sd-parseq/blob/master/LICENSE)；[事件、时间序列与关键帧说明](https://github.com/rewbs/sd-parseq#working-with-time--beats-audio-synchronisation) | 带标签事件、分频/音高/振幅候选和可编辑响应曲线的思路；导演方法先挑有作用的事件，再写回已有响应表和逐镜事实 | 不迁入 A1111/Deforum、逐帧 seed/strength/zoom、表达式或固定 BPM 网格；这些不是当前 H3 控制接口，文档也不新增音频分析能力 |
+| [Tubeviz](https://github.com/interrupt21h/tubeviz)，[Apache-2.0](https://github.com/interrupt21h/tubeviz/blob/main/LICENSE)；[乐句编排源码](https://github.com/interrupt21h/tubeviz/blob/main/src/tubeviz/choreography.py) | 乐句蓄势、峰值前收住、释放与运动/复杂度分层；导演和后期按实际素材运动选择可用区间，候选曲线可由人工修订 | 不迁入独立素材库、渲染器、自动选片生产入口或评分阈值；局部 tempo、段落及情绪启发式不当作听审或 ACCEPT，自动效果曲线不冒称已接入 |
+| [Motif](https://github.com/XinCoLab/motif)，[MIT](https://github.com/XinCoLab/motif/blob/main/LICENSE)；[事件层](https://github.com/XinCoLab/motif/blob/main/audio/key_moments_extractor.py)、[锚点优先规划](https://github.com/XinCoLab/motif/blob/main/planner/planner_v5_simple.py) | 先挑结构转折和少量重要声音落点，再填乐句内过渡；保留选中理由，区分音量与事件密度 | 不照搬固定阈值、事件数量、调速或自动评价；当前规划结果合并丢弃 `clip_offset`，不能据作者描述认定动作瞬间已准确对齐；未迁移其模型与后期链路 |
+
+表中许可仅指仓库代码；外部模型、权重和素材的许可须分别核实。方法写回现有导演事实，不改变音乐时间轴 schema、Canvas 授权/运行/采用状态或 Comfy H3 执行入口。

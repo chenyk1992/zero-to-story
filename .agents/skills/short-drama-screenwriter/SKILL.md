@@ -31,6 +31,7 @@ description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 创作选题�
 | `/开始`、选题 | [genre-guide](./references/genre-guide.md) |
 | `/创作方案` | [opening-rules](./references/opening-rules.md)、[paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md) |
 | `/角色开发` | [villain-design](./references/villain-design.md) |
+| 续集中的别名、不同年龄或服装阶段 | [角色身份与造型复用](./references/handoff-mapping.md#角色身份与造型复用)；保留人物关系与称呼来源，再交接当前造型 |
 | `/目录` | [paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md) |
 | `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集再读 [opening-rules](./references/opening-rules.md)，付费集再读 [paywall-design](./references/paywall-design.md) |
 | 改写台词，或 `/自检 N` 中需要诊断台词 | [dialogue-diagnosis](./references/dialogue-diagnosis.md)；只处理当前授权段落，锁定对白逐字保留 |
