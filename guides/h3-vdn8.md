@@ -16,20 +16,26 @@ VDN8 是 Canvas 本地 H3 视频的 8 步加速采样配置。当前 `comfy-vide
 
 这只说明已有 I2V 和图像 R2V 对照达到了当时的质量门槛。T2V、FL2V、视频引用、音频引用和混合引用已有结构兼容路径，但不能据此宣称画面质量已经验证。结构兼容不足以新增运行时拒绝规则，实际产物仍需逐次验收。
 
-## VDN8 固定结构
+## VDN8 默认结构
 
 `vdn_turbo` 模板的 `KSamplerSelect` 使用 `euler`，`BasicScheduler` 使用 `simple`，`steps=8`，`denoise=1.0`。VDN 节点保持：
 
-- `vdn_checkpoint=stage-dmd-step-250`
+- `vdn_checkpoint=stage-dmd-step-250`（可由已确认快照明确选择其他完整 8 步 bundle）
 - `apply_turbo_adapter=true`
 - `strength=1.0`
 - `lora_mode=merge`
-- `branch_weights=stream`
-- `retain_buffers=off`
+- `branch_weights=auto`
+- `retain_buffers=auto`
 - `verbose=true`
 - `attention_backend=grouped`
 
 `MiniMaxH3SigmaShift` 使用 `shift_video=12.0`、`shift_audio=3.0`。seed、时长、FPS、分辨率、提示词和引用顺序来自当前冻结的 Canvas snapshot。
+
+自动内存策略由新版 VDN 插件按运行时剩余显存决定，不绑定显卡型号，换电脑无需重做代码优化。`vdn_branch_weights` 与 `vdn_retain_buffers` 可在快照中显式覆盖；要复现旧调度路径，选择 `stream` / `off`。这些选项只用于 `vdn_turbo`。
+
+量化分支通过 `vdn_checkpoint` 选择已安装的完整 INT8 ConvRot 8 步 bundle；原目录中同时存在普通与 INT8 分支文件时，插件 `auto` 可在内存压力下优先采用 INT8。没有量化文件时仍用已选 bundle 的普通分支，不下载或生成模型文件。主 H3 模型、文本编码器、VAE、采样器和 sigma shift 不因此自动替换。
+
+`video_decode=tiled` 显式启用带默认空间与时间重叠的 `VAEDecodeTiled`，仅改变视频解码节点，音频与输出连线保持原结构；默认仍为完整解码。分块用于控制解码峰值，不承诺更快，采用前应检查边缘和时间接缝。
 
 `native` 使用原生 H3 基座，不接入 `ApplyVDNH3` 或 `MiniMaxH3SigmaShift`，采样器为 `res_multistep` / `simple`，步数来自当前 snapshot。选择 native 不代表每种步数都已有画面质量证据。
 
@@ -46,13 +52,15 @@ VDN8 是 Canvas 本地 H3 视频的 8 步加速采样配置。当前 `comfy-vide
 
 ## 当前环境与限制
 
-已验证的节点环境为 ComfyUI 0.34.x 和 ComfyUI-VDN-H3 1.4.0。VDN bundle 位于 ComfyUI 模型根目录的 `vdn/stage-dmd-step-250/`，包含 linear branch、default/turbo adapters 及配置和元数据。adapter 在本次提交前通过 MCP `nodes` 和 `validate_workflow` 检查节点、模型和枚举；不能只复制一个权重文件，或用旧检查记录代替当前预检。
+旧质量对照的节点环境为 ComfyUI 0.34.x 和 ComfyUI-VDN-H3 1.4.0。当前自动策略与 checkpoint 兼容路径使用 ComfyUI-VDN-H3 1.5.2 或更新版本：包含 `adapter_spec.json` 兼容与预取内存生命周期修复。VDN bundle 位于 ComfyUI 模型根目录的 `vdn/<所选目录>/`，包含 linear branch、default/turbo adapters 及配置和元数据。adapter 在本次提交前通过 MCP `nodes` 和 `validate_workflow` 检查节点、模型和枚举；旧节点缺少新内存策略字段时提前拒绝，不忽略配置。不能只复制一个权重文件，或用旧检查记录代替当前预检。
 
 本机 VDN merge/stream 路径配合裁剪 H3 基座时，会跳过 51 个完整宽度的 turbo AdaLN delta 张量。这可能影响细节或时序稳定性，不能解释为所有 turbo 权重都已合并。
 
 在同一 RTX 5080、5 秒、768×1344、24 fps、相同 seed/提示词/参考图的 R2V 历史对照中，曾记录：原生 20 步约 723.940 秒，VDN8 约 295.139 秒，PDD8 约 309.264 秒。VDN8 相对原生约快 59.23%，相对 PDD8 快约 14.125 秒。该记录包含同一 ComfyUI 会话的 warm-cache 影响，只是特定场景证据，不是性能承诺或纯推理基准。
 
 ## 验证口径
+
+2026-10-05 的项目优化已改为自动内存策略，并提供明确的量化 checkpoint、旧调度覆盖和分块解码选项；自动测试只能验证绑定、连线、预检和单次提交契约。本轮没有真实生成对照，历史接受结论不代表这些新组合已完成视听质量与速度验证。每次成功运行会在原 run 输出目录保存 `execution-report.json`；总耗时与 provider 等待按实际测量记录，内部编码/采样/解码时间和显存峰值未知时留空，详细口径见[执行协议](../.agents/skills/comfy-video-executor/references/execution.md#execution-measurements)。
 
 2026-09-07 的安装记录确认本地 `ComfyUI-VDN-H3` 1.4.0 与完整 bundle 已复制并逐文件核对；插件归档 SHA-256 为 `c7d40bc497aac152c9acd2d0e3a07e620060bcaf1642df905bff712ceefa32b2`，bundle 共 8 个文件、5,464,957,032 字节。随后运行中的 `/object_info` 能识别 `ApplyVDNH3` 和 `stage-dmd-step-250`。这些记录证明当时的安装和结构兼容，不替代当前 Canvas adapter 预检或实际生成验收。
 

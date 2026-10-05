@@ -14,8 +14,10 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
+import time
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from lfo.comfy.exceptions import LfoComfyError
@@ -55,6 +57,10 @@ ADVANCED_KEYS = frozenset(
         "fps",
         "reference_image_size",
         "frame_zero_video_guide",
+        "vdn_checkpoint",
+        "vdn_branch_weights",
+        "vdn_retain_buffers",
+        "video_decode",
     }
 )
 
@@ -203,6 +209,27 @@ def normalize_snapshot(snapshot: object) -> dict[str, Any]:
         raise ExecutorError("vdn_turbo requires exactly 8 sampling steps")
     provider["sampler_profile"] = profile
     provider["steps"] = steps
+    for key in ("vdn_checkpoint", "vdn_branch_weights", "vdn_retain_buffers", "video_decode"):
+        if provider.get(key) is None or provider.get(key) == "":
+            provider.pop(key, None)
+        elif key.startswith("vdn_") and profile != "vdn_turbo":
+            raise ExecutorError(f"parameters.{key} is supported only by vdn_turbo")
+    checkpoint = provider.get("vdn_checkpoint")
+    if checkpoint is not None:
+        if not isinstance(checkpoint, str):
+            raise ExecutorError("parameters.vdn_checkpoint must be a relative checkpoint name")
+        checkpoint = checkpoint.strip()
+        parts = checkpoint.replace("\\", "/").split("/")
+        if any(part in {"", ".", ".."} for part in parts) or ":" in checkpoint or "\0" in checkpoint:
+            raise ExecutorError("parameters.vdn_checkpoint must stay within models/vdn")
+        provider["vdn_checkpoint"] = checkpoint
+    for key, choices in (
+        ("vdn_branch_weights", {"auto", "stream", "cache_gpu"}),
+        ("vdn_retain_buffers", {"auto", "on", "off"}),
+        ("video_decode", {"full", "tiled"}),
+    ):
+        if key in provider and (not isinstance(provider[key], str) or provider[key] not in choices):
+            raise ExecutorError(f"parameters.{key} must be one of {', '.join(sorted(choices))}")
     if "seed" in provider and provider["seed"] is not None:
         provider["seed"] = _integer(provider["seed"], field="seed")
     if "fps" in provider and provider["fps"] is not None:
@@ -336,6 +363,15 @@ def prepare_workflow(
         noise["noise_seed"] = comfy["seed"]
     if "fps" in comfy and comfy["fps"] is not None:
         _one_node(workflow, "CreateVideo").setdefault("inputs", {})["fps"] = comfy["fps"]
+    if comfy["sampler_profile"] == "vdn_turbo":
+        acceleration = _one_node(workflow, "ApplyVDNH3").setdefault("inputs", {})
+        acceleration["vdn_checkpoint"] = comfy.get("vdn_checkpoint", "stage-dmd-step-250")
+        acceleration["branch_weights"] = comfy.get("vdn_branch_weights", "auto")
+        acceleration["retain_buffers"] = comfy.get("vdn_retain_buffers", "auto")
+    if comfy.get("video_decode") == "tiled":
+        decoder = _one_node(workflow, "VAEDecode")
+        decoder["class_type"] = "VAEDecodeTiled"
+        decoder["inputs"].update(tile_size=512, overlap=64, temporal_size=64, temporal_overlap=8)
     if normalized["mode"] == "r2v":
         if comfy.get("reference_image_size") is not None:
             generator_inputs["ref_image_size"] = comfy["reference_image_size"]
@@ -603,18 +639,22 @@ def execute_snapshot(
 
     stage = "input_validation"
     result: ComfyResult | None = None
+    started_at = time.perf_counter()
     try:
         from lfo.comfy.admission import VideoSubmissionGuard
 
         emit({"stage": stage})
         normalize_snapshot(snapshot)
+        validated_at = time.perf_counter()
         request_id = snapshot.get("request_id") if isinstance(snapshot, dict) else None
         with VideoSubmissionGuard(config.base_url, request_id=request_id) as guard, ready_session(config) as session:
+                ready_at = time.perf_counter()
                 upload = uploader or (lambda path: upload_input(path, session))
                 with tempfile.TemporaryDirectory(prefix="canvas-comfy-") as temp_dir:
                     stage = "upload"
                     emit({"stage": stage})
                     workflow, _normalized = prepare_workflow(snapshot, uploader=upload)
+                    prepared_at = time.perf_counter()
                     stage = "input_validation"
                     emit({"stage": stage})
                     workflow_path = pathlib.Path(temp_dir) / "workflow.json"
@@ -622,14 +662,51 @@ def execute_snapshot(
                         json.dumps(workflow, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
                     )
                     preflight_workflow(workflow, workflow_path, session)
+                    preflight_at = time.perf_counter()
                     stage = "submit"
                     emit({"stage": stage})
                     result = run_workflow(
                         workflow_path, output_dir, config, session, guard=guard, emit=emit
                     )
         stage = "collection"
+        collection_at = time.perf_counter()
         emit({"stage": stage, "remote_finished": True, "provider_task_id": result.provider_task_id})
         output = materialize_video(result, output_dir, config)
+        finished_at = time.perf_counter()
+        # Keep diagnostics beside the actual run media. Canvas re-probes media
+        # metadata, so attaching timings to ffprobe fields would discard them.
+        vdn_nodes = [node for node in workflow.values() if node.get("class_type") == "ApplyVDNH3"]
+        report = {
+            "schema": "comfy-video-execution.v1",
+            "recorded_at": datetime.now(UTC).isoformat(),
+            "request_id": _normalized["request_id"],
+            "provider_task_id": result.provider_task_id,
+            "sampler_profile": _normalized["comfy"]["sampler_profile"],
+            "parameters": {**_normalized["parameters"], "steps": _normalized["comfy"]["steps"],
+                           "seed": _one_node(workflow, "RandomNoise")["inputs"]["noise_seed"]},
+            "models": {
+                "diffusion": _one_node(workflow, "UNETLoader")["inputs"]["unet_name"],
+                "text_encoder": _one_node(workflow, "CLIPLoader")["inputs"]["clip_name"],
+                "vaes": [node["inputs"]["vae_name"] for node in workflow.values() if node.get("class_type") == "VAELoader"],
+            },
+            "vdn": {key: value for key, value in vdn_nodes[0]["inputs"].items() if key != "model"} if vdn_nodes else None,
+            "video_decode": _normalized["comfy"].get("video_decode", "full"),
+            "timings_seconds": {
+                "input_validation": validated_at - started_at,
+                "resource_and_startup": ready_at - validated_at,
+                "prepare_and_upload": prepared_at - ready_at,
+                "preflight": preflight_at - prepared_at,
+                **result.timings_seconds,
+                "collection_and_validation": finished_at - collection_at,
+                "total": finished_at - started_at,
+            },
+            "provider_stage_timings_seconds": None,
+            "peak_vram_bytes": None,
+            "resolved_vdn_memory_policy": None,
+        }
+        (output_dir / "execution-report.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         return {"status": "succeeded", "stage": "media_validation", "outputs": [output], "provider_task_id": result.provider_task_id}
     except (OSError, ExecutorError, LfoComfyError) as exc:
         if not isinstance(exc, ExecutorError):

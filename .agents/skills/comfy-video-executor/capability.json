@@ -70,6 +70,48 @@
       "required": true
     },
     {
+      "key": "vdn_checkpoint",
+      "label": "VDN 权重目录（仅 VDN Turbo）",
+      "type": "text",
+      "group": "advanced",
+      "required": false
+    },
+    {
+      "key": "vdn_branch_weights",
+      "label": "VDN 权重调度（仅 VDN Turbo）",
+      "type": "select",
+      "group": "advanced",
+      "options": [
+        {"value": "auto", "label": "自动"},
+        {"value": "stream", "label": "流式加载"},
+        {"value": "cache_gpu", "label": "显存缓存"}
+      ],
+      "required": false
+    },
+    {
+      "key": "vdn_retain_buffers",
+      "label": "VDN 工作缓存（仅 VDN Turbo）",
+      "type": "select",
+      "group": "advanced",
+      "options": [
+        {"value": "auto", "label": "自动"},
+        {"value": "on", "label": "保留缓存"},
+        {"value": "off", "label": "释放缓存"}
+      ],
+      "required": false
+    },
+    {
+      "key": "video_decode",
+      "label": "视频解码方式",
+      "type": "select",
+      "group": "advanced",
+      "options": [
+        {"value": "full", "label": "完整解码"},
+        {"value": "tiled", "label": "分块解码"}
+      ],
+      "required": false
+    },
+    {
       "key": "seed",
       "label": "随机种子",
       "type": "number",

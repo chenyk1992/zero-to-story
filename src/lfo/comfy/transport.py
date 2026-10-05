@@ -13,12 +13,12 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
-from .mcp_client import ComfyMcpSession, McpCallError
+from .mcp_client import ComfyMcpSession, ComfyToolSession, McpCallError
 
 DYNAMIC_MEDIA_INPUTS = {
     "LoadImage": frozenset({"image"}),
@@ -65,6 +65,7 @@ class OutputRef:
 class ComfyResult:
     provider_task_id: str
     outputs: tuple[OutputRef, ...]
+    timings_seconds: dict[str, float] = field(default_factory=dict)
 
 
 def _read_config(path: pathlib.Path | None) -> dict[str, Any]:
@@ -191,21 +192,45 @@ def _model_environment(info: dict[str, Any], config: RuntimeConfig) -> pathlib.P
 
 
 @contextmanager
-def ready_session(config: RuntimeConfig) -> Iterator[ComfyMcpSession]:
-    """Reuse an online instance or start the configured local workspace once."""
+def ready_session(config: RuntimeConfig) -> Iterator[ComfyToolSession]:
+    """Use normal MCP calls first; recover a proven offline instance before submit."""
+    _endpoint(config.base_url)
+    with ExitStack() as stack:
+        first = stack.enter_context(_connected(config))
+        yield _LazyReadySession(config, first, stack)
+
+
+class _LazyReadySession:
+    # These operations cannot create a generation. Never recover/retry run,
+    # job or fetch_outputs here: a lost submission must retain its receipt.
+    _BEFORE_SUBMISSION = frozenset({"upload_file", "validate_workflow", "nodes", "search_models"})
+
+    def __init__(self, config: RuntimeConfig, session: ComfyToolSession, stack: ExitStack):
+        self.config, self.session, self.stack = config, session, stack
+        self.startup_attempted = False
+        self.submission_attempted = False
+
+    def call(self, name: str, args: dict[str, Any] | None = None, *, timeout: float = 90) -> Any:
+        if name == "run_workflow":
+            self.submission_attempted = True
+        try:
+            return self.session.call(name, args, timeout=timeout)
+        except McpCallError:
+            if name not in self._BEFORE_SUBMISSION or self.startup_attempted or self.submission_attempted:
+                raise
+            self.startup_attempted = True
+            info = self.session.call("server_info")
+            if _running(info, self.config):
+                raise
+            self.session = self.stack.enter_context(_start_offline_session(self.config, info))
+            return self.session.call(name, args, timeout=timeout)
+
+
+@contextmanager
+def _start_offline_session(config: RuntimeConfig, info: dict[str, Any]) -> Iterator[ComfyMcpSession]:
     from .admission import state_directory
 
-    with _connected(config) as first:
-        try:
-            info = first.call("server_info")
-        except McpCallError as exc:
-            raise ExecutorError(str(exc)) from exc
-        if _running(info, config):
-            yield first
-            return
-    # The first MCP process had no model venv. Start a new one with the
-    # install's own venv so official launch never borrows Canvas's Python.
-    assert isinstance(info, dict)
+    # Launch with the existing model venv, never the Canvas interpreter.
     model_venv = _model_environment(info, config)
     folder = state_directory()
     folder.mkdir(parents=True, exist_ok=True)
@@ -234,7 +259,7 @@ def ready_session(config: RuntimeConfig) -> Iterator[ComfyMcpSession]:
             raise ExecutorError(str(exc), status="unknown") from exc
 
 
-def upload_input(path: pathlib.Path, session: ComfyMcpSession) -> str:
+def upload_input(path: pathlib.Path, session: ComfyToolSession) -> str:
     if not path.is_file():
         raise ExecutorError(f"上传源文件不存在：{path}")
     # A unique local basename prevents a previous run's input from being reused.
@@ -272,14 +297,21 @@ def _node_inputs(node_info: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def preflight_workflow(
-    workflow: dict[str, Any], workflow_path: pathlib.Path, session: ComfyMcpSession,
+    workflow: dict[str, Any], workflow_path: pathlib.Path, session: ComfyToolSession,
+    *, inspect_nodes: bool = False,
 ) -> None:
-    """Check live node choices and the official workflow verdict."""
+    """Validate once; inspect VDN policy compatibility and optional diagnostics."""
     schemas: dict[str, dict[str, Any]] = {}
     for node_id, node in workflow.items():
         if not isinstance(node, dict) or not isinstance(node.get("class_type"), str):
             raise ExecutorError(f"工作流节点 {node_id} 无效")
         name = node["class_type"]
+        if not isinstance(node.get("inputs"), dict):
+            raise ExecutorError(f"工作流节点 {node_id} 输入无效")
+        # VDN auto-policy fields must not be silently ignored by older nodes.
+        # Keep the lightweight path for all other node types.
+        if not inspect_nodes and name != "ApplyVDNH3":
+            continue
         if name not in schemas:
             try:
                 info = session.call("nodes", {"action": "get", "name": name})
@@ -296,6 +328,11 @@ def preflight_workflow(
                 continue
             schema = schemas[name].get(key)
             choices = schema.get("choices") if schema else None
+            if name == "ApplyVDNH3" and key in {"branch_weights", "retain_buffers"}:
+                if not isinstance(choices, list) or value not in choices:
+                    raise ExecutorError(
+                        f"Comfy VDN 节点不支持 {key}={value!r}；请核对新版 ComfyUI-VDN-H3 安装，不能忽略内存策略"
+                    )
             if isinstance(choices, list) and choices and value not in choices:
                 raise ExecutorError(f"Comfy 节点 {name}.{key} 的选项不受支持：{value!r}")
     try:
@@ -306,7 +343,7 @@ def preflight_workflow(
         raise ExecutorError(f"Comfy MCP 工作流预检未通过：{verdict}")
 
 
-def model_files(session: ComfyMcpSession, folder: str) -> list[str]:
+def model_files(session: ComfyToolSession, folder: str) -> list[str]:
     try:
         value = session.call("search_models", {"folder": folder})
     except McpCallError as exc:
@@ -329,9 +366,10 @@ def _status(value: Any, prompt_id: str) -> str:
 
 def run_workflow(
     workflow_path: pathlib.Path, output_dir: pathlib.Path, config: RuntimeConfig,
-    session: ComfyMcpSession, *, guard: Any, emit: Callable[[dict[str, Any]], None] | None = None,
+    session: ComfyToolSession, *, guard: Any, emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> ComfyResult:
     """Submit once, persist the ID, prove terminal state, then fetch outputs."""
+    started_at = time.perf_counter()
     guard.submitted()
     try:
         submitted = session.call(
@@ -343,6 +381,7 @@ def run_workflow(
     if not isinstance(prompt_id, str) or not prompt_id:
         raise ExecutorError("Comfy MCP 提交未返回 prompt_id；原任务状态未知", status="unknown")
     guard.submitted(prompt_id)
+    submitted_at = time.perf_counter()
     if emit:
         emit({"stage": "generation", "provider_task_id": prompt_id})
     deadline = time.monotonic() + config.timeout_seconds
@@ -366,6 +405,7 @@ def run_workflow(
         time.sleep(min(5.0, max(0.0, deadline - time.monotonic())))
     else:
         raise ExecutorError("Comfy 原任务等待超时；未重复提交", provider_task_id=prompt_id, status="unknown")
+    completed_at = time.perf_counter()
     fetched_dir = output_dir / "mcp-outputs"
     fetched_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -391,4 +431,11 @@ def run_workflow(
         source_url = item.get("url")
         refs.append(OutputRef(str(path), node_id=str(node_id) if node_id is not None else None,
                               source_url=source_url if isinstance(source_url, str) else None))
-    return ComfyResult(prompt_id, tuple(refs))
+    fetched_at = time.perf_counter()
+    return ComfyResult(prompt_id, tuple(refs), timings_seconds={
+        "submit": submitted_at - started_at,
+        # Includes queueing, model loading, encoding, sampling, decoding and
+        # polling latency. MCP does not expose separate GPU-stage measurements.
+        "provider_wait": completed_at - submitted_at,
+        "fetch": fetched_at - completed_at,
+    })

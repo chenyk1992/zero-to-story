@@ -11,7 +11,7 @@ description: 由 Canvas 服务执行已确认的本地 Comfy H3 视频快照，�
 
 1. Canvas 页面或对话确认当前节点，服务冻结快照并创建 `queued` 请求。
 2. 服务 worker 原子领取，注入该 run 的 `request_id`，启动 [scripts/execute.py](scripts/execute.py)。
-3. adapter 校验输入，通过画布持有的官方本地 Comfy MCP 会话上传素材、预检节点和工作流，调用一次 `run_workflow(wait=False)`，以 `job` 查询原任务并用 `fetch_outputs` 取回产物。
+3. adapter 本地校验输入，通过官方本地 Comfy MCP 上传素材并一次检查完整工作流，调用一次 `run_workflow(wait=False)`，以 `job` 查询原任务并用 `fetch_outputs` 取回产物。常规执行不普查所有节点 schema；VDN 只额外核实 `ApplyVDNH3` 对自动权重与缓存策略的兼容性，完整节点检查仅用于显式诊断。正常请求直接使用既有实例，提交前的上传/检查遇到错误且核实实例离线时，才按既有启动流程恢复；提交和查询原任务发生失联时保留未知状态，不自动启动或重提。
 4. 收回唯一视频，做必要技术校验，复制到服务指定的 run 输出目录并回填原运行。内容验收由调用方按共享规则处理。
 
 ## 输入与能力
@@ -26,6 +26,10 @@ description: 由 Canvas 服务执行已确认的本地 Comfy H3 视频快照，�
 | `r2v` | 至少一个 typed reference，保留原槽位；可另接 `first_frame`，用 AddGuide 在第 0 帧引导，不将声音参考变为固定音轨。启用 `frame_zero_video_guide` 时，第一条 `reference_video` 会改作带原声的多帧第 0 帧引导，生成结果包含重叠前缀，采用后由后期裁掉重叠。 |
 
 H3 必填 `duration`、`aspect_ratio`、`megapixels`，Comfy 还需 `sampler_profile` 与 `steps`。`native` 至少 8 步，`vdn_turbo` 恰为 8 步。缺值或重复配置冲突要报告，不能从 workflow 模板补成用户选择。
+
+VDN 默认使用插件的自动权重调度与工作缓存策略，不按显卡型号分支。可在确认前用 `vdn_checkpoint` 明确选择已安装的完整 8 步量化 bundle；未设置时保持 `stage-dmd-step-250`。`vdn_branch_weights`、`vdn_retain_buffers` 可显式覆盖自动策略以做对照，仅用于 VDN Turbo。`video_decode=tiled` 可选择分块视频解码，未设置时保持完整解码。参数与环境要求见[输入与执行协议](references/execution.md)；不自动下载权重或修改外部安装。
+
+成功运行在原 run 输出目录保存 `execution-report.json`，记录实际工作流配置和可测耗时。provider 等待包含排队、加载、编码、采样、解码与查询延迟，不冒充纯采样时间；插件未提供的显存峰值与内部阶段时间保持未知。
 
 ## 失败处理与诊断
 

@@ -21,7 +21,10 @@ class FakeSession:
 
     def call(self, name, args=None, **_kwargs):
         self.calls.append((name, args))
-        return self.replies.pop(0)
+        value = self.replies.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return value
 
 
 def info(*, running: bool, workspace: Path | None = None):
@@ -33,24 +36,25 @@ def info(*, running: bool, workspace: Path | None = None):
 
 
 def test_online_session_reuses_existing_comfy(monkeypatch):
-    first = FakeSession([info(running=True)])
+    first = FakeSession([{"valid": True}])
     monkeypatch.setattr(transport, "_session", lambda *a, **k: first)
     with transport.ready_session(transport.RuntimeConfig()) as session:
-        assert session is first
-    assert first.calls == [("server_info", None)]
+        assert session.call("validate_workflow", {"workflow_path": "frozen.json"}) == {"valid": True}
+    assert first.calls == [("validate_workflow", {"workflow_path": "frozen.json"})]
 
 
 def test_offline_session_uses_existing_model_venv_and_launches_once(monkeypatch, tmp_path):
     from lfo.comfy import admission
+    from lfo.comfy.mcp_client import McpCallError
 
     workspace = tmp_path / "desktop" / "ComfyUI"
     venv = workspace.parent / "standalone-env" / "Scripts"
     venv.mkdir(parents=True)
     (venv / "python.exe").write_bytes(b"python")
-    first = FakeSession([info(running=False, workspace=workspace)])
+    first = FakeSession([McpCallError("offline"), info(running=False, workspace=workspace)])
     second = FakeSession([
         info(running=False, workspace=workspace), {"ok": True},
-        info(running=True, workspace=workspace),
+        info(running=True, workspace=workspace), {"valid": True},
     ])
     sessions = iter([first, second])
     selected = []
@@ -62,7 +66,7 @@ def test_offline_session_uses_existing_model_venv_and_launches_once(monkeypatch,
     monkeypatch.setattr(transport, "_session", session)
     monkeypatch.setattr(admission, "state_directory", lambda: tmp_path / "state")
     with transport.ready_session(transport.RuntimeConfig()) as active:
-        assert active is second
+        assert active.call("validate_workflow", {"workflow_path": "frozen.json"}) == {"valid": True}
     assert selected == [None, venv.parent]
     assert second.calls[1][0] == "launch_comfyui"
     assert "--use-sage-attention" in second.calls[1][1]["extra_args"]
@@ -76,7 +80,7 @@ def test_failed_launch_keeps_marker_and_blocks_second_attempt(monkeypatch, tmp_p
     workspace = tmp_path / "ComfyUI"
     (workspace / ".venv" / "Scripts").mkdir(parents=True)
     (workspace / ".venv" / "Scripts" / "python.exe").write_bytes(b"python")
-    first = FakeSession([info(running=False, workspace=workspace)])
+    first = FakeSession([McpCallError("offline"), info(running=False, workspace=workspace)])
     second = FakeSession([info(running=False, workspace=workspace)])
 
     def fail_launch(name, args=None, **_kwargs):
@@ -85,16 +89,48 @@ def test_failed_launch_keeps_marker_and_blocks_second_attempt(monkeypatch, tmp_p
         return second.replies.pop(0)
 
     second.call = fail_launch
-    sessions = iter([first, second, FakeSession([info(running=False, workspace=workspace)])])
+    sessions = iter([first, second, FakeSession([McpCallError("offline"), info(running=False, workspace=workspace)])])
     monkeypatch.setattr(transport, "_session", lambda *a, **k: next(sessions))
     monkeypatch.setattr(admission, "state_directory", lambda: tmp_path / "state")
     with pytest.raises(transport.ExecutorError, match="timeout"):
-        with transport.ready_session(transport.RuntimeConfig()):
-            pass
+        with transport.ready_session(transport.RuntimeConfig()) as active:
+            active.call("validate_workflow", {"workflow_path": "frozen.json"})
     assert json.loads((tmp_path / "state" / "startup.json").read_text())["base_url"] == "http://127.0.0.1:8188"
     with pytest.raises(transport.ExecutorError, match="重复启动"):
-        with transport.ready_session(transport.RuntimeConfig()):
-            pass
+        with transport.ready_session(transport.RuntimeConfig()) as active:
+            active.call("validate_workflow", {"workflow_path": "frozen.json"})
+
+
+@pytest.mark.parametrize("name", ["run_workflow", "job", "fetch_outputs"])
+def test_lost_submission_or_result_never_starts_or_retries(monkeypatch, name):
+    from lfo.comfy.mcp_client import McpCallError
+    first = FakeSession([McpCallError("lost reply")])
+    monkeypatch.setattr(transport, "_session", lambda *a, **k: first)
+    with pytest.raises(transport.ExecutorError, match="lost reply"):
+        with transport.ready_session(transport.RuntimeConfig()) as active:
+            active.call(name, {})
+    assert first.calls == [(name, {})]
+
+
+def test_online_operation_error_is_reported_without_retry_or_launch(monkeypatch):
+    from lfo.comfy.mcp_client import McpCallError
+    first = FakeSession([McpCallError("bad file"), info(running=True)])
+    monkeypatch.setattr(transport, "_session", lambda *a, **k: first)
+    with pytest.raises(transport.ExecutorError, match="bad file"):
+        with transport.ready_session(transport.RuntimeConfig()) as active:
+            active.call("upload_file", {})
+    assert first.calls == [("upload_file", {}), ("server_info", None)]
+
+
+def test_no_offline_recovery_for_any_operation_after_submission_attempt(monkeypatch):
+    from lfo.comfy.mcp_client import McpCallError
+    first = FakeSession([{"prompt_id": "original"}, McpCallError("lost")])
+    monkeypatch.setattr(transport, "_session", lambda *a, **k: first)
+    with pytest.raises(transport.ExecutorError, match="lost"):
+        with transport.ready_session(transport.RuntimeConfig()) as active:
+            active.call("run_workflow", {})
+            active.call("search_models", {})
+    assert first.calls == [("run_workflow", {}), ("search_models", {})]
 
 
 def test_non_loopback_target_is_rejected():

@@ -4,6 +4,7 @@ import json
 import pathlib
 import subprocess
 import sys
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -371,3 +372,126 @@ def test_corrupt_provider_output_is_rejected_and_removed(tmp_path: pathlib.Path)
             probe_fn=lambda _path: (_ for _ in ()).throw(RuntimeError("moov atom not found")),
         )
     assert not (target_dir / "broken.mp4").exists()
+
+
+@pytest.mark.parametrize("mode", ["t2v", "i2v", "fl2v", "r2v"])
+def test_vdn_workflow_delegates_memory_policy_without_changing_generation(tmp_path, mode):
+    snapshot = _snapshot(tmp_path, mode)
+    snapshot["parameters"].update(sampler_profile="vdn_turbo", steps=8)
+    workflow, _ = executor.prepare_workflow(snapshot, uploader=lambda path: path.name)
+    vdn = _nodes(workflow, "ApplyVDNH3")[0]["inputs"]
+    assert vdn["branch_weights"] == "auto"
+    assert vdn["retain_buffers"] == "auto"
+    assert vdn["vdn_checkpoint"] == "stage-dmd-step-250"
+    assert vdn["lora_mode"] == "merge" and vdn["attention_backend"] == "grouped"
+    assert _nodes(workflow, "BasicScheduler")[0]["inputs"]["steps"] == 8
+    assert _nodes(workflow, "ResolutionSelector")[0]["inputs"]["megapixels"] == 0.6
+    assert _nodes(workflow, "RandomNoise")[0]["inputs"]["noise_seed"] == 42
+
+
+@pytest.mark.parametrize("mode", ["t2v", "r2v"])
+def test_vdn_binds_explicit_quantized_checkpoint_and_policy_overrides(tmp_path, mode):
+    snapshot = _snapshot(tmp_path, mode)
+    snapshot["parameters"].update(sampler_profile="vdn_turbo", steps=8)
+    snapshot["parameters"]["options"] = {"comfy": {
+        "vdn_checkpoint": "quantized/stage-dmd-step-250-int8_convrot_comfyui",
+        "vdn_branch_weights": "stream", "vdn_retain_buffers": "off",
+    }}
+    workflow, _ = executor.prepare_workflow(snapshot, uploader=lambda path: path.name)
+    vdn = _nodes(workflow, "ApplyVDNH3")[0]["inputs"]
+    assert vdn["vdn_checkpoint"] == "quantized/stage-dmd-step-250-int8_convrot_comfyui"
+    assert vdn["branch_weights"] == "stream" and vdn["retain_buffers"] == "off"
+    # Applying a checkpoint must not add a second acceleration or output chain.
+    assert len(_nodes(workflow, "ApplyVDNH3")) == len(_nodes(workflow, "SaveVideo")) == 1
+
+
+@pytest.mark.parametrize("key,value", [
+    ("vdn_checkpoint", "../stage"), ("vdn_checkpoint", "C:/models/stage"),
+    ("vdn_checkpoint", "/stage"), ("vdn_checkpoint", "a\\..\\stage"),
+    ("vdn_checkpoint", 42), ("vdn_branch_weights", "gpu"),
+    ("vdn_retain_buffers", True), ("video_decode", "fast"),
+])
+def test_invalid_execution_options_fail_before_any_upload(tmp_path, key, value):
+    snapshot = _snapshot(tmp_path, "i2v")
+    snapshot["parameters"].update(sampler_profile="vdn_turbo", steps=8)
+    snapshot["parameters"][key] = value
+    with pytest.raises(executor.ExecutorError):
+        executor.prepare_workflow(snapshot, uploader=lambda _path: pytest.fail("must not upload"))
+
+
+def test_vdn_options_cannot_be_ignored_by_native_profile(tmp_path):
+    snapshot = _snapshot(tmp_path)
+    snapshot["parameters"]["vdn_checkpoint"] = "quantized-stage"
+    with pytest.raises(executor.ExecutorError, match="vdn_turbo"):
+        executor.normalize_snapshot(snapshot)
+
+
+def test_vdn_option_duplicates_cannot_change_frozen_selection(tmp_path):
+    snapshot = _snapshot(tmp_path)
+    snapshot["parameters"].update(sampler_profile="vdn_turbo", steps=8, vdn_checkpoint="chosen")
+    snapshot["parameters"]["comfy"] = {"vdn_checkpoint": "different"}
+    with pytest.raises(executor.ExecutorError, match="Conflicting"):
+        executor.normalize_snapshot(snapshot)
+
+
+@pytest.mark.parametrize("profile,steps", [("native", 12), ("vdn_turbo", 8)])
+@pytest.mark.parametrize("mode", ["t2v", "r2v"])
+def test_tiled_decode_replaces_only_video_decode_and_preserves_wiring(tmp_path, profile, steps, mode):
+    snapshot = _snapshot(tmp_path, mode)
+    snapshot["parameters"].update(sampler_profile=profile, steps=steps)
+    original, _ = executor.prepare_workflow(snapshot, uploader=lambda path: path.name)
+    snapshot["parameters"]["video_decode"] = "tiled"
+    tiled, _ = executor.prepare_workflow(snapshot, uploader=lambda path: path.name)
+    decode_id = next(key for key, node in original.items() if node["class_type"] == "VAEDecode")
+    assert tiled[decode_id]["class_type"] == "VAEDecodeTiled"
+    assert tiled[decode_id]["inputs"] == {
+        **original[decode_id]["inputs"], "tile_size": 512, "overlap": 64,
+        "temporal_size": 64, "temporal_overlap": 8,
+    }
+    assert _nodes(tiled, "CreateVideo") == _nodes(original, "CreateVideo")
+    assert _nodes(tiled, "VAEDecodeAudio") == _nodes(original, "VAEDecodeAudio")
+    assert not _nodes(tiled, "VAEDecode")
+
+
+def test_successful_execution_keeps_report_in_run_and_does_not_fabricate_gpu_metrics(tmp_path, monkeypatch):
+    from lfo.comfy import admission
+
+    @contextmanager
+    def guard(*_args, **_kwargs):
+        yield object()
+
+    @contextmanager
+    def session(_config):
+        yield object()
+
+    source = tmp_path / "provider.mp4"
+    source.write_bytes(b"provider-video")
+    calls = []
+
+    def run(path, output_dir, config, _session, **kwargs):
+        calls.append(json.loads(path.read_text(encoding="utf-8")))
+        return transport.ComfyResult("original-task", (transport.OutputRef(str(source)),),
+                                     timings_seconds={"submit": 1.0, "provider_wait": 12.0, "fetch": 2.0})
+
+    monkeypatch.setattr(admission, "VideoSubmissionGuard", guard)
+    monkeypatch.setattr(executor, "ready_session", session)
+    monkeypatch.setattr(executor, "preflight_workflow", lambda *args: None)
+    monkeypatch.setattr(executor, "run_workflow", run)
+    monkeypatch.setattr(executor, "_project_probe", lambda path: {
+        "width": 320, "height": 240, "codec": "h264", "duration_ms": 1000,
+    })
+    snapshot = _snapshot(tmp_path)
+    snapshot["request_id"] = "request-report"
+    snapshot["parameters"].update(sampler_profile="vdn_turbo", steps=8)
+    output_dir = tmp_path / "run"
+    result = executor.execute_snapshot(snapshot, output_dir, transport.RuntimeConfig())
+    report = json.loads((output_dir / "execution-report.json").read_text(encoding="utf-8"))
+    assert result["provider_task_id"] == report["provider_task_id"] == "original-task"
+    assert report["request_id"] == "request-report" and report["sampler_profile"] == "vdn_turbo"
+    assert report["vdn"]["branch_weights"] == report["vdn"]["retain_buffers"] == "auto"
+    assert report["timings_seconds"]["provider_wait"] == 12.0
+    assert report["timings_seconds"]["total"] >= 0
+    assert report["provider_stage_timings_seconds"] is None
+    assert report["peak_vram_bytes"] is None and report["resolved_vdn_memory_policy"] is None
+    assert len(calls) == len(result["outputs"]) == 1
+    assert pathlib.Path(result["outputs"][0]["path"]).read_bytes() == b"provider-video"

@@ -216,8 +216,8 @@
       "apply_turbo_adapter": true,
       "strength": 1.0,
       "lora_mode": "merge",
-      "branch_weights": "stream",
-      "retain_buffers": "off",
+      "branch_weights": "auto",
+      "retain_buffers": "auto",
       "verbose": true,
       "attention_backend": "grouped"
     }

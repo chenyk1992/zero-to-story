@@ -2,16 +2,21 @@
 sandbox_mode = "workspace-write"
 model_verbosity = "medium"
 [mcp_servers.story_canvas]
-command = ".venv/Scripts/python.exe"
+command = "E:/PycharmProjects/zero-to-story/.venv/Scripts/python.exe"
 args = ["-m", "lfo.canvas", "mcp"]
+cwd = "E:/PycharmProjects/zero-to-story"
 startup_timeout_sec = 15
 tool_timeout_sec = 180
 
 # Official local Comfy MCP; dependencies live in an isolated project environment.
 [mcp_servers.comfy-mcp]
-command = "E:/ideaProjects/zero-to-story/.venv/comfy-mcp/Scripts/comfy-mcp.exe"
+command = "E:/PycharmProjects/zero-to-story/.venv/comfy-mcp/Scripts/comfy-mcp.exe"
+cwd = "F:/Comfy-Desktop/ComfyUI-Installs/ComfyUI (1)/ComfyUI"
 startup_timeout_sec = 30
-tool_timeout_sec = 180
+tool_timeout_sec = 300
 
 [mcp_servers.comfy-mcp.env]
-COMFY_BIN = "C:/Users/Administrator/AppData/Local/Programs/Python/Python312/Scripts/comfy.exe"
+COMFY_BIN = "E:/PycharmProjects/zero-to-story/.venv/comfy-mcp/Scripts/comfy.exe"
+COMFY_LOCAL_URL = "http://127.0.0.1:8188"
+COMFY_WHERE = "local"
+VIRTUAL_ENV = "F:/Comfy-Desktop/ComfyUI-Installs/ComfyUI (1)/ComfyUI/.venv"

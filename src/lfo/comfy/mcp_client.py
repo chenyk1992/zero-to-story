@@ -9,7 +9,7 @@ import threading
 from concurrent.futures import Future
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from anyio.from_thread import start_blocking_portal
 from mcp import ClientSession
@@ -26,6 +26,10 @@ REQUIRED_TOOLS = frozenset(
 
 class McpCallError(RuntimeError):
     """An MCP transport, tool, or response-contract failure."""
+
+
+class ComfyToolSession(Protocol):
+    def call(self, name: str, args: dict[str, Any] | None = None, *, timeout: float = 90) -> Any: ...
 
 
 class ComfyMcpSession:

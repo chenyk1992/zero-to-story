@@ -39,6 +39,10 @@ adapter 不写创意提示词、不决定镜头语义、不切换 provider、不
 
 `sampler_profile=native` 使用 `h3_native_*` 模板，接受至少 8 步；`sampler_profile=vdn_turbo` 使用 `h3_standard_*` 模板，只接受 8 步。T2V/I2V 使用 FL2VA 模板族，R2V 使用 R2V 模板族。adapter 不通过打开或关闭某个 VDN 节点把一种 profile 冒充另一种。
 
+VDN 默认把权重驻留与工作缓存交给插件的 `auto` 策略。快照可明确选择 `vdn_checkpoint`（已安装的完整 8 步 bundle 相对目录），并用 `vdn_branch_weights`、`vdn_retain_buffers` 覆盖内存策略；这些字段只适用于 VDN Turbo。`video_decode=tiled` 在所有模式和采样配置下只替换视频解码节点，保留音频与输出连线；未选择时仍完整解码。参数、新版节点要求与旧策略对照方法见[执行协议](../.agents/skills/comfy-video-executor/references/execution.md#vdn-execution-options)。
+
+成功运行的 `execution-report.json` 保存在当前 run 输出目录，记录实际绑定配置与可测耗时，不改变媒体输出数量。provider 等待不能解释为纯采样时间，显存峰值和内部阶段时间没有实际来源时留空。
+
 模板更新必须同时检查：
 
 - capability 字段与 adapter 校验一致；

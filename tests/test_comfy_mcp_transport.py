@@ -55,12 +55,27 @@ def test_preflight_rejects_bad_node_choice_or_workflow(tmp_path):
     graph = {"1": {"class_type": "Sampler", "inputs": {"mode": "bad"}}}
     session = FakeSession([{"name": "Sampler", "inputs": [{"name": "mode", "choices": ["good"]}]}])
     with pytest.raises(transport.ExecutorError, match="选项"):
-        transport.preflight_workflow(graph, tmp_path / "workflow.json", session)
+        transport.preflight_workflow(graph, tmp_path / "workflow.json", session, inspect_nodes=True)
     assert [name for name, _ in session.calls] == ["nodes"]
     graph["1"]["inputs"]["mode"] = "good"
     session = FakeSession([{"name": "Sampler", "inputs": [{"name": "mode", "choices": ["good"]}]}, {"valid": False, "errors": ["bad"]}])
     with pytest.raises(transport.ExecutorError, match="未通过"):
-        transport.preflight_workflow(graph, tmp_path / "workflow.json", session)
+        transport.preflight_workflow(graph, tmp_path / "workflow.json", session, inspect_nodes=True)
+
+
+def test_normal_preflight_validates_once_without_enumerating_node_schemas(tmp_path):
+    graph = {str(i): {"class_type": f"Node{i}", "inputs": {}} for i in range(20)}
+    session = FakeSession([{"valid": True}])
+    transport.preflight_workflow(graph, tmp_path / "workflow.json", session)
+    assert [name for name, _ in session.calls] == ["validate_workflow"]
+
+
+def test_normal_preflight_refusal_cannot_submit_or_leave_an_unknown_receipt(tmp_path):
+    session = FakeSession([{"valid": False, "errors": ["model not installed"]}])
+    with pytest.raises(transport.ExecutorError, match="未通过") as error:
+        transport.preflight_workflow({"1": {"class_type": "Sampler", "inputs": {}}}, tmp_path / "workflow.json", session)
+    assert error.value.status == "failed"
+    assert [name for name, _ in session.calls] == ["validate_workflow"]
 
 
 def test_submit_lost_reply_keeps_unknown_receipt(tmp_path):
@@ -155,3 +170,50 @@ def test_fetch_rejects_escaped_or_duplicate_file(tmp_path, bad):
     with pytest.raises(transport.ExecutorError, match="越界"):
         transport.run_workflow(tmp_path / "workflow.json", tmp_path, transport.RuntimeConfig(), session, guard=guard)
     assert guard.ended
+
+
+def test_vdn_preflight_rejects_old_schema_instead_of_ignoring_auto_policy(tmp_path):
+    graph = {"1": {"class_type": "ApplyVDNH3", "inputs": {
+        "branch_weights": "auto", "retain_buffers": "auto",
+    }}}
+    session = FakeSession([{"name": "ApplyVDNH3", "inputs": [
+        {"name": "branch_weights", "choices": ["auto", "stream", "cache_gpu"]},
+    ]}])
+    with pytest.raises(transport.ExecutorError, match="retain_buffers"):
+        transport.preflight_workflow(graph, tmp_path / "workflow.json", session)
+    assert [name for name, _ in session.calls] == ["nodes"]
+
+
+def test_transport_records_observed_wait_and_fetch_without_claiming_sampling_time(tmp_path, monkeypatch):
+    clock = iter([10.0, 12.0, 42.0, 47.0])
+    monkeypatch.setattr(transport.time, "perf_counter", lambda: next(clock))
+
+    class Completed(FakeSession):
+        def call(self, name, args=None, **kwargs):
+            if name == "fetch_outputs":
+                path = Path(args["out_dir"]) / "video.mp4"
+                path.write_bytes(b"video")
+                return {"files": [{"path": str(path)}]}
+            return super().call(name, args, **kwargs)
+
+    session = Completed([{"prompt_id": "p1"}, {"prompt_id": "p1", "status": "completed"}])
+    guard = FakeGuard()
+    result = transport.run_workflow(tmp_path / "workflow.json", tmp_path,
+                                    transport.RuntimeConfig(), session, guard=guard)
+    assert result.timings_seconds == {"submit": 2.0, "provider_wait": 30.0, "fetch": 5.0}
+    assert [name for name, _ in session.calls] == ["run_workflow", "job"]
+    assert guard.receipts == [None, "p1"] and guard.ended
+
+
+@pytest.mark.parametrize("key,value,choices", [
+    ("branch_weights", "stream", None), ("branch_weights", "cache_gpu", []),
+    ("retain_buffers", "on", None), ("retain_buffers", "off", []),
+])
+def test_vdn_preflight_requires_evidence_for_explicit_memory_policy(tmp_path, key, value, choices):
+    graph = {"1": {"class_type": "ApplyVDNH3", "inputs": {key: value}}}
+    session = FakeSession([{"name": "ApplyVDNH3", "inputs": [
+        {"name": key, "choices": choices},
+    ]}, {"valid": True}])
+    with pytest.raises(transport.ExecutorError, match=key):
+        transport.preflight_workflow(graph, tmp_path / "workflow.json", session)
+    assert [name for name, _ in session.calls] == ["nodes"]
