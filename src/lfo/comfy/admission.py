@@ -123,18 +123,24 @@ def reconcile_submission(request_id: str) -> dict[str, Any]:
 
 def reconcile_submission_operator(
     request_id: str,
-    provider_task_id: str,
+    provider_task_id: str | None,
     terminal_status: str,
     reason: str,
+    *,
+    server_restarted_at: str | None = None,
 ) -> dict[str, Any]:
     """Release one receipt after an operator confirms the original job ended.
 
     This path is intentionally limited to failed/cancelled jobs. It requires
-    both original identifiers and writes an audit record before removing the
-    matching receipt. Missing provider history alone is not confirmation.
+    both original identifiers, or explicit restart evidence for a receipt that
+    never received a provider ID. Missing history alone is not confirmation.
     """
-    if not request_id or not request_id.strip() or not provider_task_id or not provider_task_id.strip():
+    if not request_id or not request_id.strip():
         raise ValueError("必须提供原 Canvas 请求编号和原 Comfy 任务编号")
+    if provider_task_id is not None and not provider_task_id.strip():
+        raise ValueError("原 Comfy 任务编号不能为空白")
+    if (provider_task_id is None) != (server_restarted_at is not None):
+        raise ValueError("无远端编号时必须提供已核实的服务重启时间；有编号时沿用原编号核实")
     if terminal_status not in {"failed", "cancelled"}:
         raise ValueError("操作员核实只允许 failed 或 cancelled，不能确认成功")
     clean_reason = reason.strip() if reason else ""
@@ -150,6 +156,30 @@ def reconcile_submission_operator(
         if receipt.get("provider_task_id") != provider_task_id:
             raise ValueError("原 Comfy 任务编号不匹配")
 
+        restart_evidence = None
+        if server_restarted_at is not None:
+            submitted_at = datetime.fromisoformat(receipt["updated_at"])
+            restarted_at = datetime.fromisoformat(server_restarted_at)
+            if submitted_at.tzinfo is None or restarted_at.tzinfo is None:
+                raise ValueError("提交与重启时间必须包含时区")
+            if not submitted_at < restarted_at <= datetime.now(UTC):
+                raise ValueError("已核实的重启时间必须晚于原提交且不晚于当前时间")
+            # A restart is an operator-observed lifecycle event, not a deduction
+            # from an empty queue. Confirm that the same local endpoint is ready.
+            from . import transport
+
+            config = transport.load_runtime_config(base_url=receipt["base_url"])
+            with transport._session(config) as session:
+                info = session.call("server_info")
+            if not transport._running(info, config):
+                raise ValueError("重启后的原 Comfy 服务尚未就绪，保持未知占用")
+            restart_evidence = {
+                "server_restarted_at": restarted_at.astimezone(UTC).isoformat(),
+                "base_url": config.base_url,
+                "server": info["server"],
+                "workspace": info.get("workspace"),
+            }
+
         audit_directory = guard.folder / "reconciliations"
         audit_directory.mkdir(parents=True, exist_ok=True)
         audit_path = audit_directory / (
@@ -164,6 +194,8 @@ def reconcile_submission_operator(
             "confirmed_at": datetime.now(UTC).isoformat(),
             "receipt": receipt,
         }
+        if restart_evidence is not None:
+            audit["restart_evidence"] = restart_evidence
         temporary = audit_path.with_suffix(".tmp")
         try:
             temporary.write_text(json.dumps(audit, ensure_ascii=False), encoding="utf-8")
@@ -190,13 +222,20 @@ def main() -> None:
     reconciliation.add_argument("--reconcile", metavar="REQUEST_ID")
     reconciliation.add_argument("--operator-reconcile", metavar="REQUEST_ID")
     parser.add_argument("--provider-task-id")
+    parser.add_argument(
+        "--server-restarted-at",
+        help="仅无远端编号：操作员已核实的原服务重启时间（含时区 ISO 8601）",
+    )
     parser.add_argument("--terminal-status", choices=("failed", "cancelled"))
     parser.add_argument("--reason")
     args = parser.parse_args()
     if args.operator_reconcile:
-        if not args.provider_task_id or not args.terminal_status or not args.reason:
+        if (
+            bool(args.provider_task_id) == bool(args.server_restarted_at)
+            or not args.terminal_status or not args.reason
+        ):
             parser.error(
-                "--operator-reconcile 需要 --provider-task-id、--terminal-status "
+                "--operator-reconcile 需要 --provider-task-id 或 --server-restarted-at（二选一）、--terminal-status "
                 "和 --reason"
             )
         result = reconcile_submission_operator(
@@ -204,9 +243,10 @@ def main() -> None:
             args.provider_task_id,
             args.terminal_status,
             args.reason,
+            server_restarted_at=args.server_restarted_at,
         )
     else:
-        if args.provider_task_id or args.terminal_status or args.reason:
+        if args.provider_task_id or args.server_restarted_at or args.terminal_status or args.reason:
             parser.error("这些参数只用于 --operator-reconcile")
         result = reconcile_submission(args.reconcile) if args.reconcile else inspect_submission()
     print(json.dumps(result, ensure_ascii=False))

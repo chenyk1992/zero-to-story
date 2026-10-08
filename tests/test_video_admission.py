@@ -4,6 +4,8 @@ import json
 import subprocess
 import sys
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -150,3 +152,81 @@ def test_operator_reconciliation_rejects_ambiguous_evidence(
 
     assert inspect_submission()["request_id"] == "request-a"
     assert not list((tmp_path / "reconciliations").glob("*.json"))
+
+
+def restart_receipt(monkeypatch, tmp_path, *, online=True, url="http://127.0.0.1:8188"):
+    from lfo.comfy import transport
+
+    monkeypatch.setenv("LFO_VIDEO_STATE", str(tmp_path))
+    with VideoSubmissionGuard("http://127.0.0.1:8188", request_id="no-id") as guard:
+        guard.submitted()
+    record = inspect_submission()
+    record["updated_at"] = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
+    (tmp_path / "submission.json").write_text(json.dumps(record), encoding="utf-8")
+
+    @contextmanager
+    def session(_config):
+        class Client:
+            def call(self, name):
+                assert name == "server_info"  # Recovery must never submit.
+                return {"server": {"running": online, "url": url}}
+        yield Client()
+
+    monkeypatch.setattr(transport, "_session", session)
+    monkeypatch.setattr(transport, "load_runtime_config", lambda **kw: transport.RuntimeConfig(base_url=kw["base_url"]))
+    return (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+
+
+def test_no_id_restart_recovery_preserves_receipt_in_audit(monkeypatch, tmp_path):
+    restarted = restart_receipt(monkeypatch, tmp_path)
+    result = reconcile_submission_operator(
+        "no-id", None, "failed", "Observed old service offline and launched a new instance.",
+        server_restarted_at=restarted,
+    )
+    audit = json.loads(Path(result["audit_path"]).read_text(encoding="utf-8"))
+    assert audit["receipt"]["provider_task_id"] is None
+    assert audit["restart_evidence"]["server_restarted_at"] == restarted
+    assert result["provider_task_id"] is None
+    assert inspect_submission() is None
+
+
+@pytest.mark.parametrize("case", ["missing", "old", "future", "naive", "bad", "offline", "wrong_endpoint", "wrong_request", "has_id"])
+def test_no_id_restart_recovery_rejects_unproven_or_mismatched_restart(monkeypatch, tmp_path, case):
+    restarted = restart_receipt(monkeypatch, tmp_path, online=case != "offline",
+                                url="http://127.0.0.1:8189" if case == "wrong_endpoint" else "http://127.0.0.1:8188")
+    if case == "missing":
+        restarted = None
+    elif case == "old":
+        restarted = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    elif case == "future":
+        restarted = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    elif case == "naive":
+        restarted = datetime.now().isoformat()
+    elif case == "bad":
+        restarted = "invalid"
+    elif case == "has_id":
+        record = inspect_submission()
+        record["provider_task_id"] = "known-id"
+        (tmp_path / "submission.json").write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises((ValueError, RuntimeError)):
+        reconcile_submission_operator(
+            "other" if case == "wrong_request" else "no-id", None, "failed", "observed restart",
+            server_restarted_at=restarted,
+        )
+    assert inspect_submission() is not None
+    assert not list((tmp_path / "reconciliations").glob("*.json"))
+
+
+def test_restart_recovery_retains_guard_when_audit_write_fails(monkeypatch, tmp_path):
+    restarted = restart_receipt(monkeypatch, tmp_path)
+    original = Path.replace
+
+    def fail_audit(path, target):
+        if path.parent.name == "reconciliations":
+            raise OSError("audit storage unavailable")
+        return original(path, target)
+
+    monkeypatch.setattr(Path, "replace", fail_audit)
+    with pytest.raises(OSError, match="audit storage"):
+        reconcile_submission_operator("no-id", None, "failed", "observed restart", server_restarted_at=restarted)
+    assert inspect_submission() is not None

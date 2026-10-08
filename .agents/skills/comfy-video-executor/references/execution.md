@@ -69,6 +69,8 @@ After successful media validation, the adapter saves `execution-report.json` bes
 
 ## Canvas service invocation
 
+For an unknown submission with no provider ID, an operator who actually observed the old instance stop and a new instance start may use the audited `--operator-reconcile` / `--server-restarted-at` route described in [local recovery](../../../../guides/local-windows.md#诊断与恢复). It verifies timestamp ordering, matching request and missing provider ID, and readiness of the original endpoint. Empty queues and missing history are not restart evidence. Reconcile the original Canvas run separately with the same evidence before an authorized new Canvas request; never fabricate a provider ID or manually remove the receipt.
+
 The Canvas service is the production caller. After confirmation freezes a run, the service writes the snapshot, injects that run's `request_id`, and invokes the entrypoint with the run's existing output directory:
 
 ```text
