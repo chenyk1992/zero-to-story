@@ -1,0 +1,23 @@
+{
+  "id": "comfy-yue2-music",
+  "label": "本地 YuE2 旋律翻唱（ComfyUI）",
+  "node_types": ["audio"],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": ["comfy-mcp", "ffmpeg", "ffprobe"],
+  "resource": {"key": "video", "capacity": 1},
+  "models": [{"id": "yue2-3b", "label": "YuE2 3B INT8 + SheetSage2"}],
+  "modes": [{"id": "cover", "label": "参考旋律翻唱"}],
+  "fields": [
+    {"key": "lyrics", "label": "与参考对应的歌词", "type": "text", "group": "specs", "required": true, "multiline": true},
+    {"key": "max_duration", "label": "最长生成时长（秒）", "type": "number", "group": "specs", "required": true, "min": 0.04, "max": 360, "default": 32},
+    {"key": "seed", "label": "种子", "type": "number", "group": "advanced", "integer": true, "min": 0, "max": 9007199254740991},
+    {"key": "steps", "label": "扩散采样步数", "type": "number", "group": "advanced", "integer": true, "min": 1, "max": 100, "default": 32},
+    {"key": "temperature", "label": "演唱采样温度", "type": "number", "group": "advanced", "min": 0, "max": 5, "default": 1.0},
+    {"key": "top_p", "label": "Top P", "type": "number", "group": "advanced", "min": 0.01, "max": 1, "default": 0.95},
+    {"key": "top_k", "label": "Top K", "type": "number", "group": "advanced", "integer": true, "min": 1, "max": 32768, "default": 100},
+    {"key": "repetition_penalty", "label": "重复惩罚", "type": "number", "group": "advanced", "min": 0.01, "max": 10, "default": 1.2},
+    {"key": "cfg_scale", "label": "风格与歌词引导", "type": "number", "group": "advanced", "min": 0, "max": 100, "default": 1.0}
+  ],
+  "input_rules": {"cover": {"allowed": ["reference_audios"], "required": ["reference_audios"], "max_counts": {"reference_audios": 1}, "file_extensions": {"reference_audios": [".flac", ".wav", ".mp3", ".ogg", ".m4a"]}}}
+}

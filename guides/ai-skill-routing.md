@@ -24,6 +24,8 @@
 | 本地多语言语音、Eric 成都男声、声音设计或参考音色复用 | `qwen3-tts` | Qwen3-TTS 三模式的台词、参考转写、授权和听审准备；生成交给 Canvas 音频节点 |
 | 已确认的本地 Qwen3-TTS 音频快照执行 | `comfy-tts-executor` | 由画布 worker 单次执行 CustomVoice、VoiceDesign 或 Base，保留原始音频并回填交付 FLAC |
 | 已确认的本地 MiniMax Music 3 音乐快照执行 | `comfy-music-executor` | 由画布 worker 单次执行并回填实际音乐 FLAC；不编写歌词或重复提交 |
+| 已确认的本地 YuE2 参考旋律翻唱 | `comfy-yue2-executor` | 由画布 worker 执行 SheetSage2 melody ABC 与 YuE2，回填实际 FLAC；参考音色、原伴奏和固定多歌手身份不透传，不另行提交 |
+| 已确认的本地人声与伴奏分离 | `comfy-singing-executor` | 由画布 worker 执行 MelBandRoFormer，回填人声与伴奏；只保留 separate，不编排歌曲，不另行提交 |
 | 中英文文本去模板化 | `shuorenhua` | 文本审校和改写；不改变事实、责任主体或视频执行契约 |
 
 ## 如何交接
@@ -35,3 +37,5 @@
 ## 外部 Skill
 
 只有用户点名或当前交付确实需要时才加载外部 Skill；先确认其适用边界。外部 Skill 的审批、工具和格式建议不能覆盖用户当前指令、项目共享生产规则或宿主工具权限。插件缺失时报告缺口并继续可行的本地工作；不要为了邻近能力安装无关插件。
+
+多人轮唱的原曲、完整翻唱候选、整句混音、角色绑定与 H3 交接由 [music-video-creator](../.agents/skills/music-video-creator/references/multi-singer-workflow.md)统筹；单人、器乐和锁定画面配乐沿用原路由。
