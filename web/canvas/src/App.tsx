@@ -52,6 +52,7 @@ import {
   isValidConnection,
   normalizeEdges,
   resolveMediaOutput,
+  outputForRun,
   serializeGraph,
   sortRuns,
   toFlowNode,
@@ -185,7 +186,7 @@ function latestRun(runs: Run[], nodeId: string): Run | undefined {
 }
 
 function firstOutput(run?: Run): RunOutput | undefined {
-  return run?.outputs?.[0];
+  return outputForRun(run);
 }
 
 function decorateNodes(nodes: FlowNode[], edges: Edge[], runs: Run[], onPreview: (nodeId: string, output?: RunOutput) => void): FlowNode[] {
@@ -1093,14 +1094,14 @@ function FlowInternalsSync({ nodes }: { nodes: FlowNode[] }) {
 
 function PreviewModal({ run, onClose }: { run: Run; onClose: () => void }) {
   const dialogRef = usePreviewDialog(onClose);
-  const output = run.outputs?.[0];
+  const output = outputForRun(run);
   if (!output) return null;
   return (
     <div className="preview-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} className="preview-modal" role="dialog" aria-modal="true" aria-label="成品预览">
         <div className="preview-modal-head"><div><h2>{output.name || '最近生成的成品'}</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="关闭预览"><Icon name="close" /></button></div>
         <div className="preview-modal-content">{renderMedia(output, output.name || '生成媒体')}</div>
-        <div className="preview-modal-foot"><span>本次成品</span><span>{run.snapshot.provider || '默认方式'} · {run.snapshot.model || '默认模型'}</span></div>
+        <div className="preview-modal-foot"><span>{output.path === run.outputs?.[0]?.path ? '生成成品' : '审片采用版本'}</span><span>{run.snapshot.provider || '默认方式'} · {run.snapshot.model || '默认模型'}</span></div>
       </div>
     </div>
   );

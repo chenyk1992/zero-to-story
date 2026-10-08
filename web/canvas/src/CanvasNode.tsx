@@ -1,7 +1,7 @@
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { useEffect, useState, type CSSProperties, type SyntheticEvent } from 'react';
 import type { FlowNode, RunOutput } from './types';
-import { assetToOutput } from './graph';
+import { assetToOutput, outputForRun } from './graph';
 import { mediaUrl } from './api';
 import { categoryLabelForNode, type StoryNodeData } from './workspace';
 import { Icon, type IconName } from './Icon';
@@ -107,18 +107,19 @@ function isAudioOutput(output: RunOutput): boolean {
   return output.kind.toLowerCase().startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path);
 }
 
-function PreviewThumbnail({ path, kind, alt, onDimensions }: { path: string; kind: string; alt: string; onDimensions: (width: number, height: number) => void }) {
+function PreviewThumbnail({ path, kind, alt, onDimensions, onVideoMetadata }: { path: string; kind: string; alt: string; onDimensions: (width: number, height: number) => void; onVideoMetadata?: (durationMs: number) => void }) {
   const normalizedKind = kind.toLowerCase();
   const isImage = normalizedKind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(path);
   if (isImage) return <img src={mediaUrl(path)} alt={alt} loading="lazy" onLoad={(event) => onDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} />;
   if (normalizedKind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(path)) {
     return <span className="preview-audio-mark"><Icon name="audio" size={26} /></span>;
   }
-  return <video src={mediaUrl(path)} muted preload="metadata" onLoadedMetadata={(event: SyntheticEvent<HTMLVideoElement>) => { const video = event.currentTarget; onDimensions(video.videoWidth, video.videoHeight); if (video.duration > 0) video.currentTime = Math.min(0.05, video.duration / 2); }} />;
+  return <video src={mediaUrl(path)} muted preload="metadata" onLoadedMetadata={(event: SyntheticEvent<HTMLVideoElement>) => { const video = event.currentTarget; onDimensions(video.videoWidth, video.videoHeight); if (video.duration > 0) { onVideoMetadata?.(video.duration * 1000); video.currentTime = Math.min(0.05, video.duration / 2); } }} />;
 }
 
 function OutputPreviewButton({ output, label, current = false, fallbackRatio = 16 / 9, onRatio, onOpen }: { output: RunOutput; label: string; current?: boolean; fallbackRatio?: number; onRatio?: (path: string, ratio: number) => void; onOpen: (output?: RunOutput) => void }) {
   const [naturalSize, setNaturalSize] = useState<{ path: string; ratio: number }>();
+  const [actualDuration, setActualDuration] = useState<{ path: string; durationMs: number }>();
   const metadataRatio = validRatio(output.metadata?.width, output.metadata?.height);
   const ratio = metadataRatio || (naturalSize?.path === output.path ? naturalSize.ratio : undefined) || fallbackRatio;
   const audio = isAudioOutput(output);
@@ -128,10 +129,10 @@ function OutputPreviewButton({ output, label, current = false, fallbackRatio = 1
     setNaturalSize({ path: output.path, ratio: nextRatio });
     onRatio?.(output.path, metadataRatio || nextRatio);
   };
-  const seconds = output.metadata?.duration_ms;
+  const seconds = output.metadata?.duration_ms ?? (actualDuration?.path === output.path ? actualDuration.durationMs : undefined);
   return (
     <button className={`node-preview nodrag ${current ? 'current-output' : 'secondary-output'}`} style={audio ? { aspectRatio: 'auto', height: 92 } : { '--node-media-ratio': ratio, aspectRatio: ratio, height: 'auto' } as CSSProperties} type="button" onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onOpen(current ? undefined : output); }} aria-label={`${label}，点击打开预览`}>
-      <PreviewThumbnail key={output.path} path={output.path} kind={output.kind} alt={label} onDimensions={onDimensions} />
+      <PreviewThumbnail key={output.path} path={output.path} kind={output.kind} alt={label} onDimensions={onDimensions} onVideoMetadata={(durationMs) => setActualDuration({ path: output.path, durationMs })} />
       {current && <span className="node-preview-source">{label}</span>}
       {current && typeof seconds === 'number' && seconds > 0 && <span className="node-preview-duration" title="实际成品时长">{Number((seconds / 1000).toFixed(1))} 秒</span>}
       <span className="node-preview-caption"><b>{label}</b><em><Icon name="expand" size={12} />{current ? '打开' : '查看'}</em></span>
@@ -163,12 +164,14 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
   const targetSignature = `${targets.map((target) => target.id).join('|')}::${derivedOutputs.map((output) => output.id).join('|')}`;
   const isRunning = data.runStatus === 'queued' || data.runStatus === 'pending_agent' || data.runStatus === 'running';
   const runLabel = data.runStatus === 'pending_agent' ? '待接手' : data.runStatus === 'queued' ? '排队中' : '生成中';
-  const currentOutput = data.latestSuccessfulRun?.outputs?.[0] || assetToOutput(data.asset);
+  const currentOutput = outputForRun(data.latestSuccessfulRun) || assetToOutput(data.asset);
   const isAudioCard = kind === 'audio' || Boolean(currentOutput && isAudioOutput(currentOutput));
   const mediaRatio = validRatio(currentOutput?.metadata?.width, currentOutput?.metadata?.height) || (currentOutput && currentMediaSize?.path === currentOutput.path ? currentMediaSize.ratio : undefined) || plannedRatio(data.aspect_ratio);
   const onCurrentRatio = (path: string, ratio: number) => setCurrentMediaSize({ path, ratio });
   const history = data.history || [];
   const previousRuns = (data.runHistory || []).filter((run) => run.id !== data.latestSuccessfulRun?.id && run.outputs?.[0]);
+  const originalAcceptedOutput = data.latestSuccessfulRun?.outputs?.[0];
+  const hasAcceptedDerivedOutput = Boolean(originalAcceptedOutput && currentOutput && originalAcceptedOutput.path !== currentOutput.path);
   const prompt = data.prompt || '';
   const description = cardDescription(data);
   const promptLabel = kind === 'audio' ? data.provider === 'comfy-minimax-music' ? '音乐描述' : '配音台词' : '提示词';
@@ -180,7 +183,7 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
   const identity = category === '未分类' ? nodeLabel : category;
   const title = data.label || nodeLabel;
   const hasEarlierOutput = Boolean(currentOutput && data.latestSuccessfulRun && (data.resultChanged || data.runStatus && data.runStatus !== 'succeeded'));
-  const outputLabel = hasEarlierOutput ? '上次成功成品' : data.latestSuccessfulRun ? '生成成品' : '导入素材';
+  const outputLabel = hasEarlierOutput ? '上次成功成品' : hasAcceptedDerivedOutput ? '已采用版本' : data.latestSuccessfulRun ? '生成成品' : '导入素材';
   const spec = [kind === 'video' && data.duration ? `计划 ${data.duration} 秒` : '', kind !== 'audio' ? data.aspect_ratio : ''].filter(Boolean).join(' · ');
   const specDetails = [providerLabel(data), data.model, MODE_LABELS[data.mode] || data.mode, spec, data.megapixels ? `${data.megapixels} MP` : ''].filter(Boolean).join(' · ');
   const placeholderTitle = data.runStatus === 'unknown' ? '等待核实原任务' : data.runStatus === 'failed' ? '本次未生成成品' : isRunning ? kind === 'audio' ? '正在准备声音' : '正在准备画面' : data.runStatus === 'cancelled' ? '本次任务已取消' : kind === 'asset' ? '添加参考素材' : kind === 'audio' ? '等待第一版声音' : '等待第一版画面';
@@ -267,7 +270,8 @@ export function CanvasNode({ id, data: rawData, selected }: NodeProps<FlowNode>)
             {data.resultChanged && <div className="node-stale"><Icon name="alert" size={12} />{currentOutput ? '草稿已修改 · 预览保留原成品' : '草稿已修改 · 尚未生成'}</div>}
             <div className="node-meta" aria-label="草稿规格" title={specDetails}><span className="node-spec">{spec}</span><span className="node-provider" title={specDetails}>{data.provider ? providerLabel(data) : '待选生成方式'}</span></div>
             {derivedOutputs.length > 0 && <div className="node-output-group"><button className="node-output-heading node-output-heading-toggle nodrag" type="button" onClick={(event) => { event.stopPropagation(); setDerivedExpanded((value) => !value); }} aria-expanded={derivedExpanded}><span><Icon name="layers" size={13} />派生输出</span><small>{derivedOutputs.length} 项 <Icon name={derivedExpanded ? 'chevronUp' : 'chevronDown'} size={11} /></small></button>{derivedExpanded && <div className="node-output-list">{derivedOutputs.map((output) => { const media = assetToOutput(output.asset); return media ? <OutputPreviewButton key={output.id} output={media} label={output.label || '派生成品'} onOpen={(value) => data.onPreview?.(value)} /> : null; })}</div>}</div>}
-            {(history.length > 0 || previousRuns.length > 0) && <div className="node-output-group history-output-group"><button className="node-output-heading node-output-heading-toggle nodrag" type="button" onClick={(event) => { event.stopPropagation(); setHistoryExpanded((value) => !value); }} aria-expanded={historyExpanded}><span><Icon name="history" size={13} />历史版本</span><small>{history.length + previousRuns.length} 项 <Icon name={historyExpanded ? 'chevronUp' : 'chevronDown'} size={11} /></small></button>{historyExpanded && <div className="node-output-list">
+            {(history.length > 0 || previousRuns.length > 0 || hasAcceptedDerivedOutput) && <div className="node-output-group history-output-group"><button className="node-output-heading node-output-heading-toggle nodrag" type="button" onClick={(event) => { event.stopPropagation(); setHistoryExpanded((value) => !value); }} aria-expanded={historyExpanded}><span><Icon name="history" size={13} />历史版本</span><small>{history.length + previousRuns.length + Number(hasAcceptedDerivedOutput)} 项 <Icon name={historyExpanded ? 'chevronUp' : 'chevronDown'} size={11} /></small></button>{historyExpanded && <div className="node-output-list">
+              {hasAcceptedDerivedOutput && originalAcceptedOutput && <OutputPreviewButton key={`${data.latestSuccessfulRun?.id}-original`} output={originalAcceptedOutput} label="原始生成版" onOpen={(value) => data.onPreview?.(value)} />}
               {previousRuns.map((run) => <OutputPreviewButton key={`run-${run.id}`} output={run.outputs[0]} label={run.outputs[0].name || '历史成功成品'} onOpen={(value) => data.onPreview?.(value)} />)}
               {history.map((entry) => { const media = assetToOutput(entry.asset); return media ? <OutputPreviewButton key={entry.id} output={media} label={entry.label || '历史成品'} onOpen={(value) => data.onPreview?.(value)} /> : null; })}
             </div>}</div>}

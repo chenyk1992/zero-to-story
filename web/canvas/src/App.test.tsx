@@ -2,7 +2,7 @@
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Canvas, Capability, ProductionSummary } from './types';
+import type { Canvas, Capability, ProductionSummary, Run } from './types';
 
 vi.mock('@xyflow/react', async () => {
   const { createElement, Fragment } = await import('react');
@@ -685,6 +685,43 @@ describe('App responsive workspace', () => {
     expect(outputPreview.getAttribute('aria-label')).toContain('生成成品');
     await act(async () => outputPreview?.click());
     expect(container.querySelector<HTMLMediaElement>(`.preview-modal ${element}`)?.src).toContain(`/media/${path}`);
+  });
+});
+
+describe('App accepted review previews', () => {
+  it('shows an ACCEPTed derived file on the card, in settings and in the main preview while keeping the original in history', async () => {
+    const reviewedCanvas = structuredClone(canvas);
+    const originalPath = '/workspace/outputs/run-1/P006-generated-8s.mp4';
+    const adoptedPath = '/workspace/outputs/run-1/P006-adopted-6s.mp4';
+    const run: Run = {
+      id: 'p006-run', node_id: 'shot-1', status: 'succeeded',
+      snapshot: { node_id: 'shot-1', node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: '登上敌机', parameters: {}, inputs: {} },
+      outputs: [{ path: originalPath, kind: 'video/mp4', name: 'P006-generated-8s.mp4', metadata: { duration_ms: 8000, width: 608, height: 1056 } }],
+      review: { decision: 'ACCEPT', evidence: [], end_state: {}, unverified: [], output_path: adoptedPath, output_sha256: 'review-hash' },
+    };
+    api.getCanvases.mockResolvedValue({ canvases: [reviewedCanvas] });
+    api.getCanvas.mockResolvedValue(reviewedCanvas);
+    api.getRuns.mockResolvedValue({ runs: [run] });
+
+    await act(async () => root.render(<App />));
+    await settleApp();
+
+    const currentCard = container.querySelector<HTMLButtonElement>('.node-preview.current-output')!;
+    expect(currentCard.getAttribute('aria-label')).toContain('已采用版本');
+    expect(currentCard.querySelector('video')?.getAttribute('src')).toContain(`/media/${adoptedPath}`);
+    expect(currentCard.querySelector('.node-preview-duration')).toBeNull();
+    await act(async () => currentCard.click());
+    expect(container.querySelector('.preview-modal video')?.getAttribute('src')).toContain(`/media/${adoptedPath}`);
+    await act(async () => container.querySelector<HTMLButtonElement>('.preview-modal [aria-label="关闭预览"]')?.click());
+
+    const historyToggle = [...container.querySelectorAll<HTMLButtonElement>('.history-output-group .node-output-heading')]
+      .find((button) => button.textContent?.includes('历史版本'))!;
+    await act(async () => historyToggle.click());
+    const originalPreview = container.querySelector<HTMLButtonElement>('.history-output-group .node-preview')!;
+    expect(originalPreview.getAttribute('aria-label')).toContain('原始生成版');
+    expect(originalPreview.querySelector('video')?.getAttribute('src')).toContain(`/media/${originalPath}`);
+    await act(async () => originalPreview.click());
+    expect(container.querySelector('.preview-modal video')?.getAttribute('src')).toContain(`/media/${originalPath}`);
   });
 });
 

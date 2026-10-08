@@ -190,7 +190,14 @@ export interface Run {
   attention_state?: 'active' | 'paused' | 'abandoned' | string;
   attention_reason?: string | null;
   attention_updated_at?: string;
-  review?: { decision: 'ACCEPT' | 'REJECT' | 'INCONCLUSIVE'; evidence: string[]; end_state: Record<string, unknown>; unverified: string[] } | null;
+  review?: {
+    decision: 'ACCEPT' | 'REJECT' | 'INCONCLUSIVE';
+    evidence: string[];
+    end_state: Record<string, unknown>;
+    unverified: string[];
+    output_path?: string;
+    output_sha256?: string;
+  } | null;
 }
 
 export type ContinuationPlanState = 'active' | 'paused';

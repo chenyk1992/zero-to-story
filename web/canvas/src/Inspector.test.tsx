@@ -484,6 +484,26 @@ describe('Inspector editing behavior', () => {
     expect(events.onOpenPreview).toHaveBeenCalledWith(run);
   });
 
+  it('uses an ACCEPTed derived file as current output and keeps the generated file available in history', async () => {
+    const node = makeVideo();
+    const run: Run = {
+      id: 'video-accepted', node_id: node.id, status: 'succeeded',
+      snapshot: { node_id: node.id, node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: node.data.prompt, parameters: {}, inputs: {} },
+      outputs: [{ path: '/workspace/outputs/video-accepted/original-8s.mp4', kind: 'video/mp4', name: 'original-8s.mp4', metadata: { duration_ms: 8000 } }],
+      review: { decision: 'ACCEPT', evidence: [], end_state: {}, unverified: [], output_path: '/workspace/outputs/video-accepted/adopted-6s.mp4', output_sha256: 'accepted-hash' },
+    };
+    const events = await renderInspector(node, [capability()], [run]);
+
+    expect(container.querySelector('.preview-section')?.textContent).toContain('审片采用版本');
+    expect(container.querySelector('.preview-section video')?.getAttribute('src')).toContain('/media//workspace/outputs/video-accepted/adopted-6s.mp4');
+    await act(async () => container.querySelector<HTMLButtonElement>('.preview-section .preview-card')?.click());
+    expect(events.onOpenPreview).toHaveBeenCalledWith(run);
+
+    await act(async () => buttonWithText('展开历史版本').click());
+    const original = container.querySelector<HTMLVideoElement>('.history-section video');
+    expect(original?.getAttribute('src')).toContain('/media//workspace/outputs/video-accepted/original-8s.mp4');
+  });
+
   it('keeps history and derived outputs collapsed until opened, then opens the selected media read-only', async () => {
     const node = makeVideo({
       history: [{ id: 'history-1', label: '上一版夜站', status: '历史成功', asset: { path: 'history/old.mp4', kind: 'video', name: 'old.mp4' } }],

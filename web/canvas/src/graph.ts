@@ -176,6 +176,85 @@ export function sortRuns(runs: Run[]): Run[] {
   return [...runs].sort((left, right) => `${right.created_at || ''}\u0000${right.id}`.localeCompare(`${left.created_at || ''}\u0000${left.id}`));
 }
 
+interface AbsolutePathParts {
+  root: string;
+  segments: string[];
+  caseInsensitive: boolean;
+}
+
+function absolutePathParts(value: string): AbsolutePathParts | undefined {
+  let path = value.trim().replace(/\\/g, '/');
+  let root: string;
+  let remainder: string;
+  let caseInsensitive = false;
+
+  if (/^[a-z]:\//i.test(path)) {
+    root = `${path.slice(0, 2).toLowerCase()}/`;
+    remainder = path.slice(3);
+    caseInsensitive = true;
+  } else if (path.startsWith('//')) {
+    const parts = path.slice(2).split('/').filter(Boolean);
+    if (parts.length < 2) return undefined;
+    root = `//${parts[0]}/${parts[1]}`;
+    remainder = parts.slice(2).join('/');
+    caseInsensitive = true;
+  } else if (path.startsWith('/')) {
+    root = '/';
+    remainder = path.slice(1);
+  } else {
+    return undefined;
+  }
+
+  const segments: string[] = [];
+  for (const segment of remainder.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (!segments.length) return undefined;
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  if (caseInsensitive) {
+    root = root.toLowerCase();
+    for (let index = 0; index < segments.length; index += 1) segments[index] = segments[index].toLowerCase();
+  }
+  return { root, segments, caseInsensitive };
+}
+
+function absolutePath(parts: AbsolutePathParts): string {
+  if (!parts.segments.length) return parts.root;
+  return `${parts.root}${parts.root.endsWith('/') ? '' : '/'}${parts.segments.join('/')}`;
+}
+
+function samePath(left: AbsolutePathParts, right: AbsolutePathParts): boolean {
+  return absolutePath(left) === absolutePath(right);
+}
+
+function isInRunOutputDirectory(candidatePath: string, sourcePath: string): boolean {
+  const candidate = absolutePathParts(candidatePath);
+  const source = absolutePathParts(sourcePath);
+  if (!candidate || !source || candidate.root !== source.root || !source.segments.length) return false;
+  const sourceDirectory = source.segments.slice(0, -1);
+  if (!sourceDirectory.length) return false;
+  if (candidate.segments.length <= sourceDirectory.length) return false;
+  return sourceDirectory.every((segment, index) => candidate.segments[index] === segment);
+}
+
+/** Use an ACCEPTed review file as the current preview only when it is inside that run's output folder. */
+export function outputForRun(run?: Run): RunOutput | undefined {
+  const output = run?.outputs?.[0];
+  const reviewPath = run?.review?.decision === 'ACCEPT' ? run.review.output_path : undefined;
+  if (!output || !reviewPath || !isInRunOutputDirectory(reviewPath, output.path)) return output;
+
+  const reviewed = absolutePathParts(reviewPath);
+  const original = absolutePathParts(output.path);
+  if (!reviewed || !original || samePath(reviewed, original)) return output;
+  const name = reviewPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || output.name;
+  // Review-derived files can change duration, dimensions, or encoding; don't reuse source metadata.
+  return { path: reviewPath, kind: output.kind, name };
+}
+
 function knownKind(output?: RunOutput): 'image' | 'video' | 'audio' | undefined {
   if (!output) return undefined;
   const kind = output.kind.toLowerCase();

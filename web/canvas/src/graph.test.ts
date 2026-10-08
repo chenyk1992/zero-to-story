@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection } from '@xyflow/react';
-import { addCanvasEdge, createFlowNode, isValidConnection, moveReferenceEdge, normalizeEdges, outputForNode, resolveMediaOutput, serializeGraph, sortRuns, targetHandlesFor, toFlowNode } from './graph';
+import { addCanvasEdge, createFlowNode, isValidConnection, moveReferenceEdge, normalizeEdges, outputForNode, outputForRun, resolveMediaOutput, serializeGraph, sortRuns, targetHandlesFor, toFlowNode } from './graph';
 import type { FlowNode, Run } from './types';
 import { normalizeWorkspace } from './workspace';
 
@@ -65,6 +65,50 @@ describe('canvas graph contract', () => {
     expect(resolveMediaOutput(video.id, [video], [], [failed])?.path).toBe('assets/imported.mp4');
     expect(resolveMediaOutput(video.id, [video], [], [])?.path).toBe('assets/imported.mp4');
     expect(resolveMediaOutput(video.id, [video], [], [])?.path).not.toBe('assets/old.mp4');
+  });
+
+  it('uses only an ACCEPTed review file inside its run folder for previews, without changing ordinary edge resolution', () => {
+    const sourcePath = 'C:\\workspace\\outputs\\run-1\\generated.mp4';
+    const adoptedPath = 'c:/workspace/outputs/run-1/P006-adopted-6s.mp4';
+    const run: Run = {
+      id: 'run-1', node_id: 'video-a', status: 'succeeded',
+      snapshot: { node_id: 'video-a', node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: '', parameters: {}, inputs: {} },
+      outputs: [{ path: sourcePath, kind: 'video/mp4', name: 'generated.mp4', metadata: { duration_ms: 8000, width: 608, height: 1056 } }],
+      review: { decision: 'ACCEPT', evidence: [], end_state: {}, unverified: [], output_path: adoptedPath, output_sha256: 'sha256' },
+    };
+
+    expect(outputForRun(run)).toEqual({ path: adoptedPath, kind: 'video/mp4', name: 'P006-adopted-6s.mp4' });
+    expect(outputForRun(run)?.metadata).toBeUndefined();
+
+    const video = createFlowNode('video', { x: 0, y: 0 }, 'video-a');
+    expect(outputForNode(video, 'output', [run])?.path).toBe(sourcePath);
+  });
+
+  it.each([
+    ['REJECT', 'C:\\workspace\\outputs\\run-1\\fixed.mp4'],
+    ['INCONCLUSIVE', 'C:\\workspace\\outputs\\run-1\\fixed.mp4'],
+    ['ACCEPT', 'C:\\workspace\\outputs\\run-2\\outside.mp4'],
+    ['ACCEPT', 'C:\\workspace\\outputs\\run-1\\..\\run-2\\outside.mp4'],
+  ] as const)('keeps the generated preview for %s reviews with an unsafe or non-accepted path', (decision, outputPath) => {
+    const original = { path: 'C:\\workspace\\outputs\\run-1\\generated.mp4', kind: 'video/mp4', name: 'generated.mp4', metadata: { duration_ms: 8000 } };
+    const run: Run = {
+      id: 'run-1', node_id: 'video-a', status: 'succeeded',
+      snapshot: { node_id: 'video-a', node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: '', parameters: {}, inputs: {} },
+      outputs: [original],
+      review: { decision, evidence: [], end_state: {}, unverified: [], output_path: outputPath },
+    };
+    expect(outputForRun(run)).toBe(original);
+  });
+
+  it('keeps source metadata when ACCEPT points to the original output file', () => {
+    const output = { path: '/workspace/outputs/run-1/generated.mp4', kind: 'video/mp4', name: 'generated.mp4', metadata: { duration_ms: 6000 } };
+    const run: Run = {
+      id: 'run-1', node_id: 'video-a', status: 'succeeded',
+      snapshot: { node_id: 'video-a', node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: '', parameters: {}, inputs: {} },
+      outputs: [output],
+      review: { decision: 'ACCEPT', evidence: [], end_state: {}, unverified: [], output_path: '/workspace/outputs/run-1/./generated.mp4' },
+    };
+    expect(outputForRun(run)).toBe(output);
   });
 
   it('serializes direct prompt, snapshots, history and derived outputs while stripping local callbacks', () => {

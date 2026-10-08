@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ChangeEvent, type ReactNode, type Ref } from 'react';
 import type { Edge } from '@xyflow/react';
 import { capabilityLabel, hasExecutableSelection, isCapabilitySelectable } from './capabilities';
-import { assetToOutput, resolveMediaOutput, sortRuns } from './graph';
+import { assetToOutput, outputForRun, resolveMediaOutput, sortRuns } from './graph';
 import { mediaUrl } from './api';
 import type { Capability, CapabilityField, CanvasNodeData, CanvasNodeType, FlowNode, Run, RunOutput } from './types';
 import { CATEGORY_OPTIONS, categoryLabelForNode, isSectionNode, type GenerationSnapshot, type HistoryEntry, type StoryNodeData, type StoryNodePatch, type StoryNodeType } from './workspace';
@@ -364,9 +364,18 @@ export function Inspector({ embedded = false, node, nodes, edges, capabilities, 
   const effectiveRunStatus = orderedLatestRun?.status || data.runStatus;
   const effectiveRunError = orderedLatestRun?.error || data.runError;
   const selectionReady = hasExecutableSelection(data.provider, data.model, data.mode, data.nodeType as CanvasNodeType, capabilities, data.options[data.provider] || {});
-  const currentOutput = orderedLatestSuccess?.outputs[0] || linkedMedia;
+  const currentOutput = outputForRun(orderedLatestSuccess) || linkedMedia;
   const importPath = data.import_path ?? data.asset?.path ?? '';
+  const originalAcceptedOutput = orderedLatestSuccess?.outputs?.[0];
+  const hasAcceptedDerivedOutput = Boolean(originalAcceptedOutput && currentOutput && originalAcceptedOutput.path !== currentOutput.path);
   const historyEntries: HistoryEntry[] = [
+    ...(hasAcceptedDerivedOutput && orderedLatestSuccess && originalAcceptedOutput ? [{
+      id: `accepted-original-${orderedLatestSuccess.id}`,
+      label: '原始生成版',
+      asset: { path: originalAcceptedOutput.path, kind: originalAcceptedOutput.kind, name: originalAcceptedOutput.name || '原始生成版' },
+      generation_snapshot: orderedLatestSuccess.snapshot,
+      status: '原始生成版',
+    }] : []),
     ...(data.history || []),
     ...(data.runHistory || [])
       .filter((run) => run.id !== orderedLatestSuccess?.id && run.status === 'succeeded' && run.outputs?.length)
@@ -539,7 +548,7 @@ export function Inspector({ embedded = false, node, nodes, edges, capabilities, 
                 )}
               </>
             )}
-            {!embedded && currentOutput && <OutputPreview sectionRef={outputRef} output={currentOutput} title={orderedLatestSuccess ? '最近成功成品' : '当前成品'} status={orderedLatestSuccess ? '已完成' : '已导入素材'} help="编辑只影响下一次生成，已有成品保留原参数。" onOpen={() => orderedLatestSuccess ? onOpenPreview(orderedLatestSuccess) : onOpenMedia(currentOutput)} />}
+            {!embedded && currentOutput && <OutputPreview sectionRef={outputRef} output={currentOutput} title={hasAcceptedDerivedOutput ? '审片采用版本' : orderedLatestSuccess ? '最近成功成品' : '当前成品'} status={hasAcceptedDerivedOutput ? '已采用' : orderedLatestSuccess ? '已完成' : '已导入素材'} help="编辑只影响下一次生成，已有成品保留原参数。" onOpen={() => orderedLatestSuccess ? onOpenPreview(orderedLatestSuccess) : onOpenMedia(currentOutput)} />}
             </div>
             </SettingsDetails>
             <SettingsDetails embedded={embedded} title="更多信息" className="node-info-details">
@@ -629,19 +638,20 @@ function RunSummary({ run }: { run: Run }) {
 }
 
 function OutputPreview({ output, title, status, help, onOpen, sectionRef }: { output: Run['outputs'][number]; title: string; status: string; help: string; onOpen: () => void; sectionRef?: Ref<HTMLElement> }) {
+  const [measuredDuration, setMeasuredDuration] = useState<{ path: string; durationMs: number }>();
   if (!output) return null;
   const isImage = output.kind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(output.path);
   const isAudio = output.kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path);
-  const durationMs = output.metadata?.duration_ms;
+  const durationMs = output.metadata?.duration_ms ?? (measuredDuration?.path === output.path ? measuredDuration.durationMs : undefined);
   return (
     <section ref={sectionRef} className="preview-section">
       <div className="section-title"><h3><Icon name={isImage ? 'image' : isAudio ? 'audio' : 'film'} size={15} />{title}</h3><span className="success-badge">{status}</span></div>
       <button className="preview-card" type="button" onClick={onOpen}>
-        {isImage ? <img src={mediaUrl(output.path)} alt={output.name || '生成图片'} /> : isAudio ? <span className="preview-audio-placeholder"><Icon name="audio" size={32} /><span>{output.name || '音频素材'}</span></span> : <video src={mediaUrl(output.path)} muted preload="metadata" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.duration > 0) video.currentTime = Math.min(0.05, video.duration / 2); }} />}
+        {isImage ? <img src={mediaUrl(output.path)} alt={output.name || '生成图片'} /> : isAudio ? <span className="preview-audio-placeholder"><Icon name="audio" size={32} /><span>{output.name || '音频素材'}</span></span> : <video src={mediaUrl(output.path)} muted preload="metadata" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.duration > 0) { setMeasuredDuration({ path: output.path, durationMs: video.duration * 1000 }); video.currentTime = Math.min(0.05, video.duration / 2); } }} />}
         <span className="preview-overlay"><Icon name={isImage ? 'expand' : isAudio ? 'play' : 'play'} size={13} />{isImage ? '查看原图' : isAudio ? '播放音频' : '播放视频'}</span>
       </button>
       <p className="field-help">{help}</p>
-      {isAudio && typeof durationMs === 'number' && <p className="field-help">实际时长 {(durationMs / 1000).toFixed(2)} 秒</p>}
+      {!isImage && typeof durationMs === 'number' && <p className="field-help">实际时长 {(durationMs / 1000).toFixed(2)} 秒</p>}
       {isImage && output.metadata?.width && output.metadata?.height && <p className="field-help">实际尺寸 {output.metadata.width} × {output.metadata.height}{output.metadata.has_transparency ? ' · 含透明区域' : ''}{output.metadata.steps ? ` · ${output.metadata.steps} 步` : ''}</p>}
     </section>
   );
