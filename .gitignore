@@ -84,3 +84,7 @@ TEMP/
 # Legacy local runtime databases
 /db/
 .ruff_cache/
+
+# Per-machine Codex config: absolute interpreter paths differ per checkout location.
+# hooks.json stays tracked because it resolves paths with `git rev-parse --show-toplevel`.
+.codex/config.toml
