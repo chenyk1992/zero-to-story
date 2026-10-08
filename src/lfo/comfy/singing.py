@@ -1,4 +1,4 @@
-"""Canvas-only separation and zero-shot singing conversion via local Comfy MCP."""
+"""Canvas-only vocal separation via local Comfy MCP."""
 
 from __future__ import annotations
 
@@ -19,26 +19,23 @@ SKILL_ROOT = Path(__file__).resolve().parents[3] / ".agents/skills/comfy-singing
 
 
 def prepare_workflow(snapshot: dict[str, Any], tokens: list[str]) -> tuple[dict, dict]:
-    if (snapshot.get("node_type"), snapshot.get("provider"), snapshot.get("model")) != (
-        "audio", "comfy-singing", "melband-seedvc-44k"
-    ):
+    if (snapshot.get("node_type"), snapshot.get("provider")) != ("audio", "comfy-singing"):
         raise ValueError("Expected a Canvas Comfy singing audio request")
     mode = snapshot.get("mode")
-    if not isinstance(mode, str):
-        raise ValueError("Singing mode must be separate or convert")
+    if mode != "separate":
+        raise ValueError("Singing mode has been retired; only vocal separation is available")
+    if snapshot.get("model") != "melband-seedvc-44k":
+        raise ValueError("Unsupported separator model")
     capability = json.loads((SKILL_ROOT / "capability.json").read_text(encoding="utf-8"))
     validate_input_contract(snapshot, capability)
-    expected = {"separate": 1, "convert": 2}.get(mode)
     refs = snapshot.get("inputs", {}).get("reference_audios", [])
-    if expected is None or len(refs) != expected or len(tokens) != expected:
-        raise ValueError("Separation needs one source; conversion needs source then target voice")
+    if len(refs) != 1 or len(tokens) != 1:
+        raise ValueError("Separation needs one source audio")
     if any(r.get("kind") != "audio" for r in refs):
         raise ValueError("All references must be audio")
     if not snapshot.get("request_id") or not snapshot.get("prompt", "").strip():
         raise ValueError("Missing frozen request identity or description")
     p = snapshot["parameters"]
-    if mode == "convert" and not p.get("authorization", "").strip():
-        raise ValueError("Missing supplied voice authorization")
     prefix = hashlib.sha256(snapshot["request_id"].encode()).hexdigest()[:24]
     workflow = {"1": {"class_type": "LoadAudio", "inputs": {"audio": tokens[0]}}}
     if mode == "separate":
@@ -52,34 +49,21 @@ def prepare_workflow(snapshot: dict[str, Any], tokens: list[str]) -> tuple[dict,
             "5": {"class_type": "SaveAudio", "inputs": {
                 "audio": ["3", 1], "filename_prefix": f"canvas/singing/{prefix}/instruments"}},
         })
-    else:
-        workflow.update({
-            "2": {"class_type": "LoadAudio", "inputs": {"audio": tokens[1]}},
-            "3": {"class_type": "SeedVCModelLoader", "inputs": {
-                "device": "cuda", "precision": "auto", "download_missing": False}},
-            "4": {"class_type": "SeedVCVoiceConversion", "inputs": {
-                "source_audio": ["1", 0], "target_voice": ["2", 0], "model": ["3", 0],
-                "timbre_strength": 1.0, "diffusion_steps": p.get("steps", 30),
-                "cfg_rate": 0.7, "reference_seconds": p.get("reference_seconds", 18),
-                "auto_f0_adjust": False, "pitch_shift": p.get("pitch_shift", 0),
-                "length_adjust": 1.0, "seed": p.get("seed", 42),
-                "output_gain_db": 0.0, "peak_protection": True, "peak_ceiling_db": -1.0}},
-            "5": {"class_type": "SaveAudio", "inputs": {
-                "audio": ["4", 0], "filename_prefix": f"canvas/singing/{prefix}/converted"}},
-        })
     return workflow, {"mode": mode, "request_id": snapshot["request_id"],
-                      "parameters": p, "sources": refs}
+                      "model": snapshot["model"], "parameters": p, "sources": refs}
 
 
 def materialize_audio(result, output_dir: Path, normalized: dict) -> list[dict]:
-    names = ["vocals", "instruments"] if normalized["mode"] == "separate" else ["converted"]
+    if normalized["mode"] != "separate":
+        raise ValueError("Only separation outputs can be collected")
+    names = ["vocals", "instruments"]
     refs = [r for r in result.outputs
             if r.file_type in {"output", "absolute"} and Path(r.filename).suffix.lower() == ".flac"]
     if len(refs) != len(names):
         raise ValueError("Unexpected number of audio outputs")
     outputs = []
     for name in names:
-        output_node = {"vocals": "4", "instruments": "5", "converted": "5"}[name]
+        output_node = {"vocals": "4", "instruments": "5"}[name]
         matches = [r for r in refs if r.node_id == output_node]
         if not matches:
             # Preserve roles even when the official downloader flattens filenames.
@@ -101,7 +85,7 @@ def materialize_audio(result, output_dir: Path, normalized: dict) -> list[dict]:
             raise ValueError("Invalid FLAC output")
         expected = probe_audio(Path(normalized["sources"][0]["path"]))["duration_ms"]
         if abs(metadata["duration_ms"] - expected) > 150:
-            raise ValueError("Converted audio timing drift exceeds 150ms")
+            raise ValueError("Separated audio timing drift exceeds 150ms")
         target = output_dir / f"{name}.flac"
         if target.exists():
             raise ValueError("Refusing to overwrite an existing output")

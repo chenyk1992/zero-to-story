@@ -1,23 +1,53 @@
 {
   "id": "comfy-singing",
-  "label": "本地音轨分离 / 歌声转换（ComfyUI）",
-  "node_types": ["audio"],
+  "label": "本地人声与伴奏分离（ComfyUI）",
+  "node_types": [
+    "audio"
+  ],
   "execution": "script",
   "entrypoint": "scripts/execute.py",
-  "requires_executables": ["comfy-mcp", "ffmpeg", "ffprobe"],
-  "resource": {"key": "video", "capacity": 1},
-  "models": [{"id": "melband-seedvc-44k", "label": "MelBandRoFormer + Seed-VC 44.1k"}],
-  "modes": [{"id": "separate", "label": "分离人声与伴奏"}, {"id": "convert", "label": "转换人物歌声"}],
+  "requires_executables": [
+    "comfy-mcp",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "video",
+    "capacity": 1
+  },
+  "models": [
+    {
+      "id": "melband-seedvc-44k",
+      "label": "MelBandRoFormer 人声 / 伴奏分离"
+    }
+  ],
+  "modes": [
+    {
+      "id": "separate",
+      "label": "分离人声与伴奏"
+    }
+  ],
   "fields": [
-    {"key": "separator_model", "label": "分离模型", "type": "text", "modes": ["separate"]},
-    {"key": "authorization", "label": "已有声音授权", "type": "text", "modes": ["convert"], "required": true},
-    {"key": "steps", "label": "采样步数", "type": "number", "modes": ["convert"], "integer": true, "min": 4, "max": 100},
-    {"key": "reference_seconds", "label": "参考秒数", "type": "number", "modes": ["convert"], "min": 1, "max": 25},
-    {"key": "pitch_shift", "label": "音高调整（半音）", "type": "number", "modes": ["convert"], "integer": true, "min": -24, "max": 24},
-    {"key": "seed", "label": "种子", "type": "number", "modes": ["convert"], "integer": true, "min": 0, "max": 9007199254740991}
+    {
+      "key": "separator_model",
+      "label": "分离模型",
+      "type": "text",
+      "modes": [
+        "separate"
+      ]
+    }
   ],
   "input_rules": {
-    "separate": {"allowed": ["reference_audios"], "required": ["reference_audios"], "max_counts": {"reference_audios": 1}},
-    "convert": {"allowed": ["reference_audios"], "min_counts": {"reference_audios": 2}, "max_counts": {"reference_audios": 2}}
+    "separate": {
+      "allowed": [
+        "reference_audios"
+      ],
+      "required": [
+        "reference_audios"
+      ],
+      "max_counts": {
+        "reference_audios": 1
+      }
+    }
   }
 }

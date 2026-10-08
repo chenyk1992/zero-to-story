@@ -1,16 +1,14 @@
 ---
 name: comfy-singing-executor
-description: 由 Canvas worker 执行已确认的本地 MelBandRoFormer 音轨分离或 Seed-VC 44.1k 歌声转换，回填实际 FLAC。用于已授权参考声音的翻唱；不编排歌曲，不从对话另行提交。
+description: 由 Canvas worker 执行已确认的本地 MelBandRoFormer 人声与伴奏分离，回填实际 FLAC。用于分离执行适配和诊断；不编排歌曲，不从对话另行提交。
 ---
 
-# 本地歌声转换执行
+# 本地人声与伴奏分离
 
-遵守[共享生产规则](../../../guides/ai-system-prompt.md)。仅由画布 worker 调用 scripts/execute.py。执行冻结输入，经过共享 Comfy MCP 上传、实时节点预检、单次提交、原任务查询与取回，并共用机器锁。
+遵守[共享生产规则](../../../guides/ai-system-prompt.md)。`audio` 节点选择 `comfy-singing` / `melband-seedvc-44k` / `separate`，由画布 worker 启动 `scripts/execute.py`。使用官方本地 Comfy MCP、共享资源与机器锁，按冻结输入单次执行并回填真实人声、伴奏 FLAC；失败或未知不自动重提。
 
-separate 模式接一份 reference_audio，输出 vocals.flac 和 instruments.flac。convert 模式按边顺序接两份 reference_audio：先原演唱，后目标人物声音。明确记录已有授权，使用预下载的 44.1k 歌声模型，禁止执行时自动补下载。模型、缓存与节点在现有 ComfyUI 内，项目工作空间只保存制作媒体和运行产物。
+`melband-seedvc-44k` 是兼容已有分离节点的历史模型标识，当前只执行 MelBandRoFormer。一份实际歌曲接 `reference_audios`，描述写入 `prompt`；可选 `separator_model` 选择已安装分离权重，默认 `MelBandRoformer_fp16.safetensors`。adapter 预检模型，不下载或替换依赖。
 
-每份实际音轨记录时长与哈希；转换保持 length_adjust=1，默认不自动迁移音高。八度调整须在已确认参数内。未知任务核实原编号，不重提。技术成功不代表音色、唱词或歌曲听审通过。
+输出角色按真实输出节点或提供方文件来源核对，不依赖下载后的文件顺序。检查 FLAC 可解码、有效时长与原曲相符，保留哈希及 `INCONCLUSIVE` 听审状态。分离结果可能有串音，技术通过不等于可以自然替换人声。
 
-## 可选参考观察
-
-[scripts/transcribe_reference.py](scripts/transcribe_reference.py) 是只读本地 ASR 辅助工具，可用 `--audio`、本地 `--model-dir`、`--start`/`--duration` 和新 `--output` JSON 定位候选乐句。它需要已准备的 librosa、PyTorch、Transformers 与本地 ASR 模型，不属于 Canvas 生成执行器，也不自动安装依赖。输出保留源片起点与近似时间；用于定位后再听审，不作为准确歌词、音色或内容接受的证明。
+原有 Seed-VC、RVC、SoulX-Singer-SVC 和 DiffSinger 试验入口已撤下；历史节点与媒体保留，但这些模式不可再次执行，不能静默改成分离。多人音乐由 [music-video-creator 的多人轮唱流程](../music-video-creator/references/multi-singer-workflow.md)规划，翻唱使用 [YuE2 执行器](../comfy-yue2-executor/SKILL.md)。

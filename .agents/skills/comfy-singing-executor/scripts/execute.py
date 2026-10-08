@@ -1,4 +1,4 @@
-"""Internal Canvas worker entry point for local singing conversion."""
+"""Internal Canvas worker entry point for local vocal separation."""
 
 from __future__ import annotations
 
