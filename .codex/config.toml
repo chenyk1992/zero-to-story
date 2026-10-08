@@ -2,9 +2,9 @@
 sandbox_mode = "workspace-write"
 model_verbosity = "medium"
 [mcp_servers.story_canvas]
-command = "E:/PycharmProjects/zero-to-story/.venv/Scripts/python.exe"
+command = "E:/ideaProjects/zero-to-story/.venv/Scripts/python.exe"
 args = ["-m", "lfo.canvas", "mcp"]
-cwd = "E:/PycharmProjects/zero-to-story"
+cwd = "E:/ideaProjects/zero-to-story"
 startup_timeout_sec = 15
 tool_timeout_sec = 180
 
