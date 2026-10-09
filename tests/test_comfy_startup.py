@@ -46,6 +46,7 @@ def test_online_session_reuses_existing_comfy(monkeypatch):
 def test_offline_session_uses_existing_model_venv_and_launches_once(monkeypatch, tmp_path):
     from lfo.comfy import admission
     from lfo.comfy.mcp_client import McpCallError
+    monkeypatch.setattr(transport, "_start_offline_session", transport._owned_offline_session)
 
     workspace = tmp_path / "desktop" / "ComfyUI"
     venv = workspace.parent / "standalone-env" / "Scripts"
@@ -76,6 +77,7 @@ def test_offline_session_uses_existing_model_venv_and_launches_once(monkeypatch,
 def test_failed_launch_keeps_marker_and_blocks_second_attempt(monkeypatch, tmp_path):
     from lfo.comfy import admission
     from lfo.comfy.mcp_client import McpCallError
+    monkeypatch.setattr(transport, "_start_offline_session", transport._owned_offline_session)
 
     workspace = tmp_path / "ComfyUI"
     (workspace / ".venv" / "Scripts").mkdir(parents=True)

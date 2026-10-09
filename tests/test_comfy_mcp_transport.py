@@ -172,6 +172,41 @@ def test_fetch_rejects_escaped_or_duplicate_file(tmp_path, bad):
     assert guard.ended
 
 
+@pytest.mark.parametrize("source_type", ["input", "output", "temp"])
+def test_fetch_preserves_source_type_after_download(tmp_path, source_type):
+    class Fetch(FakeSession):
+        def call(self, name, args=None, **kwargs):
+            if name == "fetch_outputs":
+                path = Path(args["out_dir"]) / "video.mp4"
+                path.write_bytes(b"video")
+                return {"files": [{"path": str(path), "node_id": "34",
+                                   "url": f"http://127.0.0.1:8188/view?filename=video.mp4&type={source_type}"}]}
+            return super().call(name, args, **kwargs)
+
+    session = Fetch([{"prompt_id": "p1"}, {"prompt_id": "p1", "status": "completed"}])
+    result = transport.run_workflow(tmp_path / "workflow.json", tmp_path,
+                                    transport.RuntimeConfig(), session, guard=FakeGuard())
+    assert result.outputs[0].file_type == source_type
+    assert result.outputs[0].node_id == "34"
+
+
+@pytest.mark.parametrize("query", ["type=input&type=output", "type=unrecognized"])
+def test_fetch_refuses_ambiguous_or_unknown_source_type(tmp_path, query):
+    class Fetch(FakeSession):
+        def call(self, name, args=None, **kwargs):
+            if name == "fetch_outputs":
+                path = Path(args["out_dir"]) / "video.mp4"
+                path.write_bytes(b"video")
+                return {"files": [{"path": str(path),
+                                   "url": f"http://127.0.0.1:8188/view?filename=video.mp4&{query}"}]}
+            return super().call(name, args, **kwargs)
+
+    session = Fetch([{"prompt_id": "p1"}, {"prompt_id": "p1", "status": "completed"}])
+    with pytest.raises(transport.ExecutorError, match="来源类型"):
+        transport.run_workflow(tmp_path / "workflow.json", tmp_path,
+                               transport.RuntimeConfig(), session, guard=FakeGuard())
+
+
 def test_vdn_preflight_rejects_old_schema_instead_of_ignoring_auto_policy(tmp_path):
     graph = {"1": {"class_type": "ApplyVDNH3", "inputs": {
         "branch_weights": "auto", "retain_buffers": "auto",

@@ -16,7 +16,7 @@ from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from .mcp_client import ComfyMcpSession, ComfyToolSession, McpCallError
 
@@ -228,6 +228,27 @@ class _LazyReadySession:
 
 @contextmanager
 def _start_offline_session(config: RuntimeConfig, info: dict[str, Any]) -> Iterator[ComfyMcpSession]:
+    if os.name == "nt":
+        # A short-lived Windows stdio session owns a kill-on-close process
+        # tree. The launch session belongs to an independent service holder,
+        # while this adapter receives only a normal connection to that service.
+        from .service_keeper import start_persistent_service
+
+        start_persistent_service(config, info)
+        with _connected(config) as session:
+            if not _running(session.call("server_info"), config):
+                raise ExecutorError("常驻 Comfy 服务尚未就绪", status="unknown")
+            yield session
+        return
+    with _owned_offline_session(config, info) as session:
+        yield session
+
+
+@contextmanager
+def _owned_offline_session(
+    config: RuntimeConfig, info: dict[str, Any], *, reservation: str | None = None,
+) -> Iterator[ComfyMcpSession]:
+    """Launch context retained by the service holder on Windows."""
     from .admission import state_directory
 
     # Launch with the existing model venv, never the Canvas interpreter.
@@ -235,7 +256,14 @@ def _start_offline_session(config: RuntimeConfig, info: dict[str, Any]) -> Itera
     folder = state_directory()
     folder.mkdir(parents=True, exist_ok=True)
     marker = folder / "startup.json"
-    if marker.exists():
+    if reservation is not None:
+        try:
+            saved = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ExecutorError("常驻启动预留记录不可用", status="unknown") from exc
+        if saved.get("reservation") != reservation or saved.get("base_url") != config.base_url:
+            raise ExecutorError("常驻启动预留记录不匹配", status="unknown")
+    elif marker.exists():
         raise ExecutorError("上次 ComfyUI 启动尚未核实；停止重复启动")
     host, port = _endpoint(config.base_url)
     settings = info.get("config", {})
@@ -249,7 +277,12 @@ def _start_offline_session(config: RuntimeConfig, info: dict[str, Any]) -> Itera
     with _connected(config, model_venv=model_venv) as launched:
         try:
             if not _running(launched.call("server_info"), config):
-                marker.write_text(json.dumps({"base_url": config.base_url, "workspace": info["workspace"]["path"]}), encoding="utf-8")
+                if reservation is None:
+                    try:
+                        with marker.open("x", encoding="utf-8") as stream:
+                            json.dump({"base_url": config.base_url, "workspace": info["workspace"]["path"]}, stream)
+                    except FileExistsError as exc:
+                        raise ExecutorError("上次 ComfyUI 启动尚未核实；停止重复启动") from exc
                 launched.call("launch_comfyui", {"extra_args": extras}, timeout=210)
             if not _running(launched.call("server_info"), config):
                 raise ExecutorError("Comfy MCP 启动后服务未就绪")
@@ -429,7 +462,20 @@ def run_workflow(
         seen.add(path)
         node_id = item.get("node_id")
         source_url = item.get("url")
-        refs.append(OutputRef(str(path), node_id=str(node_id) if node_id is not None else None,
+        file_type = "absolute"
+        if isinstance(source_url, str):
+            try:
+                source_types = parse_qs(urlsplit(source_url).query).get("type", [])
+            except ValueError as exc:
+                raise ExecutorError("Comfy 产物来源 URL 无效", provider_task_id=prompt_id) from exc
+            if source_types:
+                if len(source_types) != 1 or source_types[0] not in {"input", "output", "temp"}:
+                    raise ExecutorError("Comfy 产物来源类型无效或不唯一", provider_task_id=prompt_id)
+                # LoadVideo reports its input alongside SaveVideo. Downloading
+                # both to local paths must not turn the input into a result.
+                file_type = source_types[0]
+        refs.append(OutputRef(str(path), file_type=file_type,
+                              node_id=str(node_id) if node_id is not None else None,
                               source_url=source_url if isinstance(source_url, str) else None))
     fetched_at = time.perf_counter()
     return ComfyResult(prompt_id, tuple(refs), timings_seconds={
