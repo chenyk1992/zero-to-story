@@ -1,9 +1,11 @@
 ---
 name: virtual-presenter
-description: 规划数字人或虚拟实拍的连续口播，处理角色、环境、自然表演、文案、声音参考、H3 提示词和 Canvas 交接。明确的数字人口播请求使用；纯 MG、B-roll 和普通文案不触发。
+description: 规划数字人或虚拟实拍的连续口播，处理角色、环境、自然表演、文案、声音参考、H3 提示词和 Canvas 交接。明确的数字人口播请求使用；纯MG、B-roll和普通文案不触发；完整广告由advertising-creator统筹，本Skill处理限定口播范围。
 ---
 
 # 虚拟实拍口播
+
+独立口播用本计划；受广告委托只交指定口播范围与当前ad_plan版本，不改广告目标、音乐/对白或另建全片源。presenter_plan只保存该专业范围。广告委托不取消L0/L1/L2、4～15秒及同镜续演真实ACCEPT尾帧要求。
 
 遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 负责创作规划和单 Panel 交接，不直接调用视频提供方、ComfyUI 或 Canvas 数据库。
 
@@ -37,6 +39,8 @@ description: 规划数字人或虚拟实拍的连续口播，处理角色、环�
 
 ## 导演标准
 
+按需复用[细腻表演](../zero-to-story/references/performance-direction.md)，只增强同一主动作的发展，保留 L0/L1/L2、锁定文案及连续镜头。总时长等于 Panel 合计，Canvas 与 Panel 一致，不生成余量后裁切或自动变速。参考片按[变更交接](../video-deconstruct-analyzer/references/recreation-change-plan.md)记方式到当前计划，不改 Canvas 页面。
+
 每个 Shot 写清四件事：镜头为什么存在、观众看到什么可观察动作、镜头怎样帮助叙事、画面和声音怎样在末态收束。自然呼吸、眨眼、视线和重心变化作为底层表演；一条短片只安排少量语言强调动作和一种主运镜。同镜头续接时，起始姿态、手持物、朝向、光向和空间关系必须能从上一条末态承接。不要用“更真实”“自然一点”等抽象词替代动作、速度和停点。
 
 讲解要点可用一次小手势落在关键词上；提醒或反问可用目光和停顿给观众反应空间；需要展示物件时才安排一次 L2 主动作。按表达选择，不为每句话配手势。关键口型、表情或手势需要看清时，先检查所选景别、侧脸角度、道具和字幕位置是否遮住它们；只补当前镜头影响用途的可见性事实。
@@ -45,17 +49,9 @@ description: 规划数字人或虚拟实拍的连续口播，处理角色、环�
 
 ## 引用槽位
 
-槽位编号从 0 开始，H3 标签从 1 开始，缺少某项时不顺延：
+用途与编号分开。身份、环境源、方向图、声音、原片与前段视频按需要绑定，编号依 Canvas 解析后的紧凑顺序从零基转一基，不预留空槽、不填无用素材。具体见[引用编号](references/h3-presenter-prompt.md#引用编号)。首条可有原片 Video 1，不虚构前段 ACCEPT。
 
-| Canvas 槽位 | H3 标签 | 语义 |
-|---|---|---|
-| ref_image_0 | <Picture 1> | 角色/身份锚点 |
-| ref_image_1 | <Picture 2> | 全景或 360°环境源 |
-| ref_image_2 | <Picture 3> | 当前 yaw、pitch、FOV 方向视图 |
-| ref_audio_0 | <Audio 1> | 声音参考 |
-| ref_video_0 | <Video 1> | 同画幅上一条完整 ACCEPT 片；首条省略 |
-
-`first_frame` 是独立首帧输入，不占上表的普通参考编号。同镜头接力必填；首帧引导不保证像素级一致或音频自动连续。contact sheet 只用于审阅，不替代方向视图。普通视频参考不等于精确首帧；不能用失败输出、推测路径或未生成尾帧接力。
+`first_frame` 是独立首帧输入，不占普通参考编号。同镜头接力必填；首帧引导不保证像素级一致或音频自动连续。contact sheet 只用于审阅，不替代方向视图。普通视频参考不等于精确首帧；不能用失败输出、推测路径或未生成尾帧接力。
 
 声音参考与原音轨保留按 [Shot Contract](references/presenter-plan-shot-contract.md#声音与动作按需记录) 分别记录；参考绑定与提示时点不能证明实际同步。控制能力见 [H3 控制与后期责任](../h3-prompt-writing/references/control-boundaries.md)。
 

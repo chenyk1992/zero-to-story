@@ -1,5 +1,7 @@
 # Canvas Handoff
 
+源协调、文字/时间与采用版按[共同交接](../../canvas-workspace/references/creative-handoff.md)。受广告委托只返回指定Panel事实；同镜续演仍固定source_run_id/require_accept与真实尾帧，不因有广告主计划就解除依赖。
+
 共享授权、Canvas 唯一入口和实际结果规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本文件只说明 Presenter Panel 如何交给画布。
 
 ## 分工
@@ -17,17 +19,7 @@ virtual-presenter 决定角色、环境、文案、Shot Contract、引用语义�
 - 声音生成方案、参考用途、原音轨/字幕的后期责任；按需附采用音频版本、原音频窗与受保护尾音，已确定的成片偏移留在成片记录；
 - 连续镜头编号、段界类型、本条可观察验收重点和连续性末态。
 
-素材语义按以下槽位固定，缺项不顺延：
-
-| Canvas 槽位 | H3 标签 | 用途 |
-|---|---|---|
-| ref_image_0 | <Picture 1> | 角色/身份 |
-| ref_image_1 | <Picture 2> | 全景/环境源 |
-| ref_image_2 | <Picture 3> | 当前方向视图 |
-| ref_audio_0 | <Audio 1> | 声音参考 |
-| ref_video_0 | <Video 1> | 同画幅上一条完整 ACCEPT 片 |
-
-首条省略 ref_video_0；后续完整视频参考按用途补充，不能替代同镜头续接必需的 `first_frame`。`first_frame` 不占普通参考编号，只绑定上一条同画幅完整 ACCEPT 实际采用版本的真实尾帧。contact sheet 不代替方向视图。不要填充无用途素材或虚构路径。
+按[引用编号](h3-presenter-prompt.md#引用编号)记录用途与实际槽位，缺项不留空位。首条可有原片 Video 1，两视频新草稿通常前段 Video 1、原片 Video 2，已有顺序以实际输入为准。普通视频不代替 first_frame；它不占普通编号，只绑定上一条同画幅完整 ACCEPT 实际采用版的真实尾帧。contact sheet 不当方向图，不填无用素材或虚构路径。
 
 `ref_audio_0` 只绑定有实际用途的声音参考；原音轨保留与声音生成责任按 [Shot Contract](presenter-plan-shot-contract.md#声音与动作按需记录) 保存。没有实际音频时省略该槽位，沿用已定 H3 声音方案。所选模式须支持必要输入，能力见 [H3 控制与后期责任](../../h3-prompt-writing/references/control-boundaries.md)。
 
@@ -46,6 +38,8 @@ virtual-presenter 决定角色、环境、文案、Shot Contract、引用语义�
 素材不可用、模式冲突、执行失败或证据不足时停止受影响 Panel。重做由调用方修改草稿并确认新快照；不建立恢复循环。
 
 ## 接力与成片
+
+片段后期按[后期与采用状态](../../zero-to-story/references/video-qc.md#后期与采用状态)处理。首次接受前审必要派生版；INCONCLUSIVE 可 CAS 重开，REJECT 视频可登记实际派生审片；ACCEPT 后成片处理保留原 run，要求改绑 Panel/尾帧版本时报告限制并停止相关接力，不伪造状态。
 
 独立 Panel 可以先准备；同镜头续接须等上一条完整 ACCEPT 并绑定其真实尾帧后才可 ready 和确认生成。默认保持机位、景别、人物画面位置与大小、背景布局和光线，按计划承接姿态与动作；拆分长口播不新增切镜。只有明确计划的切镜或换场才按新镜头起点准备输入，不要求旧镜头尾帧。拒绝、INCONCLUSIVE 或执行错误的输出不能接力。
 

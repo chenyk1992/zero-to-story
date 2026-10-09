@@ -1,5 +1,5 @@
 display-name-zh: 短剧编剧助手
-version: 0.1.12
+version: 0.1.14
 tag-en: "Short Drama / Script Writing"
 tag-cn: "短剧 / 剧本写作"
 complete-tags-en:
@@ -8,9 +8,9 @@ complete-tags-cn:
   - "短剧漫剧 / 计划制定"
 summary-en: "Write full short drama scripts by topic"
 summary-cn: "按选题撰写完整短剧剧本"
-desc-en: "For short drama screenwriting from topic to full episodic script covering the complete creative process. Takes a story premise or topic plus desired format such as vertical Chinese short drama or overseas ReelShort and DramaBox productions. Produces a complete episodic script with built-in viral methodology covering hooks, conflict beats, cliffhangers and audience retention techniques for maximum engagement."
-desc-cn: "适用于微短剧从选题到完整剧本的全流程编剧,覆盖创意发想到定稿的完整创作过程。输入故事选题或题材方向、目标格式(国内竖屏短剧或海外 ReelShort、DramaBox 平台),输出分集完整剧本。内置爆款方法论,涵盖钩子设计、冲突节点编排、悬念结构设计与观众留存技巧,帮助创作者产出高完播率的短剧内容。"
+desc-en: "Writes domestic or overseas short dramas and standalone sitcom sketches, with characters, exact dialogue, causal beats and optional creative handoff. Shares optional reversal methods that preserve director truth and audience/character knowledge without changing genre or ending outcome. Serial hooks and paywall structures apply only when relevant; standalone comedy uses setup, escalation and payoff. Does not generate media."
+desc-cn: "创作国内/海外微短剧及独立情景喜剧，交付角色、准确对白、可拍节拍与按需创作交接。共享可选反转方法，保留导演真相与观众/人物获知安排，不混淆类型和结局走向。连载钩子和付费结构只在适用时采用，独立喜剧以铺垫、升级和回收组织，不执行媒体生成。"
 cover: ""
 author-en: "MiniMax Hub"
 author-cn: "MiniMax Hub"
-source: official
+source: project-maintained

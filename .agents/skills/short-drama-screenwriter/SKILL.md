@@ -1,9 +1,13 @@
 ---
 name: short-drama-screenwriter
-description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 创作选题、角色、分集和可拍剧本，并按需整理创作侧 handoff。用户要求短剧编剧、分集创作或海外短剧改编时使用；普通视频提示词、代码和纯视频执行不触发。
+description: 为国内微短剧、海外 ReelShort/DramaBox 或独立情景喜剧创作选题、角色、分集和可拍剧本，并按需整理创作交接。用户要求短剧编剧、喜剧小品或分集改编时使用；不负责视频提示词和媒体执行。
 ---
 
 # 微短剧编剧
+
+独立编剧按以下自己的文本产物完成；受影视/广告/叙事MV委托，只写指定范围并返回调用方，不重建其整片主计划。广告目标/产品事实由[广告入口](../advertising-creator/SKILL.md)锁定；本文分集/桥接规范仅为独立剧目适配，不强加给受托广告稿。
+
+参考改编时采用用户在对话/Skill 入口选择的自由改编、受控复刻或只读分析，记入当前创作简报，不写入市场 mode 或 Canvas 参数。按[变更边界](../video-deconstruct-analyzer/references/recreation-change-plan.md)保留锁定项，受控复刻不套自由重组默认；只读分析交证据而不自动改稿。
 
 遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 只负责故事、人物、对白、分集文本和可选 handoff；不调用 Canvas、ComfyUI 或视频提供方，也不记录运行状态。
 
@@ -29,11 +33,13 @@ description: 为国内竖屏微短剧或海外 ReelShort/DramaBox 创作选题�
 | 请求 | 读取 |
 |---|---|
 | `/开始`、选题 | [genre-guide](./references/genre-guide.md) |
-| `/创作方案` | [opening-rules](./references/opening-rules.md)、[paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md) |
-| `/角色开发` | [villain-design](./references/villain-design.md) |
+| 独立情景喜剧的选题、方案、角色、剧本 | [喜剧写作](./references/sitcom-writing.md)优先；不默认加载付费、反派或恋爱结构 |
+| 当前剧本的反转、误判或身份揭示 | 按需读[通用反转](./references/reversal-design.md)；它是叙事机制，不改主类型，不强加给每集 |
+| 连载微短剧 `/创作方案` | [opening-rules](./references/opening-rules.md)、[paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md) |
+| 连载微短剧 `/角色开发` | [villain-design](./references/villain-design.md)；其他人物按当前剧情需要 |
 | 续集中的别名、不同年龄或服装阶段 | [角色身份与造型复用](./references/handoff-mapping.md#角色身份与造型复用)；保留人物关系与称呼来源，再交接当前造型 |
-| `/目录` | [paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md) |
-| `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集再读 [opening-rules](./references/opening-rules.md)，付费集再读 [paywall-design](./references/paywall-design.md) |
+| 连载微短剧 `/目录` | [paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md) |
+| 连载微短剧 `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集再读 [opening-rules](./references/opening-rules.md)，付费集再读 [paywall-design](./references/paywall-design.md) |
 | 改写台词，或 `/自检 N` 中需要诊断台词 | [dialogue-diagnosis](./references/dialogue-diagnosis.md)；只处理当前授权段落，锁定对白逐字保留 |
 | `/自检 N`、`/合规` | [compliance-checklist](./references/compliance-checklist.md)；创作检查按工作流契约 |
 | `/桥接 N` | [handoff-mapping](./references/handoff-mapping.md)、[handoff-brief-template](./references/handoff-brief-template.md)；字段示例按需读 JSON 模板 |

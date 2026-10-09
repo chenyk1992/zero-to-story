@@ -121,6 +121,10 @@ Agent 的 `canvas_read(canvas_id)` 默认是目录概览，每页 50 个节点�
 
 事件保存不等于后台唤醒。当前活跃会话可用宿主的真实继续执行操作触发下一步；未接入空闲唤醒的宿主保留待交接任务，下一次活跃时接手，不能宣称无人值守执行。
 
+## 创作流程交接
+
+完整影视、独立音乐/MV、广告分别由 zero-to-story、music-video-creator、advertising-creator 主责。资产和专业任务仅交受托单元。主源与草稿、文字与时间、采用版本如何进入节点见[共同创作交接](../.agents/skills/canvas-workspace/references/creative-handoff.md)；document/content/related 只是资料，定稿必须保存到媒体 data.prompt，真实素材连接实际端口。画布不自动反写主文件或检查广告语义。
+
 ## 实际媒体、连续镜头与后期
 
 故事审查分开视觉和音频证据。关键剧情遗漏、身份/物理关系错误、对白缺失和主体遮挡需要修复；不影响剧情和连续性的自然动作差异可说明后采用。看不清、听不清或 ASR 有歧义时记为 `INCONCLUSIVE` 并局部复核，不把分析器说明当作台词。

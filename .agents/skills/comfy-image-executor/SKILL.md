@@ -7,7 +7,7 @@ description: 由 Canvas 服务执行已确认的本地 Qwen Image 2.1 图片快�
 
 仅处理 Canvas 服务冻结的图片请求。页面确认后进入 queued，由内部 worker 调用 scripts/execute.py；无需 Codex 或 Agent claim。用户的图片生成必须从画布进入，禁止从对话重复启动脚本。
 
-使用规范见 [Qwen 图片指南](../../../guides/qwen-image.md)。角色卡与分镜板复用 zero-to-story 的原有模板；执行器逐字使用冻结的提示词，不添加隐藏创作指令。
+使用规范见 [Qwen 图片指南](../../../guides/qwen-image.md)。创作侧按用途选模板：影视角色卡/分镜用zero-to-story，产品/服装/海报/最终网格用[视觉资产专能](../visual-design-creator/SKILL.md)。执行器不选择/改写模板，逐字使用冻结提示词，不加隐藏创作指令。
 
 - create 不接受图片；reference/edit 接受 1～10 张。编辑第 1 张为目标，其余至多 9 张辅助参考。
 - 数字编号按实际输入顺序；提示词使用 <image1> 至 <image10>。用途写清楚，不把 related 连线当图片输入。

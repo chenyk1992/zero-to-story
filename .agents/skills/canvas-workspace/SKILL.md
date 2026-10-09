@@ -21,6 +21,8 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 
 ## 保存约定
 
+三主入口和专业任务的源协调、文字/时序、采用版及节点映射见[共同创作交接](references/creative-handoff.md)。画布不是第四个创作主入口。
+
 - 日常先用 `canvas_read(canvas_id)` 的分页目录定位；目录省略长正文和历史，不可把它当完整图覆盖保存。按 `page.next_offset` 和当前 `expected_version` 读下一页，版本变化时重读。需要完整项目数据时显式 `view="full"`。
 - 多个镜头用 `canvas_read(canvas_id, node_ids=[...])` 一次精读最多 20 个目标及直接上游；全文和参数原样返回，共享输入只返回一次。按当前版本用一批 `canvas_edit` operations 保存，默认只返回新版本与改动回执；确需全图时设 `full=True`。
 
@@ -54,7 +56,7 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 
 独立后期工具不自动继承 Canvas 输入的采用检查。调用方在正式后期交接前读取当前 run.review，核对 ACCEPT、`output_path`、`output_sha256` 与实际文件，采用 review 指向的版本；不能只凭 run_id 或渲染成功认定接受。MV 的音乐版本与声音处理按[后期交接](../music-video-creator/references/finishing-and-review.md)核对。
 
-要由该 run 的 review 采用的裁尾、配声或其他派生版本，保留在原 run 输出目录并对最终实际版本重新验收；旧版本结论不能替代新文件结论。完整项目拼接成片仍按 `projects/<project_id>/final` 产物布局处理。只有最终采用版本 `ACCEPT` 且下游确实需要精确首帧时，才从该 run 提取真实尾帧并登记 `derived_outputs`；不把普通资产边当作接力尾帧。
+片段派生版按[采用版本与后期](references/creative-handoff.md#采用版本与后期)走合法入口：首次待审、INCONCLUSIVE 重开、REJECT 派生审片分别处理，不替换已 ACCEPT 原 run。成片后期保留源 review，放 `projects/<project_id>/final` 并检查实际成片。改绑已 ACCEPT Panel/尾帧版当前不支持，报告缺口并停相关续接。只有当前采用版 ACCEPT 且下游需要时才提取真实尾帧，不用普通资产边绕过来源。
 
 持续生产先绑定真实宿主会话、明确组件范围和已有授权；实际派发、结果待处理和处理完成按接续指南登记。结果返回后处理并启动下一项 ready 工作；结束前读取接续状态。暂停不自动恢复，持久状态不能独自唤醒宿主。
 

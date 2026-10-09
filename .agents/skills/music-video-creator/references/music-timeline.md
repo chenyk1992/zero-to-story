@@ -16,6 +16,6 @@
 
 使用 Skill 的 `scripts/music_tools.py`：`inspect --audio SONG --start-ms START --end-ms END --output TIMELINE` 读取实际元信息；`analyze` 使用相同参数补候选；`validate --timeline TIMELINE --output CHECKED` 核对修订后的时序及源媒体。输出路径必须是新文件，工具不会覆盖素材。项目解释器可以执行 inspect/validate；analyze 需要显式选择已装 librosa 的 Python 环境，例如本机已验证的 Comfy Python，不自动安装依赖。每条段落或歌词事件使用原歌 `start_ms/end_ms`、原文或段落名及 `status=candidate|verified|unknown`；歌词可加 `layer` 区分合唱。每个 beat 使用原歌 `time_ms` 与核对状态。手工修订后再次验证媒体哈希和窗口范围；旧音频版本的已核对时间不能挪用到新版本。
 
-镜头表使用歌曲时间段、最终成片 Shot、生成 Panel 三个不同单位。短镜头可从较长素材中选段；乐句和观众注意力比机械逐拍切镜更重要。
+镜头表使用歌曲时间段、最终成片 Shot、生成 Panel 三个不同单位。同一已定 Panel 可包含多个短 Shot；已有较长素材可按授权选段，但新生成不为短 Shot 另留时间余量再裁切，时长与音频窗口按[生产交接](production-handoff.md)核对。乐句和观众注意力比机械逐拍切镜更重要。
 
 在创作计划另记实际 groove（平直/摇摆/切分等）、人声咬字/拖音/换气、鼓与低频的主次、编曲增减和主观能量发展，并绑定原歌位置与听审依据。将值得响应的事件编号，供动作、镜头和文字共同引用；不把每个候选 beat 都当切点。上述创作注释不擅自扩充时间轴 JSON schema。无法听审时保持候选或未知，先做不依赖精确时序的美术准备。

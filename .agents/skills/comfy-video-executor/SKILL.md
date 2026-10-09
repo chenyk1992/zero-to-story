@@ -23,7 +23,9 @@ description: 由 Canvas 服务执行已确认的本地 Comfy H3 视频快照，�
 | `t2v` | 不带媒体 |
 | `i2v` | 一张 `first_frame` |
 | `fl2v` | `first_frame` 和 `last_frame` |
-| `r2v` | 至少一个 typed reference，保留原槽位；可另接 `first_frame`，用 AddGuide 在第 0 帧引导，不将声音参考变为固定音轨。启用 `frame_zero_video_guide` 时，第一条 `reference_video` 会改作带原声的多帧第 0 帧引导，生成结果包含重叠前缀，采用后由后期裁掉重叠。 |
+| `r2v` | 至少一个 typed reference，保留原槽位；可另接 `first_frame`，用 AddGuide 在第 0 帧引导，不将声音参考变为固定音轨。普通路线关闭/省略 `frame_zero_video_guide`；显式选择并核实特殊前缀路线时，第一条 `reference_video` 改作带原声的多帧第 0 帧引导，结果含重叠前缀，采用与裁切边界见下文。 |
+
+前缀路线不改变故事 Panel 时长定义，不授予多生成余量后裁切的例外。裁切若决定本 Panel 采用版，须在首次 review 前完成，或按[合法派生/重开路径](../zero-to-story/references/video-qc.md#后期与采用状态)处理；已 ACCEPT 源仅可在最终时间线裁切，不能据此改绑原 review/尾帧。特殊路线无法满足当前预算、参考标签或接力要求时报告缺口，不静默启用。
 
 H3 必填 `duration`、`aspect_ratio`、`megapixels`，Comfy 还需 `sampler_profile` 与 `steps`。`native` 至少 8 步，`vdn_turbo` 恰为 8 步。缺值或重复配置冲突要报告，不能从 workflow 模板补成用户选择。
 

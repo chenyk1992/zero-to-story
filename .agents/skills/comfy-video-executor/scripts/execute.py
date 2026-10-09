@@ -464,7 +464,8 @@ def prepare_workflow(
                 )
             # Anchor the short, frame-valid (22, 39, ...) continuation prefix
             # together with its original soundtrack at output frame zero.
-            # The caller trims the overlap after content acceptance.
+            # Panel adoption requires trimming before review or a legal derived
+            # review; final-assembly trimming preserves the accepted source.
             generator_id = next(key for key, node in workflow.items() if node is generator)
             guide_id = _add_node(workflow, {
                 "_meta": {"title": "Canvas.FrameZeroVideoGuide"},

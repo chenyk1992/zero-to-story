@@ -2,6 +2,10 @@
 
 ## 通用导入、编辑与真实尾帧
 
+按[当前版本协调](creative-handoff.md#当前版本协调)保留明确用户编辑，由调用方同步源/蓝图，画布不自动反写。三种改编方式只记创作简报，不新增 UI 或生成参数。参考用途不固定编号，按实际紧凑输入顺序映射零基槽/一基标签，不留空槽；顺序变化同步当前提示词，不改历史绑定。
+
+派生采用按[采用版本与后期](creative-handoff.md#采用版本与后期)核对。INCONCLUSIVE 用 POST /api/runs/{id}/reopen-review（原因、最新 expected_updated_at）取新 token；succeeded 完整 REJECT 视频用 POST /api/runs/{id}/review-derived 登记不同路径/哈希的原 run 目录派生版和最终证据。ACCEPT 不支持终态替换，不伪造状态绕过。
+
 完整故事图使用本 Skill 的 `scripts/import_workspace.py` 及 JSON manifest，先 `--dry-run` 验证稳定节点 ID、素材路径和连线，再导入。已有画布使用 `CanvasClient.edit(canvas_id, version, operations)` 精确更新；版本冲突后重新读取当前版本与本次操作所需范围并重新应用，不用新版本号提交旧图，不以历史 Markdown 覆盖当前提示词。
 
 MCP `canvas_read` 默认返回分页概览，每页默认 50、最多 100 个节点，不返回长正文和历史。后续页带首读版本 `expected_version`，版本变化后重读目录；`node_ids` 一次精读最多 20 个目标及其直接上游，`view="full"` 显式读取整图。MCP `canvas_edit` 默认仅返回版本和改动回执，必要时用 `full=True`；HTTP 页面保存仍返回完整画布。每次接续先用 `canvas_next` 读取当前会话的少量待办，优先处理已经完成的结果，再精读本批节点。

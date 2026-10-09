@@ -1,10 +1,24 @@
 # 创作蓝图与低成本预检
 
+## 逐项文字分工
+
+文字项与四条时间轴按[共同交接](../../canvas-workspace/references/creative-handoff.md#逐项文字与时间)；下表仅为影视现有 schema 的摘要适配，不是广告/MV必建的蓝图。
+
+逐文字项事实保存在人工源“关键视觉要求与后期分工”：稳定 ID、Panel/Setup、载体、精确字符串、出现/变化窗口、生成或后期责任。Shot 的现有字段只作兼容摘要，不增加 schema：
+
+| 当前 Shot 文字 | text_strategy | post_asset |
+| --- | --- | --- |
+| 无场景文字 | none | null |
+| 全由生成承担 | prompt | null |
+| 含任意后期文字（包括混合） | post | 现有后期条目 ID 或 Shot 级组 ID |
+
+`post` 只表示含后期任务，不表示全部文字移到后期。H3 从完整源表读取生成项，后期只读取分配项。例：C001 的 T01 是生成空间招牌，T02 是后期精确品牌落版；摘要 `post + POST.C001`，该后期组只展开 T02，H3 仍保留 T01 及其窗口。不新增 mixed，不给 prompt 附 post_asset，不为通过校验拆 Shot。源表与组表必须可定位，摘要不能取代正文分工。
+
 共同的角色、Panel ready、实际验收和授权规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。本文只规定蓝图字段和静态预检，不把预检当作成片验收。
 
 ## 目的
 
-storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_blueprint.json 是从它同步编译的机器可读索引，用于一次低成本静态预检；它不是第二套剧情，也不是视频成片评分器。两者冲突时修正故事板，再重新编译蓝图。
+storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_blueprint.json 是其结构化索引，不是第二套剧情或成片评分器。按[当前版本协调](storyboard-brief.md#当前版本协调)纳入明确的用户新编辑后再编译，不能用旧故事板覆盖最新 Canvas 决定。
 
 完整故事生产使用 zero-to-story.creative-blueprint.v2，不维护旧 schema 的平行流程。该流程的蓝图在资产或视频生成前通过一次，相关输入变化后才复核；局部交付不因本参考扩展为整章生产。
 

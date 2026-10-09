@@ -2,11 +2,11 @@
   "schema": "short-drama.creative-handoff.v1",
   "project": {
     "title": "{drama_title}",
-    "default_aspect_ratio": "9:16",
-    "target_duration_ms": 45000,
-    "language": "zh-CN",
-    "visual_style": "wet-night neo-noir cinematic",
-    "mood": "tense comedy unease"
+    "default_aspect_ratio": "{current_aspect_ratio}",
+    "target_duration_ms": null,
+    "language": "{current_language}",
+    "visual_style": "{current_visual_style}",
+    "mood": "{current_mood}"
   },
   "episode": {
     "episode_id": "ep{NNN}",
@@ -14,7 +14,7 @@
     "source_path": ".short-drama/{drama_title}/episodes/ep{NNN}.md",
     "storyboard_brief_path": ".short-drama/{drama_title}/handoff/ep{NNN}/storyboard_brief.md",
     "cut_notes_path": ".short-drama/{drama_title}/handoff/ep{NNN}/cut_notes.md",
-    "visual_summary": "{logline_cut}\n\n场景摘要：\n1) {scene_a_summary}\n2) {scene_b_summary}\n\n关键对白（精简）：\n- {key_line_1}\n- {key_line_2}\n\n视觉重点：{visual_beats}"
+    "visual_summary": "{current_type_and_adaptation_choice}\n{logline_cut}\n\n场景摘要：\n{scene_summaries}\n\n完整逐字对白来源：{full_dialogue_source_and_version}；摘要仅导航，未授权不得精简。\n\n视觉重点：{visual_beats}"
   },
   "panelization": {
     "min_duration_ms": 4000,
@@ -25,11 +25,11 @@
     "dialogue": "{dialogue_intent}",
     "effects": "{effects_intent}",
     "external_voiceover": "{external_voiceover_intent}",
-    "subtitle_requested": false
+    "subtitle_requested": null
   },
   "origin": {
     "source": "user",
     "derived_from": [".short-drama/{drama_title}/episodes/ep{NNN}.md"],
-    "reason": "短剧编剧 Skill /桥接 生成的创作侧简报；交给 zero-to-story，不直接创建或确认 Canvas 生成请求。"
+    "reason": "创作桥接模板；填写当前类型、画幅、语言、时长、风格与完整对白源。null 表示待填，不是生产默认。交给 zero-to-story，不创建或确认生成请求。"
   }
 }

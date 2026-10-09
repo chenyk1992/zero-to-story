@@ -1,6 +1,6 @@
 ---
 name: music-video-creator
-description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际歌曲设计 MV、卡点表演、空间歌词和复古拼贴音乐视频。包含 music-video-subtitle-generator 与 cool-music-video 的项目适配方法；纯音频止于音频交付，普通配乐剧情片由故事流程主导。
+description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际歌曲设计独立MV、卡点表演、空间歌词和复古拼贴音乐视频。包含 music-video-subtitle-generator 与 cool-music-video 的项目适配方法；纯音频止于音频交付，普通配乐剧情片由故事主导，整支歌曲广告由advertising-creator统筹，本Skill只交音乐成果。
 ---
 
 # 音乐与 MV 创作
@@ -11,7 +11,8 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际�
 
 - 只写歌词：按[音乐方向](references/music-direction.md)交付文本并停止，不生成音频或安排镜头。
 - 只要歌曲或器乐：准备音乐输入，经 Canvas 授权执行后交付实际音频和听审结论，不进入 MV 视觉阶段。
-- 歌曲驱动 MV：使用下面六阶段，复用已有歌曲与有效采用证据。
+- 独立歌曲驱动MV：使用下面六阶段，复用已有歌曲与采用证据。
+- 广告主题曲只要音频：本Skill完成音乐/听审即停止。完整歌曲形式广告由[广告入口](../advertising-creator/SKILL.md)统筹，本Skill仅返回限定音乐成果/实际采用版本与窗口，不建立全片mv_plan/整曲预览。现有MV仅加赞助落版保持MV主责。
 - 已锁定画面的配乐：由原故事/视频流程保持画面与声音时点，只复用[锁定画面配乐](references/music-direction.md#锁定画面配乐)，不改为歌曲主导的 MV。
 
 ## 多人音乐
@@ -25,7 +26,7 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际�
 1. 确定歌曲与意图：沿用用户选定的已有歌曲版本，核对实际文件与采用依据；用户选曲不自动等于内容验收 ACCEPT。只有歌词或想法时，在前期创意简报中按[音乐方向](references/music-direction.md)完成实际歌词、Hook/旋律主题、节奏、人声、编曲发展与收尾，形成音乐创作稿并交 Music 3 生成。正式详细分镜和参考卡以实际采用歌曲为依据；器乐作品无需歌词。
 2. 多人项目先冻结最终混剪和实际声音到角色的映射，再根据**实际采用音频**建立[音乐时间轴](references/music-timeline.md)：段落、歌词句、重要重拍、停顿及情绪转折；候选分析须听审校准。
 3. 按[MV 导演方法](references/mv-direction.md)选择声音事件，安排表演、意象、剧情与文字的响应和全曲发展；按下方路线读取对应方法，建立文字系统，与人物/环境美术并行。未核对的事件保持候选，可用于暂定样式探索，不能作为精确歌词、口型或镜内卡点的采用依据；缺口只影响依赖该事件的镜头。
-4. 把成片 Shot 映射到歌曲时间段，写明唱词、动作、运镜、文字事件及转场，再安排生成 Panel 和[视觉资产](references/visual-assets.md)。完整贴字/拼贴路线先制作或复用独立样式卡、空间卡及适用人物卡；具体歌词图与镜头构图共同设计，再制作精确首帧或绑定普通 R2V。人物视角按实际动作覆盖，不默认强制三视图。用[创作计划模板](assets/mv_plan.template.md)记录，先验证代表乐句的构图、文字和真实输入，再扩展同类镜头。
+4. 把成片 Shot 映射到歌曲时间段，写明唱词、动作、运镜、文字事件及转场，再安排生成 Panel 和[视觉资产](references/visual-assets.md)。完整贴字/拼贴路线先制作或复用独立样式卡、空间卡及人物卡；每个新建角色按[完整人物模板](assets/character_reference.template.md)生成单张16:9设定图，固定三视图与1–2张半身变化，无人物不造人物卡。具体歌词图与镜头构图共同设计，再制作精确首帧或绑定普通 R2V。用[创作计划模板](assets/mv_plan.template.md)记录，先验证代表乐句的构图、文字和真实输入，再扩展同类镜头。
 5. 对已确定的 Panel 按[生产交接](references/production-handoff.md)交给 [h3-prompt-writing](../h3-prompt-writing/SKILL.md)，将全片脚本/版本映射和逐 Panel 完整提示词保存到 Canvas，再经 [canvas-workspace](../canvas-workspace/SKILL.md)执行。MV 不另写 H3 语法或提交 Comfy 任务。
 6. 用户要求成片时，围绕主歌曲完成[后期与成片验收](references/finishing-and-review.md)：采用窗口的粗剪、准确歌词、必要音效、一次完整视听检查。
 
@@ -34,6 +35,8 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际�
 完整 MV 在视频批量扩展前，按[生产检查与结构预览](references/production-checks.md)登记当前 Panel 的歌曲窗口、脚本片段和真实图片绑定，并制作整曲结构预览。检查只阻塞有缺口的 Panel；预览占位不当作已生成素材。生产进度读取 Canvas 的实际运行与事件，渲染采用可复用的分段缓存。
 
 ## 创作路线与必读方法
+
+叙事MV可按需读[反转](../short-drama-screenwriter/references/reversal-design.md)、[喜剧](../short-drama-screenwriter/references/sitcom-writing.md)、[表演](../zero-to-story/references/performance-direction.md)、[时间效果](../zero-to-story/references/time-effects-direction.md)、[对称风格](../zero-to-story/references/symmetric-storybook-style.md)或[布局动效](../visual-design-creator/references/layout-motion-handoff.md)。保持实际歌窗口与原主责，不补商品、影视六Beat或故事蓝图。
 
 先记录用户希望获得的观看效果和所用方法。音乐曲风不等于视觉路线：流行歌曲也可使用空间歌词、拼贴或表演；Trap 等触发词不自动要求黑红色、快速硬切或全程演唱。
 

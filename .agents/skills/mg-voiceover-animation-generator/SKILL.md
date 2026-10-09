@@ -1,9 +1,13 @@
 ---
 name: mg-voiceover-animation-generator
-description: 把产品、界面、功能或抽象主题做成 MG 口播动画，处理文案、视觉系统、动效时间线、H3 创作事实和 Canvas 交接。用户要 MG、产品讲解、口播转动画或 H3 MG 时使用；数字人口播、B-roll 和泛视频提示词不触发。
+description: 把产品、界面、功能或抽象主题做成 MG 口播动画，处理文案、视觉系统、动效时间线、H3 创作事实和 Canvas 交接。用户要 MG、产品讲解、口播转动画或 H3 MG 时使用；数字人口播、B-roll和泛提示词不触发；完整广告由advertising-creator统筹，本Skill处理限定MG范围。
 ---
 
 # MG 口播动画
+
+独立MG按本流程；受完整广告委托只交指定文案/动效/Panel事实，引用ad_plan版本，不改广告策略、不重建全片计划或锁定音乐。独立非商业海报/网格动效可用无口播分支。多Shot保持批准切镜，不套Presenter固定同镜头。
+
+参考片按[变更交接](../video-deconstruct-analyzer/references/recreation-change-plan.md)记方式到当前简报，保留批准多切镜，不因“单连续 Clip”模板变单 Shot。文字逐项交给生成/后期，H3 仍由专门 Skill 定稿；最新 Canvas 用户编辑按[当前版本协调](../canvas-workspace/references/creative-handoff.md#当前版本协调)处理。
 
 遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 负责 MG 的创意方案、口播/视觉映射和单 Panel 交接；不直接操作 Canvas 数据库、ComfyUI 或视频提供方。
 
@@ -16,7 +20,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 口播动画，
 - 交给 h3-prompt-writing 的单 Panel 创作事实；
 - 方案确定后交给 canvas-workspace 的提示词、素材、模式、参数、音频/后期责任和验收重点。
 
-用户只要方案或审阅时停在文档；已确定并明确授权时才进入 Canvas。默认一个连续 Clip；只有用户要多条成片或单条时长/能力要求拆分时才建立多个 Panel。
+用户只要方案或审阅时停在文档；已确定并明确授权时才进入 Canvas。默认一条 Panel Clip，可含已批准的多个 Shot/切点，不等于单连续镜；只有用户要多条成片或单条时长/能力要求拆分时才建立多个 Panel。
 
 ## 输入判断
 
@@ -69,7 +73,7 @@ description: 把产品、界面、功能或抽象主题做成 MG 口播动画，
 
 单 Panel 事实至少包括：
 
-1. 生成规格：Panel 时长（H3 为 4–15 秒）、画幅、横竖屏、单/多 Panel、是否口播和音频来源；
+1. 生成规格：Panel时长（本MG流程采用4～15秒创作约定，非H3全局下限）、画幅、横竖屏、单/多 Panel、是否口播和音频来源；
 2. 产品/主题：真实或虚构属性、外观、功能、必须保真的元素；
 3. 视觉系统：背景、构图、层级、材质、UI/图形载体、视觉密度；
 4. 核心结构：信息流、流程、对比、中心对象、时间线或聚合等；

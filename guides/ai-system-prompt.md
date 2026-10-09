@@ -35,6 +35,8 @@ Panel 指一段独立生成的视频。它的时长、动作、提示词、必�
 
 本地 ComfyUI 离线时，共享 MCP 连接层调用 `launch_comfyui` 启动已配置安装并等待就绪，无需用户另外启动 Desktop。启动使用同一回环地址与既有模型环境；已有服务直接复用，启动超时保留启动标记，不重复创建实例。此授权不包含安装、更新、替换模型或重复提交生成。
 
+生成任务的生命周期与 ComfyUI 服务分开：任务结束只释放该执行连接，不关闭服务或主动清除模型缓存。Windows 离线启动由项目独立常驻连接持有，避免临时 MCP 会话的进程树清理连带终止服务；正常任务复用在线实例，常驻观察失败不自动重启。具体状态和恢复规则见[本机环境](local-windows.md)。
+
 Comfy 的 `VideoSubmissionGuard` 以机器级互斥覆盖提交和整个等待周期。进程丢失后，持久回执继续阻塞未知任务，直到根据原任务证据核实结束。回执以 Canvas `request_id` 标识，位于应用数据目录 `zero-to-story/video`，可由 `LFO_VIDEO_STATE` 指定。诊断用 `python -m lfo.comfy.admission`；`--reconcile REQUEST_ID` 通过 MCP `job` 只读核实原任务，不重提，也不替代画布状态核实。
 
 如果操作员确认 ComfyUI 重启等事件已使原任务失败或取消、原历史无法再查询，可用 `--operator-reconcile REQUEST_ID --provider-task-id TASK_ID --terminal-status failed|cancelled --reason "..."` 记录核实依据并解除完全匹配的回执。该路径只接受原 Canvas 请求编号和原 Comfy 任务编号，先写入应用数据目录的核实审计记录，再清除回执；它不会改变 Canvas run 状态，也不会提交新任务。`prompt_not_found`、空队列或历史缺失本身都不足以作出失败/取消判断；必须由操作员实际确认原任务终态。
@@ -55,7 +57,7 @@ Comfy 的 `VideoSubmissionGuard` 以机器级互斥覆盖提交和整个等待�
 
 有关键疑点时只对该窗口做一次局部复核；仍不清楚就保留未知。轻微且不影响用途的差异直接注明即可。默认不打分、不多模型投票、不反复自审、不写重复 QC 报告。抽帧、轨道存在、模型描述和不确定的 ASR 不能冒充实际视听证据；工具无法验证的项目如实说明。
 
-仅在下游需要精确首帧时，从已 `ACCEPT` 的实际采用视频提取真实尾帧。后期修改会产生新版本，应检查改动及受影响的接缝；旧版本结论不能替代新文件检查。最终成片完成全部后期后做一次完整视听检查：故事分镜按需读[故事视频验收](../.agents/skills/zero-to-story/references/video-qc.md)，MV 按需读[MV 后期与验收](../.agents/skills/music-video-creator/references/finishing-and-review.md)。
+仅在下游需要精确首帧时，从已 `ACCEPT` 的实际采用视频提取真实尾帧。后期修改会产生新版本，应检查改动及受影响的接缝；旧版本结论不能替代新文件检查。最终成片完成全部后期后做一次完整视听检查：故事分镜按需读[故事视频验收](../.agents/skills/zero-to-story/references/video-qc.md)，MV按需读[MV后期与验收](../.agents/skills/music-video-creator/references/finishing-and-review.md)，广告按需读[广告后期与验收](../.agents/skills/advertising-creator/references/finishing-and-review.md)。
 
 确定性编辑只处理已有授权内、执行者已核实可以删除的静音区间，保留受保护对白和句尾余量；ASR/VAD 只用于定位。编辑后核对受影响的字幕、画面、声音和同步，不为每个静音区间增加审批。
 

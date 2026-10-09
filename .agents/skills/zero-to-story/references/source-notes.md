@@ -1,5 +1,15 @@
 # 来源说明
 
+## 时间效果与广告方法
+
+2026-10-09 审查本机 bullet-time-slow-motion-video 与 plot-twist-ad-generator。采用其冻结/运动对象区分、环绕与恢复状态、产品参与因果和利益证据的通用思路，自主重写为[时间效果导演](time-effects-direction.md)及[统一广告](../../advertising-creator/SKILL.md)。本机包未发现许可文件，不复制其文字、模板、媒体、代码或工作流，不引用本机 .hub 路径作为运行依赖，也不沿用下列其他来源许可证。未引入固定资产套餐、精确速度控制、平台入口、重复审批、自动重试或免验收承诺。
+
+## 五项本机专项方法
+
+2026-10-09 审查本机 character-identity-asset-studio、micro-expression-video-generator、sitcom-story-video、wes-anderson-style-short-film-generator、reference-video-recreation-workflow。采用其通用身份设计、可见反应发展、喜剧因果/反应、对称舞台化美术与证据/变更边界思路，自主重写为项目参考；复刻证据由video-deconstruct-analyzer、喜剧写作由short-drama-screenwriter负责，通用身份已统一维护于[视觉身份方法](../../visual-design-creator/references/character-identity-design.md)，旧故事路径保留适配。微表演/时间/对称可供三个主入口按需复用，不改变主责。本机包未发现许可文件，不复制原文字库、模板、媒体、工具流程，不将以下已有 MIT/其他许可声明套用到它们。不引入固定候选、资产套餐、画幅/配色/音乐、平台入口或自动重试。
+
+源包复核后的补强仍采用按需方法：表演参考增加不同情绪和收整后余波的自编例子；喜剧复杂棚景可用空间辅助资料核对；严格角色音色连续复用项目已有声音引用。均写回现有镜头/声音交接，不迁移大词库、固定节拍、多视图套餐或强制声线生产。
+
 本目录中的动作与表演参考，是依据 [chenyk1992/manju-laoli-skill](https://github.com/chenyk1992/manju-laoli-skill) 固定版本 [`079df685f7cf2f0de635362bd359c233db38f9fe`](https://github.com/chenyk1992/manju-laoli-skill/tree/079df685f7cf2f0de635362bd359c233db38f9fe) 的导演资料所作的项目内重写。
 
 保留的思路：

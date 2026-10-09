@@ -1,5 +1,5 @@
 display-name-zh: 从零开始创作短片
-version: 0.17.0
+version: 0.19.0
 tag-en: "Visual Production / Image Generation"
 tag-cn: "视觉创作 / 图像生成"
 complete-tags-en:
@@ -8,8 +8,8 @@ complete-tags-en:
 complete-tags-cn:
   - "短剧漫剧 / 计划制定"
   - "动画 / 计划制定"
-desc-en: "Turns ideas, novels, screenplays, or short-drama handoffs into adaptation decisions, storyboard briefs, Camera Setups, six-beat semantic maps, necessary identity/visual assets, and per-Panel Canvas handoff. Control needs determine the mode and assets: R2V may use ordinary references or one self-contained storyboard board. Only the board strategy locks a rowsxcolumns layout of 2–6 cells and creates or reuses one complete image, without separate cell generation or later stitching. Each approved Panel goes to h3-prompt-writing for the full prompt, then to Canvas for one execution from a confirmed snapshot through the selected available provider. Song-driven MVs use music-video-creator."
-desc-cn: "将灵感、小说、剧本或短剧交接转成改编决策、故事板概要、Camera Setup、六 Beat 语义映射、必要身份/视觉资产与逐 Panel Canvas 交接。先按控制需求选择模式和资产：R2V 可用普通参考或单张自包含分镜板；仅分镜板策略锁定 rowsxcolumns 的 2–6 格布局，一次生成或复用整板，不逐格生成或后期拼板。每个已确认 Panel 交给 h3-prompt-writing 定稿完整提示词，再由 Canvas 确认固定快照并通过所选可用能力单次执行。歌曲驱动 MV 使用 music-video-creator。"
+desc-en: "Turns ideas, novels, screenplays, short-drama handoffs into adaptation decisions, storyboard briefs, Camera Setups, six-beat semantic maps, necessary identity/visual assets, and per-Panel Canvas handoff. Preserves narrative prop facts and reversal timing; complete ads use advertising-creator, standalone assets use visual-design-creator; directs slow motion, frozen-world or selective-freeze effects with orbit and resumption inside the planned duration, without exact speed-control APIs. Control needs determine the mode and assets: R2V may use ordinary references or one self-contained storyboard board. Only the board strategy locks a rowsxcolumns layout of 2–6 cells and creates or reuses one complete image, without separate cell generation or later stitching. Each approved Panel goes to h3-prompt-writing for the full prompt, then to Canvas for one execution from a confirmed snapshot through the selected available provider. Song-driven MVs use music-video-creator."
+desc-cn: "将灵感、小说、剧本或短剧交接转成改编决策、故事板概要、Camera Setup、六 Beat 语义映射、必要身份/视觉资产与逐 Panel Canvas 交接。完整广告由advertising-creator主责，独立静态资产由visual-design-creator处理；保留叙事道具与反转时序，在原预算内导演慢动作、世界/选择性冻结、环绕和恢复，不新增精确速度接口。先按控制需求选择模式和资产：R2V 可用普通参考或单张自包含分镜板；仅分镜板策略锁定 rowsxcolumns 的 2–6 格布局，一次生成或复用整板，不逐格生成或后期拼板。每个已确认 Panel 交给 h3-prompt-writing 定稿完整提示词，再由 Canvas 确认固定快照并通过所选可用能力单次执行。歌曲驱动 MV 使用 music-video-creator。"
 cover: ""
 author-en: "MiniMax Hub"
 author-cn: "MiniMax Hub"

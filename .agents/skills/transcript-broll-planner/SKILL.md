@@ -1,9 +1,11 @@
 ---
 name: transcript-broll-planner
-description: 将逐字稿、口播稿、数据型讲稿或知识视频脚本按语义转成可审阅 B-roll 方案，并在授权后交给 Canvas 逐 Panel 生成。适用于 B-roll 规划、口播副镜头和逐字稿驱动视频；不用于纯字幕、简单剪切、单张图片提示词或无关长篇剪辑。
+description: 将逐字稿、口播稿、数据型讲稿或知识视频脚本按语义转成可审阅 B-roll 方案，并在授权后交给 Canvas 逐 Panel 生成。适用于 B-roll 规划、口播副镜头和逐字稿驱动视频；不用于纯字幕、简单剪切、单图提示词或无关长篇剪辑；完整广告由advertising-creator统筹，本Skill只交限定副镜头。
 ---
 
 # 口播视频 B-roll 规划器
+
+独立逐字稿按本流程；受广告委托只返回指定语义/时间范围，引用ad_plan版本，不改主稿事实/广告策略或建第二份全片源。文字、时序、实际采用按[共同交接](../canvas-workspace/references/creative-handoff.md)。
 
 遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 负责逐字稿的语义拆分、镜头选择、素材缺口和 Panel 创作输入；不直接生成视频，不改口播事实，不另建执行或 QC 流程。
 
@@ -69,7 +71,7 @@ description: 将逐字稿、口播稿、数据型讲稿或知识视频脚本按�
 
 用户只要计划或审阅时，交付计划并保留可选方向。当前指令或已有计划已明确生成范围、素材、语言、风格和连续性要求时，直接准备已选 Panel 输入，不为同一内容重复确认；缺少会改变成品的事实才提问。
 
-先把语义节拍组合成用户要求的 Clip，再按 Clip 交接：一个 Clip 对应一个 Panel。用户要求连续一镜到底时，保持为一个连续 Panel；使用 H3 时该 Panel 遵守当前能力的 4–15 秒。若时长超过能力上限且无法无缝兑现，报告限制并等待用户选择，不静默切镜。提示词事实交给 [h3-prompt-writing](../h3-prompt-writing/SKILL.md)，再把最终提示词、素材、模式、参数、音频/后期责任和验收重点交给 [canvas-workspace](../canvas-workspace/SKILL.md)。保存是草稿，确认由画布按项目规则执行；本 Skill 不直接操作 ComfyUI 或提供方。独立 Panel 可先准备；有连续性依赖才等待上一条实际 ACCEPT。
+先把语义节拍组合成用户要求的 Clip，再按 Clip 交接：一个 Clip 对应一个 Panel。用户要求连续一镜到底时，保持为一个连续 Panel；本B-roll流程采用4～15秒创作约定（非H3全局下限），受托仍保留此约定；更短广告插镜由广告主责按实际能力另设计。若时长超过能力上限且无法无缝兑现，报告限制并等待用户选择，不静默切镜。提示词事实交给 [h3-prompt-writing](../h3-prompt-writing/SKILL.md)，再把最终提示词、素材、模式、参数、音频/后期责任和验收重点交给 [canvas-workspace](../canvas-workspace/SKILL.md)。保存是草稿，确认由画布按项目规则执行；本 Skill 不直接操作 ComfyUI 或提供方。独立 Panel 可先准备；有连续性依赖才等待上一条实际 ACCEPT。
 
 ### 6. 实际结果
 

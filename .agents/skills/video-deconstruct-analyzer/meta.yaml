@@ -1,21 +1,19 @@
 # GPT-6 适配变更说明：统一入口元数据与正文的路线选择；用户要求提示词时沿用指定路线，未指定则选择一个受支持路线。
 display-name-zh: 视频拆解分析师
-version: 0.3.0
+version: 0.4.0
 summary-en: "Deconstruct AI videos with dense keyframes and produce one route-specific replica prompt when the user asks for a prompt; use the selected route or choose one supported route when none is specified."
 summary-cn: "高密度拆解 AI 视频；用户要求复刻提示词时按指定路线，未指定则选择一个受支持路线"
 desc-en: "Deep AI-video deconstruction with replica prompts. Reads video metadata, builds a traceable evidence chain from dense keyframes, and outputs a structured Markdown report. When the user requests a prompt, produces one MiniMax-H3 or Seedance 2.0 branch using the selected route or one supported route chosen when unspecified; source-model inference and target routing remain separate. Uses whatever media and canvas tools are available and does not generate video itself."
-desc-cn: "AI 视频深度拆解与复刻提示词。读取视频元信息并用高密度关键帧建立可追溯证据链，输出结构化 Markdown 报告；用户要求复刻提示词时按指定路线，未指定则选择一个受支持路线，不直接生成视频。"
-tag-en: "Short Drama / Intent Brainstorming"
-tag-cn: "短剧漫剧 / 意图脑爆"
+desc-cn: "视频深度拆解与参考变更交接。对话/Skill 可选择自由改编、受控复刻或只读分析并记入当前简报；以可追溯证据区分观察、变更和未知。用户要求提示词时只交一个指定或受支持路线，不直接生成视频。"
+tag-en: "Video / Analysis"
+tag-cn: "视频 / 分析"
 complete-tags-en:
-  - "Short Drama / Intent Brainstorming"
-  - "Commercial Ad / Intent Brainstorming"
-  - "Animation / Intent Brainstorming"
+  - "Video / Reference Analysis"
+  - "Video / Change Handoff"
 complete-tags-cn:
-  - "短剧漫剧 / 意图脑爆"
-  - "商业广告 / 意图脑爆"
-  - "动画 / 意图脑爆"
+  - "视频 / 参考分析"
+  - "视频 / 变更交接"
 author-en: "MiniMax Hub"
 author-cn: "MiniMax Hub"
-source: official
+source: project-maintained
 cover: "https://cdn.hailuoai.com/hailuo-video-web/public_assets/c810a994-05ab-4b38-b793-59c10e04590d.mp4"
