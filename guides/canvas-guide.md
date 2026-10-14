@@ -24,7 +24,16 @@ Windows 新电脑先按 [Windows 使用指南](windows-setup.md)运行 `./script
 
 返回的本机地址可以用普通浏览器或宿主浏览器面板打开。默认地址为 `http://127.0.0.1:8765`；前台启动用 `serve`。项目级参数 `--project`、`--data-dir`、`--media-root`、`--port` 放在子命令前。修改后端后重启服务，修改页面后重新构建。重启不会重新提交生成。
 
-支持 MCP 的宿主可启动项目解释器，参数为 `-m lfo.canvas mcp`，工作目录为项目根。Codex 的连接示例在项目 [.codex/config.toml](../.codex/config.toml)。其他宿主使用自己的项目级连接格式，加载同一组 Skills；不复制画布数据库，也不修改项目的主会话/子代理分工。
+支持 MCP 的宿主可启动项目解释器，参数为 `-m lfo.canvas mcp`，工作目录为项目根。Codex 可在本机项目级 `.codex/config.toml` 中配置如下连接，将示例路径替换为当前电脑的实际项目路径；该文件包含机器相关路径，不随 Git 分发：
+
+```toml
+[mcp_servers.story_canvas]
+command = 'C:\path\to\zero-to-story\.venv\Scripts\python.exe'
+args = ["-m", "lfo.canvas", "mcp"]
+cwd = 'C:\path\to\zero-to-story'
+```
+
+其他宿主使用自己的项目级连接格式，加载同一组 Skills；不复制画布数据库，也不修改项目的主会话/子代理分工。
 
 没有 MCP 时仍可使用相同接口：
 

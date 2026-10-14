@@ -60,7 +60,7 @@ cd ../..
 
 按前面的快速开始步骤准备依赖并打开画布，默认地址为 `http://127.0.0.1:8765`。端口冲突时用 `./scripts/start_canvas.ps1 -Port 8766`。修改页面后重新构建，修改服务代码后重启服务。
 
-让 Agent 核实项目 Skills 已被发现、`story_canvas` MCP 已连接。连接示例在 [.codex/config.toml](.codex/config.toml)，应从项目根使用项目解释器；没有 MCP 时仍可通过项目 Python CLI 操作同一个画布。宿主要求信任项目配置或 hooks 时，由用户在宿主界面审阅，配置文件存在不代表已加载。
+让 Agent 核实项目 Skills 已被发现、`story_canvas` MCP 已连接。连接示例见[画布指南的宿主接入](guides/canvas-guide.md#启动与宿主接入)，应从项目根使用项目解释器；本机 `.codex/config.toml` 不随 Git 分发。没有 MCP 时仍可通过项目 Python CLI 操作同一个画布。宿主要求信任项目配置或 hooks 时，由用户在宿主界面审阅，配置文件存在不代表已加载。
 
 普通浏览器中的画布用于编辑、确认和查看结果，不会自行承担编剧或导演工作。完成创作到成片需要保持具有相应工具的 Agent 会话可用。
 
