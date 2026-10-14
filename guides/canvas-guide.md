@@ -166,6 +166,12 @@ Agent 的 `canvas_read(canvas_id)` 默认是目录概览，每页 50 个节点�
 
 制作进度使用只读 `GET /api/canvases/{id}/production` 或 `canvas_production_summary`：统计覆盖当前整张画布，运行数与接受数来自当前 run，阶段观察跨度来自持久事件；缺少边界保留 unknown，部分可得保留 partial，不推测 ETA。接续提示明确来自最近更新计划，不代表整张画布状态。成片片段和采用来源数仅从当前项目目录内、不超过 4 MiB 的明确编辑清单及匹配 review 推导，清单引用存于 `graph.workspace.production_summary`，必填 `edit_manifest_path` 和 `edit_manifest_sha256`，对同一字节校验再解析；不可核实时页面显示原因。
 
+精读节点会在 `production[node_id]` 附带当前 `readiness` 和 `latest_run`；接续的 review 动作包含 `run` 摘要。优先复用同次读取的结果，只有输入/版本变化或需要原始冻结证据时再读取，不另外维护人工运行状态副本。只读文件哈希按文件身份和修改信息复用，确认冻结及实际执行仍重新核实字节与采用绑定。
+
+视频结果回收后自动准备无声候选和抽样图，并完整技术解码一次；材料在原运行目录，原片不变。`outputs[].metadata.review_materials` 提供状态、清单、摘要、实测解码帧数和准备耗时，页面显示材料入口。相同原片及材料摘要可复用，材料损坏时保留旧文件并准备新版本。准备失败单独记录，生成结果与 review 不改写；技术检查及抽样均不代表内容 ACCEPT。此阶段耗时属于结果处理，不等于模型生成时间。
+
+当前接续范围保留旧方案时，可显式在旧节点填写 `data.superseded_by` 指向同类型替代节点。只有替代节点也在范围内且已 ACCEPT，旧成功运行的 REJECT/INCONCLUSIVE 才作为已处理历史完成；原 review 与文件保留，仍在执行/unknown 或有显式单元阻塞时继续阻塞。该标记不重绑下游采用来源、不生成或授予授权。
+
 新 MV 可在 `graph.workspace.mv_production` 登记逐视频节点生产关联，readiness 和 confirm 检查歌曲采用版本、相关脚本片段、模式与真实素材绑定。检查只适用于明确登记的 Panel，不升级普通视频或旧画布要求；缺口阻止当前请求创建，不自动生成或重试。结构及预览操作见[MV 生产检查](../.agents/skills/music-video-creator/references/production-checks.md)。
 
 内部 SQLite、快照、事件和临时输入位于配置的应用数据目录；媒体位于 `workspace/assets/uploads/` 与 `workspace/projects/<canvas_id>/outputs/<run_id>/`。数据库通过增量迁移保留历史请求、媒体路径和状态；旧成功记录不自动变成 `ACCEPT`。不整理或重建用户数据来完成升级。

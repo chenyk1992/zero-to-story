@@ -8,6 +8,8 @@
 
 它只从当前快照判断机械事实。以下内容仍需创作者或实际验收处理：素材画面中的人物身份、空间与表演是否正确、人物和 `(Sx)` 的身份绑定、蓝图没有记录的准确切点、复杂跨镜/合唱/复用音频对白，以及最终画面和声音是否可用。
 
+检查器不验证固定人物描述是否覆盖所有出场人物。确认前调用方仍须按[人物覆盖核对](../../zero-to-story/references/creative-assets.md#人物与场景文本锚点)检查跨镜配角/旁观者、当前造型和图文对应；`passed` 不能替代该语义检查，也不能把仅文字控制的人物判为缺角色图。缺少适用描述先补主源与草稿，不增加用户逐镜审批。
+
 当前格式依据见[基础格式](base-en.txt)和[全参考格式](ref-en.txt)。检查项的外部问题清单参考来自 [chenyk1992/manju-laoli-skill](https://github.com/chenyk1992/manju-laoli-skill) 固定版本 [`079df685f7cf2f0de635362bd359c233db38f9fe`](https://github.com/chenyk1992/manju-laoli-skill/tree/079df685f7cf2f0de635362bd359c233db38f9fe)；脚本按本项目 Canvas 契约独立实现，未移植其代码。
 
 ## 调用时机与命令

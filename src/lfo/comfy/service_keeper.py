@@ -88,7 +88,7 @@ def keep_service(
 
 
 def start_persistent_service(config: RuntimeConfig, info: dict[str, Any]) -> None:
-    """Reserve a single detached Windows launcher and wait for its ready proof."""
+    """Reserve a single windowless Windows launcher and wait for its ready proof."""
     _endpoint(config.base_url)
     _model_environment(info, config)  # Fail before reserving if the install is incomplete.
     folder = state_directory()
@@ -116,7 +116,10 @@ def start_persistent_service(config: RuntimeConfig, info: dict[str, Any]) -> Non
             process = subprocess.Popen(
                 [sys.executable, "-m", "lfo.comfy.service_keeper", "--bootstrap", str(marker)],
                 cwd=config.project_root, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                creationflags=(subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP),
+                # A venv redirector can give its real interpreter a new console
+                # when detached. A windowless console is inherited by children;
+                # DETACHED_PROCESS would disable CREATE_NO_WINDOW if combined.
+                creationflags=(subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP),
             )
     except OSError as exc:
         # No child exists, so the matching unsubmitted reservation is safe to release.

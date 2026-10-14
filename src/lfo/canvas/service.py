@@ -30,6 +30,7 @@ from lfo.canvas.graph import CanvasError, resolve_snapshot
 from lfo.canvas.media import CanvasMedia, creative_snapshot
 from lfo.canvas.mv_preflight import inspect_mv_panel, mv_metadata_fingerprint
 from lfo.canvas.production_metrics import summarize_production
+from lfo.canvas.review_materials import prepare_video_review
 from lfo.canvas.settings import CanvasSettings
 from lfo.canvas.store import CanvasStore, ContinuationRevisionError
 from lfo.canvas.views import canvas_view
@@ -109,7 +110,22 @@ class CanvasService:
         return result
 
     def read_canvas(self, canvas_id: str, **options: Any) -> dict[str, Any]:
-        return canvas_view(self.store.get_canvas(canvas_id), **options)
+        canvas = self.store.get_canvas(canvas_id)
+        result = canvas_view(canvas, **options)
+        requested = options.get("node_ids") or ([options["node_id"]] if options.get("node_id") else [])
+        if requested:
+            runs = self.store.list_runs(canvas_id)
+            latest_by_node = {run["node_id"]: run for run in sorted(
+                runs, key=lambda item: (item.get("created_at", ""), item["id"]))}
+            result["production"] = {
+                node_id: {
+                    "readiness": self._readiness(canvas, node_id, runs),
+                    "latest_run": (self._summary(latest_by_node[node_id])
+                                   if node_id in latest_by_node else None),
+                }
+                for node_id in requested
+            }
+        return result
 
     def confirm(
         self, canvas_id: str, node_id: str, version: int, request_id: str
@@ -252,6 +268,23 @@ class CanvasService:
             raise ValueError("视频输出无法读取：缺少有效时长、尺寸或编码信息")
         return dict(metadata)
 
+    def _collect_outputs(self, outputs: list[dict[str, Any]], canvas_id: str,
+                         run_id: str) -> list[dict[str, Any]]:
+        collected = self.media.collect_outputs(outputs, canvas_id, run_id)
+        for output in collected:
+            if output["kind"] != "video":
+                continue
+            started = time.perf_counter()
+            try:
+                materials = prepare_video_review(output, self.settings.output_dir(canvas_id, run_id))
+            except Exception as exc:
+                # Retain the successful provider result. Never re-submit for a QC-aid failure.
+                materials = {"status": "failed", "error": str(exc),
+                             "content_review": "NOT_REVIEWED",
+                             "elapsed_seconds": time.perf_counter() - started}
+            output.setdefault("metadata", {})["review_materials"] = materials
+        return collected
+
     def claim_agent(self, run_id: str, host_tools: list[str] | None = None) -> dict[str, Any]:
         run = self.store.get_run(run_id)
         capability = self.catalog.validate(run["snapshot"], host_tools, for_claim=True)
@@ -295,16 +328,21 @@ class CanvasService:
             if status not in {"succeeded", "failed", "unknown"}:
                 raise ValueError("只能回填成功、失败或状态未知")
             provider_task_id = self._provider_task_id(run, provider_task_id)
-            checked_outputs = (
-                self._validate_output_payload(outputs, run["snapshot"]["node_type"])
-                if status == "succeeded"
-                else None
-            )
-            collected = (
-                self.media.collect_outputs(checked_outputs, run["canvas_id"], run_id)
-                if checked_outputs is not None
-                else []
-            )
+        # Media preparation may decode a full clip. Do not hold the global
+        # confirmation lock while unrelated nodes need to submit or finish.
+        checked_outputs = (
+            self._validate_output_payload(outputs, run["snapshot"]["node_type"])
+            if status == "succeeded" else None
+        )
+        collected = (
+            self._collect_outputs(checked_outputs, run["canvas_id"], run_id)
+            if checked_outputs is not None else []
+        )
+        with self._confirm_lock:
+            current = self.store.get_run(run_id)
+            if current["status"] != "running" or current.get("owner_token") != owner_token:
+                raise CanvasError("媒体准备期间任务状态或接手方已改变", code="run_conflict", status=409)
+            provider_task_id = self._provider_task_id(current, provider_task_id)
             updated = self.store.update_run(
                 run_id,
                 status=status,
@@ -389,7 +427,7 @@ class CanvasService:
             else None
         )
         collected = (
-            self.media.collect_outputs(checked_outputs, run["canvas_id"], run_id)
+            self._collect_outputs(checked_outputs, run["canvas_id"], run_id)
             if checked_outputs is not None
             else None
         )
@@ -417,7 +455,10 @@ class CanvasService:
             self._changes.notify_all()
 
     def run_summary(self, run_id: str) -> dict[str, Any]:
-        run = self._public_run(self.store.get_run(run_id))
+        return self._summary(self.store.get_run(run_id))
+
+    @staticmethod
+    def _summary(run: Mapping[str, Any]) -> dict[str, Any]:
         return {
             key: run.get(key)
             for key in (
@@ -441,8 +482,11 @@ class CanvasService:
     def readiness(self, canvas_id: str, node_id: str) -> dict[str, Any]:
         """Check a draft's dependencies without freezing, claiming or generating."""
         canvas = self.store.get_canvas(canvas_id)
+        return self._readiness(canvas, node_id, self.store.list_runs(canvas_id))
+
+    def _readiness(self, canvas: dict[str, Any], node_id: str,
+                   runs: list[dict[str, Any]]) -> dict[str, Any]:
         try:
-            runs = self.store.list_runs(canvas_id)
             if any(
                 run["node_id"] == node_id
                 and run["status"]
@@ -464,7 +508,7 @@ class CanvasService:
                         inspect(item)
                 elif isinstance(value, dict):
                     if "path" in value and "kind" in value:
-                        self.media.validate_input(value)
+                        self.media.validate_input(value, cached=True)
                     else:
                         for item in value.values():
                             inspect(item)
@@ -536,17 +580,23 @@ class CanvasService:
     # ------------------------------------------------------------------
     # Opt-in continuation hand-off
     # ------------------------------------------------------------------
-    def _continuation_summary(self, plan: Mapping[str, Any]) -> dict[str, Any]:
+    def _continuation_summary(self, plan: Mapping[str, Any], *,
+                              canvas: dict[str, Any] | None = None) -> dict[str, Any]:
         """Build a bounded, read-only summary for one persisted plan."""
 
-        canvas = self.store.get_canvas(str(plan["canvas_id"]))
+        canvas = canvas if canvas is not None else self.store.get_canvas(str(plan["canvas_id"]))
         runs = self.store.list_runs(str(plan["canvas_id"]))
-        return build_continuation_summary(
+        summary = build_continuation_summary(
             plan,
             canvas,
             runs,
-            lambda node_id: self.readiness(str(plan["canvas_id"]), node_id),
+            lambda node_id: self._readiness(canvas, node_id, runs),
         )
+        by_id = {run["id"]: run for run in runs}
+        for action in summary["actions"]:
+            if action.get("type") == "review" and action.get("run_id") in by_id:
+                action["run"] = self._summary(by_id[action["run_id"]])
+        return summary
 
     def _continuation_payload(self, plan: Mapping[str, Any]) -> dict[str, Any]:
         """Return the shared public plan plus its current read-only check."""
@@ -632,7 +682,7 @@ class CanvasService:
             }
             if plans:
                 plan = plans[0]
-                summary = self._continuation_summary(plan)
+                summary = self._continuation_summary(plan, canvas=canvas)
                 counts: dict[str, int] = {}
                 for record in summary["nodes"]:
                     state = record["state"]
@@ -1110,7 +1160,7 @@ class CanvasService:
                 checked_outputs = self._validate_output_payload(
                     result.get("outputs", []), run["snapshot"]["node_type"]
                 )
-                outputs = self.media.collect_outputs(checked_outputs, run["canvas_id"], run["id"])
+                outputs = self._collect_outputs(checked_outputs, run["canvas_id"], run["id"])
                 self.store.update_run(
                     run["id"],
                     status="succeeded",

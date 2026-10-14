@@ -14,6 +14,12 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 
 查看原运行使用 `python -m lfo.canvas call GET /api/runs/<run_id>`；修改提示词使用版本化 `edit` 的 `update_node` 操作，不再复制章节专用提交脚本。审片辅助使用 `scripts/qc_video.py <video> <新的输出目录>` 提取抽样帧和响度；它不作内容判断，不记录 ACCEPT，不提取接力尾帧。
 
+精读节点响应的 `production` 已包含目标节点 readiness 和最新运行摘要；`canvas_next` 的 review 动作也带 `run` 摘要和实际输出，可直接使用，只有需要冻结快照/原始证据时再读完整 run。每次接续只以 Canvas 当前结果为状态来源，不手工同步另一份运行状态。只读素材核对复用文件身份、大小、修改/变更时间相同的哈希结果；确认冻结和实际执行仍对字节重新核实，不用缓存 readiness 代替授权或采用检查。
+
+视频完成后的输出 `metadata.review_materials` 给出自动准备结果：`status=ready` 时有 `manifest_path`、原片摘要、`decoded_frames`、`elapsed_seconds` 和 `artifacts.silent_video/contact_sheet` 的路径及摘要；无声候选只复制视频流，原片和音轨保留。原片与材料摘要都未变时复用已有结果。`status=failed` 仅表示材料准备失败，原生成成功与内容 review 不改写，不重新提交提供方；`NOT_REVIEWED` 必须通过实际观看/人类反馈另行验收。抽样图不冒充连续动作证据。
+
+旧节点可显式保存 `data.superseded_by=<新节点id>`，供接续摘要识别已处理历史候选。只有旧 run 已成功且 review 为 REJECT/INCONCLUSIVE、范围内同类型替代节点已 ACCEPT、且无显式执行单元阻塞时，旧候选标为完成并保留替代说明；不删除历史、不修改旧 review、不重绑下游引用，也不跳过 running/unknown。下游采用仍按原来源端口与实际文件核对。
+
 已 ACCEPT 的视频需要下一镜首帧时，从项目根运行：
 
 ```powershell

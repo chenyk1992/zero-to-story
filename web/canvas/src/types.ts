@@ -160,6 +160,14 @@ export interface RunOutput {
     sample_rate?: number;
     channels?: number;
     tempo?: number;
+    review_materials?: {
+      status: 'ready' | 'failed';
+      content_review: string;
+      decoded_frames?: number;
+      elapsed_seconds?: number;
+      error?: string;
+      artifacts?: Record<string, { path: string; sha256: string }>;
+    };
   };
 }
 

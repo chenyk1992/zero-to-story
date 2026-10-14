@@ -201,6 +201,20 @@ def build_continuation_summary(
         # not turn an already ACCEPTed run back into review work.  For every
         # other successful result, the explicit blocker wins so the same node
         # is not offered a fresh review/prepare/execute action.
+        replacement_id = node.get("data", {}).get("superseded_by") if node else None
+        replacement = _latest_run([run for run in run_list if run.get("node_id") == replacement_id])
+        if (latest is not None and latest.get("status") == "succeeded"
+                and _review_decision(latest.get("review")) in {"REJECT", "INCONCLUSIVE"}
+                and explicit_block is None and replacement_id in node_ids
+                and replacement_id != node_id and replacement is not None
+                and replacement_id in graph_nodes
+                and graph_nodes[replacement_id]["type"] == node["type"]
+                and replacement.get("status") == "succeeded"
+                and _review_decision(replacement.get("review")) == "ACCEPT"):
+            record.update(state="complete", superseded_by=replacement_id,
+                          reason="已明确由范围内通过 ACCEPT 的新方案替代；原运行与审查保留")
+            node_records.append(record)
+            continue
         if latest is not None and latest.get("status") == "succeeded":
             decision = _review_decision(latest.get("review"))
             if decision == "ACCEPT":

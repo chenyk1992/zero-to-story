@@ -41,7 +41,7 @@ must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事�
 
 ## 编译顺序
 
-1. 从原文建立 source.conflicts，先解决人物、版本、道具和结尾等歧义。
+1. 从原文建立 source.conflicts，先解决人物、版本、道具和结尾等歧义。拆镜前按[固定人物文字](creative-assets.md#人物与场景文本锚点)建立当前主源角色条目与出现范围，包括跨镜配角/旁观者；`scenes.cast` 保留有关人物 ID，`critical_characters` 包含当前镜头必须正确识别或承担关键动作的人物，不等同“主演名单”。固定描述及英文表达仍在主源，不另造蓝图角色 schema；状态字段只记录当前事实变化。无人空镜不补人物。
 2. 列出观众必须获得的信息，给每个 coverage 事件写可见证据、before_state 和 after_state。
 3. 先按因果链填写 scenes，再拆 panels 和 Camera Setup；Panel 边界写唯一的 transition ownership。
 4. 根据真实首帧/尾帧和参考控制需要选择 operation，再选择 visual_asset_policy；分镜板不能反向决定 R2V。
@@ -67,6 +67,8 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 明确选择分镜板或有用途的普通参考，`first_frame_source` / `last_frame_source` 为 `null`。本地 R2V 可另用 `first_frame_guide_source` 提供首帧引导，不接尾帧，也不承诺像素级首帧锁。
 
 预检不做最终视频评分，不计算对白关键路径、不要求形容词计数，也不生成候选片、恢复记录或独立锁文件。
+
+静态预检不证明每个出场人物的固定文字已进入提示词，也不判断图文身份相符。主会话在[Panel 交接](panel-execution.md)完成逐人人物覆盖核对；蓝图通过不能跳过该步骤，文本控制角色也不因没有图片而判缺资产。
 
 ## `generation.panel_plans`
 

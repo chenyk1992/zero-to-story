@@ -38,7 +38,7 @@ def create_mcp(settings: CanvasSettings):
         canvas_id: str | None = None, node_id: str | None = None, node_ids: list[str] | None = None,
         view: str = "overview", limit: int = 50, offset: int = 0, expected_version: int | None = None,
     ) -> dict[str, Any]:
-        """默认读分页目录，无长提示词。node_id/node_ids精读目标和直接上游（最多20个目标）；view=full显式读取全图。后续目录分页带expected_version。"""
+        """默认读分页目录。node_id/node_ids精读目标和直接上游（最多20个目标），并返回production中的readiness及最新run摘要；无需重复逐项读取。view=full显式读全图。后续分页带expected_version。"""
         path = f"/api/canvases/{canvas_id}" if canvas_id else "/api/canvases"
         if not canvas_id:
             return client.request("GET", path)

@@ -1034,3 +1034,4 @@
 .inspector-inline .node-task-records > .snapshot-toggle small { overflow: hidden; max-width: 60%; text-overflow: ellipsis; }
 .inspector-inline .node-task-body { padding: 0 1px 5px; }
 .inspector-inline .node-task-body .snapshot-details { padding-top: 0; }
+.review-materials a { display: inline-block; margin: 0 14px 6px 0; color: var(--accent); font-size: 12px; }

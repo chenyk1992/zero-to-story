@@ -484,6 +484,26 @@ describe('Inspector editing behavior', () => {
     expect(events.onOpenPreview).toHaveBeenCalledWith(run);
   });
 
+  it('shows prepared review aids without treating them as content acceptance or submitting a task', async () => {
+    const node = makeVideo();
+    const run: Run = {
+      id: 'ready-materials', node_id: node.id, status: 'succeeded',
+      snapshot: { node_id: node.id, node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: node.data.prompt, parameters: {}, inputs: {} },
+      outputs: [{ path: '/workspace/outputs/run/original.mp4', kind: 'video', metadata: { duration_ms: 1000,
+        review_materials: { status: 'ready', content_review: 'NOT_REVIEWED', artifacts: {
+          silent_video: { path: '/workspace/outputs/run/review/silent.mp4', sha256: 'silent-hash' },
+          contact_sheet: { path: '/workspace/outputs/run/review/contact.jpg', sha256: 'sheet-hash' },
+        } },
+      } }],
+    };
+    const events = await renderInspector(node, [capability()], [run]);
+    expect(container.querySelector('.review-materials')?.textContent).toContain('内容仍需实际观看确认');
+    expect(container.querySelector('.review-materials a')?.getAttribute('href')).toContain('silent.mp4');
+    expect(container.querySelectorAll('.review-materials a')).toHaveLength(2);
+    expect(events.onExecute).not.toHaveBeenCalled();
+    expect(events.onUpdate).not.toHaveBeenCalled();
+  });
+
   it('uses an ACCEPTed derived file as current output and keeps the generated file available in history', async () => {
     const node = makeVideo();
     const run: Run = {

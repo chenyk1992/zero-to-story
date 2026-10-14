@@ -643,6 +643,7 @@ function OutputPreview({ output, title, status, help, onOpen, sectionRef }: { ou
   const isImage = output.kind.startsWith('image') || /\.(png|jpe?g|webp|gif)$/i.test(output.path);
   const isAudio = output.kind.startsWith('audio') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(output.path);
   const durationMs = output.metadata?.duration_ms ?? (measuredDuration?.path === output.path ? measuredDuration.durationMs : undefined);
+  const materials = output.metadata?.review_materials;
   return (
     <section ref={sectionRef} className="preview-section">
       <div className="section-title"><h3><Icon name={isImage ? 'image' : isAudio ? 'audio' : 'film'} size={15} />{title}</h3><span className="success-badge">{status}</span></div>
@@ -653,6 +654,12 @@ function OutputPreview({ output, title, status, help, onOpen, sectionRef }: { ou
       <p className="field-help">{help}</p>
       {!isImage && typeof durationMs === 'number' && <p className="field-help">实际时长 {(durationMs / 1000).toFixed(2)} 秒</p>}
       {isImage && output.metadata?.width && output.metadata?.height && <p className="field-help">实际尺寸 {output.metadata.width} × {output.metadata.height}{output.metadata.has_transparency ? ' · 含透明区域' : ''}{output.metadata.steps ? ` · ${output.metadata.steps} 步` : ''}</p>}
+      {materials?.status === 'ready' && <div className="review-materials">
+        <p className="field-help">待审材料已就绪 · 内容仍需实际观看确认</p>
+        {materials.artifacts?.silent_video && <a href={mediaUrl(materials.artifacts.silent_video.path)} target="_blank" rel="noreferrer">打开无声候选</a>}
+        {materials.artifacts?.contact_sheet && <a href={mediaUrl(materials.artifacts.contact_sheet.path)} target="_blank" rel="noreferrer">查看抽样图</a>}
+      </div>}
+      {materials?.status === 'failed' && <p className="field-help">待审材料准备未完成，原片已保留，可直接播放原片检查。</p>}
     </section>
   );
 }

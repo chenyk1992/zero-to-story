@@ -6,6 +6,8 @@
 - **I2VA**: T2VA body + first-frame instruction + a visual path that develops forward from the first frame.
 - **FL2VA**: T2VA body + first-and-last-frame instruction + a continuous path from the first frame to the last frame.
 
+For every character requiring continuity, including supporting characters, bystanders and back views, reuse the upstream fixed identity and current-look wording relevant to this shot. T2VA establishes appearance through those words; I2VA/FL2VA retain concise identifying traits consistent with the actual frame(s), without redesigning the depicted person or forcing a face reveal. Keep temporary poses, held objects and entrance/exit progress in shot actions, not in the fixed identity. Use the project SKILL's cross-mode character guidance; do not invent missing character images or silently replace conflicting visual facts.
+
 ## 2. Final Prompt Structure
 
 ### 2.1 Part One Is the Instruction
@@ -145,6 +147,8 @@ A red neon sign reading "营业中" glows above the doorway.
 ### 4.6 overall_soundscape
 
 Use 1–4 English sentences in one continuous paragraph to summarize the ambient sound, physical action sounds, and non-verbal human sounds across the full video, such as wind, rain, traffic, footsteps, fabric movement, impacts, breathing, laughter, or panting. Dialogue, singing, and diegetic music already belong in the multimodal description and should not be repeated here. Use `N/A` only when the user explicitly requests complete silence throughout the video.
+
+These are possible sound sources, not a checklist. Ordinary conversational breathing need not become an audible event. Include prominent breathing, sighs, or panting only with an established purpose and audibility; retain their planned trigger, intensity, and scope in the shot description rather than implying they continue throughout the scene. Preserve explicitly chosen breathy voices and meaningful pauses. Do not add non-verbal sounds merely to make acting seem natural.
 
 ```text
 overall_soundscape: Steady rain taps against the café windows while low room ambience continues underneath. The entrance bell rings once, followed by wet footsteps and the soft scrape of a chair.

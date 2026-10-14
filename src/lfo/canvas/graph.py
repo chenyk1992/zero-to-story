@@ -420,7 +420,7 @@ def resolve_input_bindings(
 
 
 def _validate_node_data(data: Mapping[str, Any], index: int, node_type: str) -> None:
-    for field in ("label", "prompt", "provider", "model", "mode"):
+    for field in ("label", "prompt", "provider", "model", "mode", "superseded_by"):
         if field in data and data[field] is not None and not isinstance(data[field], str):
             raise GraphValidationError(
                 f"nodes[{index}].data.{field} must be a string", code="node_data_field_type"

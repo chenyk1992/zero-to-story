@@ -9,6 +9,33 @@ from lfo.canvas.media import CanvasMedia
 from lfo.canvas.settings import CanvasSettings
 
 
+def test_read_only_parent_checks_are_cached_but_confirmation_rehashes(tmp_path, monkeypatch):
+    media = CanvasMedia(CanvasSettings(tmp_path, tmp_path / "state", tmp_path / "media"))
+    frame = media.settings.media_root / "frame.png"
+    frame.parent.mkdir(parents=True)
+    frame.write_bytes(b"frame")
+    parent = frame.with_name("parent.mp4")
+    parent.write_bytes(b"parent")
+    value = {"path": str(frame), "kind": "image", "sha256": hashlib.sha256(frame.read_bytes()).hexdigest(),
+             "accepted_source": {"output_path": str(parent),
+                                 "output_sha256": hashlib.sha256(parent.read_bytes()).hexdigest()}}
+    original = hashlib.file_digest
+    calls = []
+    def count(stream, algorithm):
+        calls.append(stream.name)
+        return original(stream, algorithm)
+    monkeypatch.setattr(hashlib, "file_digest", count)
+    for _ in range(30):
+        assert media.inputs_unchanged({"inputs": {"first_frame": value}})
+    assert len(calls) == 2
+    media.freeze({"inputs": {"first_frame": value}}, "confirmed")
+    assert len(calls) == 3  # validate_input rehashes accepted parent, freeze copies/hashes frame
+    parent.write_bytes(b"changed parent")
+    assert not media.inputs_unchanged({"inputs": {"first_frame": value}})
+    with pytest.raises(ValueError, match="来源发生变化"):
+        media.freeze({"inputs": {"first_frame": value}}, "next")
+
+
 @pytest.mark.parametrize("changed", ["frame", "parent"])
 def test_accepted_derived_input_checks_frame_and_actual_parent(tmp_path, changed):
     media = CanvasMedia(CanvasSettings(tmp_path, tmp_path / "state", tmp_path / "media"))

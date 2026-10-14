@@ -50,7 +50,7 @@ def service(tmp_path: Path):
 def _ready(instance: CanvasService) -> None:
     # The continuation check is meant to reuse the existing read-only
     # readiness result; these tests focus on the continuation state machine.
-    instance.readiness = lambda _canvas_id, _node_id: {"ready": True}  # type: ignore[method-assign]
+    instance._readiness = lambda _canvas, _node_id, _runs: {"ready": True}  # type: ignore[method-assign]
 
 
 def _configure(
@@ -101,8 +101,8 @@ def test_next_work_wait_wakes_on_completion_without_polling_full_canvas(service)
     run = service.store.create_run(canvas["id"], "a", canvas["version"], "request", {"node_id": "a", "node_type": "image"}, status="running")
     started = threading.Event()
     original = service._continuation_summary
-    def observe(plan):
-        summary = original(plan)
+    def observe(plan, **kwargs):
+        summary = original(plan, **kwargs)
         started.set()
         return summary
     service._continuation_summary = observe
@@ -139,8 +139,8 @@ def test_next_work_wait_wakes_when_user_pauses_scope(service):
     service.store.create_run(canvas["id"], "a", canvas["version"], "request", {"node_id": "a", "node_type": "image"}, status="running")
     started = threading.Event()
     original = service._continuation_summary
-    def observe(plan):
-        summary = original(plan)
+    def observe(plan, **kwargs):
+        summary = original(plan, **kwargs)
         started.set()
         return summary
     service._continuation_summary = observe

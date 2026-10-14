@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -121,7 +123,7 @@ def test_pending_start_reservation_blocks_duplicate_spawn(monkeypatch, tmp_path)
         keeper.start_persistent_service(RuntimeConfig(), {"workspace": {"path": str(tmp_path)}})
 
 
-def test_detached_launch_and_timeout_keep_original_reservation(monkeypatch, tmp_path):
+def test_windowless_launch_and_timeout_keep_original_reservation(monkeypatch, tmp_path):
     from types import SimpleNamespace
 
     monkeypatch.setattr(keeper, "state_directory", lambda: tmp_path)
@@ -139,6 +141,44 @@ def test_detached_launch_and_timeout_keep_original_reservation(monkeypatch, tmp_
         keeper.start_persistent_service(RuntimeConfig(), {"workspace": {"path": str(tmp_path)}})
     assert (tmp_path / "startup.json").exists()
     flags = spawned[0][1]["creationflags"]
-    assert flags & keeper.subprocess.DETACHED_PROCESS
+    assert flags & keeper.subprocess.CREATE_NO_WINDOW
+    assert not flags & keeper.subprocess.DETACHED_PROCESS
     assert flags & keeper.subprocess.CREATE_NEW_PROCESS_GROUP
+    assert spawned[0][1]["stdin"] == keeper.subprocess.DEVNULL
+    assert spawned[0][1]["stdout"].name.endswith(".log")
+    assert spawned[0][1]["stderr"] is spawned[0][1]["stdout"]
     assert "--bootstrap" in spawned[0][0]
+
+
+@pytest.mark.skipif(keeper.os.name != "nt", reason="Windows venv console inheritance")
+def test_windowless_venv_interpreter_and_child_have_no_console(tmp_path):
+    interpreter = Path(__file__).resolve().parents[1] / ".venv" / "Scripts" / "python.exe"
+    if not interpreter.is_file():
+        pytest.skip("Project Windows venv interpreter is unavailable")
+    console_probe = (
+        "import ctypes,json; "
+        "get_console=ctypes.windll.kernel32.GetConsoleWindow; "
+        "get_console.restype=ctypes.c_void_p; "
+        "print(json.dumps({'console':get_console() or 0}))"
+    )
+    launcher_probe = (
+        "import ctypes,json,subprocess,sys; "
+        "get_console=ctypes.windll.kernel32.GetConsoleWindow; "
+        "get_console.restype=ctypes.c_void_p; "
+        f"child=subprocess.run([sys.executable,'-c',{console_probe!r}],"
+        "capture_output=True,text=True,check=True,timeout=15); "
+        "print(json.dumps({'console':get_console() or 0,'child':json.loads(child.stdout)}))"
+    )
+    result = subprocess.run(
+        [str(interpreter), "-c", launcher_probe],
+        cwd=tmp_path,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+    )
+    observed = json.loads(result.stdout)
+    assert observed["console"] == 0
+    assert observed["child"]["console"] == 0

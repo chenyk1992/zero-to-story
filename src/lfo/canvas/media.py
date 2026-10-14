@@ -6,6 +6,7 @@ import copy
 import hashlib
 import re
 import shutil
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -42,7 +43,29 @@ def media_kind(path: Path) -> str:
 class CanvasMedia:
     def __init__(self, settings: CanvasSettings) -> None:
         self.settings = settings
-        self._digests: dict[str, tuple[int, int, str]] = {}
+        self._digests: dict[str, tuple[tuple[int, ...], str]] = {}
+        self._digest_lock = threading.Lock()
+
+    def _cached_digest(self, path: Path) -> str:
+        """Reuse read-only checks; confirmation still hashes the actual bytes."""
+        with self._digest_lock:
+            before = path.stat()
+            fingerprint = (before.st_dev, before.st_ino, before.st_size,
+                           before.st_mtime_ns, before.st_ctime_ns)
+            key = str(path)
+            cached = self._digests.get(key)
+            if cached is not None and cached[0] == fingerprint:
+                return cached[1]
+            with path.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            after = path.stat()
+            if fingerprint != (after.st_dev, after.st_ino, after.st_size,
+                               after.st_mtime_ns, after.st_ctime_ns):
+                raise ValueError("素材在检查期间发生变化")
+            if len(self._digests) >= 256:
+                self._digests.pop(next(iter(self._digests)))
+            self._digests[key] = (fingerprint, digest)
+            return digest
 
     def resolve(self, value: str, *, external: bool = False) -> Path:
         path = Path(value).expanduser()
@@ -78,7 +101,7 @@ class CanvasMedia:
     def asset(path: Path, name: str | None = None) -> dict[str, str]:
         return {"path": str(path.resolve()), "kind": media_kind(path), "name": name or path.name}
 
-    def validate_input(self, value: dict[str, Any]) -> Path:
+    def validate_input(self, value: dict[str, Any], *, cached: bool = False) -> Path:
         """Resolve an input and verify any explicit production acceptance binding."""
         path = self.resolve(value["path"])
         if media_kind(path) != value["kind"]:
@@ -91,9 +114,13 @@ class CanvasMedia:
             )
         for source, digest in checks:
             if digest:
-                with source.open("rb") as stream:
-                    if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
-                        raise ValueError("已采用素材或其来源发生变化，请重新核实")
+                if cached:
+                    actual = self._cached_digest(source)
+                else:
+                    with source.open("rb") as stream:
+                        actual = hashlib.file_digest(stream, "sha256").hexdigest()
+                if actual != digest:
+                    raise ValueError("已采用素材或其来源发生变化，请重新核实")
         return path
 
     def freeze(self, snapshot: dict[str, Any], request_id: str) -> dict[str, Any]:
@@ -180,19 +207,9 @@ class CanvasMedia:
                 if "sha256" in value and "path" in value:
                     try:
                         if value.get("accepted_source"):
-                            self.validate_input(value)
+                            self.validate_input(value, cached=True)
                         path = self.resolve(value["path"])
-                        stat = path.stat()
-                        key = str(path)
-                        cached = self._digests.get(key)
-                        if cached is None or cached[:2] != (stat.st_size, stat.st_mtime_ns):
-                            with path.open("rb") as stream:
-                                digest = hashlib.file_digest(stream, "sha256").hexdigest()
-                            cached = (stat.st_size, stat.st_mtime_ns, digest)
-                            if len(self._digests) >= 256:
-                                self._digests.pop(next(iter(self._digests)))
-                            self._digests[key] = cached
-                        return cached[2] == value["sha256"]
+                        return self._cached_digest(path) == value["sha256"]
                     except (OSError, ValueError):
                         return False
                 return all(visit(item) for item in value.values())

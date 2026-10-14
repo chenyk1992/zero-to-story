@@ -22,7 +22,7 @@
 
 真实素材→实际端口→解析零基槽位→H3一基标签依次核对。商品不固定Picture1，规划九格不自动传入，related只资料。t2v无媒体；i2v仅first_frame；fl2v实际首尾图；r2v至少一种参考、可另首帧、无尾帧、最多9图/3视频/3音频。普通r2v frame_zero_video_guide关闭/省略，不能把源片默认作为前缀。
 
-本地H3当前0.2～15秒、24fps，短插镜按可读性/实际能力；影视4秒下限不套广告。provider/model/mode、duration/aspect_ratio/megapixels及options里的sampler_profile/steps按当前capability与已选规格继承，vdn_turbo的8步等条件不猜。不切镜30秒/仅尾帧等冲突说明缺口，不自行拆分、改模式/提供方。
+本地H3当前0.2～15秒、24fps，短插镜按可读性/实际能力；影视4秒下限不套广告。provider/model/mode、duration/aspect_ratio/megapixels及options里的sampler_profile/steps按当前capability与广告入口记录的本次已选规格继承，并保留用户确认依据；已有参数但依据不明时先核对，vdn_turbo的8步等条件不猜。不切镜30秒/仅尾帧等冲突说明缺口，不自行拆分、改模式/提供方。
 
 依赖同镜末态用固定ACCEPT源run与真实尾帧；独立镜头不等待全片资产。目标海报为r2v参考不保证精确末帧，主格全屏开场不能用整板冒充第0帧。
 

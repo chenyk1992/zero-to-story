@@ -2,7 +2,7 @@
 
 影视与广告的角色设定图使用本模板；MV 的[人物参考模板](../../music-video-creator/assets/character_reference.template.md)保持相同展示规格，只适配人物描述来源。通用身份方法见[身份设计](../../visual-design-creator/references/character-identity-design.md)。
 
-为每个新建角色单独生成 1 张横版 16:9 角色设定图，记录完整外观。后续采用黑白分镜时，可从中提取最小轮廓符号；设定图本身遵守已定的 Style Brief 与 Medium Lock，不因此改成黑白。图片能力（image agent）仍通过 Canvas 已确认请求执行，见[共享生产规则](../../../../guides/ai-system-prompt.md)。
+仅在用户要求或当前资产计划确定需要完整角色设定图时使用本模板，新增角色条目不自动生图。为选定角色单独生成 1 张横版 16:9 角色设定图，记录完整外观。后续采用黑白分镜时，可从中提取最小轮廓符号；设定图本身遵守已定的 Style Brief 与 Medium Lock，不因此改成黑白。图片能力（image agent）仍通过 Canvas 已确认请求执行，见[共享生产规则](../../../../guides/ai-system-prompt.md)。
 
 ## Prompt 模板
 
