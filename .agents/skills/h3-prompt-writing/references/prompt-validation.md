@@ -12,6 +12,16 @@
 
 当前格式依据见[基础格式](base-en.txt)和[全参考格式](ref-en.txt)。检查项的外部问题清单参考来自 [chenyk1992/manju-laoli-skill](https://github.com/chenyk1992/manju-laoli-skill) 固定版本 [`079df685f7cf2f0de635362bd359c233db38f9fe`](https://github.com/chenyk1992/manju-laoli-skill/tree/079df685f7cf2f0de635362bd359c233db38f9fe)；脚本按本项目 Canvas 契约独立实现，未移植其代码。
 
+## 检查方式分级（M / S / H）
+
+| 级 | 含义 | 谁做 | 例 |
+| --- | --- | --- | --- |
+| **M** 机器可判 | 结构、计数、集合、时序 | `h3_prompt_lint` / 蓝图预检 | 字段顺序、Shot 切点、槽位编号、对白逐字、CONT-* |
+| **S** 需语义判断 | 含义、身份、表演是否成立 | 调用方（Agent/导演） | 人物覆盖、说话人是否对脸、动作是否演得出 |
+| **H** 需人看/听 | 感官质量与采用决策 | 用户或指定审片人 | 脸是否像、口型、BGM 是否刺、最终 ACCEPT |
+
+**铁律：** 不得用 M 的证据冒充 S/H 已完成。`passed` 只代表 M 层无错且无相关 `unverified`。
+
 ## 调用时机与命令
 
 调用方先保存当前 Panel 的草稿，再使用其 Canvas ID、视频节点 ID 和刚读到的版本号运行：

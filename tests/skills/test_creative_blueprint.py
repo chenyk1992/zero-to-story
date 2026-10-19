@@ -611,3 +611,159 @@ def test_storyboard_board_rejects_multiple_board_keys() -> None:
     messages = "\n".join(issue.format() for issue in issues)
 
     assert "must contain exactly one current-Panel storyboard_board.P001 key" in messages
+
+
+def test_dialogue_capacity_passes_at_measured_normal_rate() -> None:
+    blueprint = _valid_blueprint()
+    # ~3.5 chars/s is inside the project-measured band (2.9–4.0).
+    blueprint["dialogue"][0]["text"] = "一二三四五六七八九十十一十二十三十四"
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "dialogue load" not in messages
+
+
+def test_dialogue_capacity_warns_when_speech_is_tight() -> None:
+    blueprint = _valid_blueprint()
+    # 8s panel: 5.5 chars/s * 8 = 44 chars threshold.
+    blueprint["dialogue"][0]["text"] = "甲" * 45
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "dialogue load" in messages
+    assert "tight for pauses" in messages
+    assert "clearly cannot fit" not in messages
+
+
+def test_dialogue_capacity_fails_when_clearly_overloaded() -> None:
+    blueprint = _valid_blueprint()
+    # 8s panel: 7 chars/s * 8 = 56 chars fail threshold.
+    blueprint["dialogue"][0]["text"] = "乙" * 57
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "clearly cannot fit" in messages
+
+
+def test_cont_id_rejects_character_outside_scene_cast() -> None:
+    blueprint = _valid_blueprint()
+    blueprint["generation"]["shots"][0]["critical_characters"] = ["ghost"]
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "CONT-ID" in messages
+    assert "ghost" in messages
+
+
+def test_cont_id_rejects_speaker_missing_from_critical_characters() -> None:
+    blueprint = _valid_blueprint()
+    blueprint["dialogue"][0]["speaker"] = "teacher"
+    blueprint["generation"]["shots"][0]["critical_characters"] = ["student"]
+    issues = MODULE.validate_blueprint(blueprint)
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "CONT-ID" in messages
+    assert "teacher" in messages
+
+
+def test_cont_cast_silent_exit_requires_bridge() -> None:
+    issues: list[Any] = []
+    MODULE._validate_character_continuity(
+        scene_by_id={"S1": {"cast": ["alice", "bob"]}},
+        panels=[
+            {
+                "id": "P1",
+                "order": 1,
+                "scene_id": "S1",
+                "transition_to_next": {"ownership": "next", "bridge": ""},
+            },
+            {"id": "P2", "order": 2, "scene_id": "S1", "transition_to_next": None},
+        ],
+        shots=[
+            {
+                "id": "C1",
+                "panel_id": "P1",
+                "scene_id": "S1",
+                "critical_characters": ["alice", "bob"],
+            },
+            {
+                "id": "C2",
+                "panel_id": "P2",
+                "scene_id": "S1",
+                "critical_characters": ["alice"],
+            },
+        ],
+        dialogue=[],
+        issues=issues,
+    )
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "CONT-CAST-1" in messages
+    assert "bob" in messages
+
+
+def test_cont_cast_silent_entry_requires_bridge() -> None:
+    issues: list[Any] = []
+    MODULE._validate_character_continuity(
+        scene_by_id={"S1": {"cast": ["alice", "bob"]}},
+        panels=[
+            {
+                "id": "P1",
+                "order": 1,
+                "scene_id": "S1",
+                "transition_to_next": {"ownership": "next", "bridge": ""},
+            },
+            {"id": "P2", "order": 2, "scene_id": "S1", "transition_to_next": None},
+        ],
+        shots=[
+            {
+                "id": "C1",
+                "panel_id": "P1",
+                "scene_id": "S1",
+                "critical_characters": ["alice"],
+            },
+            {
+                "id": "C2",
+                "panel_id": "P2",
+                "scene_id": "S1",
+                "critical_characters": ["alice", "bob"],
+            },
+        ],
+        dialogue=[],
+        issues=issues,
+    )
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "CONT-CAST-2" in messages
+    assert "bob" in messages
+
+
+def test_cont_cast_allows_explained_exit_with_bridge() -> None:
+    issues: list[Any] = []
+    MODULE._validate_character_continuity(
+        scene_by_id={"S1": {"cast": ["alice", "bob"]}},
+        panels=[
+            {
+                "id": "P1",
+                "order": 1,
+                "scene_id": "S1",
+                "transition_to_next": {
+                    "ownership": "next",
+                    "bridge": "Bob leaves through the door before the cut.",
+                },
+            },
+            {"id": "P2", "order": 2, "scene_id": "S1", "transition_to_next": None},
+        ],
+        shots=[
+            {
+                "id": "C1",
+                "panel_id": "P1",
+                "scene_id": "S1",
+                "critical_characters": ["alice", "bob"],
+            },
+            {
+                "id": "C2",
+                "panel_id": "P2",
+                "scene_id": "S1",
+                "critical_characters": ["alice"],
+            },
+        ],
+        dialogue=[],
+        issues=issues,
+    )
+    messages = "\n".join(issue.format() for issue in issues)
+    assert "CONT-CAST-1" not in messages
+    assert "CONT-CAST-2" not in messages

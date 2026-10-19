@@ -48,7 +48,7 @@
 
 按当前交付阶段选主责，再组合业务目标、类型/基调、叙事机制与拍法。例如“悬疑产品广告＋反转＋子弹时间”由advertising-creator自己统筹，按需复用叙事/时间导演参考，直接交H3/Canvas，不转影视整片、不因反转改喜剧。独立MG、数字人、B-roll、MV保留原主责，受广告委托则只返回指定成果；只需单 Panel 提示词直接交 H3，只需保存定稿直接交 Canvas。文本创意不强加资产或生成参数门禁。
 
-先选负责当前交付物的 Skill，完成这一阶段后才加载下游。已有事实、参数与授权直接沿用，只传当前 Panel 所需信息。创作、执行和验收的共同规则只在共享生产规则维护；版本、文字/四时间轴与采用文件按[共同交接](../.agents/skills/canvas-workspace/references/creative-handoff.md)，字段与接口按需读[画布指南](canvas-guide.md)。
+先选负责当前交付物的 Skill，完成这一阶段后才加载下游。已有事实、参数与授权直接沿用，只传当前 Panel 所需信息。创作、执行和验收的共同规则只在[共享生产规则](ai-system-prompt.md)维护（含概念单一权威、三项关键硬门、素材就绪形态）；本表只做目标到主 Skill 的路由，不另写定义。版本、文字/四时间轴与采用文件按[共同交接](../.agents/skills/canvas-workspace/references/creative-handoff.md)，字段与接口按需读[画布指南](canvas-guide.md)。
 
 例如“给逐字稿做 B-roll 方案，先别生成”只走 B-roll 规划；明确授权生产后才交 H3 写作和 Canvas。歌曲、节奏、歌词或演唱主导的 MV 走 `music-video-creator`；普通剧情片带背景音乐仍走故事分镜。“把已有 H3 提示词放入画布”直接走 Canvas，不再触发创作或提示词优化。Comfy 是服务执行的脚本能力，Agent 不另行启动。
 

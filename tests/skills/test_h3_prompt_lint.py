@@ -592,3 +592,41 @@ def test_blueprint_shot_requires_dialogue_ids_array() -> None:
         "generation": {**PLAN["generation"], "shots": [shot]},
     }
     assert errors(lint_plan(plan=plan), "PLAN-MATCH")
+
+
+def test_r2v_rejects_reference_images_above_capability_limit() -> None:
+    images = [{"path": f"img{i}.png", "kind": "image"} for i in range(10)]
+    result = MODULE.lint_snapshot(
+        make_snapshot(
+            prompt=R2V,
+            mode="r2v",
+            duration=8,
+            inputs={
+                "first_frame": None,
+                "last_frame": None,
+                "reference_images": images,
+                "reference_videos": [],
+                "reference_audios": [],
+            },
+        )
+    )
+    assert any("最多 9 个实际输入" in finding.message for finding in result.findings)
+
+
+def test_r2v_accepts_reference_images_at_capability_limit() -> None:
+    images = [{"path": f"img{i}.png", "kind": "image"} for i in range(9)]
+    result = MODULE.lint_snapshot(
+        make_snapshot(
+            prompt=R2V,
+            mode="r2v",
+            duration=8,
+            inputs={
+                "first_frame": None,
+                "last_frame": None,
+                "reference_images": images,
+                "reference_videos": [],
+                "reference_audios": [],
+            },
+        )
+    )
+    assert not any("最多 9 个实际输入" in finding.message for finding in result.findings)

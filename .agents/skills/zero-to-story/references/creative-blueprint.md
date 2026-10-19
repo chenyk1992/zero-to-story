@@ -62,11 +62,12 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - 每个 Panel 为 4–15 秒，目标总时长等于 Panel 时长之和。
 - `must_show` / `must_explain` 事件都有唯一镜头落点，镜头有来源、证据和前后状态。
 - 同场相邻 Panel 的状态链相接；换场有明确桥接，不能无解释跳转。
-- 对白顺序、Setup 归属和已确认的文字策略可执行。
+- 对白顺序、Setup 归属和已确认的文字策略可执行；对白字数相对 Panel 时长不明显超载（实测参照约 2.9–4.0 字/秒，≥5.5 预警、≥7 失败）。
+- 人物账算术连续（`CONT-*`）：`critical_characters` 与说话人使用 `scenes[].cast` 的同一 ID；同场相邻 Panel 人物集合变化须有非空 `transition_to_next.bridge` 解释入场或退场（`CONT-CAST-1` 静默退场 / `CONT-CAST-2` 静默入场）。不检查长相、站位散文或称呼变体。
 - 每个 Panel 恰好一条 `generation.panel_plans`；operation、首尾帧和引用槽位相互一致。
 - I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 明确选择分镜板或有用途的普通参考，`first_frame_source` / `last_frame_source` 为 `null`。本地 R2V 可另用 `first_frame_guide_source` 提供首帧引导，不接尾帧，也不承诺像素级首帧锁。
 
-预检不做最终视频评分，不计算对白关键路径、不要求形容词计数，也不生成候选片、恢复记录或独立锁文件。
+预检不做最终视频评分，不对白关键路径，不要求形容词计数，不判断图文身份或站位是否自然，也不生成候选片、恢复记录或独立锁文件。`CONT-*` 只做集合与计数对账；没有结构化字段的散文连续性保持未知，不靠正则猜测。
 
 静态预检不证明每个出场人物的固定文字已进入提示词，也不判断图文身份相符。主会话在[Panel 交接](panel-execution.md)完成逐人人物覆盖核对；蓝图通过不能跳过该步骤，文本控制角色也不因没有图片而判缺资产。
 

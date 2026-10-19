@@ -28,6 +28,19 @@ adapter 不写创意提示词、不决定镜头语义、不切换 provider、不
 
 ## 模式和素材槽位
 
+**能力事实（以当前 `comfy-video-executor/capability.json` 与 adapter 为准，勿抄外部模型口径）：**
+
+| 事实 | 当前值 | 权威来源 |
+| --- | --- | --- |
+| 单段时长 | 0.2–15 秒 | `comfy-video-executor/scripts/execute.py` duration 校验 |
+| 参考槽位上限 | 图 9 / 视频 3 / 音频 3 | `capability.json` `max_counts` 与 `REFERENCE_LIMITS` |
+| R2V 参考 | 至少一种 typed reference；可另接 `first_frame` 第 0 帧引导 | 执行 Skill 模式表 |
+| 提示词长度 | **无已证明的硬上限**；超长以当前 Comfy 节点预检失败为准 | 不把 Seedance 字数分档写入本项目 |
+
+未在上表写出的数字不得当成已核实能力。变更能力时同步改 `capability.json` 与本表，不在散文里另写一套。
+
+
+
 - `t2v`：不接受媒体输入。
 - `i2v`：恰好一个 `first_frame` 图片。
 - `fl2v`：恰好一个 `first_frame` 和一个 `last_frame` 图片。

@@ -404,6 +404,7 @@ def _check_references(
     unverified: list[str],
 ) -> None:
     slot_counts = _slot_counts(mode, inputs)
+    _check_slot_capability_limits(mode, inputs, findings)
     frame_zero_guide = isinstance(parameters, Mapping) and bool(parameters.get("frame_zero_video_guide"))
     if frame_zero_guide:
         unverified.append(
@@ -437,6 +438,38 @@ def _check_references(
         if number > slot_counts[category]:
             findings.append(
                 Finding("H3-REF", "error", f"<{category} {number}> 没有对应的实际输入槽位。", line)
+            )
+
+
+# Local Comfy H3 capability ceilings (comfy-video-executor capability.json / REFERENCE_LIMITS).
+# Do not copy external model track quotas into these constants.
+MAX_REFERENCE_SLOTS = {"Picture": 9, "Video": 3, "Audio": 3}
+
+
+def _check_slot_capability_limits(
+    mode: str,
+    inputs: Mapping[str, Any],
+    findings: list[Finding],
+) -> None:
+    if mode != "r2v":
+        return
+    mapping = {
+        "Picture": "reference_images",
+        "Video": "reference_videos",
+        "Audio": "reference_audios",
+    }
+    for category, key in mapping.items():
+        value = inputs.get(key)
+        if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+            continue
+        maximum = MAX_REFERENCE_SLOTS[category]
+        if len(value) > maximum:
+            findings.append(
+                Finding(
+                    "H3-REF",
+                    "error",
+                    f"{key} 最多 {maximum} 个实际输入，当前 {len(value)} 个。",
+                )
             )
 
 
