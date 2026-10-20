@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from lfo.canvas.production_metrics import summarize_production
 
 CANVAS = "canvas-a"
@@ -31,6 +33,30 @@ def run(
         # This field is intentionally not trusted for duration calculation.
         "stage_updated_at": "2026-09-30T23:59:59Z",
         "updated_at": "2026-09-30T23:59:59Z",
+    }
+
+
+def _reviewed_source(
+    run_id: str,
+    path: str,
+    digest: str,
+    *,
+    node_id: str = "video-a",
+    decision: str = "ACCEPT",
+) -> dict:
+    return run(
+        run_id,
+        node_id=node_id,
+        review={"decision": decision, "output_path": path, "output_sha256": digest},
+    )
+
+
+def _edit_manifest(segments: list[dict], overlays: list[dict] | None = None) -> dict:
+    return {
+        "schema": "lfo.mv.edit.v1",
+        "canvas_id": CANVAS,
+        "segments": segments,
+        "image_overlays": overlays if overlays is not None else [],
     }
 
 
@@ -433,6 +459,150 @@ def test_manifest_counts_only_accepted_sources_and_segments_within_scope() -> No
     assert summary["production_counts"]["segments"]["value"] == 4
     assert summary["production_counts"]["accepted_sources"]["value"] == 1
     assert summary["production_counts"]["accepted_sources"]["state"] == "partial"
+
+
+def test_manifest_counts_accepted_image_overlays_once_without_counting_them_as_segments() -> None:
+    runs = [
+        _reviewed_source("accepted-video", r"E:\media\accepted.mp4", "a" * 64),
+        _reviewed_source("accepted-logo", r"E:\media\logo.png", "b" * 64),
+    ]
+    logo = {
+        "node_id": "video-a",
+        "run_id": "accepted-logo",
+        "path": r"E:\media\logo.png",
+        "sha256": "b" * 64,
+    }
+    manifest = _edit_manifest(
+        [{
+            "shot_id": "S1",
+            "node_id": "video-a",
+            "run_id": "accepted-video",
+            "path": r"E:\media\accepted.mp4",
+            "sha256": "a" * 64,
+        }],
+        [logo, dict(logo)],
+    )
+
+    summary = summarize_production(
+        runs, [], canvas_id=CANVAS, node_ids=["video-a"], edit_manifest=manifest
+    )
+
+    assert summary["production_counts"]["segments"]["value"] == 1
+    accepted = summary["production_counts"]["accepted_sources"]
+    assert accepted["value"] == 2
+    assert accepted["state"] == "observed"
+    assert len(accepted["sources"]) == 2
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("path", r"E:\media\different-logo.png"), ("sha256", "c" * 64)],
+)
+def test_manifest_image_overlay_requires_current_review_path_and_hash(field: str, value: str) -> None:
+    runs = [
+        _reviewed_source("accepted-video", r"E:\media\accepted.mp4", "a" * 64),
+        _reviewed_source("accepted-logo", r"E:\media\logo.png", "b" * 64),
+    ]
+    overlay = {
+        "node_id": "video-a",
+        "run_id": "accepted-logo",
+        "path": r"E:\media\logo.png",
+        "sha256": "b" * 64,
+    }
+    overlay[field] = value
+    manifest = _edit_manifest(
+        [{
+            "shot_id": "S1",
+            "node_id": "video-a",
+            "run_id": "accepted-video",
+            "path": r"E:\media\accepted.mp4",
+            "sha256": "a" * 64,
+        }],
+        [overlay],
+    )
+
+    summary = summarize_production(
+        runs, [], canvas_id=CANVAS, node_ids=["video-a"], edit_manifest=manifest
+    )
+
+    assert summary["production_counts"]["segments"]["value"] == 1
+    accepted = summary["production_counts"]["accepted_sources"]
+    assert accepted["value"] == 1
+    assert accepted["state"] == "partial"
+
+
+def test_manifest_imported_and_unaccepted_overlays_remain_partial_without_fake_runs() -> None:
+    runs = [
+        _reviewed_source("accepted-video", r"E:\media\accepted.mp4", "a" * 64),
+        _reviewed_source(
+            "rejected-logo", r"E:\media\rejected.png", "b" * 64, decision="REJECT"
+        ),
+    ]
+    manifest = _edit_manifest(
+        [{
+            "shot_id": "S1",
+            "node_id": "video-a",
+            "run_id": "accepted-video",
+            "path": r"E:\media\accepted.mp4",
+            "sha256": "a" * 64,
+        }],
+        [
+            {
+                "node_id": "video-a",
+                "source_note": "imported user logo",
+                "path": r"E:\media\imported.png",
+                "sha256": "c" * 64,
+            },
+            {
+                "node_id": "video-a",
+                "run_id": "rejected-logo",
+                "path": r"E:\media\rejected.png",
+                "sha256": "b" * 64,
+            },
+        ],
+    )
+
+    summary = summarize_production(
+        runs, [], canvas_id=CANVAS, node_ids=["video-a"], edit_manifest=manifest
+    )
+
+    assert summary["production_counts"]["segments"]["value"] == 1
+    accepted = summary["production_counts"]["accepted_sources"]
+    assert accepted["value"] == 1
+    assert accepted["state"] == "partial"
+
+
+def test_manifest_overlay_without_node_id_keeps_scoped_source_count_partial() -> None:
+    runs = [
+        _reviewed_source("accepted-video", r"E:\media\accepted.mp4", "a" * 64),
+        _reviewed_source("accepted-logo", r"E:\media\logo.png", "b" * 64),
+    ]
+    manifest = _edit_manifest(
+        [{
+            "shot_id": "S1",
+            "node_id": "video-a",
+            "run_id": "accepted-video",
+            "path": r"E:\media\accepted.mp4",
+            "sha256": "a" * 64,
+        }],
+        [
+            {
+                "run_id": "accepted-logo",
+                "path": r"E:\media\logo.png",
+                "sha256": "b" * 64,
+            }
+        ],
+    )
+
+    summary = summarize_production(
+        runs, [], canvas_id=CANVAS, node_ids=["video-a"], edit_manifest=manifest
+    )
+
+    assert summary["production_counts"]["segments"]["value"] == 1
+    assert summary["production_counts"]["segments"]["state"] == "observed"
+    accepted = summary["production_counts"]["accepted_sources"]
+    assert accepted["value"] == 1
+    assert accepted["state"] == "partial"
 
 
 def test_missing_manifest_keeps_edit_counts_unknown_and_explicit_resource_wait_only() -> None:

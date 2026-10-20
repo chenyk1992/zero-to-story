@@ -768,21 +768,29 @@ def _production_counts(
     segments = manifest.get("segments")
     if not isinstance(segments, list):
         return result
+    overlays_value = manifest.get("image_overlays", [])
+    overlays_valid = isinstance(overlays_value, list)
+    overlays = overlays_value if overlays_valid else []
 
-    relevant = []
-    uncertain_scope = False
-    for segment in segments:
-        if not isinstance(segment, Mapping):
-            uncertain_scope = True
-            continue
-        node_id = segment.get("node_id")
-        if allowed_nodes is not None:
-            if not _nonempty(node_id):
+    def relevant_items(items: list[Any]) -> tuple[list[Mapping[str, Any]], bool]:
+        relevant: list[Mapping[str, Any]] = []
+        uncertain_scope = False
+        for item in items:
+            if not isinstance(item, Mapping):
                 uncertain_scope = True
                 continue
-            if str(node_id) not in allowed_nodes:
-                continue
-        relevant.append(segment)
+            node_id = item.get("node_id")
+            if allowed_nodes is not None:
+                if not _nonempty(node_id):
+                    uncertain_scope = True
+                    continue
+                if str(node_id) not in allowed_nodes:
+                    continue
+            relevant.append(item)
+        return relevant, uncertain_scope
+
+    relevant, uncertain_scope = relevant_items(segments)
+    relevant_overlays, uncertain_overlay_scope = relevant_items(overlays)
 
     segment_metric = _count_metric(
         len(relevant),
@@ -797,15 +805,21 @@ def _production_counts(
     result["segments"] = segment_metric
 
     run_by_id = {str(run.get("id")): run for run in runs if _nonempty(run.get("id"))}
+    source_items = [*relevant, *relevant_overlays]
     source_ids = {
-        str(segment.get("run_id")) for segment in relevant if _nonempty(segment.get("run_id"))
+        str(item.get("run_id")) for item in source_items if _nonempty(item.get("run_id"))
     }
-    unresolved = any(not _nonempty(segment.get("run_id")) for segment in relevant)
+    unresolved = (
+        uncertain_scope
+        or uncertain_overlay_scope
+        or not overlays_valid
+        or any(not _nonempty(item.get("run_id")) for item in source_items)
+    )
     accepted = []
-    segments_by_source: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
-    for segment in relevant:
-        if _nonempty(segment.get("run_id")):
-            segments_by_source[str(segment["run_id"])].append(segment)
+    assets_by_source: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for item in source_items:
+        if _nonempty(item.get("run_id")):
+            assets_by_source[str(item["run_id"])].append(item)
     for source_id in source_ids:
         run = run_by_id.get(source_id)
         review = run.get("review") if isinstance(run, Mapping) else None
@@ -819,14 +833,14 @@ def _production_counts(
             continue
         reviewed_path = review.get("output_path")
         reviewed_digest = review.get("output_sha256")
-        source_segments = segments_by_source.get(source_id, [])
-        if not _nonempty(reviewed_path) or not _nonempty(reviewed_digest) or not source_segments:
+        source_assets = assets_by_source.get(source_id, [])
+        if not _nonempty(reviewed_path) or not _nonempty(reviewed_digest) or not source_assets:
             unresolved = True
             continue
         binding_matches = all(
-            _same_path(segment.get("path"), reviewed_path)
-            and _same_digest(segment.get("sha256"), reviewed_digest)
-            for segment in source_segments
+            _same_path(item.get("path"), reviewed_path)
+            and _same_digest(item.get("sha256"), reviewed_digest)
+            for item in source_assets
         )
         if binding_matches:
             accepted.append(source_id)
@@ -837,7 +851,9 @@ def _production_counts(
     )
     if unresolved:
         accepted_metric["state"] = "partial"
-        accepted_metric["note"] = "部分清单来源缺少 run_id、当前范围内运行记录或 ACCEPT 审查证据。"
+        accepted_metric["note"] = (
+            "部分清单来源缺少 run_id、节点编号、当前范围内运行记录或 ACCEPT 审查证据。"
+        )
     result["accepted_sources"] = accepted_metric
     return result
 
