@@ -11,9 +11,7 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 
 读取已有创作源和用户规格：剧情、目标时长、画幅、画风、对白/声音、交付阶段。复用已有决定；只在关键事实缺失或冲突时集中说明缺口。主会话负责导演选择，下游按确定的事实写提示词和执行。
 
-视频制作任务在本入口先确认本次规格：目标总时长、画幅、原生生成像素预算、采样模式与步数，以及声音和最终导出要求。规格由用户自定义；本地 H3 明确询问 `megapixels`、`sampler_profile`（`vdn_turbo` / `native`）与 `steps`，其他提供方按实际能力提供选择。可以推荐组合，但不能把模板值、历史项目参数或推荐当成用户已选择；创作自主权不自动包含制作规格决定权。用户明确委托决定制作规格时，记录该授权与实际选值。
-
-用户在当前请求中已给出的规格直接记录，只问缺失或冲突项；续接同一作品时，继承有用户确认依据的规格，不逐 Panel 重问。记录确认依据与适用范围到本片故事板和蓝图 `user_constraints`，区分原生生成与后期导出规格。来源不明的已有参数先核对；未经选择或明确委托的规格不提交生成。用户变更规格时同步受影响草稿，保留旧运行快照。纯剧本、分析或局部文字交付不要求提前填写执行参数。
+视频制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)记录本次目标时长、画幅、生成参数、声音与导出要求，区分用户指定、同作品沿用与本次推断。已有决定直接复用；只询问共享硬门和影响交付的真实冲突，不逐 Panel 重问。规格写入故事板及蓝图 `user_constraints`，H3 定稿和 Canvas 继承，纯文本任务不提前填写执行参数。
 
 有人物的故事在拆 Panel 前读取[固定人物文字与跨模式使用](references/creative-assets.md#人物与场景文本锚点)，从整场动作关系识别全部需要连续的人物，包括跨镜配角、旁观者和背影；自动补齐必要设计并沿用已有 ID/造型，不等用户逐人提醒。角色列表不等于生图清单。
 
@@ -26,12 +24,15 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 | 慢动作、冻结、子弹时间或 bullet-time-slow-motion-video 项目方法 | 读[时间效果导演](references/time-effects-direction.md)，写回现有 Setup、状态和声音字段，不引入精确速度参数 |
 | 对称复古童话式短片或风格图 | 读[对称童话风格](references/symmetric-storybook-style.md)，保留用户画幅、媒介与颜色 |
 | 参考片改编/受控复刻 | 接收[变更交接](../video-deconstruct-analyzer/references/recreation-change-plan.md)，采用用户方式并记入当前简报，不新增 Canvas 参数 |
+| 参考作品研究、选题或改编依据 | 按需读[参考研究](references/reference-research.md)，研究成果返回当前主源，不自动进入生产 |
+| 历史、科普或知识解说稿 | 委托[narration-writer](../narration-writer/SKILL.md)完成事实与旁白；影视重现由本入口统筹，MG/B-roll/Presenter 保留专业范围 |
 | 剧本、改编与叙事声音 | 读[剧本与改编层](references/script-adaptation.md)，再进入故事板设计 |
 | 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
 | 只修改某个 Panel 的拍法 | 读[局部改拍](references/storyboard-production.md#局部改拍)，依据当前创作源修改，保留未受影响的剧情、对白和 ID |
 | 下一集复用人物，或角色有别名、年龄与服装变化 | 读[角色身份与造型复用](references/creative-assets.md#角色身份与造型复用)，先匹配故事身份，再选择本镜适用的资产 |
 | 宫崎骏／吉卜力启发的手绘动画，或未来科幻短片与参考图 | 按需读[视觉风格参考](references/visual-style-profiles.md)的对应分支，将具体美术规则写回风格与资产字段；项目采用方法涵盖 miyazaki-inspired-animation / future-sci-fi-cinematic-generator，不启动其外部生产流程 |
 | 细化当前镜头的动作或表演 | 仅按需要读[动作导演参考](references/action-direction.md)或[表演导演参考](references/performance-direction.md)，再写回已有的 Setup、状态与转场字段 |
+| 多人、反打、出入口、遮挡或复杂走位 | 读[复杂场面调度](references/blocking-direction.md)，稳定场景位置后再转为各机位画面关系 |
 | 为已锁定画面制作配乐 | 保持本故事流程，只复用[音乐方向的锁定画面分支](../music-video-creator/references/music-direction.md#锁定画面配乐)，保留画面、对白与动作时点 |
 | 完整故事生产的结构化蓝图 | 从故事板编译时读[创作蓝图](references/creative-blueprint.md) |
 | 角色图、分镜板、关键帧 | 只在准备相应资产时读[视觉资产](references/creative-assets.md) |
@@ -54,7 +55,7 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 ./.venv/Scripts/python.exe .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py <creative_blueprint.json>
 ~~~
 
-`CREATIVE PREFLIGHT: PASS` 只表示结构与引用可用，不保证创作质量或成片已接受。故事板/蓝图变化后复核受影响输入；无变化不重复预检。
+预检 `FAIL` 先修复硬错误；`NEEDS_REVIEW` 仅有 warning，由主责判断提示的实际影响，不自动增加审批；`PASS` 只表示静态无发现。JSON `ok` 和退出码只区分有无 error，均不证明创作质量或成片采用，详见[结果解释](references/creative-blueprint.md#编译顺序)。输入变化后仅复核受影响部分。
 
 ## 容易混淆的契约
 
@@ -62,7 +63,7 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 - 目标总时长等于 Panel 时长合计，Canvas 时长与该 Panel 一致。不采用生成余量后裁切或自动变速凑时长；实际帧对齐微差如实核对交付条件，不擅自修整。
 - 继续创作先按[当前版本协调](references/storyboard-brief.md#当前版本协调)核对最新源、Canvas 草稿和冻结快照；“人工源”不表示旧文件覆盖明确的用户新编辑。
 - 先选镜头控制方式，再决定资产。分镜板只用于采用该策略的 R2V；整板一次生成，不拆格生图或后期拼板。I2V/FL2V 只用其精确帧输入。
-- 像素预算 `megapixels`、采样模式 `sampler_profile` 和步数 `steps` 属于本入口向用户确认的项目制作规格，记录到故事板和蓝图 `user_constraints`，以后按确认范围继承。步数不能代替模式，不从模板猜用户选择。
+- 本次像素预算、采样模式与步数按共享规格规则记录到故事板和蓝图 `user_constraints`；步数不能代替模式，推断依据不写成用户已选。
 - 当前 Panel 输入齐全即可推进；只有真实依赖前段状态时才等它 `ACCEPT`。准备可并行，视频提交仍串行。
 - 连续场景跨 Panel 时，区分同机位续演、换机位与换场；静态角色/场景参考不等于继承实际末态。不得为提前生成而取消真实依赖。相邻片段按[画面与声音接缝](references/video-qc.md#画面与声音接缝)一起检查，单片通过不代表接缝成立。
 - 生成失败、状态未知、`REJECT` 或 `INCONCLUSIVE` 只停止受影响单元及其依赖。先核对原任务或修正草稿；新生成按已有授权范围确认新的快照，不自动重提。

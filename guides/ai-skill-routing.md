@@ -10,6 +10,10 @@
 | 对称复古童话；wes-anderson-style-short-film-generator 方法 | 当前影视/广告/MV，复用风格参考 | 不强加画幅、粉彩、旁白或音乐 |
 | 参考复刻；reference-video-recreation-workflow 方法 | `video-deconstruct-analyzer`，再交原主 Skill | 对话/Skill 选择自由改编、受控复刻、只读分析并记简报；不改 Canvas 页面，不代表生成授权 |
 | 微短剧、独立情景喜剧及其角色/分集剧本 | `short-drama-screenwriter` | 剧情、人物、对白和分集文本；普通小说或其他剧本不强套短剧规则，不直接执行视频 |
+| 参考作品研究、对标或选题采风 | 当前创作主责复用[参考研究](../.agents/skills/zero-to-story/references/reference-research.md) | 交来源、实际观察、推断与迁移决定；视频观察由分析专能负责，不自动生产 |
+| 从选题/资料撰写历史、科普、人物或知识解说稿 | `narration-writer` | 事实、解释与旁白文本；制作按视觉目标交影视/MG/B-roll/Presenter，不新增完整作品生产链 |
+| 海外对白、多语互动与地域语言 | 当前主责复用[语言适配](../.agents/skills/short-drama-screenwriter/references/overseas-dialogue.md) | 保留语言证据、人物知情与当前版本；文本、音色、字幕和口型分别验证 |
+| 多人、反打、产品交接或复杂走位 | 当前影视/MV/广告/专业主责复用[复杂调度](../.agents/skills/zero-to-story/references/blocking-direction.md) | 场景位置与各机位画面关系写回现有 Shot/Setup，不建第二份全片计划 |
 | 广告、品牌传播、电商宣传；含反转、美妆、时装和海报/IP动效 | `advertising-creator` | 独立广告策略、ad_plan、静态/视频制作与验收；反转可选，文本不自动生成 |
 | 影视、广告或有叙事需要的MV中的反转、误判、身份揭示 | 当前写作/导演主 Skill，复用[通用反转](../.agents/skills/short-drama-screenwriter/references/reversal-design.md) | 反转是叙事机制，不自动归入喜剧，也不强制进入短剧或广告流程 |
 | 慢动作、冻结与子弹时间；bullet-time-slow-motion-video 项目方法 | 当前制作主 Skill，复用[时间效果导演](../.agents/skills/zero-to-story/references/time-effects-direction.md) | 效果窗口、冻结/运动对象、环绕与恢复；不新增控制接口。已有视频确定性变速先核实工具 |

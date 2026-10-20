@@ -20,9 +20,11 @@
 
 每Panel是独立生成段，无六Beat要求。交给[H3](../../h3-prompt-writing/SKILL.md)的事实包括目的、Shot/切点、动作/起止状态、身份/产品、逐字对白/说话人/语言、文字表、声音/静默窗、素材用途、规格、后期与关键验收。时装动态涉及衣料响应时，在该Shot动作描述中区分资料支持的材质事实与已采用的运动意图；不要求精确布料仿真。
 
-真实素材→实际端口→解析零基槽位→H3一基标签依次核对。商品不固定Picture1，规划九格不自动传入，related只资料。t2v无媒体；i2v仅first_frame；fl2v实际首尾图；r2v至少一种参考、可另首帧、无尾帧、最多9图/3视频/3音频。普通r2v frame_zero_video_guide关闭/省略，不能把源片默认作为前缀。
+真实素材→实际端口→解析零基槽位→H3一基标签依次核对。商品不固定Picture1，规划九格不自动传入，related只资料。本地H3（provider=comfy）中t2v无媒体；i2v仅first_frame；fl2v实际首尾图；r2v至少一种参考、可另首帧、无尾帧、最多9图/3视频/3音频。普通本地r2v frame_zero_video_guide关闭/省略，不能把源片默认作为前缀。用户选择其他已接入提供方时，模式和参考容量按其当前capability核对，不套用上述本地数值。
 
-本地H3当前0.2～15秒、24fps，短插镜按可读性/实际能力；影视4秒下限不套广告。provider/model/mode、duration/aspect_ratio/megapixels及options里的sampler_profile/steps按当前capability与广告入口记录的本次已选规格继承，并保留用户确认依据；已有参数但依据不明时先核对，vdn_turbo的8步等条件不猜。不切镜30秒/仅尾帧等冲突说明缺口，不自行拆分、改模式/提供方。
+本地H3当前0.2～15秒、24fps，短插镜按可读性/实际能力；影视4秒下限不套广告。provider/model/mode、duration/aspect_ratio/megapixels及options里的sampler_profile/steps继承广告主责按[共享规格规则](../../../../guides/ai-system-prompt.md#制作规格与判断依据)记录的值与依据，按当前capability核对组合；执行端不猜。来源不明回主责核对，不切镜30秒/仅尾帧等冲突说明缺口，不自行拆分、改模式/提供方。
+
+多人互动、产品交接和跨机位使用按需复用[复杂调度](../../zero-to-story/references/blocking-direction.md)，将空间、遮挡、接触与商品状态写回 ad_plan 当前 Shot；不建立影视蓝图。解释性文案可委托[narration-writer](../../narration-writer/SKILL.md)处理限定稿件，产品事实与主张仍由广告持有，不因委托变成中立科普。
 
 依赖同镜末态用固定ACCEPT源run与真实尾帧；独立镜头不等待全片资产。目标海报为r2v参考不保证精确末帧，主格全屏开场不能用整板冒充第0帧。
 

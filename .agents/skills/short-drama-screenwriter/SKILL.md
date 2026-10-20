@@ -32,25 +32,25 @@ description: 为国内微短剧、海外 ReelShort/DramaBox 或独立情景喜�
 
 | 请求 | 读取 |
 |---|---|
-| `/开始`、选题 | [genre-guide](./references/genre-guide.md) |
+| `/开始`、选题 | [genre-guide](./references/genre-guide.md)；要求对标/采风时再读[参考研究](../zero-to-story/references/reference-research.md) |
 | 独立情景喜剧的选题、方案、角色、剧本 | [喜剧写作](./references/sitcom-writing.md)优先；不默认加载付费、反派或恋爱结构 |
 | 当前剧本的反转、误判或身份揭示 | 按需读[通用反转](./references/reversal-design.md)；它是叙事机制，不改主类型，不强加给每集 |
 | 连载微短剧 `/创作方案` | [opening-rules](./references/opening-rules.md)、[paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md) |
-| 连载微短剧 `/角色开发` | [villain-design](./references/villain-design.md)；其他人物按当前剧情需要 |
+| 核心角色与长期关系开发 | [人物开发](./references/character-development.md)；需要反派时再读[villain-design](./references/villain-design.md) |
 | 续集中的别名、不同年龄或服装阶段 | [角色身份与造型复用](./references/handoff-mapping.md#角色身份与造型复用)；保留人物关系与称呼来源，再交接当前造型 |
 | 连载微短剧 `/目录` | [paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md) |
 | 连载微短剧 `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集再读 [opening-rules](./references/opening-rules.md)，付费集再读 [paywall-design](./references/paywall-design.md) |
 | 改写台词，或 `/自检 N` 中需要诊断台词 | [dialogue-diagnosis](./references/dialogue-diagnosis.md)；只处理当前授权段落，锁定对白逐字保留 |
 | `/自检 N`、`/合规` | [compliance-checklist](./references/compliance-checklist.md)；创作检查按工作流契约 |
 | `/桥接 N` | [handoff-mapping](./references/handoff-mapping.md)、[handoff-brief-template](./references/handoff-brief-template.md)；字段示例按需读 JSON 模板 |
-| `/出海` | [genre-guide](./references/genre-guide.md) 的出海部分 |
+| `/出海`、海外对白或多语互动 | [语言适配](./references/overseas-dialogue.md)；类型迁移再读[genre-guide](./references/genre-guide.md) 的出海部分 |
 
 这些参考是创作方法，不是额外审批或视频 QC。
 
 ## 交付规则
 
 1. 选题最多 3 个类型且保留一个主类型；用户未指定时按故事意图、受众和平台选定。
-2. 国内格式使用场景标题、中文景别、角色对白和可选声音提示；海外格式使用 `INT./EXT.`、英文景别和英文对白，并做文化适配而非逐字直译。
+2. 剧本格式和对白语言沿用用户要求及目标市场：中文稿可用场景标题、中文景别、角色对白和可选声音提示；英文市场可用 `INT./EXT.`、英文景别与英文对白。海外不等于英语，其他语言和多语稿按[语言适配](references/overseas-dialogue.md)保留逐句语言与文化语境。
 3. 连载中间集保留已定钩子，按需给下集预告；独立单集和完结集按已定结局收束，不强加预告。伏笔回收位置沿用已确认大纲；付费点、主冲突和爽点服务剧情，不以模板数量替代因果。
 4. 合规只在用户要求或题材明显涉及风险时加载清单；先处理红线和关系/价值观风险，再给少量具体改法，不生成分数表。
 5. `/桥接` 只读剧本并把事实交给 `zero-to-story`。本 Skill 不把音频意图写成音频文件，不写 Canvas ID、请求状态、真实媒体、尾帧或 QC 结论。

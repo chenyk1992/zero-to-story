@@ -1,5 +1,11 @@
 # 来源说明
 
+## 漫剧老李新版的选择性方法适配
+
+2026-10-20 审查 [lixiaoxiao9888-create/manju-laoli-skill](https://github.com/lixiaoxiao9888-create/manju-laoli-skill/tree/370a236ed47d29ef3bf356ced85a17cee2f117a4) 固定版本 `370a236ed47d29ef3bf356ced85a17cee2f117a4`（根 LICENSE 为 MIT，Copyright (c) 2026 Short-Drama Director Suite contributors）。在已有旧版适配上，自主重写参考研究、复杂调度、动作专项与风格选择方法，补充编剧层人物/语言参考和解说文本专能；对应文件与归属见[第三方说明](../../../../THIRD_PARTY_NOTICES.md)。没有导入上游 Skill、脚本、素材库或运行链。
+
+采用的是证据与推断分开、固定地标到画面位置的转换、动作的起因/路径/反馈、语言校准范围与研究到旁白的交接。不采用整套强制锁、固定资产包、每段定格、人物/招式/镜头配额、模糊台词匹配或以文档指纹代替完成验收。上游引用其他资料的条目未整体复制；许可不扩展到第三方媒体、模型或外部来源。保留本目录已有 MIT 许可证，后续直接引用需另核具体条目来源。
+
 ## 时间效果与广告方法
 
 2026-10-09 审查本机 bullet-time-slow-motion-video 与 plot-twist-ad-generator。采用其冻结/运动对象区分、环绕与恢复状态、产品参与因果和利益证据的通用思路，自主重写为[时间效果导演](time-effects-direction.md)及[统一广告](../../advertising-creator/SKILL.md)。本机包未发现许可文件，不复制其文字、模板、媒体、代码或工作流，不引用本机 .hub 路径作为运行依赖，也不沿用下列其他来源许可证。未引入固定资产套餐、精确速度控制、平台入口、重复审批、自动重试或免验收承诺。

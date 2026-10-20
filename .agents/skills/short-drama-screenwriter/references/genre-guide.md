@@ -118,48 +118,20 @@
 
 ---
 
-## 出海改编指南
+## 出海改编参考
 
-### 中式→西式类型映射
+具体对白、多语知情与地域证据由[语言适配](overseas-dialogue.md)维护。本节只提供类型设计的可能方向，不能作为某平台当前偏好或成功率的依据。
 
-| 中式类型 | 西式改编 | 典型平台 |
-|----------|----------|----------|
-| 霸总 | Billionaire Romance | ReelShort |
-| 战神归来 | Ex-Military / Secret Agent | ReelShort |
-| 宫斗 | Royal Court / High Society | DramaBox |
-| 重生 | Second Chance / Time Loop | 通用 |
-| 赘婿 | Underdog Husband | ReelShort |
-| 萌宝 | Secret Baby / Single Dad | DramaBox |
-| 家庭伦理 | Family Drama | FlexTV |
+| 原剧情功能 | 可探索的目标语表达 | 需要核对 |
+| --- | --- | --- |
+| 财富与关系权力 | Billionaire Romance、阶层冲突 | 人物筹码与当地制度，不能只换称呼 |
+| 隐藏经历与身份揭示 | Secret Past、职业或家庭秘密 | 经历与能力依据，不凭职业授予权限 |
+| 第二次选择 | Second Chance、Time Loop | 是现实和解还是超自然设定 |
+| 低位者争取尊重 | Underdog、家庭或职场冲突 | 谁能改变局面及其行动代价 |
+| 亲子与秘密关系 | Secret Baby、Single Parent | 家庭结构、人物关系和叙事边界 |
 
-### 海外验证梯队
+没有来源、日期和样本范围时，不给题材排“验证梯队”或成功率。用户需要市场选择时按[参考研究](../../zero-to-story/references/reference-research.md)核对当前地区、平台与具体作品；排名、个别热剧和评论不能推导新项目成功概率。
 
-| 梯队 | 类型 | 成功率 |
-|------|------|--------|
-| S 级 | Billionaire + Secret Baby | 最高 |
-| A 级 | Werewolf / Vampire Romance | 高 |
-| B 级 | Military + Second Chance | 中高 |
+文化元素按原场景功能重写：家庭聚会不一定要变成慈善晚宴，彩礼、婚前协议与信托不是相同制度。要保留或改变哪种关系压力由当前改编决定说明；缺少事实依据时用已确认的虚构设定或保留待核实，不编造当地法律或惯例。
 
-### 文化元素本地化
-
-| 中式元素 | 西式替代 |
-|----------|----------|
-| 家族聚会 | Charity Gala / Cocktail Party |
-| 磕头认错 | Public Apology / On Knees |
-| 彩礼 | Trust Fund / Prenup |
-| 拜把子 | Brotherhood Oath |
-| 门当户对 | Social Status / "Old Money vs New Money" |
-
-### 中式叙事陷阱（出海需避免）
-
-1. **过度隐忍**：西方观众更倾向主角快速反击
-2. **家长权威**：西方观众不接受无条件服从长辈
-3. **道德绑架**：善良不能沦为软弱的借口
-4. **大团圆执念**：开放式结局在海外接受度更高
-
-### 英文对白技巧
-
-- 用短句、口语化表达
-- 避免直译中文成语
-- 潜台词 > 直白表达
-- 加入文化梗（pop culture references）
+观众对反击、长辈权威、开放结局和潜台词的接受因类型、地区与观看情境变化，不把“海外”当成同质观众。人物可以隐忍、直接表达或使用长句；文化梗与缩略语只在当前关系中有用时加入，不作为本地化配额。

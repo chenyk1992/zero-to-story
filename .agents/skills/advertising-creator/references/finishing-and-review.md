@@ -10,9 +10,9 @@
 
 ## 采用路径与后期
 
-按[共同采用版本与后期](../../canvas-workspace/references/creative-handoff.md#采用版本与后期)区分首次待审、INCONCLUSIVE CAS重开、succeeded完整REJECT派生、ACCEPT后final和新请求重生成。正式后期读取当前review路径/摘要并核对实际字节，不只看run_id。必要片段后期在原run目录写新文件，采用/末态/尾帧同版；ACCEPT原run不能直接改绑。
+按[共同采用版本与后期](../../canvas-workspace/references/creative-handoff.md#采用版本与后期)区分首次待审、INCONCLUSIVE CAS重开、succeeded完整REJECT派生、ACCEPT后final和新请求重生成。正式后期对生成素材读取当前review路径/摘要并核对实际字节，不只看run_id；导入/拍摄素材沿用真实来源、版本和用途证据，不伪造run。必要片段后期在原run目录写新文件，采用/末态/尾帧同版；ACCEPT原run不能直接改绑。
 
-源生成声、参考声、最终音轨分别登记。保留主歌/原声不等于生成口型已同步；替换音轨检查实际新文件及接缝。确定性现有工具：timeline硬切/选段/尺寸fps归一；ASS有限none/fade/scale；混音增益/淡入淡出，background duck在有前景时是整轨-12dB，不是局部曲线。复杂Logo/跟踪文字/任意转场/mask/retime/分层工程核实工具缺口。
+源生成声、参考声、最终音轨分别登记。保留主歌/原声不等于口型已同步；替换音轨检查实际新文件及接缝。现有工具支持硬切/选段/尺寸fps归一、有限ASS、混音增益/渐变；对白窗压低、定时透明Logo、静态图片段及显式片尾沿[共用后期字段](../../music-video-creator/references/postproduction-manifest.md)执行。默认旧background策略仍为整轨-12dB，显式窗口会替代它；跟踪文字、人物mask、透视、任意转场与分层工程另核工具。
 
 保护完整文案/句尾、反转揭示、视觉反应、产品证据和品牌阅读窗；静音不等于可删。只换CTA则检查其新阅读窗、声音和结尾/接缝，保留未影响片段。未知影响尾帧依赖则只停相关续接，不通过普通资产边绕过固定源run。
 

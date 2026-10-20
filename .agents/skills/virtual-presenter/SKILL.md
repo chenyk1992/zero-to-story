@@ -27,6 +27,8 @@ description: 规划数字人或虚拟实拍的连续口播，处理角色、环�
 
 只在缺失信息会改变成品或无法绑定输入时提问。只有 Shot 需要确定空间方向和站位时才运行 scripts/build_environment_pack.py，并登记其实际 manifest、方向视图和 contact sheet；不需要 360°空间依赖时不生成环境包。没有可用探查工具或比例不合格时，只暂停受影响阶段并说明缺口。
 
+从资料开始的历史/知识讲解可委托[narration-writer](../narration-writer/SKILL.md)完成限定稿件；海外、多语口播按需读[语言适配](../short-drama-screenwriter/references/overseas-dialogue.md)。已有锁定文案与实际音轨直接继承，文本自然、音色连续及口型同步分别核对，不重复建立全片计划。
+
 ## 创作流程
 
 1. **计划与文案**：明确一个口播意图，在允许改写的范围内把书面稿改成可说的短句；准确复述或已锁定文案保留逐字内容。记录停顿、重音、发音和声音尾音。有实际音频时先听审采用版本，按其音色、节奏或原音轨用途记录所需事实；只有文案时标注估计时长，沿用已定 H3 声音方案。详见 Shot Contract 的[声音与动作记录](references/presenter-plan-shot-contract.md#声音与动作按需记录)。

@@ -27,7 +27,7 @@ storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_
 | 区域 | 内容 |
 |---|---|
 | source | 当前原文、已经解决的冲突和采用版本 |
-| user_constraints | 用户选择的生成像素预算、采样模式和步数；视频生产前补齐，后续 Panel 继承 |
+| user_constraints | 本次生成像素预算、采样模式和步数；依据在主源区分用户指定、沿用或推断，视频生产前补齐 |
 | coverage | 观众必须看到/理解的事件、原文出处、可见证据和前后状态 |
 | scenes | 每场目的、转折、入场/离场状态、下一场义务和必要桥接 |
 | panels | Panel 顺序、4–15 秒时长、场景、六 Beat、状态和边界归属 |
@@ -52,7 +52,7 @@ must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事�
 python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creative_blueprint.json
 ~~~
 
-只有 CREATIVE PREFLIGHT: PASS 才能进入角色卡、视觉资产和视频提示词阶段。失败时按具体报错修正文档并复核；没有新依据或缺关键事实时报告阻塞，不消耗视频生成资源，也不重复同一无效修复。
+`FAIL` / JSON `status=failed` 表示结构、引用或已定硬约束错误，退出码 1，先修正受影响输入。`NEEDS_REVIEW` / `needs_review` 表示只有经验风险或身份待核实提示，退出码 0；主责按具体事实处理，不自动改稿或升级用户审批。`PASS` / `passed` 只表示静态检查没有发现问题。JSON `ok` 只表示无 error，每项带 `severity`；warning 与退出码 0 都不是内容采用或生成授权。缺关键事实只停受影响工作，没有新依据不反复做同一修复。
 
 ## 最小预检范围
 
@@ -62,12 +62,12 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - 每个 Panel 为 4–15 秒，目标总时长等于 Panel 时长之和。
 - `must_show` / `must_explain` 事件都有唯一镜头落点，镜头有来源、证据和前后状态。
 - 同场相邻 Panel 的状态链相接；换场有明确桥接，不能无解释跳转。
-- 对白顺序、Setup 归属和已确认的文字策略可执行；对白字数相对 Panel 时长不明显超载（实测参照约 2.9–4.0 字/秒，≥5.5 预警、≥7 失败）。
-- 人物账算术连续（`CONT-*`）：`critical_characters` 与说话人使用 `scenes[].cast` 的同一 ID；同场相邻 Panel 人物集合变化须有非空 `transition_to_next.bridge` 解释入场或退场（`CONT-CAST-1` 静默退场 / `CONT-CAST-2` 静默入场）。不检查长相、站位散文或称呼变体。
+- 对白顺序、Setup 归属和已确认文字策略可执行。汉字为主的条目按汉字数/整 Panel 时长给粗略风险提示（≥5.5，≥7 高风险，均为 warning）；不计标点，不以英文字符数套用中文阈值。蓝图未记录发声方式时不猜普通对白或说唱，提示不能裁决唱词可行性、实际音轨或某个短 Shot 的容量。
+- 人物 ID 核对：`critical_characters` 必须属于当前 `scenes[].cast`（空 cast 不能含关键人物）。说话人未列入当前 cast 时提示核对旁白、画外来源或 ID，不强制说话人入画；取景中的关键人物集合不是在场名单，相邻集合变化不自动报出入场错误。
 - 每个 Panel 恰好一条 `generation.panel_plans`；operation、首尾帧和引用槽位相互一致。
 - I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 明确选择分镜板或有用途的普通参考，`first_frame_source` / `last_frame_source` 为 `null`。本地 R2V 可另用 `first_frame_guide_source` 提供首帧引导，不接尾帧，也不承诺像素级首帧锁。
 
-预检不做最终视频评分，不对白关键路径，不要求形容词计数，不判断图文身份或站位是否自然，也不生成候选片、恢复记录或独立锁文件。`CONT-*` 只做集合与计数对账；没有结构化字段的散文连续性保持未知，不靠正则猜测。
+预检不做最终视频评分，不要求形容词计数，不判断图文身份或站位是否自然，也不生成候选片、恢复记录或独立锁文件。没有结构化依据的入离场、可见说话人绑定与语言时序保留语义核对，不靠集合差或正则猜测。
 
 静态预检不证明每个出场人物的固定文字已进入提示词，也不判断图文身份相符。主会话在[Panel 交接](panel-execution.md)完成逐人人物覆盖核对；蓝图通过不能跳过该步骤，文本控制角色也不因没有图片而判缺资产。
 
@@ -101,6 +101,8 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 ## 接力与 Canvas 交接
 
-项目级生成选择存入顶层 `user_constraints.megapixels`、`user_constraints.sampler_profile` 和 `user_constraints.steps`，与故事板一致。准备当前 Panel 时继承到 Canvas 节点参数；所选能力不接受的组合必须在确认前停止，不根据数字猜测模式，也不在执行时切换。故事规划可先于参数选择完成，但不能把尚未选择的值写成用户已批准。
+项目级生成值存入顶层 `user_constraints.megapixels`、`user_constraints.sampler_profile` 和 `user_constraints.steps`，与故事板一致；值的用户指定、沿用或推断依据按[共享规格规则](../../../../guides/ai-system-prompt.md#制作规格与判断依据)记录。Canvas 继承显式值，所选能力不接受的组合在确认前解决，执行端不猜模式或切换配置。故事规划可先于参数确定，不把推断写成用户已批准。
+
+`generation.limits` 记录本作品选择的规划限额，模板示例可按当前镜头需要调整；它不是 capability 的副本或模型的已证明上限。检查器只核对当前记录的数量与限额，动作能否演清、人物是否真实可见仍需语义与实际媒体检查。
 
 通过预检后按[Panel 交接](panel-execution.md)准备 H3 和 Canvas 当前节点；执行、依赖及产物验收沿用共享规则。蓝图不记录运行日志、接受结论或恢复状态，不以静态通过替代实际视频检查。
