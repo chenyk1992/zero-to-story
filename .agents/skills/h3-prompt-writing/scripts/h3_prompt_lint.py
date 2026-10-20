@@ -142,6 +142,10 @@ def lint_snapshot(
     shot_count = _check_shots(description, duration_ms, findings) if description else 0
 
     _check_alignment(mode, prompt, fields, shot_count, duration_ms, input_mapping, findings)
+    if snapshot.get("provider") == "comfy":
+        _check_slot_capability_limits(mode, input_mapping, findings)
+    elif mode == "r2v":
+        unverified.append("未验证: 非本地 Comfy 提供方的参考容量, 须按其当前 capability 核对。")
     _check_references(mode, fields, input_mapping, snapshot.get("parameters"), masked_prompt, findings, unverified)
     retention_labels = _standalone_reference_labels(fields.get("subject_definitions"))
     _check_retention(fields.get("retention_analysis"), retention_labels, findings)
@@ -404,7 +408,6 @@ def _check_references(
     unverified: list[str],
 ) -> None:
     slot_counts = _slot_counts(mode, inputs)
-    _check_slot_capability_limits(mode, inputs, findings)
     frame_zero_guide = isinstance(parameters, Mapping) and bool(parameters.get("frame_zero_video_guide"))
     if frame_zero_guide:
         unverified.append(

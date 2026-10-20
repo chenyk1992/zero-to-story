@@ -50,12 +50,13 @@ class Issue:
 
     path: str
     message: str
+    severity: str = "error"
 
     def as_dict(self) -> JsonObject:
-        return {"path": self.path, "message": self.message}
+        return {"path": self.path, "message": self.message, "severity": self.severity}
 
     def format(self) -> str:
-        return f"{self.path}: {self.message}"
+        return f"{self.severity}: {self.path}: {self.message}"
 
 
 def _is_mapping(value: object) -> bool:
@@ -894,26 +895,26 @@ def _validate_dialogue(
 # Measured from project accepted audio (013bb0cc inspection, 8 clips): ~2.89–3.98 chars/s.
 # Feasibility bounds only — not a speaking-rate prescription.
 DIALOGUE_CHARS_PER_SEC_WARN = 5.5
-DIALOGUE_CHARS_PER_SEC_FAIL = 7.0
+DIALOGUE_CHARS_PER_SEC_HIGH = 7.0
 
 
 def _dialogue_char_count(text: object) -> int:
     if not isinstance(text, str):
         return 0
-    return len(re.sub(r"\s+", "", text))
+    # Chinese rates do not generalize to letters or punctuation in other languages.
+    return len(re.findall(r"[\u3400-\u9fff]", text))
 
 
 def _validate_dialogue_capacity(
     dialogue: Sequence[Mapping[str, Any]],
     panels: Sequence[Mapping[str, Any]],
     *,
-    shot_by_id: Mapping[str, Mapping[str, Any]],
     issues: list[Issue],
 ) -> None:
     """Arithmetic fit of locked dialogue text into each panel window.
 
-    Character counts (whitespace-stripped) vs duration_s. Warn/fail thresholds
-    come from project-measured speech audio, not genre pacing rules.
+    Chinese-majority text only, with warnings rather than runtime constraints.
+    Without measured timing this cannot prove that speech fits or fails.
     """
     panel_duration: dict[str, float] = {}
     shot_to_panel: dict[str, str] = {}
@@ -930,25 +931,32 @@ def _validate_dialogue_capacity(
                     shot_to_panel[shot_id] = panel_id
 
     chars_by_panel: dict[str, int] = defaultdict(int)
-    for index, line in enumerate(dialogue):
+    for line in dialogue:
         shot_id = line.get("shot_id")
         panel_id = shot_to_panel.get(shot_id) if isinstance(shot_id, str) else None
         if panel_id is None:
             continue
-        chars_by_panel[panel_id] += _dialogue_char_count(line.get("text"))
+        text = line.get("text")
+        if not isinstance(text, str):
+            continue
+        spoken_count = sum(character.isalnum() for character in text)
+        chinese_count = _dialogue_char_count(text)
+        if spoken_count and chinese_count / spoken_count >= 0.8:
+            chars_by_panel[panel_id] += chinese_count
 
     for panel_id, chars in sorted(chars_by_panel.items()):
         duration = panel_duration.get(panel_id)
         if not duration or duration <= 0:
             continue
         rate = chars / duration
-        if rate >= DIALOGUE_CHARS_PER_SEC_FAIL:
+        if rate >= DIALOGUE_CHARS_PER_SEC_HIGH:
             issues.append(
                 Issue(
                     f"panels[{panel_id}]",
                     f"dialogue load {chars} chars / {duration:g}s = {rate:.2f} chars/s "
-                    f">= {DIALOGUE_CHARS_PER_SEC_FAIL:g} (clearly cannot fit at normal speech); "
-                    "split lines, lengthen the panel, or use voice-over",
+                    f">= {DIALOGUE_CHARS_PER_SEC_HIGH:g} (high speech-load risk); "
+                    "verify actual audio and protected pauses; do not infer timing from text alone",
+                    severity="warning",
                 )
             )
         elif rate >= DIALOGUE_CHARS_PER_SEC_WARN:
@@ -957,7 +965,8 @@ def _validate_dialogue_capacity(
                     f"panels[{panel_id}]",
                     f"dialogue load {chars} chars / {duration:g}s = {rate:.2f} chars/s "
                     f">= {DIALOGUE_CHARS_PER_SEC_WARN:g} (tight for pauses and reactions); "
-                    "prefer simplifying secondary action or adjusting duration",
+                    "verify actual audio before changing locked text or duration",
+                    severity="warning",
                 )
             )
 
@@ -969,16 +978,6 @@ def _shot_characters(shot: Mapping[str, Any]) -> set[str]:
     return {item for item in value if isinstance(item, str) and item.strip()}
 
 
-def _shot_panel_id(shot: Mapping[str, Any]) -> str | None:
-    panel_id = shot.get("panel_id")
-    return panel_id if isinstance(panel_id, str) and panel_id.strip() else None
-
-
-def _panel_scene_id(panel: Mapping[str, Any]) -> str | None:
-    scene_id = panel.get("scene_id")
-    return scene_id if isinstance(scene_id, str) and scene_id.strip() else None
-
-
 def _scene_cast(scene: Mapping[str, Any] | None) -> set[str]:
     if scene is None:
         return set()
@@ -988,105 +987,49 @@ def _scene_cast(scene: Mapping[str, Any] | None) -> set[str]:
     return {item for item in value if isinstance(item, str) and item.strip()}
 
 
-def _transition_bridge(panel: Mapping[str, Any]) -> str:
-    transition = panel.get("transition_to_next")
-    if not _is_mapping(transition):
-        return ""
-    bridge = transition.get("bridge")
-    return bridge.strip() if isinstance(bridge, str) else ""
-
-
 def _validate_character_continuity(
     *,
     scene_by_id: Mapping[str, Mapping[str, Any]],
-    panels: Sequence[Mapping[str, Any]],
     shots: Sequence[Mapping[str, Any]],
     dialogue: Sequence[Mapping[str, Any]],
     issues: list[Issue],
 ) -> None:
-    """Arithmetic character-ledger checks across panels (CONT-*).
+    """Check scene identity, never infer entrances from camera coverage.
 
-    Set membership and cardinality only — not face identity or blocking prose.
+    critical_characters describes this shot's visual responsibilities, not the
+    complete in-scene population. Offscreen voices and narrators may speak.
     """
-    panel_chars: dict[str, set[str]] = defaultdict(set)
-    panel_speakers: dict[str, set[str]] = defaultdict(set)
-    shot_panel: dict[str, str] = {}
-
+    shot_scenes: dict[str, str] = {}
     for shot in shots:
         shot_id = shot.get("id")
-        panel_id = _shot_panel_id(shot)
-        chars = _shot_characters(shot)
-        if isinstance(shot_id, str) and panel_id:
-            shot_panel[shot_id] = panel_id
-        if panel_id:
-            panel_chars[panel_id].update(chars)
-
         scene_id = shot.get("scene_id")
-        cast = _scene_cast(scene_by_id.get(scene_id) if isinstance(scene_id, str) else None)
-        if cast:
-            for character in sorted(chars - cast):
-                issues.append(
-                    Issue(
-                        f"generation.shots[{shot_id}].critical_characters",
-                        f"CONT-ID: {character!r} is not in scene cast; "
-                        "use the same character ID as scenes[].cast",
-                    )
+        if not isinstance(scene_id, str) or scene_id not in scene_by_id:
+            continue
+        if isinstance(shot_id, str):
+            shot_scenes[shot_id] = scene_id
+        cast = _scene_cast(scene_by_id[scene_id])
+        for character in sorted(_shot_characters(shot) - cast):
+            issues.append(
+                Issue(
+                    f"generation.shots[{shot_id}].critical_characters",
+                    f"CONT-ID: {character!r} is not in scene cast; "
+                    "use the same character ID as scenes[].cast",
                 )
+            )
 
     for index, line in enumerate(dialogue):
         speaker = line.get("speaker")
         shot_id = line.get("shot_id")
-        if not isinstance(speaker, str) or not speaker.strip():
+        if not isinstance(speaker, str) or not isinstance(shot_id, str):
             continue
-        speaker = speaker.strip()
-        panel_id = shot_panel.get(shot_id) if isinstance(shot_id, str) else None
-        if panel_id:
-            panel_speakers[panel_id].add(speaker)
-            if speaker not in panel_chars[panel_id]:
-                issues.append(
-                    Issue(
-                        f"dialogue[{index}].speaker",
-                        f"CONT-ID: speaker {speaker!r} is not in panel {panel_id} "
-                        "critical_characters; keep one character ID",
-                    )
-                )
-
-    ordered_panels = sorted(
-        (panel for panel in panels if isinstance(panel.get("id"), str)),
-        key=lambda item: item.get("order", 0) if isinstance(item.get("order"), int) else 0,
-    )
-    for previous, current in pairwise(ordered_panels):
-        previous_id = previous.get("id")
-        current_id = current.get("id")
-        if not isinstance(previous_id, str) or not isinstance(current_id, str):
-            continue
-
-        if _panel_scene_id(previous) != _panel_scene_id(current):
-            continue
-        previous_chars = panel_chars[previous_id]
-        current_chars = panel_chars[current_id]
-        if previous_chars == current_chars:
-            continue
-        bridge = _transition_bridge(previous)
-        scene_cast = _scene_cast(scene_by_id.get(_panel_scene_id(previous)))
-        only_previous = sorted((previous_chars & scene_cast) - current_chars) if scene_cast else sorted(previous_chars - current_chars)
-        only_current = sorted(current_chars - previous_chars)
-        if only_previous and not bridge:
+        scene_id = shot_scenes.get(shot_id)
+        if scene_id and speaker.strip() not in _scene_cast(scene_by_id[scene_id]):
             issues.append(
                 Issue(
-                    f"panels[{previous_id}].transition_to_next.bridge",
-                    f"CONT-CAST-1: {', '.join(only_previous)} leave the character ledger "
-                    f"before {current_id} without a transition bridge; explain the exit "
-                    "or keep the ID on the next panel",
-                )
-            )
-        if only_current and not bridge:
-            issues.append(
-                Issue(
-                    f"panels[{previous_id}].transition_to_next.bridge",
-                    f"CONT-CAST-2: {', '.join(only_current)} enter the character ledger "
-                    f"at {current_id} without a transition bridge; explain the entrance "
-                    "or reuse an existing ID",
+                    f"dialogue[{index}].speaker",
+                    f"CONT-SPEAKER: {speaker!r} is not in the current scene cast; "
+                    "verify narrator/offscreen source or character ID in the human source",
+                    severity="warning",
                 )
             )
 
@@ -1358,12 +1301,10 @@ def validate_blueprint(document: object) -> list[Issue]:
     _validate_dialogue_capacity(
         [item for item in dialogue_records if _is_mapping(item)],
         ordered_panels,
-        shot_by_id=shot_by_id,
         issues=issues,
     )
     _validate_character_continuity(
         scene_by_id=scene_by_id,
-        panels=ordered_panels,
         shots=ordered_shots,
         dialogue=[item for item in dialogue_records if _is_mapping(item)],
         issues=issues,
@@ -1427,15 +1368,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         issues = validate_blueprint(document)
 
+    errors = [issue for issue in issues if issue.severity == "error"]
+    status = "failed" if errors else "needs_review" if issues else "passed"
     if args.json_output:
-        print(json.dumps({"ok": not issues, "issues": [issue.as_dict() for issue in issues]}, ensure_ascii=False))
-    elif issues:
-        print(f"CREATIVE PREFLIGHT: FAIL ({len(issues)} issue(s))")
+        print(json.dumps({"ok": not errors, "status": status, "issues": [issue.as_dict() for issue in issues]}, ensure_ascii=False))
+    else:
+        label = {"failed": "FAIL", "needs_review": "NEEDS_REVIEW", "passed": "PASS"}[status]
+        print(f"CREATIVE PREFLIGHT: {label}")
         for issue in issues:
             print(f"- {issue.format()}")
-    else:
-        print("CREATIVE PREFLIGHT: PASS")
-    return 1 if issues else 0
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

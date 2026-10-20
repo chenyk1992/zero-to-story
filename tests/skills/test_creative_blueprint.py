@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 SCRIPT_PATH = (
     Path(__file__).parents[2]
@@ -278,7 +281,7 @@ def test_cli_emits_json_result(tmp_path: Path, capsys: Any) -> None:
     assert MODULE.main([str(blueprint_path), "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
 
-    assert result == {"ok": True, "issues": []}
+    assert result == {"ok": True, "status": "passed", "issues": []}
 
 
 def test_panel_plan_is_required_for_every_panel() -> None:
@@ -633,137 +636,123 @@ def test_dialogue_capacity_warns_when_speech_is_tight() -> None:
     assert "clearly cannot fit" not in messages
 
 
-def test_dialogue_capacity_fails_when_clearly_overloaded() -> None:
+def test_high_chinese_dialogue_load_is_a_warning_not_a_hard_failure() -> None:
     blueprint = _valid_blueprint()
-    # 8s panel: 7 chars/s * 8 = 56 chars fail threshold.
     blueprint["dialogue"][0]["text"] = "乙" * 57
     issues = MODULE.validate_blueprint(blueprint)
-    messages = "\n".join(issue.format() for issue in issues)
-    assert "clearly cannot fit" in messages
+    assert any("high speech-load risk" in issue.message for issue in issues)
+    assert all(issue.severity == "warning" for issue in issues)
 
 
-def test_cont_id_rejects_character_outside_scene_cast() -> None:
+@pytest.mark.parametrize("text", ["A long English sentence with enough letters to exceed Chinese rates." * 3, "？！……" * 100, "1234567890" * 10])
+def test_chinese_rate_does_not_judge_other_languages_or_symbols(text: str) -> None:
     blueprint = _valid_blueprint()
+    blueprint["dialogue"][0]["text"] = text
+    assert not any("dialogue load" in issue.message for issue in MODULE.validate_blueprint(blueprint))
+
+
+def test_punctuation_does_not_inflate_chinese_speech_load() -> None:
+    blueprint = _valid_blueprint()
+    blueprint["dialogue"][0]["text"] = "你？！" * 30
+    assert not any("dialogue load" in issue.message for issue in MODULE.validate_blueprint(blueprint))
+
+
+@pytest.mark.parametrize("count,warning", [(43, False), (44, True), (56, True)])
+def test_chinese_rate_boundaries(count: int, warning: bool) -> None:
+    blueprint = _valid_blueprint()
+    blueprint["dialogue"][0]["text"] = "甲" * count
+    issues = [issue for issue in MODULE.validate_blueprint(blueprint) if "dialogue load" in issue.message]
+    assert bool(issues) == warning
+    assert all(issue.severity == "warning" for issue in issues)
+
+
+@pytest.mark.parametrize("duration", [None, 0, -1, "eight"])
+def test_invalid_duration_is_structural_error_not_speech_arithmetic_crash(duration: Any) -> None:
+    blueprint = _valid_blueprint()
+    blueprint["panels"][0]["duration_s"] = duration
+    assert any(issue.severity == "error" for issue in MODULE.validate_blueprint(blueprint))
+
+
+@pytest.mark.parametrize("cast", [["teacher", "student"], []])
+def test_cont_id_rejects_character_outside_even_empty_scene_cast(cast: list[str]) -> None:
+    blueprint = _valid_blueprint()
+    blueprint["scenes"][0]["cast"] = cast
     blueprint["generation"]["shots"][0]["critical_characters"] = ["ghost"]
-    issues = MODULE.validate_blueprint(blueprint)
-    messages = "\n".join(issue.format() for issue in issues)
-    assert "CONT-ID" in messages
-    assert "ghost" in messages
+    assert any("CONT-ID" in issue.message and issue.severity == "error" for issue in MODULE.validate_blueprint(blueprint))
 
 
-def test_cont_id_rejects_speaker_missing_from_critical_characters() -> None:
+def test_empty_scene_and_empty_visual_cast_are_valid() -> None:
+    issues: list[Any] = []
+    MODULE._validate_character_continuity(
+        scene_by_id={"S1": {"cast": []}},
+        shots=[{"id": "C1", "scene_id": "S1", "critical_characters": []}],
+        dialogue=[], issues=issues,
+    )
+    assert issues == []
+
+
+def test_offscreen_speaker_does_not_have_to_be_a_visual_subject() -> None:
     blueprint = _valid_blueprint()
-    blueprint["dialogue"][0]["speaker"] = "teacher"
     blueprint["generation"]["shots"][0]["critical_characters"] = ["student"]
+    assert MODULE.validate_blueprint(blueprint) == []
+
+
+def test_unknown_speaker_requires_semantic_review_without_forcing_visibility() -> None:
+    blueprint = _valid_blueprint()
+    blueprint["dialogue"][0]["speaker"] = "narrator"
     issues = MODULE.validate_blueprint(blueprint)
-    messages = "\n".join(issue.format() for issue in issues)
-    assert "CONT-ID" in messages
-    assert "teacher" in messages
+    assert len(issues) == 1
+    assert issues[0].severity == "warning"
+    assert "CONT-SPEAKER" in issues[0].message
 
 
-def test_cont_cast_silent_exit_requires_bridge() -> None:
+def test_speaker_is_checked_against_its_own_scene_not_another_shot() -> None:
+    issues: list[Any] = []
+    MODULE._validate_character_continuity(
+        scene_by_id={"S1": {"cast": ["alice"]}, "S2": {"cast": ["bob"]}},
+        shots=[
+            {"id": "C1", "panel_id": "P1", "scene_id": "S1", "critical_characters": ["alice"]},
+            {"id": "C2", "panel_id": "P1", "scene_id": "S2", "critical_characters": ["bob"]},
+        ],
+        dialogue=[{"speaker": "bob", "shot_id": "C1"}], issues=issues,
+    )
+    assert len(issues) == 1
+    assert "CONT-SPEAKER" in issues[0].message
+
+
+def test_reaction_cut_does_not_imply_character_entrance_or_exit() -> None:
     issues: list[Any] = []
     MODULE._validate_character_continuity(
         scene_by_id={"S1": {"cast": ["alice", "bob"]}},
-        panels=[
-            {
-                "id": "P1",
-                "order": 1,
-                "scene_id": "S1",
-                "transition_to_next": {"ownership": "next", "bridge": ""},
-            },
-            {"id": "P2", "order": 2, "scene_id": "S1", "transition_to_next": None},
-        ],
         shots=[
-            {
-                "id": "C1",
-                "panel_id": "P1",
-                "scene_id": "S1",
-                "critical_characters": ["alice", "bob"],
-            },
-            {
-                "id": "C2",
-                "panel_id": "P2",
-                "scene_id": "S1",
-                "critical_characters": ["alice"],
-            },
+            {"id": "C1", "panel_id": "P1", "scene_id": "S1", "critical_characters": ["alice"]},
+            {"id": "C2", "panel_id": "P2", "scene_id": "S1", "critical_characters": ["bob"]},
         ],
-        dialogue=[],
-        issues=issues,
+        dialogue=[{"speaker": "alice", "shot_id": "C2"}], issues=issues,
     )
-    messages = "\n".join(issue.format() for issue in issues)
-    assert "CONT-CAST-1" in messages
-    assert "bob" in messages
+    assert issues == []
 
 
-def test_cont_cast_silent_entry_requires_bridge() -> None:
-    issues: list[Any] = []
-    MODULE._validate_character_continuity(
-        scene_by_id={"S1": {"cast": ["alice", "bob"]}},
-        panels=[
-            {
-                "id": "P1",
-                "order": 1,
-                "scene_id": "S1",
-                "transition_to_next": {"ownership": "next", "bridge": ""},
-            },
-            {"id": "P2", "order": 2, "scene_id": "S1", "transition_to_next": None},
-        ],
-        shots=[
-            {
-                "id": "C1",
-                "panel_id": "P1",
-                "scene_id": "S1",
-                "critical_characters": ["alice"],
-            },
-            {
-                "id": "C2",
-                "panel_id": "P2",
-                "scene_id": "S1",
-                "critical_characters": ["alice", "bob"],
-            },
-        ],
-        dialogue=[],
-        issues=issues,
-    )
-    messages = "\n".join(issue.format() for issue in issues)
-    assert "CONT-CAST-2" in messages
-    assert "bob" in messages
-
-
-def test_cont_cast_allows_explained_exit_with_bridge() -> None:
-    issues: list[Any] = []
-    MODULE._validate_character_continuity(
-        scene_by_id={"S1": {"cast": ["alice", "bob"]}},
-        panels=[
-            {
-                "id": "P1",
-                "order": 1,
-                "scene_id": "S1",
-                "transition_to_next": {
-                    "ownership": "next",
-                    "bridge": "Bob leaves through the door before the cut.",
-                },
-            },
-            {"id": "P2", "order": 2, "scene_id": "S1", "transition_to_next": None},
-        ],
-        shots=[
-            {
-                "id": "C1",
-                "panel_id": "P1",
-                "scene_id": "S1",
-                "critical_characters": ["alice", "bob"],
-            },
-            {
-                "id": "C2",
-                "panel_id": "P2",
-                "scene_id": "S1",
-                "critical_characters": ["alice"],
-            },
-        ],
-        dialogue=[],
-        issues=issues,
-    )
-    messages = "\n".join(issue.format() for issue in issues)
-    assert "CONT-CAST-1" not in messages
-    assert "CONT-CAST-2" not in messages
+@pytest.mark.parametrize("case,status,exit_code", [("clean", "passed", 0), ("speech", "needs_review", 0), ("speaker", "needs_review", 0), ("error", "failed", 1)])
+def test_real_cli_reports_severity_and_exit_code(tmp_path: Path, case: str, status: str, exit_code: int) -> None:
+    blueprint = _valid_blueprint()
+    if case == "speech":
+        blueprint["dialogue"][0]["text"] = "甲" * 56
+    elif case == "speaker":
+        blueprint["dialogue"][0]["speaker"] = "narrator"
+    elif case == "error":
+        blueprint["generation"]["shots"][0]["critical_characters"] = ["ghost"]
+    source = tmp_path / "blueprint.json"
+    source.write_text(json.dumps(blueprint), encoding="utf-8")
+    for json_output in (False, True):
+        command = [sys.executable, str(SCRIPT_PATH), str(source)] + (["--json"] if json_output else [])
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", check=False)
+        assert result.returncode == exit_code, result.stderr
+        if json_output:
+            payload = json.loads(result.stdout)
+            assert payload["status"] == status
+            assert payload["ok"] == (exit_code == 0)
+            assert all(issue["severity"] in {"error", "warning"} for issue in payload["issues"])
+        else:
+            label = {"passed": "PASS", "needs_review": "NEEDS_REVIEW", "failed": "FAIL"}[status]
+            assert f"CREATIVE PREFLIGHT: {label}" in result.stdout

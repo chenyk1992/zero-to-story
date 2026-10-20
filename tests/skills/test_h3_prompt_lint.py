@@ -630,3 +630,28 @@ def test_r2v_accepts_reference_images_at_capability_limit() -> None:
         )
     )
     assert not any("最多 9 个实际输入" in finding.message for finding in result.findings)
+
+
+@pytest.mark.parametrize("key", ["reference_videos", "reference_audios"])
+@pytest.mark.parametrize("count,exceeds", [(3, False), (4, True)])
+def test_local_media_reference_capacities(key: str, count: int, exceeds: bool) -> None:
+    snapshot = make_snapshot(
+        prompt=R2V, mode="r2v", duration=8,
+        inputs={"reference_images": [], "reference_videos": [], "reference_audios": [],
+                key: [{"path": f"media{i}"} for i in range(count)]},
+    )
+    result = MODULE.lint_snapshot(snapshot)
+    capacity_errors = [finding for finding in result.findings if f"{key} 最多 3" in finding.message]
+    assert bool(capacity_errors) == exceeds
+
+
+def test_nonlocal_provider_does_not_inherit_comfy_reference_quota() -> None:
+    snapshot = make_snapshot(
+        prompt=R2V, mode="r2v", duration=8,
+        inputs={"reference_images": [{"path": f"img{i}.png"} for i in range(10)],
+                "reference_videos": [], "reference_audios": []},
+    )
+    snapshot["provider"] = "another-h3-provider"
+    result = MODULE.lint_snapshot(snapshot)
+    assert not any("最多 9 个实际输入" in finding.message for finding in result.findings)
+    assert any("非本地 Comfy" in item for item in result.unverified)
