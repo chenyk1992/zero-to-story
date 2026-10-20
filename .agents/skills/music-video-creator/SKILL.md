@@ -21,9 +21,7 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际�
 
 ## MV 六阶段
 
-进入 MV 制作时，先在本入口询问歌曲范围/目标时长、画幅、原生生成规格及最终输出与声音要求，允许用户自定义。本地 H3 明确选择 `megapixels`、`sampler_profile`（`vdn_turbo` / `native`）和 `steps`；其他提供方按实际能力给出选项。可推荐组合，但不从模板、其他 MV 或模型默认值推定用户选择；音乐/视觉创作自主权不自动包含制作规格决定权。用户明确委托决定制作规格时，记录授权与实际选值。
-
-用户本次已给出的值直接记录，只问缺失或冲突项；同一 MV 后续 Panel 继承有确认依据的规格，不逐镜重问。将规格、用户确认依据和适用范围写入 `mv_plan`，区分原生生成与后期导出；来源不明的已有值先核对，未选择或明确委托的规格不提交生成。变更只更新受影响草稿，旧运行快照保留。随后按[音乐时间轴](references/music-timeline.md)锁定采用歌曲窗口；模型默认长度不能替代成片意图。仅歌词、歌曲/器乐或局部文字交付继续按原范围，不要求视频执行参数。
+MV 制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)在 `mv_plan` 记录歌曲范围、时长、画幅、生成参数、声音与导出要求，区分用户指定、同 MV 沿用与本次推断；不逐镜重问。按[音乐时间轴](references/music-timeline.md)绑定实际采用歌曲及窗口，不能由模型默认长度决定选曲范围。仅歌词、歌曲/器乐或局部文字交付不提前收集视频参数。
 
 1. 确定歌曲与意图：沿用用户选定的已有歌曲版本，核对实际文件与采用依据；用户选曲不自动等于内容验收 ACCEPT。只有歌词或想法时，在前期创意简报中按[音乐方向](references/music-direction.md)完成实际歌词、Hook/旋律主题、节奏、人声、编曲发展与收尾，形成音乐创作稿并交 Music 3 生成。正式详细分镜和参考卡以实际采用歌曲为依据；器乐作品无需歌词。
 2. 多人项目先冻结最终混剪和实际声音到角色的映射，再根据**实际采用音频**建立[音乐时间轴](references/music-timeline.md)：段落、歌词句、重要重拍、停顿及情绪转折；候选分析须听审校准。
@@ -41,6 +39,8 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际�
 叙事MV可按需读[反转](../short-drama-screenwriter/references/reversal-design.md)、[喜剧](../short-drama-screenwriter/references/sitcom-writing.md)、[表演](../zero-to-story/references/performance-direction.md)、[时间效果](../zero-to-story/references/time-effects-direction.md)、[对称风格](../zero-to-story/references/symmetric-storybook-style.md)或[布局动效](../visual-design-creator/references/layout-motion-handoff.md)。保持实际歌窗口与原主责，不补商品、影视六Beat或故事蓝图。
 
 先记录用户希望获得的观看效果和所用方法。音乐曲风不等于视觉路线：流行歌曲也可使用空间歌词、拼贴或表演；Trap 等触发词不自动要求黑红色、快速硬切或全程演唱。
+
+参考歌曲/MV时按[参考研究](../zero-to-story/references/reference-research.md)提取情绪、乐句发展与声画机制，不把榜单或评论当作实际听看证据。多语创作按需复用[语言适配](../short-drama-screenwriter/references/overseas-dialogue.md)，保留歌词韵律与风格，歌曲定稿后不借语言润色改动已采用词曲。叙事群戏和动作段按需复用[复杂调度](../zero-to-story/references/blocking-direction.md)与[动作导演](../zero-to-story/references/action-direction.md)，均服从实际主歌曲窗口。
 
 | 当前需求 | 必须落实的方法与产物 |
 | --- | --- |

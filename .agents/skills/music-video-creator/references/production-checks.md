@@ -40,7 +40,7 @@ Canvas 的 `readiness` 返回当前声明与依赖的具体缺口；`confirm` �
 
 ## 可恢复的分段后期
 
-正式清单仍为 `lfo.mv.edit.v1`。`render` 先校验实际源文件与哈希，以累计帧边界排列片段，按源片真实帧率裁切，然后拼接画面、处理声音及字幕。源范围不足时报错，不冻结尾帧或自动放慢素材补足。`replace` 不处理无需保留的原音；`mix` 对真实原音与无音片段分别处理。
+正式清单仍为 `lfo.mv.edit.v1`。`render` 先校验实际源文件与哈希，以累计帧边界排列片段，按源片真实帧率裁切，然后拼接画面、处理声音及字幕。源范围不足时报错，不冻结尾帧或自动放慢素材补足。`replace` 不处理无需保留的原音；`mix` 对真实原音与无音片段分别处理。按需使用[正式后期字段](postproduction-manifest.md)设置对白窗口压低主歌曲、透明 Logo、静态图片段和歌曲后片尾；旧清单无需补填。preview 拒绝这些正式后期字段，避免静默忽略效果。
 
 默认缓存位于输出文件旁的隐藏分段目录，或通过 `--cache-dir` 指定本项目中间产物目录。缓存键绑定文件内容、裁切、输出规格及效果；命中时还核对缓存文件与技术规格。重跑复用有效片段，损坏片段重建。末次拼接失败不会删除有效分段；缓存不构成素材 ACCEPT，也不能覆盖已有媒体。当前源片帧序按真实名义帧率计算，变帧率素材尚未独立验证；遇到这类素材先核实时间戳或制作可追溯的恒定帧率派生版，不宣称毫秒剪辑已精确验证。
 
@@ -48,11 +48,11 @@ Canvas 的 `readiness` 返回当前声明与依赖的具体缺口；`confirm` �
 ./.venv/Scripts/python.exe .agents/skills/music-video-creator/scripts/music_tools.py render --edit EDIT_JSON --output NEW_VIDEO --canvas-id CANVAS_ID --receipt NEW_RECEIPT_JSON
 ```
 
-`--canvas-id` 核对视频清单与当前成功 run 的 ACCEPT 路径和哈希。主歌曲、音效及最终文件的视听采用仍由调用方核对。回执记录输出规格、实际帧区间、缓存复用与媒体摘要，不能把技术通过标成全片内容通过。修改字幕、声音或切点产生新版本，检查受影响接缝后再交付。
+`--canvas-id` 核对生成视频、生成图片段和生成 Logo 与当前成功 run 的 ACCEPT 路径和哈希。导入/拍摄视频及图片保存真实来源、选定版本和用途依据，不伪造 run。主歌曲、音效、导入素材及最终文件的视听采用仍由调用方核对。回执记录输出规格、实际帧区间、缓存复用与媒体摘要，不能把技术通过标成全片内容通过。修改字幕、声音或切点产生新版本，检查受影响接缝后再交付。缓存目录须专用于缓存，不得包含源媒体、输入清单、回执或输出文件，冲突在写入前报错。
 
 ## 有证据的进度与交付
 
-`GET /api/canvases/{id}/production` 与 `canvas_production_summary` 返回同一只读统计，页面制作进度也使用它。区分运行请求、接受来源与成片片段；接受来源只有实际编辑清单与当前 review 匹配时可计数，同一来源多次剪辑只算一个来源。
+`GET /api/canvases/{id}/production` 与 `canvas_production_summary` 返回同一只读统计，页面制作进度也使用它。区分运行请求、接受来源与成片片段；接受来源从 `segments` 和 `image_overlays` 联合核对当前 review，同一来源多次剪辑或叠加只算一个来源，叠加图层不增加画面段数量。导入素材的人工采用不冒充 Canvas run；缺少当前 review 或节点范围依据时该计数保留 partial，见[来源边界](postproduction-manifest.md#来源采用与输出)。
 
 清单引用登记到 `graph.workspace.production_summary` 的 `edit_manifest_path` 与必填 `edit_manifest_sha256`，文件须位于当前项目媒体目录且不超过 4 MiB。缺少、越界或变更的清单不能给出已核实采用数量，页面显示原因。此接口统计当前整张画布，接续提示来自最近更新的计划，并非全画布完成结论；页面原接续面板仍展示各计划。
 

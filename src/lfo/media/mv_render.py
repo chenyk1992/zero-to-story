@@ -24,6 +24,16 @@ _VIDEO_CRF = 18
 _VIDEO_B_FRAMES = 0
 
 
+def validate_cache_directory(cache_dir: Path, protected_paths: list[Path]) -> Path:
+    """Require a dedicated cache tree, never one containing input or output files."""
+    root = Path(cache_dir).resolve()
+    roots = (Path(os.path.abspath(cache_dir)), root)
+    if any(identity.is_relative_to(base) for path in protected_paths
+           for identity in (Path(os.path.abspath(path)), Path(path).resolve()) for base in roots):
+        raise ValueError("分段缓存目录不能包含源素材、输入清单、回执或输出文件")
+    return root
+
+
 class MVRenderError(RuntimeError):
     """A stage-labelled MV rendering failure with the complete command detail."""
 
@@ -619,7 +629,9 @@ def render_visual_segments(
             metadata_by_source[identity] = _source_metadata(item, index=index)
         metadata.append(metadata_by_source[identity])
     has_native_audio = include_native_audio and any(item["has_audio"] for item in metadata)
-    root = Path(cache_dir).resolve()
+    root = validate_cache_directory(
+        cache_dir, [Path(item["path"]) for item in items if item.get("path")]
+    )
     root.mkdir(parents=True, exist_ok=True)
     working = Path(work_dir).resolve() if work_dir is not None else root
     working.mkdir(parents=True, exist_ok=True)

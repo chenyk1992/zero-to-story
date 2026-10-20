@@ -8,13 +8,14 @@ import json
 import math
 import os
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from lfo.media._ffmpeg import probe, probe_audio, run_command
-from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
+from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack, parse_ducking_windows
 from lfo.media.music_timeline import validate_music_timeline
-from lfo.media.mv_render import render_visual_segments
+from lfo.media.mv_render import render_visual_segments, validate_cache_directory
 from lfo.media.mv_subtitles import render_ass
 
 SCHEMA = "lfo.mv.edit.v1"
@@ -89,6 +90,30 @@ def _timeline(value: dict[str, Any]) -> dict[str, Any]:
     return validate_music_timeline(timeline)
 
 
+def _postroll(value: dict[str, Any]) -> int:
+    duration = _integer(value.get("postroll_duration_ms", 0), "片尾延长时长")
+    if duration < 0:
+        raise ValueError("片尾延长时长不能为负数")
+    return duration
+
+
+def _check_still(path: Path, info: dict[str, Any]) -> None:
+    if (path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+            or not info.get("width") or not info.get("height")
+            or _stream_info(path, "video")["frame_count"] != 1):
+        raise ValueError(f"素材不是单帧静态图片：{path}")
+
+
+def _media_provenance(item: dict[str, Any]) -> None:
+    run_id = item.get("run_id")
+    source = item.get("source_note")
+    if run_id is not None:
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise ValueError("素材 run_id 无效；导入素材使用 source_note，不伪造 run")
+    elif not isinstance(source, str) or not source.strip():
+        raise ValueError("素材须记录生成 run_id 或导入 source_note")
+
+
 def validate_edit(value: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != SCHEMA:
         raise ValueError("不是受支持的 MV 编辑清单")
@@ -126,37 +151,65 @@ def validate_edit(value: dict[str, Any]) -> dict[str, Any]:
             checked_video_streams[path] = _stream_info(path, "video")
         return checked_video_streams[path]
 
-    duration = timeline["window"]["end_ms"] - timeline["window"]["start_ms"]
+    duration = timeline["window"]["end_ms"] - timeline["window"]["start_ms"] + _postroll(value)
+    parse_ducking_windows(value.get("music_ducking", []), duration)
     segments = value.get("segments")
     if not isinstance(segments, list) or not segments:
-        raise ValueError("MV 至少需要一个源片镜头")
+        raise ValueError("MV 至少需要一个画面段")
     expected = 0
     for index, segment in enumerate(segments, start=1):
-        if (
-            not isinstance(segment, dict)
-            or not isinstance(segment.get("run_id"), str)
-            or not segment["run_id"].strip()
-        ):
-            raise ValueError(f"镜头 {index} 缺少 run_id")
+        if not isinstance(segment, dict):
+            raise ValueError(f"镜头 {index} 必须是对象")
+        kind = segment.get("kind", "video")
+        if not isinstance(kind, str) or kind not in {"video", "image"}:
+            raise ValueError("正式画面段 kind 仅支持 video 或 image，不接受占位")
+        _media_provenance(segment)
         if segment.get("transition", "cut") != "cut":
             raise ValueError("当前 MV 渲染仅支持硬切转场")
         path, info = verified_media(segment.get("path"), segment.get("sha256"), audio=False)
         if info.get("width") is None or info.get("height") is None:
             raise ValueError(f"源片不是视频：{path}")
-        source_in = _integer(segment.get("source_in_ms"), "源片入点")
-        source_out = _integer(segment.get("source_out_ms"), "源片出点")
+        if kind == "image":
+            _check_still(path, info)
+            if "source_in_ms" in segment or "source_out_ms" in segment:
+                raise ValueError("静态图片段使用 duration_ms，不接受视频裁切字段")
+            clip_duration = _integer(segment.get("duration_ms"), "图片时长")
+            if clip_duration <= 0:
+                raise ValueError("图片时长必须大于零")
+        else:
+            source_in = _integer(segment.get("source_in_ms"), "源片入点")
+            source_out = _integer(segment.get("source_out_ms"), "源片出点")
+            video_duration = video_stream(path)["duration_ms"]
+            if not 0 <= source_in < source_out <= video_duration:
+                raise ValueError(f"镜头 {index} 源片范围越界")
+            clip_duration = source_out - source_in
         start = _integer(segment.get("timeline_start_ms"), "成片起点")
-        video_duration = video_stream(path)["duration_ms"]
-        if not 0 <= source_in < source_out <= video_duration:
-            raise ValueError(f"镜头 {index} 源片范围越界")
         if start != expected:
             raise ValueError("成片镜头时间轴有空洞、重叠或不连续")
-        end = start + source_out - source_in
+        end = start + clip_duration
         if round(end * fps / 1000) <= round(start * fps / 1000):
             raise ValueError("镜头短于一个可渲染视频帧")
         expected = end
     if expected != duration:
-        raise ValueError("镜头总时长与采用歌曲窗口不一致")
+        raise ValueError("镜头总时长与采用歌曲窗口及显式片尾延长不一致")
+    overlays = value.get("image_overlays", [])
+    if not isinstance(overlays, list):
+        raise ValueError("image_overlays 必须是数组")
+    for overlay in overlays:
+        if not isinstance(overlay, dict):
+            raise ValueError("图片叠加必须是对象")
+        _media_provenance(overlay)
+        path, info = verified_media(overlay.get("path"), overlay.get("sha256"), audio=False)
+        _check_still(path, info)
+        begin = _integer(overlay.get("start_ms"), "叠加起点")
+        end = _integer(overlay.get("end_ms"), "叠加终点")
+        x, y = _integer(overlay.get("x"), "叠加横位置"), _integer(overlay.get("y"), "叠加纵位置")
+        w, h = _integer(overlay.get("width"), "叠加宽度"), _integer(overlay.get("height"), "叠加高度")
+        opacity = _real(overlay.get("opacity", 1), "图片不透明度")
+        if (not 0 <= begin < end <= duration or min(x, y) < 0
+                or min(w, h) <= 0 or x + w > width or y + h > height
+                or not 0 <= opacity <= 1):
+            raise ValueError("图片叠加时间、位置、尺寸或不透明度越界")
     effects = value.get("sound_effects", [])
     if not isinstance(effects, list):
         raise ValueError("sound_effects 必须是数组")
@@ -177,20 +230,23 @@ def validate_edit(value: dict[str, Any]) -> dict[str, Any]:
     events = value.get("text_events", [])
     if not isinstance(events, list):
         raise ValueError("text_events 必须是数组")
-    start, end = timeline["window"]["start_ms"], timeline["window"]["end_ms"]
+    start = timeline["window"]["start_ms"]
+    song_end = timeline["window"]["end_ms"]
+    end = song_end + _postroll(value)
     for event in events:
         if not isinstance(event, dict):
             raise ValueError("文字事件必须是对象")
         event_start = _integer(event.get("start_ms"), "文字起点")
         event_end = _integer(event.get("end_ms"), "文字终点")
-        if event_end <= start or event_start >= end or event_end <= event_start:
+        event_limit = song_end if event.get("kind", "lyric") == "lyric" else end
+        if event_end <= start or event_start >= event_limit or event_end <= event_start:
             raise ValueError("文字事件不在采用歌曲窗口内")
         render_ass(
             [
                 {
                     **event,
                     "start_ms": max(event_start, start) - start,
-                    "end_ms": min(event_end, end) - start,
+                    "end_ms": min(event_end, event_limit) - start,
                 }
             ],
             width=width,
@@ -239,6 +295,34 @@ def _publish_new_file(temp_path: Path, output_path: Path) -> None:
     temp_path.unlink()
 
 
+def _render_image_overlays(
+    source: Path, output: Path, overlays: list[dict[str, Any]], *, fps: float, duration_ms: int
+) -> None:
+    command = [os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-xerror", "-n",
+               "-i", str(source)]
+    filters = []
+    previous = "0:v"
+    for index, item in enumerate(overlays, start=1):
+        # Overlay inputs bypass the segment cache, so verify their bytes again
+        # immediately before this final processing stage.
+        _media(item["path"], item["sha256"], audio=False)
+        command += ["-loop", "1", "-framerate", f"{fps:.12g}", "-i", item["path"]]
+        filters.append(
+            f"[{index}:v]scale={item['width']}:{item['height']}:force_original_aspect_ratio=decrease,"
+            f"format=rgba,colorchannelmixer=aa={item.get('opacity', 1):.12g}[logo{index}]"
+        )
+        filters.append(
+            f"[{previous}][logo{index}]overlay=x={item['x']}:y={item['y']}:"
+            f"enable='gte(t,{item['start_ms']/1000:.9f})*lt(t,{item['end_ms']/1000:.9f})':"
+            f"shortest=1:eof_action=repeat[visual{index}]"
+        )
+        previous = f"visual{index}"
+    command += ["-filter_complex", ";".join(filters), "-map", f"[{previous}]", "-map", "0:a:0",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-bf", "0", "-c:a", "copy",
+                "-t", f"{duration_ms/1000:.9f}", "-movflags", "+faststart", str(output)]
+    run_command(command)
+
+
 def render_edit(
     value: dict[str, Any],
     output_path: Path,
@@ -247,28 +331,31 @@ def render_edit(
 ) -> dict[str, Any]:
     validate_edit(value)
     output = Path(output_path).resolve()
-    sources = [Path(item["path"]).resolve() for item in value["segments"]]
-    sources.extend(Path(item["path"]).resolve() for item in value.get("sound_effects", []))
-    sources.append(Path(value["music_timeline"]).resolve())
+    sources = [Path(item["path"]) for item in value["segments"]]
+    sources.extend(Path(item["path"]) for item in value.get("sound_effects", []))
+    sources.extend(Path(item["path"]) for item in value.get("image_overlays", []))
+    sources.append(Path(value["music_timeline"]))
     timeline = _timeline(value)
-    sources.append(Path(timeline["source"]["path"]).resolve())
-    if output in sources or output.exists() or output.is_symlink():
+    sources.append(Path(timeline["source"]["path"]))
+    if output in {path.resolve() for path in sources} or output.exists() or output.is_symlink():
         raise ValueError("输出路径会覆盖源素材或已有成片")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    duration = timeline["window"]["end_ms"] - timeline["window"]["start_ms"]
+    duration = timeline["window"]["end_ms"] - timeline["window"]["start_ms"] + _postroll(value)
     fps = float(value["fps"])
     cache = (
         Path(cache_dir) if cache_dir is not None else output.with_name(f".{output.stem}-segments")
     )
+    cache = validate_cache_directory(cache, [*sources, Path(output_path)])
+    output.parent.mkdir(parents=True, exist_ok=True)
     render_items = [
         {
-            "kind": "video",
+            "kind": item.get("kind", "video"),
             "timeline_start_ms": item["timeline_start_ms"],
-            "duration_ms": item["source_out_ms"] - item["source_in_ms"],
+            "duration_ms": (item["duration_ms"] if item.get("kind") == "image"
+                            else item["source_out_ms"] - item["source_in_ms"]),
             "path": item["path"],
             "sha256": item["sha256"],
-            "source_in_ms": item["source_in_ms"],
-            "source_out_ms": item["source_out_ms"],
+            **({"source_in_ms": item["source_in_ms"], "source_out_ms": item["source_out_ms"]}
+               if item.get("kind", "video") == "video" else {}),
         }
         for item in value["segments"]
     ]
@@ -292,7 +379,8 @@ def render_edit(
             timeline["window"]["start_ms"],
             timeline["window"]["end_ms"],
         )
-        tracks = [AudioTrack(asset_key=str(master), role="music")]
+        tracks = [AudioTrack(asset_key=str(master), role="music",
+                             ducking_windows=parse_ducking_windows(value.get("music_ducking", []), duration))]
         for index, item in enumerate(value.get("sound_effects", []), start=1):
             selected = temp / f"effect-{index}.flac"
             _trim_audio(Path(item["path"]), selected, item["source_in_ms"], item["source_out_ms"])
@@ -325,21 +413,29 @@ def render_edit(
         if not mix_result.success:
             raise ValueError(f"主音轨合成失败：{mix_result.error}")
         events = []
-        window_start, window_end = timeline["window"]["start_ms"], timeline["window"]["end_ms"]
+        window_start = timeline["window"]["start_ms"]
+        window_end = timeline["window"]["end_ms"] + _postroll(value)
         for event in value.get("text_events", []):
+            event_limit = (timeline["window"]["end_ms"]
+                           if event.get("kind", "lyric") == "lyric" else window_end)
             events.append(
                 {
                     **event,
                     "start_ms": max(window_start, event["start_ms"]) - window_start,
-                    "end_ms": min(window_end, event["end_ms"]) - window_start,
+                    "end_ms": min(event_limit, event["end_ms"]) - window_start,
                 }
             )
         final_candidate = mixed
+        if value.get("image_overlays"):
+            final_candidate = temp / "overlaid.mp4"
+            _render_image_overlays(mixed, final_candidate, value["image_overlays"],
+                                   fps=fps, duration_ms=duration)
         if events:
             ass_path = temp / "lyrics.ass"
             ass_path.write_text(
                 render_ass(events, width=value["width"], height=value["height"]), encoding="utf-8"
             )
+            subtitle_source = final_candidate
             final_candidate = temp / "subtitled.mp4"
             run_command(
                 [
@@ -349,7 +445,7 @@ def render_edit(
                     "-xerror",
                     "-n",
                     "-i",
-                    str(mixed),
+                    str(subtitle_source),
                     "-vf",
                     f"ass={ass_path.name}",
                     "-c:v",
@@ -385,6 +481,11 @@ def render_edit(
         "audio_duration_ms": final_audio["duration_ms"],
         "source_music_sha256": timeline["source"]["sha256"],
         "native_audio_strategy": value["native_audio_strategy"],
+        "postroll_duration_ms": _postroll(value),
+        "music_ducking": [asdict(window) for window in parse_ducking_windows(
+            value.get("music_ducking", []), duration
+        )],
+        "image_overlays": value.get("image_overlays", []),
         "output_width": value["width"],
         "output_height": value["height"],
         "output_fps": fps,
@@ -396,12 +497,15 @@ def render_edit(
         "native_audio_segment_count": rendered["native_audio_segment_count"],
         "segments": [
             {
-                "run_id": item["run_id"],
+                "kind": item.get("kind", "video"),
+                "path": item["path"],
+                "run_id": item.get("run_id"),
+                "source_note": item.get("source_note"),
                 "sha256": item["sha256"],
-                "source_in_ms": item["source_in_ms"],
-                "source_out_ms": item["source_out_ms"],
+                "source_in_ms": item.get("source_in_ms"),
+                "source_out_ms": item.get("source_out_ms"),
                 "source_trim_in_ms": rendered_segment["source_trim_in_ms"],
-                "source_trim_out_ms": item["source_out_ms"],
+                "source_trim_out_ms": item.get("source_out_ms"),
                 "source_fps": rendered_segment["source_fps"],
                 "source_frame_start": rendered_segment["source_frame_start"],
                 "source_frame_end": rendered_segment["source_frame_end"],
@@ -426,7 +530,7 @@ def render_preview(
     *,
     cache_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Render an MV rough cut. Preview-only stills and placeholders cannot enter edit.v1."""
+    """Render an MV rough cut; placeholders remain exclusive to the preview schema."""
     from lfo.media.mv_preview import render_preview as render_mv_preview
 
     return render_mv_preview(value, output_path, cache_dir=cache_dir)

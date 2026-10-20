@@ -2,12 +2,93 @@
 
 from __future__ import annotations
 
+import math
 import os
+import subprocess
+import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
 from lfo.media._ffmpeg import MediaCommandError, atomic_replace, probe, run_command
+
+
+@dataclass(frozen=True)
+class DuckingWindow:
+    """Dialogue interval in output time; attack precedes it, release follows it."""
+
+    start_ms: int
+    end_ms: int
+    gain_db: float = -12.0
+    attack_ms: int = 100
+    release_ms: int = 200
+
+
+def parse_ducking_windows(value: object, duration_ms: int) -> list[DuckingWindow]:
+    """Validate explicit timeline windows without detecting or changing speech."""
+    if not isinstance(value, list):
+        raise ValueError("music_ducking must be an array")
+    windows = []
+    for record in value:
+        if not isinstance(record, Mapping) or set(record) - {
+            "start_ms", "end_ms", "gain_db", "attack_ms", "release_ms"
+        }:
+            raise ValueError("Invalid music_ducking window fields")
+        try:
+            window = DuckingWindow(**record)
+        except TypeError as exc:
+            raise ValueError("Ducking window requires start_ms and end_ms") from exc
+        windows.append(window)
+    _validate_ducking(windows, duration_ms)
+    return windows
+
+
+def _validate_ducking(windows: list[DuckingWindow], duration_ms: int) -> None:
+    if not isinstance(windows, list):
+        raise ValueError("Ducking windows must be a list")
+    if windows and (type(duration_ms) is not int or duration_ms <= 0):
+        raise ValueError("Ducking windows require a positive clip_duration_ms")
+    for window in windows:
+        if not isinstance(window, DuckingWindow):
+            raise ValueError("Invalid ducking window")
+        if any(type(value) is not int for value in (
+            window.start_ms, window.end_ms, window.attack_ms, window.release_ms
+        )) or not 0 <= window.start_ms < window.end_ms <= duration_ms:
+            raise ValueError("Ducking window exceeds the output timeline")
+        if window.attack_ms < 0 or window.release_ms < 0:
+            raise ValueError("Ducking attack/release must be nonnegative milliseconds")
+        if (isinstance(window.gain_db, bool) or not isinstance(window.gain_db, (int, float))
+                or not math.isfinite(window.gain_db) or window.gain_db > 0):
+            raise ValueError("Ducking gain_db must be finite and nonpositive")
+
+
+def _ducking_filter(windows: list[DuckingWindow], duration_ms: int) -> str:
+    _validate_ducking(windows, duration_ms)
+    expressions = []
+    for window in windows:
+        start, end = window.start_ms / 1000, window.end_ms / 1000
+        attack_start = max(0, window.start_ms - window.attack_ms) / 1000
+        release_end = min(duration_ms, window.end_ms + window.release_ms) / 1000
+        gain = f"{window.gain_db:.12g}"
+        attack = (f"{gain}*(t-{attack_start:.9f})/{start-attack_start:.9f}"
+                  if start > attack_start else gain)
+        release = (f"{gain}*({release_end:.9f}-t)/{release_end-end:.9f}"
+                   if release_end > end else "0")
+        expressions.append(
+            f"if(lt(t,{attack_start:.9f}),0,if(lt(t,{start:.9f}),{attack},"
+            f"if(lt(t,{end:.9f}),{gain},if(lt(t,{release_end:.9f}),{release},0))))"
+        )
+    # Overlaps use the stronger attenuation, never sum independent dB cuts.
+    # Keep parser recursion logarithmic for dialogue-dense full-length edits.
+    while len(expressions) > 1:
+        expressions = [
+            f"min({expressions[index]},{expressions[index + 1]})"
+            if index + 1 < len(expressions) else expressions[index]
+            for index in range(0, len(expressions), 2)
+        ]
+    envelope = expressions[0] if expressions else "0"
+    return f"volume='pow(10,({envelope})/20)':eval=frame"
 
 
 @dataclass
@@ -20,6 +101,8 @@ class AudioTrack:
     fade_out_ms: int = 0
     duck_group: str | None = None
     duration_ms: int | None = None
+    # None preserves legacy group ducking; [] explicitly requests no ducking.
+    ducking_windows: list[DuckingWindow] | None = None
 
 
 @dataclass
@@ -51,6 +134,12 @@ class AudioMixer:
     """Mix and publish audio atomically; without paths, build a deterministic plan."""
 
     def mix(self, request: AudioMixRequest, *, timeout_s: float = 300.0) -> AudioMixResult:
+        try:
+            for track in request.tracks:
+                if track.ducking_windows is not None:
+                    _validate_ducking(track.ducking_windows, request.clip_duration_ms)
+        except ValueError as exc:
+            return AudioMixResult(False, error=str(exc))
         if request.native_audio_strategy not in {"preserve", "mute", "mix", "replace"}:
             return AudioMixResult(
                 False, error=f"Unknown native_audio_strategy: {request.native_audio_strategy}"
@@ -78,7 +167,15 @@ class AudioMixer:
         temp = output.with_name(f".{output.stem}.{uuid4().hex}.tmp{output.suffix}")
         command = self.build_command(request, source, temp)
         try:
-            run_command(command, timeout_s=timeout_s)
+            with tempfile.TemporaryDirectory(prefix="lfo-audio-filter-") as folder:
+                # Windows CreateProcess limits the complete command line. Keep
+                # large envelopes out of argv without changing the filter graph.
+                if "-filter_complex" in command and len(subprocess.list2cmdline(command)) > 24000:
+                    index = command.index("-filter_complex")
+                    graph_path = Path(folder) / "mix.ffscript"
+                    graph_path.write_text(command[index + 1], encoding="utf-8")
+                    command[index:index + 2] = ["-/filter_complex", str(graph_path)]
+                run_command(command, timeout_s=timeout_s)
             atomic_replace(temp, output)
             return AudioMixResult(
                 True,
@@ -128,9 +225,13 @@ class AudioMixer:
             chain = ["aresample=48000", "asetpts=PTS-STARTPTS"]
             if track.offset_ms:
                 chain.append(f"adelay={max(0, track.offset_ms)}:all=1")
-            gain = track.gain_db + self.compute_duck(track, foreground)
+            gain = track.gain_db + (
+                self.compute_duck(track, foreground) if track.ducking_windows is None else 0
+            )
             if gain:
                 chain.append(f"volume={gain}dB")
+            if track.ducking_windows:
+                chain.append(_ducking_filter(track.ducking_windows, request.clip_duration_ms))
             if track.fade_in_ms:
                 chain.append(f"afade=t=in:st=0:d={track.fade_in_ms / 1000:.3f}")
             if track.fade_out_ms and track.duration_ms:

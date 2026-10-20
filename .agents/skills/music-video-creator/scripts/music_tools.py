@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from lfo.media.music_timeline import inspect_music, validate_music_timeline  # noqa: E402
 from lfo.media.mv_edit import render_edit, render_preview  # noqa: E402
+from lfo.media.mv_render import validate_cache_directory  # noqa: E402
 
 
 def _save_new(path: Path, value: dict) -> None:
@@ -33,8 +34,26 @@ def _canvas_read(canvas_id: str, suffix: str) -> dict:
 
 
 def _check_adopted_segments(edit: dict, canvas_id: str) -> None:
+    assets = []
+    for key in ("segments", "image_overlays"):
+        records = edit.get(key, [])
+        if not isinstance(records, list):
+            raise ValueError(f"{key} 必须是数组")
+        for record in records:
+            if not isinstance(record, dict):
+                raise ValueError(f"{key} 条目必须是对象")
+            for field in ("path", "sha256"):
+                if not isinstance(record.get(field), str) or not record[field].strip():
+                    raise ValueError(f"{key} 条目缺少有效 {field}")
+            if record.get("run_id") is not None and not isinstance(record["run_id"], str):
+                raise ValueError(f"{key} run_id 必须是字符串")
+            assets.append(record)
     runs = {run["id"]: run for run in _canvas_read(canvas_id, "/runs")["runs"]}
-    for segment in edit.get("segments", []):
+    for segment in assets:
+        if not segment.get("run_id") and isinstance(segment.get("source_note"), str) and segment["source_note"].strip():
+            # Imported media have no Canvas run. Their bytes/type/source are
+            # checked by validate_edit; actual visual adoption stays with caller.
+            continue
         run = runs.get(segment.get("run_id"), {})
         review = run.get("review") or {}
         if (run.get("status") != "succeeded" or review.get("decision") != "ACCEPT"
@@ -48,15 +67,32 @@ def _receipt_target(path: Path | None, edit: dict, edit_path: Path, output: Path
         return
     target = path.resolve()
     protected = {edit_path.resolve(), output.resolve()}
-    timeline_path = Path(edit["music_timeline"]).resolve()
+    timeline_value = edit.get("music_timeline")
+    if not isinstance(timeline_value, str) or not timeline_value:
+        raise ValueError("music_timeline 必须是实际时间轴路径")
+    timeline_path = Path(timeline_value).resolve()
     protected.add(timeline_path)
     timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
-    protected.add(Path(timeline["source"]["path"]).resolve())
-    for segment in edit.get("segments", []):
-        source = segment.get("media", segment)
-        if source.get("path"):
-            protected.add(Path(source["path"]).resolve())
-    protected.update(Path(effect["path"]).resolve() for effect in edit.get("sound_effects", []))
+    source = timeline.get("source") if isinstance(timeline, dict) else None
+    if not isinstance(source, dict) or not isinstance(source.get("path"), str):
+        raise ValueError("音乐时间轴缺少有效源音频路径")
+    protected.add(Path(source["path"]).resolve())
+    for key in ("segments", "sound_effects", "image_overlays"):
+        records = edit.get(key, [])
+        if not isinstance(records, list):
+            raise ValueError(f"{key} 必须是数组")
+        for record in records:
+            if not isinstance(record, dict):
+                raise ValueError(f"{key} 条目必须是对象")
+            media = record.get("media", record) if key == "segments" else record
+            if not isinstance(media, dict):
+                raise ValueError(f"{key} 媒体必须是对象")
+            if key == "segments" and media.get("type") == "placeholder":
+                continue
+            media_path = media.get("path")
+            if not isinstance(media_path, str) or not media_path:
+                raise ValueError(f"{key} 条目缺少有效媒体路径")
+            protected.add(Path(media_path).resolve())
     if target in protected or target.exists() or target.is_symlink():
         raise ValueError("回执不得覆盖输入清单、媒体、输出或已有文件")
 
@@ -124,6 +160,10 @@ def main(argv=None) -> int:
         else:
             edit = json.loads(args.edit.read_text(encoding="utf-8"))
             _receipt_target(args.receipt, edit, args.edit, args.output)
+            cache = args.cache_dir if args.cache_dir is not None else args.output.with_name(
+                f".{args.output.stem}-segments"
+            )
+            validate_cache_directory(cache, [args.edit, *([args.receipt] if args.receipt else [])])
             if args.command == "render" and args.canvas_id:
                 _check_adopted_segments(edit, args.canvas_id)
             renderer = render_preview if args.command == "preview" else render_edit

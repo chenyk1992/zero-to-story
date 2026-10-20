@@ -11,7 +11,7 @@ from typing import Any
 
 from lfo.media._ffmpeg import probe, run_command
 from lfo.media.audio import AudioMixer, AudioMixRequest, AudioTrack
-from lfo.media.mv_render import render_visual_segments
+from lfo.media.mv_render import render_visual_segments, validate_cache_directory
 from lfo.media.mv_subtitles import render_ass
 
 PREVIEW_SCHEMA = "lfo.mv.preview.v1"
@@ -73,6 +73,8 @@ def validate_preview(value: dict[str, Any]) -> dict[str, Any]:
     """Validate a preview-only manifest. It is intentionally not an edit.v1."""
     if not isinstance(value, dict) or value.get("schema") != PREVIEW_SCHEMA:
         raise ValueError("不是受支持的 MV 预览清单")
+    if any(value.get(key) for key in ("music_ducking", "image_overlays", "postroll_duration_ms")):
+        raise ValueError("预览不消费正式后期字段；请使用 lfo.mv.edit.v1 的 render")
     from lfo.media.mv_edit import _media, _real
 
     timeline = _timeline(value)
@@ -220,13 +222,17 @@ def render_preview(
     source_paths.extend([timeline_path, song_path])
     if output in source_paths or output.exists() or output.is_symlink():
         raise ValueError("预览输出路径会覆盖源素材或已有文件")
-    output.parent.mkdir(parents=True, exist_ok=True)
     if any(item["kind"] == "placeholder" for item in validated["segments"]):
         _verify_ass_support()
     duration = validated["duration_ms"]
     cache = (
         Path(cache_dir) if cache_dir is not None else output.with_name(f".{output.stem}-segments")
     )
+    raw_paths = [Path(segment["media"]["path"]) for segment in value["segments"]
+                 if segment["media"].get("path")]
+    raw_paths.extend([Path(value["music_timeline"]), Path(validated["timeline"]["source"]["path"])])
+    cache = validate_cache_directory(cache, [*source_paths, *raw_paths, Path(output_path)])
+    output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".mv-preview-", dir=output.parent) as folder:
         work = Path(folder)
         rendered = render_visual_segments(
