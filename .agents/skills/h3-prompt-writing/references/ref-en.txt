@@ -284,6 +284,8 @@ When only timbre, rhythm, emotion, or delivery is referenced, do not carry the o
 
 Assign `(Sx)` once according to the order of actual vocal events in the target video. Reuse the corresponding ID at every actual vocal event in `detailed_description`; an `<Audio N>` definition bound to a target speaker in `subject_definitions` also reuses the same `(Sx)` but never assigns a new one independently. Do not write `(Sx)` in `retention_analysis`. Verbal cues that exist only within a directly reused BGM or complete soundtrack use `<Audio N>`; voices physically produced by a concrete person, character, narrator, or other independent vocal source use `(Sx)`.
 
+A voice whose delivery is assigned to postproduction receives no generation speaker ID. Number the speakers of the current generation prompt consecutively from S1 in the order they first vocalize. When delivery responsibility changes, renumber the current prompt's speaker IDs and update any `<Audio N>` definition in `subject_definitions` that was bound to the changed `(Sx)`, keeping the upstream character ID and the identity of each voice; do not leave a reserved number for a removed voice.
+
 ## 6. `overall_soundscape` and `non_diegetic_music`
 
 The definitions of these two sound categories follow the Video Prompt Writing Guide (T2VA / I2VA / FL2VA).
