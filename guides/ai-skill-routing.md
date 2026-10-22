@@ -17,6 +17,7 @@
 | 海外对白、多语互动与地域语言 | 当前主责复用[语言适配](../.agents/skills/short-drama-screenwriter/references/overseas-dialogue.md) | 保留语言证据、人物知情与当前版本；文本、音色、字幕和口型分别验证 |
 | 多人、反打、产品交接或复杂走位 | 当前影视/MV/广告/专业主责复用[复杂调度](../.agents/skills/zero-to-story/references/blocking-direction.md) | 场景位置与各机位画面关系写回现有 Shot/Setup，不建第二份全片计划 |
 | 广告、品牌传播、电商宣传；含反转、美妆、时装和海报/IP动效 | `advertising-creator` | 独立广告策略、ad_plan、静态/视频制作与验收；反转可选，文本不自动生成 |
+| 卖点直接造成一次可见状态倒置的剧情广告 | `advertising-creator` 的[反转广告创意路线](../.agents/skills/advertising-creator/references/twist-ad-ideation.md) | 只补创意搜索与自筛；反转机制与商品因果仍在通用反转与产品因果，不新增入口或广告 schema |
 | 影视、广告或有叙事需要的MV中的反转、误判、身份揭示 | 当前写作/导演主 Skill，复用[通用反转](../.agents/skills/short-drama-screenwriter/references/reversal-design.md) | 反转是叙事机制，不自动归入喜剧，也不强制进入短剧或广告流程 |
 | 慢动作、冻结与子弹时间；bullet-time-slow-motion-video 项目方法 | 当前制作主 Skill，复用[时间效果导演](../.agents/skills/zero-to-story/references/time-effects-direction.md) | 效果窗口、冻结/运动对象、环绕与恢复；不新增控制接口。已有视频确定性变速先核实工具 |
 | 影视剧、短剧、叙事短片及其分镜/Panel交接 | `zero-to-story` | 影视故事板/蓝图与必要资产；广告不用影视全片契约，H3另定稿 |

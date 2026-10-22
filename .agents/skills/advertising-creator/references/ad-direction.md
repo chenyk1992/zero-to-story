@@ -7,6 +7,7 @@
 | 需求 | 按需方法，不转主责 |
 | --- | --- |
 | 产品主角、材质/结构与品牌视觉 | [产品展示](product-showcase-direction.md)，先选一个可见事件，再发展摄影、图形和声音 |
+| 卖点直接造成一次可见状态倒置 | [反转广告创意](twist-ad-ideation.md)负责创意搜索与自筛；反转机制与商品因果仍在[通用反转](../../short-drama-screenwriter/references/reversal-design.md)与[产品因果](product-causality.md) |
 | 动态字体、主体与图形共演 | [构图与字体](../../mg-voiceover-animation-generator/references/composition-and-typography.md)，广告保留文案、主张与全片计划 |
 | 字形/排字或包装材料仍不具体 | [字形选型](../../visual-design-creator/references/type-and-layout-choices.md)、[包装风格](../../visual-design-creator/references/packaging-style-directions.md)，在已定整体方向内形成设计；不重写品牌标准字或已定文案 |
 | 材料声音、留白或声画先后关系 | [声音互动](../../music-video-creator/references/sound-image-interaction.md)，已有歌曲/原声和产品事实优先；不建立MV全曲计划 |
