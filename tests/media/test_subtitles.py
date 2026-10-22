@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from lfo.media.subtitles import (
     SubtitleCue,
+    SubtitleRenderer,
     clip_local_to_global_cues,
     cues_to_srt,
     cues_to_vtt,
@@ -12,6 +13,24 @@ from lfo.media.subtitles import (
     trim_cues,
     validate_srt,
 )
+
+
+class TestAuthoredAssStyle:
+    def test_authored_ass_is_not_overridden_by_portrait_caption_defaults(self) -> None:
+        for suffix in (".ass", ".ASS"):
+            command = SubtitleRenderer().build_burnin_command("input.mp4", f"brand{suffix}", "output.mp4")
+            video_filter = command[command.index("-vf") + 1]
+            assert "subtitles=" in video_filter
+            assert "force_style" not in video_filter
+            assert command[command.index("-c:a") + 1] == "copy"
+
+    def test_unstyled_captions_keep_existing_defaults(self) -> None:
+        for suffix in (".srt", ".vtt"):
+            command = SubtitleRenderer().build_burnin_command("input.mp4", f"captions{suffix}", "output.mp4")
+            video_filter = command[command.index("-vf") + 1]
+            assert "force_style=" in video_filter
+            assert "PlayResX=1080,PlayResY=1920" in video_filter
+            assert "FontName=Microsoft YaHei" in video_filter
 
 
 class TestCuesToSrt:

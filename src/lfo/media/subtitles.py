@@ -308,13 +308,18 @@ class SubtitleRenderer:
             "BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginL=60,"
             "MarginR=60,MarginV=120,WrapStyle=2"
         )
+        # Authored ASS already carries its canvas, fonts and visual hierarchy.
+        # Keep the legacy caption defaults only for unstyled SRT/VTT inputs.
+        subtitle_filter = f"subtitles='{escaped}'"
+        if Path(subtitle_path).suffix.lower() != ".ass":
+            subtitle_filter += f":force_style='{force_style}'"
         return [
             "ffmpeg",
             "-y",
             "-i",
             str(video_path),
             "-vf",
-            f"subtitles='{escaped}':force_style='{force_style}'",
+            subtitle_filter,
             "-c:a",
             "copy",
             str(output_path),
