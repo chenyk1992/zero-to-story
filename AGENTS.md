@@ -34,7 +34,7 @@
 
 ## 修改与验证
 
-- README 面向新用户；长期生产规则与操作参考放 `guides/` 并随 Git 分发。`docs/` 只保存本地迭代计划、维护记录和复盘，不作为运行依赖，不提交；不要从公开规则链接到本地迭代记录。
+- README 面向新用户；长期生产规则与操作参考放 `guides/` 并随 Git 分发。`docs/` 下只保存本地迭代计划、维护记录和复盘，不作为运行依赖，不提交；不要从公开规则链接到本地迭代记录。唯一例外是 `docs/agents/`，它是工程 Skills 读取的仓库级配置，随仓库分发。
 - 开始修改前检查工作区状态和相关 diff，保留已有未提交改动与用户资产；只改当前任务需要的文件，不顺手重构。
 - 修改规则、Skill 或流程时，联查受影响的入口、上游来源、模板、交接、实际能力与验收，保留既有要求和适用例外；以最小完整修复范围处理，并核对代表性的正向与反向场景，不以文件改动少或格式通过代替全流程完整。
 - 新增或调整的 Skill 及其脚本、参考和能力文件只放项目 `.agents/skills/`；连接配置放各宿主的项目级配置，不安装或修改全局 Skill。
@@ -62,3 +62,17 @@
 ## Skill 路由
 
 只读取当前请求所需的 Skill 和引用；Skill 审查不启动其中的创作、付费调用或部署。职责边界和外部能力规则见[Skill 路由](guides/ai-skill-routing.md)。不要把外部 Skill、工具列表或历史审计文字当成当前宿主已具备的能力。
+
+## Agent skills
+
+### Issue tracker
+
+Issue 与规格记录在 GitHub Issues，全部操作走 `gh` CLI。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用默认五角色标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单 context 布局：根目录 `CONTEXT.md` 与 `docs/adr/`。详见 `docs/agents/domain.md`。

@@ -40,7 +40,10 @@ artifacts/
 
 # Local iteration plans, maintenance notes and retrospectives.
 # Durable user/Agent documentation is tracked in guides/.
-/docs/
+# docs/agents/ holds per-repo configuration read by the engineering skills and
+# must ship with the repo; everything else under docs/ stays local.
+/docs/*
+!/docs/agents/
 
 # Node
 node_modules/
