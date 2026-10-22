@@ -14,7 +14,7 @@
 
 听完整首或采用窗口，标出实际段落起止、人声进入与结束、歌词逐句位置、显著重拍、停顿、能量与情绪转折。节拍分析只提供候选，半速/倍速歧义和弱鼓点保留未知。逐字时间需要足够听审证据；不能按字数平摊。合唱重叠可分层记录，拖音按实际演唱处理。器乐时间轴没有歌词项目。
 
-使用 Skill 的 `scripts/music_tools.py`：`inspect --audio SONG --start-ms START --end-ms END --output TIMELINE` 读取实际元信息；`analyze` 使用相同参数补候选；`validate --timeline TIMELINE --output CHECKED` 核对修订后的时序及源媒体。输出路径必须是新文件，工具不会覆盖素材。项目解释器可以执行 inspect/validate；analyze 需要显式选择已装 librosa 的 Python 环境，例如本机已验证的 Comfy Python，不自动安装依赖。每条段落或歌词事件使用原歌 `start_ms/end_ms`、原文或段落名及 `status=candidate|verified|unknown`；歌词可加 `layer` 区分合唱。每个 beat 使用原歌 `time_ms` 与核对状态。手工修订后再次验证媒体哈希和窗口范围；旧音频版本的已核对时间不能挪用到新版本。
+使用 Skill 的 `scripts/music_tools.py`：`inspect --audio SONG --start-ms START --end-ms END --output TIMELINE` 读取实际元信息；`analyze` 使用相同参数补候选；`validate --timeline TIMELINE --output CHECKED` 核对修订后的时序及源媒体。输出路径必须是新文件，工具不会覆盖素材。项目解释器可以执行 inspect/validate/analyze：analyze 在装有 librosa 时走 librosa，未安装时改用项目内置的节拍定位器，两条路径给出同一份候选契约，实际来源记在 `analysis.analyzer`；不自动安装依赖。存在半速/倍速歧义时会出现多个 `bpm_candidates`，按强拍/弱拍分别听审后选定，不自动采信其中一条。每条段落或歌词事件使用原歌 `start_ms/end_ms`、原文或段落名及 `status=candidate|verified|unknown`；歌词可加 `layer` 区分合唱。每个 beat 使用原歌 `time_ms` 与核对状态。手工修订后再次验证媒体哈希和窗口范围；旧音频版本的已核对时间不能挪用到新版本。
 
 镜头表使用歌曲时间段、最终成片 Shot、生成 Panel 三个不同单位。同一已定 Panel 可包含多个短 Shot；已有较长素材可按授权选段，但新生成不为短 Shot 另留时间余量再裁切，时长与音频窗口按[生产交接](production-handoff.md)核对。乐句和观众注意力比机械逐拍切镜更重要。
 

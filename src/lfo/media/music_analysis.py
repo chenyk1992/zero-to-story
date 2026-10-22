@@ -6,16 +6,34 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+from lfo.media.beat_locator import analyze_window
 from lfo.media.music_timeline import inspect_music, validate_music_timeline
 
 
+def _analyze_builtin(path: Path, timeline: dict[str, Any]) -> dict[str, Any]:
+    """Locate candidates with the dependency-free locator."""
+    window = timeline["window"]
+    located = analyze_window(path, start_ms=window["start_ms"], end_ms=window["end_ms"])
+    timeline["analysis"]["analyzer"] = "builtin.autocorrelation"
+    timeline["analysis"]["bpm_candidates"] = located["bpm_candidates"]
+    timeline["analysis"]["energy"] = located["energy"]
+    timeline["beats"] = located["beats"]
+    return validate_music_timeline(timeline, verify_source=False)
+
+
 def analyze_music(path: Path, *, start_ms: int = 0, end_ms: int | None = None) -> dict[str, Any]:
+    """Return a music timeline with unverified beat, tempo and energy candidates.
+
+    The librosa path is used when it is installed; otherwise the built-in
+    locator keeps the same candidate contract without the extra dependency.
+    Every result stays a candidate until a listener confirms it.
+    """
     timeline = inspect_music(path, start_ms=start_ms, end_ms=end_ms)
     try:
         librosa = import_module("librosa")
         np = import_module("numpy")
-    except ImportError as exc:
-        raise RuntimeError("音乐候选分析需要已安装 librosa 的 Python 环境") from exc
+    except ImportError:
+        return _analyze_builtin(path, timeline)
     window = timeline["window"]
     duration_seconds = (window["end_ms"] - window["start_ms"]) / 1000
     samples, sample_rate = librosa.load(str(Path(path)), sr=22050, mono=True,
@@ -25,6 +43,7 @@ def analyze_music(path: Path, *, start_ms: int = 0, end_ms: int | None = None) -
         return timeline
     hop = 512
     rms = librosa.feature.rms(y=samples, hop_length=hop)[0]
+    timeline["analysis"]["analyzer"] = "librosa.beat"
     timeline["analysis"]["energy"] = [
         {"time_ms": window["start_ms"] + round(index * hop * 1000 / sample_rate),
          "rms": round(float(level), 6), "status": "candidate"}

@@ -11,6 +11,12 @@ dependencies = []
 canvas = [
     "mcp>=1.30,<2",
 ]
+# Optional richer music analysis. The project environment can locate beat and
+# energy candidates without these; installing them is never automatic.
+audio = [
+    "librosa>=0.10,<1",
+    "numpy>=1.26,<3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-timeout>=2.3",
