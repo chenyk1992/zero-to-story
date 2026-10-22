@@ -1,5 +1,15 @@
 # Panel 与画布交接
 
+涉及具体字形/排字、包装材料或声音互动时，按[共同具体交接](../../canvas-workspace/references/creative-handoff.md#字形包装与声音互动的具体交接)将本段实际骨架、构图/阅读和声画关系展开到完整prompt、真实字图输入或后期责任；已有文字事件与歌曲窗口继续复用。方法名与角色名不成为provider参数，不为新方法另建MV计划或生成任务。
+
+按[共同风格交接](../../canvas-workspace/references/creative-handoff.md#整体风格的继承与分镜方法)从当前mv_plan继承已采用的整体媒介、美术、气质及局部变化范围，分别交本段音乐响应与具体拍法。H3与参考输入落实当前Shot需要的轮廓、材质、色光和运动语言，不只保存“国漫/拼贴”等名字；歌曲未核实的精确事件继续保持候选，已有风格不重复推荐或确认。
+
+实际歌曲到来/换版的[内部复核](music-timeline.md#实际歌曲到来后的内部复核)结论从现有主源继承：当前真实音乐版本、保持的风格及受影响Shot/音频窗口已同步，再取本Panel事实写H3和Canvas。执行端不重做创作选择或审批，不把旧版暂定时点当作当前音频依据；未受影响内容与历史快照保留。
+
+拼贴表演专项按[专业路线](collage-performance-direction.md)保留人物意图、景别/出镜形态、表演与图层主次及可见演唱事实，不把贴图平移当演唱。跨Panel统一按[共同边界](../../canvas-workspace/references/creative-handoff.md#跨panel文字声音与状态)交文字、实际主歌窗口及人物/空间/图层末态；实际输入编号在本段重映射。
+
+所选路线在当前 MV 计划中保留乐句怎样推动构图、表演、字形或拼贴层次，以及各事件由生成还是后期承担。交给 H3 时带上当前实际歌曲窗口与具体发展过程，不压成“卡点、酷炫”标签；交给后期时保留精确文字、事件窗口、实际素材及工具。纯音频、歌词或受广告委托的限定音乐任务不因此扩展成整片 MV。
+
 [共同交接](../../canvas-workspace/references/creative-handoff.md)定义源协调、逐项文字/四时间轴、采用与后期。本文为独立MV适配；受广告委托仅交实际音乐成果和窗口，不承担整片广告。广告若明确启用mv_production仍须完整满足production-checks，不能半填或跳过字段。
 
 参考复刻按[变更交接](../../video-deconstruct-analyzer/references/recreation-change-plan.md)接收方式/保留项及源片到 Panel 的时间映射与帧率证据，仍由本 MV 流程主导；源片时间与原歌时间分别记录，不默认同轴。原片音轨不替代已采用主歌曲同窗口 reference_audio，可见演唱继续绑定实际主音轨；参考用途与真实编号分开。用户新编辑按[当前版本协调](../../canvas-workspace/references/creative-handoff.md#当前版本协调)同步当前脚本与 Panel，不改历史快照。混合文字逐项交接，不因 post 摘要丢生成项。

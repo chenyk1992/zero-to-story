@@ -124,6 +124,20 @@ def test_valid_local_prompt_without_blueprint_needs_review() -> None:
     assert result["unverified"]
 
 
+def test_readonly_adapter_records_explicit_post_scope_without_changing_source() -> None:
+    plan = copy.deepcopy(PLAN)
+    plan["dialogue"] = [{"id": "VO001", "order": 1, "speaker": "旁白", "text": "天亮了。", "shot_id": "C001"}]
+    plan["generation"]["shots"][0]["dialogue_ids"] = ["VO001"]
+    client = FakeClient(responses(canvas(SINGLE_SHOT)))
+    result = MODULE.inspect_canvas(client, "canvas-1", "video-1", 1, blueprint=plan, panel_id="P001", post_dialogue_ids=["VO001"])
+    assert result["status"] == "needs_review"
+    assert result["post_dialogue_ids"] == ["VO001"]
+    assert not [f for f in result["findings"] if f["code"] == "PLAN-DIALOGUE"]
+    assert all(method == "GET" and body is None for method, _, body in client.calls)
+    args = MODULE._parser().parse_args(["--canvas-id", "canvas-1", "--node-id", "video-1", "--expected-version", "1", "--post-dialogue-id", "VO001"])
+    assert args.post_dialogue_id == ["VO001"]
+
+
 def test_structural_error_returns_failed_status() -> None:
     broken = canvas(BASE.replace("00:03.000", "00:10.000"))
     result = MODULE.inspect_canvas(FakeClient(responses(broken)), "canvas-1", "video-1", 1)
@@ -207,6 +221,16 @@ def test_unrelated_run_change_does_not_invalidate_the_same_effective_input() -> 
 
 def test_main_rejects_unpaired_blueprint_arguments_without_creating_a_client(capsys: Any) -> None:
     assert MODULE.main(["--canvas-id", "canvas-1", "--node-id", "video-1", "--expected-version", "1", "--blueprint", "x.json", "--json"]) == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "unavailable"
+
+
+def test_post_scope_without_blueprint_stops_before_client_creation(capsys: Any, monkeypatch: Any) -> None:
+    def unexpected_client(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("Offline argument rejection must not create a client")
+
+    monkeypatch.setattr(MODULE, "CanvasClient", unexpected_client)
+    assert MODULE.main(["--canvas-id", "canvas-1", "--node-id", "video-1", "--expected-version", "1", "--post-dialogue-id", "D001", "--json"]) == 2
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "unavailable"
 

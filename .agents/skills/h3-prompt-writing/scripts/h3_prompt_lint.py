@@ -94,6 +94,7 @@ def lint_snapshot(
     *,
     blueprint: Mapping[str, Any] | None = None,
     panel_id: str | None = None,
+    post_dialogue_ids: Sequence[str] = (),
 ) -> LintResult:
     """Check a resolved H3 snapshot without modifying it.
 
@@ -162,6 +163,7 @@ def lint_snapshot(
         shot_count,
         findings,
         unverified,
+        post_dialogue_ids,
     )
 
     return LintResult(
@@ -618,7 +620,16 @@ def _check_plan(
     shot_count: int,
     findings: list[Finding],
     unverified: list[str],
+    post_dialogue_ids: Sequence[str],
 ) -> None:
+    if isinstance(post_dialogue_ids, (str, bytes)) or not isinstance(post_dialogue_ids, Sequence) or any(
+        not isinstance(item, str) or not item for item in post_dialogue_ids
+    ):
+        findings.append(Finding("PLAN-DIALOGUE", "error", "后期对白范围必须是由非空对白 ID 组成的列表。"))
+        return
+    if post_dialogue_ids and (blueprint is None or not isinstance(panel_id, str) or not panel_id):
+        findings.append(Finding("PLAN-DIALOGUE", "error", "后期对白范围需要对应的当前 Panel 蓝图。"))
+        return
     if blueprint is None and panel_id is None:
         unverified.append("未验证: 未提供蓝图, 未核对上游 Panel、镜头和锁定对白。")
         return
@@ -693,7 +704,7 @@ def _check_plan(
     if description and (_DIALOGUE_PATTERN.search(description.value) or _SPEAKER_PATTERN.search(description.value)):
         unverified.append("未验证: 蓝图未提供角色与 (Sx) 的结构化绑定, 未确认说话人身份。")
     if description is not None:
-        _check_plan_dialogue(description, shot_ids, plan_shots, blueprint, findings, unverified)
+        _check_plan_dialogue(description, shot_ids, plan_shots, blueprint, findings, unverified, post_dialogue_ids)
 
 
 def _mapping_items(value: Any) -> list[Mapping[str, Any]]:
@@ -751,7 +762,18 @@ def _check_plan_dialogue(
     blueprint: Mapping[str, Any],
     findings: list[Finding],
     unverified: list[str],
+    post_dialogue_ids: Sequence[str],
 ) -> None:
+    panel_dialogue_ids = {
+        item for shot in plan_shots
+        for item in _strict_string_items(shot.get("dialogue_ids"), "shot.dialogue_ids", findings)
+    }
+    post_ids = set(post_dialogue_ids)
+    if not post_ids.issubset(panel_dialogue_ids):
+        findings.append(Finding("PLAN-DIALOGUE", "error", "后期对白 ID 必须属于当前 Panel，不能排除未知或其他 Panel 的台词。"))
+        return
+    if post_ids:
+        unverified.append("未验证: 后期对白责任由调用方按当前创作源提供; 未核实实际音轨、窗口或后期完成情况。")
     if "<scenetrans>" in description.value or "<cutoff>" in description.value:
         unverified.append("未验证: 跨镜或 cutoff 对白无法唯一归属, 未猜测拼接结果。")
         return
@@ -777,7 +799,8 @@ def _check_plan_dialogue(
             if not isinstance(text, str):
                 findings.append(Finding("PLAN-DIALOGUE", "error", "蓝图锁定对白必须是文本。", description.line))
                 return
-            expected.append(text)
+            if dialogue_id not in post_ids:
+                expected.append(text)
         expected_by_shot.append(expected)
 
     actual_by_shot: list[list[str]] = [[] for _ in shot_ids]

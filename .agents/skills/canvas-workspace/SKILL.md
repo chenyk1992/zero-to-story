@@ -23,6 +23,10 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 
 三主入口和专业任务的源协调、文字/时序、采用版及节点映射见[共同创作交接](references/creative-handoff.md)。画布不是第四个创作主入口。
 
+选定的动作、构图、材质和声音表现按[表现方法的传递与局部更新](references/creative-handoff.md#表现方法的传递与局部更新)进入现有提示词、实际参考或后期清单；方法链接和资料节点本身不会进入模型。
+
+片头、拼贴表演与游戏状态等专业成果回原主源；多Panel按[共同边界](references/creative-handoff.md#跨panel文字声音与状态)保留文字、声音与实际状态。保存现有字段，不从专业术语推导新能力或自动创建运行。
+
 - 日常先用 `canvas_read(canvas_id)` 的分页目录定位；目录省略长正文和历史，不可把它当完整图覆盖保存。按 `page.next_offset` 和当前 `expected_version` 读下一页，版本变化时重读。需要完整项目数据时显式 `view="full"`。
 - 多个镜头用 `canvas_read(canvas_id, node_ids=[...])` 一次精读最多 20 个目标及直接上游；全文和参数原样返回，共享输入只返回一次。响应的 `production` 同时给目标节点当前 readiness 和最新运行摘要，不为同一批次再逐项读取。readiness 不代表授权，确认执行时仍冻结并核实实际输入。按当前版本用一批 `canvas_edit` operations 保存，默认只返回新版本与改动回执；确需全图时设 `full=True`。
 

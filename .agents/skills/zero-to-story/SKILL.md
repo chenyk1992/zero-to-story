@@ -1,6 +1,6 @@
 ---
 name: zero-to-story
-description: 将灵感、小说、剧本或短剧交接转成影视故事板、角色与必要视觉资产，再按Panel交给H3和Canvas。用于影视剧、叙事短片及其局部导演任务；完整广告交advertising-creator，独立歌曲/MV交music-video-creator。
+description: 将灵感、小说、剧本或短剧交接转成影视故事板、角色与必要视觉资产，结合内容推荐或继承整体风格，再按Panel交给H3和Canvas。用于影视剧、叙事短片及其局部导演任务；完整广告交advertising-creator，独立歌曲/MV交music-video-creator。
 ---
 
 # 故事到分镜与视频交接
@@ -11,6 +11,8 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 
 读取已有创作源和用户规格：剧情、目标时长、画幅、画风、对白/声音、交付阶段。复用已有决定；只在关键事实缺失或冲突时集中说明缺口。主会话负责导演选择，下游按确定的事实写提示词和执行。
 
+开始新故事、改编或全片方案时，先按[整体风格推荐与继承](references/style-selection.md)结合用户想法、剧情和观看目标主动推荐适合的作品方向，再深化依赖该方向的剧本与分镜。已有剧情不等于风格已定；已有风格直接继承，授权自主设计则选择并说明依据，不重复确认。末日/科幻、国漫等题材与美术可组合；反转、微表情、慢动作和运镜按剧情在剧本/分镜层安排，不与整体风格并列为互斥选项。局部任务不重开全片选择。
+
 视频制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)记录本次目标时长、画幅、生成参数、声音与导出要求，区分用户指定、同作品沿用与本次推断。已有决定直接复用；只询问共享硬门和影响交付的真实冲突，不逐 Panel 重问。规格写入故事板及蓝图 `user_constraints`，H3 定稿和 Canvas 继承，纯文本任务不提前填写执行参数。
 
 有人物的故事在拆 Panel 前读取[固定人物文字与跨模式使用](references/creative-assets.md#人物与场景文本锚点)，从整场动作关系识别全部需要连续的人物，包括跨镜配角、旁观者和背影；自动补齐必要设计并沿用已有 ID/造型，不等用户逐人提醒。角色列表不等于生图清单。
@@ -19,6 +21,8 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 | --- | --- |
 | 影视中的身份设计/必要资产 | 委托[视觉资产](../visual-design-creator/SKILL.md)，按[身份适配](references/character-identity-design.md)沿用cast ID/阶段；独立资产请求止于专能 |
 | 情景喜剧分镜 | 读[喜剧导演](references/sitcom-direction.md)；缺剧本时由编剧层确定因果 |
+| 影视片头、片名揭示或开场卡司 | 委托[标题序列](../title-sequence-creator/SKILL.md)限定片头，回本故事主源；完整预告仍由本入口统筹 |
+| RPG/游戏电影化、探索/战斗/跑酷与HUD状态 | 按需读[游戏导演](references/game-cinematic-direction.md)，仅补创作与状态交接；宣传广告回广告，歌曲驱动回MV |
 | 完整广告或独立宣发广告 | 交[advertising-creator](../advertising-creator/SKILL.md)主责；广告复用本目录导演方法，不建立影视全片蓝图 |
 | 反转、身份揭示或误判的导演信息安排 | 按需读[通用反转](../short-drama-screenwriter/references/reversal-design.md)，保留导演真相和观众获知窗口 |
 | 慢动作、冻结、子弹时间或 bullet-time-slow-motion-video 项目方法 | 读[时间效果导演](references/time-effects-direction.md)，写回现有 Setup、状态和声音字段，不引入精确速度参数 |
@@ -26,11 +30,13 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 | 参考片改编/受控复刻 | 接收[变更交接](../video-deconstruct-analyzer/references/recreation-change-plan.md)，采用用户方式并记入当前简报，不新增 Canvas 参数 |
 | 参考作品研究、选题或改编依据 | 按需读[参考研究](references/reference-research.md)，研究成果返回当前主源，不自动进入生产 |
 | 历史、科普或知识解说稿 | 委托[narration-writer](../narration-writer/SKILL.md)完成事实与旁白；影视重现由本入口统筹，MG/B-roll/Presenter 保留专业范围 |
-| 剧本、改编与叙事声音 | 读[剧本与改编层](references/script-adaptation.md)，再进入故事板设计 |
-| 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
+| 剧本、改编与叙事声音 | 读[剧本与改编层](references/script-adaptation.md)；已选旁白与对白混合时按需读[混合叙事](references/mixed-narration-direction.md)，再进入故事板设计 |
+| 故事板与导演设计 | 读[故事板与导演工作台](references/storyboard-production.md)，需要把事件发展成具体拍法时读[镜头表现示例](references/expressive-direction.md)，填字段时查[故事板结构](references/storyboard-brief.md) |
 | 只修改某个 Panel 的拍法 | 读[局部改拍](references/storyboard-production.md#局部改拍)，依据当前创作源修改，保留未受影响的剧情、对白和 ID |
 | 下一集复用人物，或角色有别名、年龄与服装变化 | 读[角色身份与造型复用](references/creative-assets.md#角色身份与造型复用)，先匹配故事身份，再选择本镜适用的资产 |
 | 宫崎骏／吉卜力启发的手绘动画，或未来科幻短片与参考图 | 按需读[视觉风格参考](references/visual-style-profiles.md)的对应分支，将具体美术规则写回风格与资产字段；项目采用方法涵盖 miyazaki-inspired-animation / future-sci-fi-cinematic-generator，不启动其外部生产流程 |
+| 都市赛璐璐 / City Pop 或中式仙宫空间的风格设计 | 读同一[风格参考](references/visual-style-profiles.md)的对应分支，落实运动、空间和声音；只要图片止于图片，不继承外部固定镜数/模型或改变广告、MV 主责 |
+| 风格化3D、国漫块面或带绘画表面的3D | 读同一参考的[3D分支](references/visual-style-profiles.md#风格化3d与混合叙事)，声音分工另按混合叙事；不默认工作室、强制首帧或重置周期 |
 | 细化当前镜头的动作或表演 | 仅按需要读[动作导演参考](references/action-direction.md)或[表演导演参考](references/performance-direction.md)，再写回已有的 Setup、状态与转场字段 |
 | 多人、反打、出入口、遮挡或复杂走位 | 读[复杂场面调度](references/blocking-direction.md)，稳定场景位置后再转为各机位画面关系 |
 | 为已锁定画面制作配乐 | 保持本故事流程，只复用[音乐方向的锁定画面分支](../music-video-creator/references/music-direction.md#锁定画面配乐)，保留画面、对白与动作时点 |

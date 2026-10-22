@@ -22,6 +22,8 @@ description: 为国内微短剧、海外 ReelShort/DramaBox 或独立情景喜�
 
 读取项目状态时只读用户点名的剧目；独立请求不扫描其他剧目。用户已给阶段和集数就完成该范围，不擅自扩成整部剧或固定集数。只有缺失信息会改变题材、语言、受众、市场格式或下游输入时才提问；其余采用清楚的默认并说明。
 
+新创作方案按[整体风格推荐与继承](../zero-to-story/references/style-selection.md)从故事意图主动推荐适合的整体方向，写入当前创作方案/简报，再深化剧本。影视剧本可先推荐美术与气质，不提前收集生成参数；单独文学文本或台词润色仅讨论所需类型与语气，不强加视觉设计。受影视、MV或广告委托时直接继承调用方风格及局部例外，不另选或重问。已有剧情但视觉风格未定时由作品主责补推荐；只读桥接保留未定项，不自行选成已确认。反转因果与伏笔在剧本安排，微表情、慢动作与运镜在具体场面按表达需要细化，均不替代整体风格。
+
 连载剧在用户未给预算时可参考每集 3–6 场、约 15–25 句对白、一个主冲突和一个副冲突；这是规划参考，不得覆盖用户的时长、场景或对白要求。独立单集按用户规格收束，不强加下集预告。
 
 写作质量以可拍和可读为准：每场有明确目的和变化，动作能被镜头看见，台词推动冲突且能区分角色；时间线、称呼、服装、道具、伏笔、空间关系和人物出场保持连续。需要视频交接时，补充景别、主体位置、可见起止状态和对白/环境声意图；精确对白或屏幕文字逐字保留。
@@ -41,6 +43,7 @@ description: 为国内微短剧、海外 ReelShort/DramaBox 或独立情景喜�
 | 连载微短剧 `/目录` | [paywall-design](./references/paywall-design.md)、[rhythm-curve](./references/rhythm-curve.md) |
 | 连载微短剧 `/分集 N` | [rhythm-curve](./references/rhythm-curve.md)、[satisfaction-matrix](./references/satisfaction-matrix.md)、[hook-design](./references/hook-design.md)；第 1 集再读 [opening-rules](./references/opening-rules.md)，付费集再读 [paywall-design](./references/paywall-design.md) |
 | 改写台词，或 `/自检 N` 中需要诊断台词 | [dialogue-diagnosis](./references/dialogue-diagnosis.md)；只处理当前授权段落，锁定对白逐字保留 |
+| 半解说或旁白与对白混合的虚构故事 | [混合叙事](../zero-to-story/references/mixed-narration-direction.md)中的表达分工；编剧只交原文、归属与画面意图，Panel/音轨/执行由下游处理 |
 | `/自检 N`、`/合规` | [compliance-checklist](./references/compliance-checklist.md)；创作检查按工作流契约 |
 | `/桥接 N` | [handoff-mapping](./references/handoff-mapping.md)、[handoff-brief-template](./references/handoff-brief-template.md)；字段示例按需读 JSON 模板 |
 | `/出海`、海外对白或多语互动 | [语言适配](./references/overseas-dialogue.md)；类型迁移再读[genre-guide](./references/genre-guide.md) 的出海部分 |

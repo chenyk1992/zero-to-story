@@ -1,5 +1,13 @@
 # 原 Skill 方法的项目适配
 
+2026-10-22 按最新评估补[声音互动](sound-image-interaction.md)的原创方法与例子，复用已有音乐事件、跨Panel声音及实际后期定义；同时引用共享字形/排字与包装方法，不另建字体角色或风格母版。不复制外部cue表/代码，不引入固定BPM、声效数量、每状态cue或Node节拍工具；规划、输入可传递与实际音画接受仍分别报告。
+
+第三轮对本机collage-performance-mv 1.0.0继续自主展开乐句/段落的身体与图层发展、群体功能及生成式整幅/独立演员层交接。具体字体共演复用项目MG方法；不迁入固定动作/表演占比、独立合成器或自动验收。来源方法只帮助选定表达，不把作者案例或代码存在当作当前可执行与采用证据。
+
+第二轮自主重写[拼贴表演](collage-performance-direction.md)，继续对照collage-performance-mv 1.0.0的人物与平面设计协作、景别/表演分工及原混音用途；不复制原文/媒体/代码，不迁入固定60%表演、人物全程顶层、默认静音全部生成声或逐批用户验收，也不虚称已具备独立抠像合成。所选声音、层序与验收由当前计划和共享规则持有。
+
+2026-10-22 对照本机 `collage-performance-mv` 1.0.0、`h3-visual-design` 1.0.4 与已有两份音乐来源，自主补写[乐句示例](route-examples.md)，按需复用项目[构图与字体](../../mg-voiceover-animation-generator/references/composition-and-typography.md)。只取人物内部表演/外部图层运动分工、完整构图与段落发展的思路；不复制原文、代码、图片，不迁入人物表演比例、人物始终顶层、固定清晰度或用户逐批审批。独立抠像/图层合成仍须实际能力，未在本轮接入，也不改变已有 H3 生成式文字路线。新编示例不作为历史或当前媒体已通过的证据。
+
 本轮另按需复用[通用反转](../../short-drama-screenwriter/references/reversal-design.md)、[表演](../../zero-to-story/references/performance-direction.md)、[时间效果](../../zero-to-story/references/time-effects-direction.md)、[对称风格](../../zero-to-story/references/symmetric-storybook-style.md)、[资产/布局方法](../../visual-design-creator/SKILL.md)。对应十三来源取舍在各方法source-notes维护；MV保留实际歌窗口和原文字/拼贴要求，不新增商品/影视六Beat。完整广告的歌曲委托只交音乐成果，不抢全片。
 
 以下材料由用户提供，作为创作方法来源；当前生产以本项目规则、实际能力和用户指令为准。所需方法已保存在本 Skill 内，运行不需要原目录、外部 MV workflow 或故事 Skill 的创作文件。

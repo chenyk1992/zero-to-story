@@ -29,6 +29,7 @@ def inspect_canvas(
     *,
     blueprint: Mapping[str, Any] | None = None,
     panel_id: str | None = None,
+    post_dialogue_ids: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Inspect one stable Canvas snapshot with GET requests only."""
 
@@ -54,7 +55,9 @@ def inspect_canvas(
             return _unavailable(canvas_id, node_id, first_version, "readiness 对应的画布版本已变化。")
         first_snapshot = resolve_snapshot(first_canvas, node_id, first_runs)
         first_digest = _digest_json(first_snapshot)
-        lint = lint_snapshot(first_snapshot, blueprint=blueprint, panel_id=panel_id)
+        lint = lint_snapshot(
+            first_snapshot, blueprint=blueprint, panel_id=panel_id, post_dialogue_ids=post_dialogue_ids
+        )
 
         second_canvas = _mapping_response(client.request("GET", canvas_path), "canvas")
         second_version = _version(second_canvas)
@@ -81,6 +84,7 @@ def inspect_canvas(
         "canvas_version": first_version,
         "input_digest": first_digest,
         "blueprint_digest": None,
+        "post_dialogue_ids": list(post_dialogue_ids),
         "status": status,
         "findings": findings,
         "checked": list(lint.checked),
@@ -100,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("expected-version 必须是非负整数。")
         if bool(args.blueprint) != bool(args.panel_id):
             raise ValueError("--blueprint 与 --panel-id 必须同时提供。")
+        if args.post_dialogue_id and not args.blueprint:
+            raise ValueError("--post-dialogue-id 需要 --blueprint 和 --panel-id。")
         project_root = args.project.resolve()
         blueprint, blueprint_digest = _read_blueprint(args.blueprint) if args.blueprint else (None, None)
         settings = CanvasSettings.resolve(project_root=project_root)
@@ -114,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             args.expected_version,
             blueprint=blueprint,
             panel_id=args.panel_id,
+            post_dialogue_ids=args.post_dialogue_id,
         )
         result["blueprint_digest"] = blueprint_digest
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -136,6 +143,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--url")
     parser.add_argument("--blueprint", type=Path)
     parser.add_argument("--panel-id")
+    parser.add_argument("--post-dialogue-id", action="append", default=[], help="当前创作源明确交后期的对白 ID，可重复指定。")
     parser.add_argument("--json", action="store_true")
     return parser
 

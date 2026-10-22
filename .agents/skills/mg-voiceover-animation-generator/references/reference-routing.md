@@ -6,6 +6,8 @@ poster-motion-generator的五层分析与八类运动、ip-toy-grid-motion的最
 
 共享授权、停止和结果规则见[项目共享生产规则](../../../../guides/ai-system-prompt.md)。只读取会改变当前 MG 决策的参考。
 
+第一轮对照本机 `h3-visual-design` 1.0.4、`cinematic-title-sequence` 1.0.4，自主重写[构图与字体](composition-and-typography.md)。第三轮补入[共演方法](type-subject-direction.md)的具体过程；未复制原文/素材/代码，未沿用固定字数、效果配额、中文分栏 Prompt、2K 默认或强制 H3 重绘原片。片头限定任务已由项目[标题序列](../../title-sequence-creator/SKILL.md)承接；这些视觉方法不声明新增后期能力。
+
 ## 创作参考
 
 所有 MG 任务先读本路由；只有准备 H3 交接或用户要求提示词文档时才读 [h3-mg-prompt-template.md](h3-mg-prompt-template.md)，再按问题选择：
@@ -13,6 +15,10 @@ poster-motion-generator的五层分析与八类运动、ip-toy-grid-motion的最
 | 问题 | 参考 |
 |---|---|
 | 风格、版式、色彩、信息密度 | visual-style-layout-library.md |
+| 字体角色、构图状态与主体共演 | [构图与字体](composition-and-typography.md) |
+| 字形骨架/读序与包装材料需要具体选择 | [字形与排字](../../visual-design-creator/references/type-and-layout-choices.md)、[包装风格](../../visual-design-creator/references/packaging-style-directions.md)，不重建已有角色和共演定义 |
+| 材料声音、先后/延迟与留白 | [声音互动](../../music-video-creator/references/sound-image-interaction.md)，选中的关系写回原时间线 |
+| 空间交换、材料经过、字形转场与轴线继承 | [具体共演方法](type-subject-direction.md)，只读本次选中机制 |
 | 卡片、图标、线条、镜头和转场 | element-motion-transition-library.md |
 | 标题、关键词、输入框、动态字 | kinetic-typography-motion-library.md |
 | 抽象概念、对比、分流、聚合、波形 | mg-motion-pattern-library.md |

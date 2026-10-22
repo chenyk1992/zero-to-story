@@ -64,7 +64,7 @@ Recommended structure: **first-frame state → observable intermediate changes �
 
 `integrated_multimodal_description` is the main body of the rewritten prompt. Every detail should correspond to something visible or audible: visual style, initial composition, subject appearance and position, scene and key props, actions and reactions, shot changes, spoken language, and synchronized diegetic sound.
 
-At the beginning of `[Shot 1]`, state the overall style and initial composition. Common styles include `Cinematic`, `live-action`, `2D-animated`, `3D CG`, `claymation`, `watercolor`, and `vintage film`. For keyframe tasks, derive the style from the reference image; for T2VA, select it from the user's text.
+At the beginning of `[Shot 1]`, state the overall style and initial composition. Common styles include `Cinematic`, `live-action`, `2D-animated`, `3D CG`, `claymation`, `watercolor`, and `vintage film`. Inherit the upstream selected medium, visual language and tone, including applicable local variations; do not reopen style selection. For keyframe tasks, retain traits consistent with the actual reference image; for T2VA, express the upstream selected style through concrete visible features. A conflicting image and plan must return to the creative owner for resolution. Shot-specific slow motion, expressions or camera moves do not replace the overall style.
 
 When no visual reference is supplied, reuse the approved character and scene text anchors for the subjects and environment that are actually visible in the shot. Keep the anchor wording stable across Panels; add only shot-specific pose, state, lighting, and action. Do not use a text anchor to claim an exact first frame—use I2VA or FL2VA when an exact frame is required.
 
@@ -120,6 +120,8 @@ The camera holds a static shot as the runner exits the frame.
 ### 4.4 Speakers, Dialogue, and Singing
 
 Subjects who speak, sing, or produce an off-screen human voice use stable IDs such as `(S1)` and `(S2)`. When multiple already-numbered speakers speak or sing together, use a compound ID such as `(S1,S2)`. A speaker keeps the same ID across shots; characters who never vocalize receive no speaker ID.
+
+Number speakers consecutively from S1 in the order they first vocalize in the current generation prompt. A voice assigned only to postproduction receives no generation speaker ID. If delivery responsibility changes, remap the current prompt's speaker numbers while preserving the upstream character IDs and the identity of each voice; do not leave a reserved number for the removed voice.
 
 When a speaker first appears, provide enough information from the visual and audio context to establish a stable identity, such as character type, age, gender, whether the person is on-screen, pitch, timbre, speaking rate, or accent. Place the speaker's identifying phrase, ID, action, and delivery outside `<d>`. Inside `<d>`, include only the language tag and the actual user-provided spoken content. Preserve every original word and punctuation mark verbatim; do not translate or rewrite them.
 

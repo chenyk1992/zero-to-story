@@ -1,5 +1,15 @@
 # 来源说明
 
+## 2026-10-22 创作表现补强
+
+第三轮继续依据以下本地来源自主展开风格化3D、都市运动与仙宫空间生活关系，所有新配方为原创规划。去掉固定重置/发声比例不等于丢弃媒介差异；本轮把具体轮廓、材质、运动及节奏选择写回既有风格参考、模板和H3交接，不承诺静态图或原包案例已经证明本项目视频效果。
+
+第二轮对照本机rpg-game-cinematic 1.0.0，自主编写[游戏电影化](game-cinematic-direction.md)与当前状态交接模板，只取行动/空间/HUD生命周期及计划/实测分开的方法。未复制文字/代码/资产，未迁入30秒/固定地标数量、付费试片、分层HUD工具假设、额外审批或空间状态替代精确尾帧的默认；执行仍遵守项目现行规则。
+
+只读对照本机 `half-narrated-3d-short-drama` 1.0.2、`90s-cel-animation-city-pop-short` 1.0.1、`chinese-celestial-palace-video` 1.0.1 的本地快照。自主重写旁白/对白/画面分工、音频排程、都市赛璐璐与仙宫环境互动方法；[镜头表现](expressive-direction.md)与[混合叙事](mixed-narration-direction.md)使用新编案例，不是历史作品缺陷的通用化。既有 miyazaki-inspired-animation / future-sci-fi-cinematic-generator 的风格适配继续保留。
+
+不复制原包文字、模板、媒体或代码；本地包未附许可文件，元数据版本不构成复制分发授权。未迁入固定发声比例、强制 TTS 预演、周期性主卡重置、固定五镜、默认图像模型、审批或重试流程。方法、结构/输入检查与实际效果分别记录，不以旧作品的问题推断现行 Skill 有缺陷。
+
 ## 漫剧老李新版的选择性方法适配
 
 2026-10-20 审查 [lixiaoxiao9888-create/manju-laoli-skill](https://github.com/lixiaoxiao9888-create/manju-laoli-skill/tree/370a236ed47d29ef3bf356ced85a17cee2f117a4) 固定版本 `370a236ed47d29ef3bf356ced85a17cee2f117a4`（根 LICENSE 为 MIT，Copyright (c) 2026 Short-Drama Director Suite contributors）。在已有旧版适配上，自主重写参考研究、复杂调度、动作专项与风格选择方法，补充编剧层人物/语言参考和解说文本专能；对应文件与归属见[第三方说明](../../../../THIRD_PARTY_NOTICES.md)。没有导入上游 Skill、脚本、素材库或运行链。

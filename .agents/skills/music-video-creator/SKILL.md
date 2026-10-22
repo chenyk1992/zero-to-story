@@ -1,6 +1,6 @@
 ---
 name: music-video-creator
-description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际歌曲设计独立MV、卡点表演、空间歌词和复古拼贴音乐视频。包含 music-video-subtitle-generator 与 cool-music-video 的项目适配方法；纯音频止于音频交付，普通配乐剧情片由故事主导，整支歌曲广告由advertising-creator统筹，本Skill只交音乐成果。
+description: 创作歌词、歌曲或器乐，支持多人轮唱；为MV结合歌曲与想法推荐或继承整体风格，从实际歌曲设计卡点表演、空间歌词和复古拼贴音乐视频。包含 music-video-subtitle-generator 与 cool-music-video 的项目适配方法；纯音频止于音频交付，普通配乐剧情片由故事主导，整支歌曲广告由advertising-creator统筹，本Skill只交音乐成果。
 ---
 
 # 音乐与 MV 创作
@@ -21,12 +21,14 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱，并从实际�
 
 ## MV 六阶段
 
+独立MV在前期创意阶段先按[整体风格推荐与继承](../zero-to-story/references/style-selection.md)结合歌曲主题、用户想法和观看目标主动推荐整体媒介、美术与气质，再发展剧情/表演/意象/文字路线和详细分镜。已有风格直接继承，授权自主设计则自行选择并说明依据，不重复确认。只有想法或歌词时视觉方向可暂定，详细音乐事件仍等实际采用歌核实；纯歌词/音频任务保持原范围。国漫、末日科幻等整体方向与局部反转、微表情、慢动作、运镜分层处理，音乐曲风不自动决定画风。
+
 MV 制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)在 `mv_plan` 记录歌曲范围、时长、画幅、生成参数、声音与导出要求，区分用户指定、同 MV 沿用与本次推断；不逐镜重问。按[音乐时间轴](references/music-timeline.md)绑定实际采用歌曲及窗口，不能由模型默认长度决定选曲范围。仅歌词、歌曲/器乐或局部文字交付不提前收集视频参数。
 
 1. 确定歌曲与意图：沿用用户选定的已有歌曲版本，核对实际文件与采用依据；用户选曲不自动等于内容验收 ACCEPT。只有歌词或想法时，在前期创意简报中按[音乐方向](references/music-direction.md)完成实际歌词、Hook/旋律主题、节奏、人声、编曲发展与收尾，形成音乐创作稿并交 Music 3 生成。正式详细分镜和参考卡以实际采用歌曲为依据；器乐作品无需歌词。
-2. 多人项目先冻结最终混剪和实际声音到角色的映射，再根据**实际采用音频**建立[音乐时间轴](references/music-timeline.md)：段落、歌词句、重要重拍、停顿及情绪转折；候选分析须听审校准。
+2. 多人项目先冻结最终混剪和实际声音到角色的映射，再根据**实际采用音频**建立[音乐时间轴](references/music-timeline.md)：段落、歌词句、重要重拍、停顿及情绪转折；候选分析须听审校准。从暂定视觉转到实际歌曲或歌曲换版时，由主责完成[内部复核](references/music-timeline.md#实际歌曲到来后的内部复核)，在已选风格内更新受影响表达，直接继承已有选择，不新增确认或审批。
 3. 按[MV 导演方法](references/mv-direction.md)选择声音事件，安排表演、意象、剧情与文字的响应和全曲发展；按下方路线读取对应方法，建立文字系统，与人物/环境美术并行。未核对的事件保持候选，可用于暂定样式探索，不能作为精确歌词、口型或镜内卡点的采用依据；缺口只影响依赖该事件的镜头。
-4. 把成片 Shot 映射到歌曲时间段，写明唱词、动作、运镜、文字事件及转场，再安排生成 Panel 和[视觉资产](references/visual-assets.md)。人物含跨镜配角按[固定文字与跨模式规则](../zero-to-story/references/creative-assets.md#人物与场景文本锚点)记录在本片计划；完整贴字/拼贴路线落实所需独立样式卡、空间卡，人物图按用途选择。确需完整人物图时使用[完整人物模板](assets/character_reference.template.md)，保留单角色16:9三视图与1–2张半身变化，不因登记角色自动生图，无人物不造人物卡。具体歌词图与镜头构图共同设计，再制作精确首帧或绑定普通 R2V。用[创作计划模板](assets/mv_plan.template.md)记录，先验证代表乐句的构图、文字和真实输入，再扩展同类镜头。
+4. 把成片 Shot 映射到歌曲时间段，写明唱词、动作、运镜、文字事件及转场，再安排生成 Panel 和[视觉资产](references/visual-assets.md)。人物含跨镜配角按[固定文字与跨模式规则](../zero-to-story/references/creative-assets.md#人物与场景文本锚点)记录在本片计划；完整贴字/文字主导拼贴路线落实所需独立样式卡、空间卡，人物图按用途选择。确需完整人物图时使用[完整人物模板](assets/character_reference.template.md)，保留单角色16:9三视图与1–2张半身变化，不因登记角色自动生图，无人物不造人物卡。具体歌词图与镜头构图共同设计，再制作精确首帧或绑定普通 R2V。用[创作计划模板](assets/mv_plan.template.md)记录，先验证代表乐句的构图、文字和真实输入，再扩展同类镜头。
 5. 对已确定的 Panel 按[生产交接](references/production-handoff.md)交给 [h3-prompt-writing](../h3-prompt-writing/SKILL.md)，将全片脚本/版本映射和逐 Panel 完整提示词保存到 Canvas，再经 [canvas-workspace](../canvas-workspace/SKILL.md)执行。MV 不另写 H3 语法或提交 Comfy 任务。
 6. 用户要求成片时，围绕主歌曲完成[后期与成片验收](references/finishing-and-review.md)：采用窗口的粗剪、准确歌词、必要音效、一次完整视听检查。
 
@@ -40,14 +42,17 @@ MV 制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#�
 
 先记录用户希望获得的观看效果和所用方法。音乐曲风不等于视觉路线：流行歌曲也可使用空间歌词、拼贴或表演；Trap 等触发词不自动要求黑红色、快速硬切或全程演唱。
 
+路线已有、需要把它发展成完整乐句或安排重复副歌时，读[乐句与风格示例](references/route-examples.md)。从中选择文字、人物、图层或意象的主导关系，写回当前音乐响应与 Shot；示例不是固定镜数、风格配额或额外试片要求。
+
 参考歌曲/MV时按[参考研究](../zero-to-story/references/reference-research.md)提取情绪、乐句发展与声画机制，不把榜单或评论当作实际听看证据。多语创作按需复用[语言适配](../short-drama-screenwriter/references/overseas-dialogue.md)，保留歌词韵律与风格，歌曲定稿后不借语言润色改动已采用词曲。叙事群戏和动作段按需复用[复杂调度](../zero-to-story/references/blocking-direction.md)与[动作导演](../zero-to-story/references/action-direction.md)，均服从实际主歌曲窗口。
 
 | 当前需求 | 必须落实的方法与产物 |
 | --- | --- |
 | 点名 `music-video-subtitle-generator`，或要求歌词贴字、空间字幕、文字驱动 MV | 读[文字导演](references/typography-direction.md)，形成文字系统与逐镜文字事件；文字在首帧和动作设计前参与构图。普通底部字幕或几张章节标题不能替代此路线 |
-| 点名 `cool-music-video`，或要求复古拼贴、zine、说唱时尚表演 | 读[风格方法](references/style-library.md)及文字导演，落实印刷图层、动作与空间路线、设计主导镜头和字形回收。保留方法，不照搬固定 15 秒或固定镜数 |
+| 点名 `cool-music-video`，或明确以复古印刷/文字版式主导的zine、说唱时尚路线 | 读[风格方法](references/style-library.md)及文字导演，落实印刷图层、动作与空间路线、设计主导镜头和字形回收。保留方法，不照搬固定 15 秒或固定镜数 |
 | 同时要求两者 | 以实际歌词及声音事件组织时间，以拼贴字层与表演组织视觉；在计划中分别指出两者落在哪些 Shot 和文字事件 |
 | 叙事、诗意、纯意象、普通字幕或明确无字 | 按用户路线组织；文字方法只在需要时读取。纯器乐可有视觉词也可无字，不能凭空补唱词 |
+| 人物表演与平面拼贴共同主导，或点名collage-performance-mv | 读[拼贴表演](references/collage-performance-direction.md)，在当前计划落实表演意图/出镜形态、图层关系、实际歌曲与生成/后期责任；不迁入表演占比或新合成器 |
 
 用户已指定的方法不能在自主决策时悄悄变成通用电影感镜头。授权自行设计时可自行完成路线选择和代表片段检查，不重复索要批准。能力不足只影响相关效果；记录可执行替代及其差异，不能以改名掩盖简化。来源取舍见[适配说明](references/source-adaptation.md)。
 
@@ -58,6 +63,8 @@ MV 制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#�
 用户要求图片支撑的生成式歌词时，按视觉资产规则为每项选定上屏原文落实可读图片并检查实际视频输入路径。全片文字样式卡不等于全曲文字素材完成；图片参考有助于约束字形，不保证 H3 稳定保持或准确同步。
 
 ## 镜头与模式
+
+MV需要独立开场标题序列时可委托[片头专能](../title-sequence-creator/SKILL.md)，沿用本MV主歌窗口与全片事实；普通片名卡仍在当前文字方案。游戏电影化段按需复用[游戏状态方法](../zero-to-story/references/game-cinematic-direction.md)，不因题材改主责。
 
 先决定镜头在音乐中的作用，再选视频模式。**人物在画面中可见地演唱或说唱时，使用当前 H3 的 R2V，把该 Panel 对应的实际歌曲片段（多人项目为最终采用混剪）接入 `reference_audio`；歌词与起口、停顿仍写入提示词，最终成片沿用主歌曲音轨。**精确首帧可在 R2V 中作为第 0 帧引导，但不能为保留首帧而改用不接歌的 I2V。该歌曲片段或音频槽缺失时暂停这个演唱 Panel，先补齐输入；不靠歌词文本或后期换音轨冒充生成时的音频参考。
 

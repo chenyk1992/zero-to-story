@@ -7,6 +7,10 @@ description: 把产品、界面、功能或抽象主题做成 MG 口播动画，
 
 独立MG按本流程；受完整广告委托只交指定文案/动效/Panel事实，引用ad_plan版本，不改广告策略、不重建全片计划或锁定音乐。独立非商业海报/网格动效可用无口播分支。多Shot保持批准切镜，不套Presenter固定同镜头。
 
+受作品主责委托时，视觉系统继承当前主源已采用的整体媒介、美术、气质与局部例外；在该范围内设计字体、版式与运动，不因局部MG另选全片风格或重问。按[共同风格交接](../canvas-workspace/references/creative-handoff.md#整体风格的继承与分镜方法)返回本段具体事实与来源；只有独立MG才在自身范围确定视觉方向。
+
+独立影视片头/卡司/片名序列交[标题序列专能](../title-sequence-creator/SKILL.md)；本MG中的普通标题、关键词或限定动效仍按当前任务处理，不因出现一个标题就转交整段。
+
 参考片按[变更交接](../video-deconstruct-analyzer/references/recreation-change-plan.md)记方式到当前简报，保留批准多切镜，不因“单连续 Clip”模板变单 Shot。文字逐项交给生成/后期，H3 仍由专门 Skill 定稿；最新 Canvas 用户编辑按[当前版本协调](../canvas-workspace/references/creative-handoff.md#当前版本协调)处理。
 
 遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 负责 MG 的创意方案、口播/视觉映射和单 Panel 交接；不直接操作 Canvas 数据库、ComfyUI 或视频提供方。
@@ -40,10 +44,10 @@ description: 把产品、界面、功能或抽象主题做成 MG 口播动画，
 ## 创作流程
 
 1. **锁定信息**：提炼每段的一个核心信息和观众应理解的结论；区分真实对象、概念对象和抽象主题。
-2. **建立视觉系统**：选一个主风格、必要时 0–2 个辅助模块和一条核心结构。统一背景、色彩、排版网格、字体层级、图标/容器和动效语言；不为套菜单添加无关风格。
+2. **建立视觉系统**：确定主导关系、必要辅助和核心结构，协调背景、色彩、排版、字体、图标/容器及运动。稳定与强烈表达均可，参考库的示例比例、时长和保活动作按用途取舍，不为套菜单添加风格。
 3. **写时间线**：每段写画面主体、短屏幕文字、对应 Voiceover、元素如何出现/变化/离场、镜头和桥接。让图形动作解释语义，单屏一个焦点，数字与文字留出阅读时间。
 4. **定稿与交接**：读取 [H3 MG 提示词模板](references/h3-mg-prompt-template.md)，按需读取风格、元素、文字、抽象或数据参考；把当前 Panel 的创作事实交给 [h3-prompt-writing](../h3-prompt-writing/SKILL.md)，再交 [canvas-workspace](../canvas-workspace/SKILL.md) 保存。
-5. **授权后执行**：Canvas 保存的是草稿；页面确认或对话明确授权后冻结快照并提交一次。comfy 由 Canvas 服务调用 [comfy-video-executor](../comfy-video-executor/SKILL.md)。返回实际结果后由调用方按共享规则做一次任务相关验收。
+5. **授权后执行**：Canvas 保存的是草稿；页面确认或对话明确授权后冻结快照并提交一次。comfy 由 Canvas 服务调用 [comfy-video-executor](../comfy-video-executor/SKILL.md)。返回实际结果后由调用方按共享规则做一次任务相关验收：结合实际口播观看构图如何发展、文字何时读懂、动作是否解释语义；不按元素数、动画密度或参考库覆盖率评分。
 
 ## MG 导演标准
 
@@ -64,6 +68,10 @@ description: 把产品、界面、功能或抽象主题做成 MG 口播动画，
 | 需要解决的问题 | 读取 |
 |---|---|
 | 风格、版式、层级、色彩 | visual-style-layout-library.md |
+| 完整构图状态、字体角色、主体与图形/手绘互动 | [构图与字体](references/composition-and-typography.md) |
+| 具体字形、读序、排字与包装材料 | [字形选型](../visual-design-creator/references/type-and-layout-choices.md)、[包装方向](../visual-design-creator/references/packaging-style-directions.md)，返回当前视觉系统 |
+| 声音怎样参与发现、触感、留白或释放 | [声音互动](../music-video-creator/references/sound-image-interaction.md)，保持锁定口播、原轨与实际后期责任 |
+| 字体空间交换、材料变化与跨镜轴线 | [共演方法](references/type-subject-direction.md)，返回当前时间线 |
 | 卡片、图标、线条、镜头、转场 | element-motion-transition-library.md |
 | 标题、关键词、输入框、动态字体 | kinetic-typography-motion-library.md |
 | 抽象概念、对比、分流、聚合、波形 | mg-motion-pattern-library.md |

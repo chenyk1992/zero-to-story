@@ -504,6 +504,50 @@ def test_repeated_identical_source_lines_remain_distinct_and_legal() -> None:
     assert not errors(lint_plan(prompt, plan), "PLAN-DIALOGUE")
 
 
+def _mixed_delivery_plan() -> dict[str, Any]:
+    import copy
+
+    plan = copy.deepcopy(PLAN)
+    plan["dialogue"].insert(0, {"id": "VO001", "order": 0, "speaker": "旁白", "text": "那时我还以为，他是来送别的。", "shot_id": "C001"})
+    plan["generation"]["shots"][0]["dialogue_ids"].insert(0, "VO001")
+    return plan
+
+
+def test_explicit_post_voiceover_preserves_source_but_is_not_required_in_h3() -> None:
+    plan = _mixed_delivery_plan()
+    result = MODULE.lint_snapshot(make_snapshot(SPOKEN), blueprint=plan, panel_id="P001", post_dialogue_ids=["VO001"])
+    assert not errors(result, "PLAN-DIALOGUE")
+    assert plan["dialogue"][0]["text"] == "那时我还以为，他是来送别的。"
+    assert any("后期对白" in item for item in result.unverified)
+
+
+def test_post_voiceover_requires_explicit_scope_and_cannot_be_generated_twice() -> None:
+    plan = _mixed_delivery_plan()
+    assert errors(lint_plan(SPOKEN, plan), "PLAN-DIALOGUE")
+    duplicated = SPOKEN.replace("<d>[Chinese]", "<d>[Chinese] 那时我还以为，他是来送别的。</d> <d>[Chinese]", 1)
+    result = MODULE.lint_snapshot(make_snapshot(duplicated), blueprint=plan, panel_id="P001", post_dialogue_ids=["VO001"])
+    assert errors(result, "PLAN-DIALOGUE")
+
+
+@pytest.mark.parametrize("post_ids", [["UNKNOWN"], ["OTHER_PANEL_LINE"], "D001", [None]])
+def test_invalid_post_dialogue_scope_cannot_silently_skip_source_lines(post_ids: Any) -> None:
+    plan = _mixed_delivery_plan()
+    plan["dialogue"].append({"id": "OTHER_PANEL_LINE", "order": 3, "speaker": "旁白", "text": "另一个段落。", "shot_id": "C002"})
+    plan["panels"].append({"id": "P002", "duration_s": 8, "shot_ids": ["C002"]})
+    plan["generation"]["shots"].append({"id": "C002", "order": 2, "panel_id": "P002", "dialogue_ids": ["OTHER_PANEL_LINE"]})
+    result = MODULE.lint_snapshot(make_snapshot(SPOKEN), blueprint=plan, panel_id="P001", post_dialogue_ids=post_ids)
+    assert errors(result, "PLAN-DIALOGUE")
+
+
+def test_post_scope_still_checks_native_dialogue_and_requires_a_plan() -> None:
+    changed = SPOKEN.replace("门开了。", "改过的台词。")
+    result = MODULE.lint_snapshot(make_snapshot(changed), blueprint=_mixed_delivery_plan(), panel_id="P001", post_dialogue_ids=["VO001"])
+    assert errors(result, "PLAN-DIALOGUE")
+    assert errors(MODULE.lint_snapshot(make_snapshot(SPOKEN), post_dialogue_ids=["VO001"]), "PLAN-DIALOGUE")
+    assert errors(MODULE.lint_snapshot(make_snapshot(SPOKEN), panel_id="P001", post_dialogue_ids=["VO001"]), "PLAN-DIALOGUE")
+    assert errors(MODULE.lint_snapshot(make_snapshot(SPOKEN), blueprint=_mixed_delivery_plan(), post_dialogue_ids=["VO001"]), "PLAN-DIALOGUE")
+
+
 def test_cross_shot_and_cutoff_dialogue_is_left_unverified_instead_of_guessed() -> None:
     prompt = SPOKEN.replace(
         "</d>", " <scenetrans>[Shot 2] At 00:04.000, <d>[Chinese] 还没说完。</d>"
