@@ -1150,7 +1150,7 @@ class CnPulseAdapter(Adapter):
                     f"https://www.bilibili.com/video/{lead['bvid']}"
                     if lead.get("bvid") else None
                 ),
-                "category": "国产模型中文侧供给",
+                "category": "中文侧产品供给",
                 "stat": {},
                 "published": lead.get("pubdate"),
                 "extra": {
