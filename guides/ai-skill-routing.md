@@ -13,6 +13,7 @@
 | 参考复刻；reference-video-recreation-workflow 方法 | `video-deconstruct-analyzer`，再交原主 Skill | 对话/Skill 选择自由改编、受控复刻、只读分析并记简报；不改 Canvas 页面，不代表生成授权 |
 | 微短剧、独立情景喜剧及其角色/分集剧本 | `short-drama-screenwriter` | 剧情、人物、对白和分集文本；普通小说或其他剧本不强套短剧规则，不直接执行视频 |
 | 参考作品研究、对标或选题采风 | 当前创作主责复用[参考研究](../.agents/skills/zero-to-story/references/reference-research.md) | 交来源、实际观察、推断与迁移决定；视频观察由分析专能负责，不自动生产 |
+| AI 知识分享、工具实测、vibe coding 账号的热点、升温线索、对标、选题与脚本复盘 | [ai-creator-radar](../.agents/skills/ai-creator-radar/SKILL.md) | 免费来源与可追溯采样；不承诺爆款、不自动发布或调用付费 API，成片交原有制作入口 |
 | 从选题/资料撰写历史、科普、人物或知识解说稿 | `narration-writer` | 事实、解释与旁白文本；制作按视觉目标交影视/MG/B-roll/Presenter，不新增完整作品生产链 |
 | 海外对白、多语互动与地域语言 | 当前主责复用[语言适配](../.agents/skills/short-drama-screenwriter/references/overseas-dialogue.md) | 保留语言证据、人物知情与当前版本；文本、音色、字幕和口型分别验证 |
 | 多人、反打、产品交接或复杂走位 | 当前影视/MV/广告/专业主责复用[复杂调度](../.agents/skills/zero-to-story/references/blocking-direction.md) | 场景位置与各机位画面关系写回现有 Shot/Setup，不建第二份全片计划 |

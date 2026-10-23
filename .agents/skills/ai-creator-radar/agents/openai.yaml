@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI 内容选题雷达"
+  short_description: "用免费公开数据研究 AI 热点、升温线索与对标视频，辅助选题、脚本和发布后复盘"
+  default_prompt: "使用 $ai-creator-radar，为我的 AI 内容账号研究本周选题，注明免费数据来源与证据，再写最值得拍的一条脚本。"
