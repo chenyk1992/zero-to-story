@@ -1,0 +1,7 @@
+display-name-zh: 热点选题决策
+version: 1.0.0
+tag-en: "Hotspot Topic Decision"
+tag-cn: "热点 / 选题决策"
+desc-en: "Turns the hot-collect snapshot library into a topic decision: five weighted signals (velocity, days on list, rank climb, cross-platform spread, supply gap), track filtering, and a ready-to-shoot topic card. Ships a regression harness so any change to the scoring口径 is proven against a frozen snapshot set before it ships."
+desc-cn: "把 hot-collect 的快照库变成选题判断：五信号加权打分（增速/上榜天数/爬升斜率/跨平台/供给缺口）、赛道过滤、可直接开做的选题卡；自带回归装置，任何打分口径变更都必须先在冻结快照集上证明不破坏历史结论。"
+source: project-maintained

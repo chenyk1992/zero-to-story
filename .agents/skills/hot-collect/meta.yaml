@@ -1,0 +1,7 @@
+display-name-zh: 热点采集
+version: 1.0.0
+tag-en: "Hotspot Collection"
+tag-cn: "热点 / 采集"
+desc-en: "Collects cross-platform hotspot data into timestamped, contract-checked snapshots: Douyin/Xiaohongshu/Quark hot lists, Bilibili work-level stats, YouTube channel feeds and 'high-view videos from the last 7 days'. Also ships a TikTok benchmark corpus face for studying how a topic is actually presented overseas."
+desc-cn: "跨平台热点采集：抖音/小红书/夸克热榜、B站作品级数据、YouTube 频道流与「近 7 天高播放新视频」，落成带时间戳、带端点契约指纹的快照；另含 TikTok 对标语料面，用于研究海外怎么讲一个话题。"
+source: project-maintained

@@ -1,0 +1,155 @@
+---
+name: topic-scout
+description: 热点选题决策。把 hot-collect 的快照库变成「该做哪个选题」的判断：五信号打分（增速/上榜天数/爬升斜率/跨平台交叉/供给缺口）、赛道过滤、预聚类，并产出可直接开做的选题卡（切入角度/开头 3 秒钩子/tag/BGM/借势风险）。当用户需要"该做哪个选题""热点里挑一个""选题卡""AI 圈最近值得做的话题""趋势判断"时使用。触发词：选题、做什么题、选题卡、热点挑、趋势、值得做吗、蓝海、蹭热点、选题打分。
+---
+
+# topic-scout · 热点选题决策层
+
+**这个 skill 只判断，不采集。** 数据来自 `hot-collect` 的快照库。
+
+## 它解决什么
+
+别人只能看到「什么在火」。我们要能判断：
+1. **什么正在起来**（增速、爬升斜率）
+2. **什么已经是老热点**（上榜天数多、增长平）
+3. **什么还没人做**（供给缺口）
+4. **什么是真热点而不是单平台噪音**（跨平台交叉）
+5. **哪些跟我们这个号有关**（赛道过滤）
+
+## 用法
+
+```bash
+S=".agents/skills/topic-scout/scripts"
+
+python "$S/doctor.py"              # ★ 先跑这个：判断层是否就绪
+python "$S/selftest.py"            # 离线自检（含「闸门会红」的验证）
+
+# 全量打分
+python "$S/scout.py" score --top 20 --supply-search 10
+
+# 赛道过滤（关键：通用热榜大部分是时事新闻，跟 AI 号无关）
+python "$S/scout.py" score --top 20 --supply-search 10 \
+  --include "AI,大模型,智能,Agent,编程,代码,GPT,Claude,Gemini,机器学习,推理,生成,开源" \
+  --platforms "ai-news,douyin,quark,rednote,youtube"
+
+# 回退到 v1 口径（只有热榜关键词进候选），用于和历史结论做回归对比
+python "$S/scout.py" score --candidate-sources keywords
+
+# 词面重叠预聚类（⚠️ 2026-10-23 实测几乎不聚，见「已知限制」）
+python "$S/scout.py" cluster
+
+# 生成选题卡骨架（证据已填好，角度/钩子由你填）
+python "$S/scout.py" card "记忆张量开源记忆原生基础模型 MemT 1.0 系列"
+```
+
+## 依赖与环境
+
+**零第三方依赖**（纯标准库）。缺 `hot-collect` 兄弟 skill 时只有 S5 供给缺口降级为 0，
+其余信号照常。
+
+**可移植性**：无硬编码路径；把 `topic-scout/` 复制到另一台机器即可用（`hot-collect/` 建议同级放置）。
+搬运步骤见 [guides/hotspot-skill-porting.md](../../../guides/hotspot-skill-porting.md)。
+
+## 退出码契约（与 hot-collect 一致）
+
+| 码 | 含义 |
+|---|---|
+| `0` | 成功 |
+| `1` | 判定失败（**回归未过**、闸门报红） |
+| `2` | 环境未就绪（缺快照、数据根不可写） |
+
+`regress.py --compare` 的 exit code 就是口径变更的门禁：**非 0 = 不允许合并**。
+
+## 候选来源与口径版本
+
+| 版本 | 候选来源 | 开关 |
+|---|---|---|
+| v1 | 只有热榜关键词 | --candidate-sources keywords |
+| v2 | + YouTube「近 7 天高播放新视频」的视频标题 | 默认 |
+| v3 | + 同一事件合并（只合并共享 ≥4 字连续汉字的中文新闻）+ **话题簇**输出 | --dedup off 可关合并 |
+
+**「话题簇」是 v3 新增的只读维度**：把讲同一话题的候选聚起来报强度
+（簇越大 = 越多创作者在跟；平台数 >1 = 跨平台共振）。**它不删任何候选。**
+
+⚠️ **不要用拉丁词组判「同一件事」**：实测 15 个不同的 YouTube 视频都写 "Claude Duet"，
+合并它们会丢 14 个真实选题角度。判据与理由见 references/signals.md。
+
+## 五个信号
+
+| # | 信号 | 权重 | 含义 | 何时可用 |
+|---|---|---:|---|---|
+| S1 | 增速 | 25 | 最近两次快照的热度变化率 | D2 起 |
+| S2 | 上榜天数 | 15 | 出现在多少天的快照里（5 天封顶） | D2 起 |
+| S3 | 爬升斜率 | 20 | 名次变化率（正 = 往上爬） | D2 起 |
+| S4 | 跨平台 | 25 | 同一词出现在几个平台 | **D1 即可** |
+| S5 | 供给缺口 | 15 | 同题**最新一条**作品距今（越久=越没人做）+ 热度分位 | **D1 即可** |
+
+详细定义与算法见 [references/signals.md](references/signals.md)。
+
+## 候选来源（口径版本）
+
+打分公式和五个权重**没有变过**；变的是「哪些记录有资格当候选」。改动必须换版本号。
+
+| 版本 | 候选来源 | 说明 |
+|---|---|---|
+| v1 | `keywords` | 只有热榜关键词（`kind=keyword`） |
+| v2 | `keywords` + `youtube_highview` | 追加 YouTube「近 7 天高播放新视频」层的**视频标题**——那一层的标题带播放量，可直接当热度参与同一套五信号 |
+
+- 只有 `youtube/data_api_recent_popular` 这一层开放标题入池；B 站有 215 条标题，全放会把候选池淹掉。
+- `--candidate-sources keywords` 可一键回退 v1，做回归对比。
+- `score` 输出里带 `scoring_version` 与 `candidate_sources`，别手改口径不改版本号。
+
+> ⚠️ **v2 实测影响**：YouTube 候选带真实播放量（heat），而 `sixty/ai-news` 的热词 **heat 恒为 0**，
+> 于是中文 AI 快讯只能拿到 S2，排序上会被 YouTube 候选压过去。这是**已知口径差异，不是 bug**，
+> 但选中文话题时要意识到它没有增速分。
+
+## 冷启动说明（必须诚实）
+
+S1/S2/S3 需要历史快照，**D0 建的库在 D2 之前这三项基本无效**。
+冷启动期只有 S4（跨平台）和 S5（供给缺口）可用 —— 这两条恰好就是「还没火但会火」的核心判据。
+**不要在 D1 就宣称系统能判断趋势**，那是在编。
+
+## 你（Agent）要做的部分
+
+`scout.py` 只算数。**选题角度、钩子、风险这些由你填**，按 [references/card_template.md](references/card_template.md) 的结构。
+
+推荐流程：
+1. `score` 拿到候选（含证据）
+2. `cluster` 做一次语义聚类，把候选归成 3–5 个方向
+3. 每个方向挑 1 个，用 `video-deconstruct-analyzer` 拉 3–5 个同题材爆款，提取它们的**结构特征**（开场怎么起、节奏怎么排、信息在第几秒给）
+4. `card` 生成卡片，把第 3 步的结构结论填进「内容形式 + 开头 3 秒钩子」
+5. 交回给用户挑，不要一次给十几个选题
+
+## 维护纪律
+
+- **改判据 = 改版本号 + 跑回归**。固定 30 个历史快照做打分回归，别让改一个公式毁掉历史结论的可比性。
+- **打分口径变化要写进 references/signals.md**，否则下次没人知道为什么两个月的分不可比。
+- **不要新增第六个信号而不删旧的**：信号越多越稀释，五个是上限。
+
+### 回归装置（已建成，别手搓）
+
+```bash
+R=".agents/skills/topic-scout/scripts/regress.py"
+inc="AI,大模型,智能,Agent,编程,代码,GPT,Claude,Gemini,机器学习,LLM,网络安全"
+
+python "$R" --freeze                                    # 把当前快照库冻结成回归集（满 30 后重冻）
+python "$R" --make-baseline --profile v2 --include $inc # 生成基线
+python "$R" --compare --profile v3 --baseline <root>/regression/baseline-v2.json --include $inc
+```
+
+**`--compare` 的 exit code 就是门禁：非 0 = 不允许合并这次口径变更。**
+
+- 回归集冻结在 `<data-root>/regression/snapshots/`（带 sha256 清单），**库满 30 份必须重冻并重生成基线**
+- 判据取**基线那一版**的承诺（8 条，含「两次运行一致」）
+- **每个口径变更都要有独立回退开关**（现有 `--candidate-sources`，v3 将加 `--alias-table`）
+- ⚠️ **S5 不在自动回归覆盖内**（供给缺口要打 B 站实时接口，不可复现）→ S5 的口径变更只能「跑一次 + 人工对比」。别假装它被覆盖了。
+- v3（实体归并 + ai-news 热度）的完整方案见 `docs/plans/2026-10-23-topic-scout-scoring-v3-regression-plan.md`
+
+## 已知限制
+
+- **抖音视频级数据缺失** → 抖音只有热词层，作品级靠 B 站。
+- **`sixty/ai-news` 的热词没有热度值（heat=0）** → 这类中文 AI 快讯算不出 S1 增速，也拉不动 S5 的热度分位。只有 YouTube 层带真实播放量。
+- **YouTube 需要 `YOUTUBE_API_KEY`** 才能用「近 7 天高播放新视频」；没有时该端点被跳过并明确报告，不静默。
+- **S4 跨平台目前几乎恒为 0**：它要求同一字符串在 ≥2 个平台出现，而中文快讯标题和 YouTube 英文标题不会字面重合。真正的跨平台归并要靠 LLM 做实体对齐（`cluster` 只是词面重叠预聚类）。
+- **供给缺口只查前 N 个候选**（默认 10），因为每次要打一次 B 站搜索接口。
+- **B 站搜索的 `numResults` 上限 1000**，所以 S5 不用作品数，改用「最新一条距今天数」。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "热点选题决策"
+  short_description: "五信号打分与选题卡，带口径回归门禁"
+  default_prompt: "使用 $topic-scout 给我今天的选题：按我的赛道过滤打分，挑出最值得做的 3 个方向，给每个出选题卡，并说明证据来自哪些平台的哪些数据。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "热点采集"
+  short_description: "跨平台热点采集与快照，带端点契约指纹与降级上报"
+  default_prompt: "使用 $hot-collect 采集今天的跨平台热点，告诉我各源拿到了多少条、哪些端点降级了、契约指纹有没有变化。"
