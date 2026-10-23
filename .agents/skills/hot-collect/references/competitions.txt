@@ -1,0 +1,33 @@
+# AI 赛事采集过滤表 · competitions 采集面
+#
+# 格式：一行一条正则
+#   正常行  = **包含**规则（命中才留下）
+#   `!` 开头 = **排除**规则（命中就踢掉）
+#
+# **这是数据，不是代码。** 想扩关键词直接改这个文件，不用动脚本。
+#
+# 为什么要有这个面：赛事的「新鲜度」就是它的截止日期 —— 报名截止、决赛、
+# 榜单更新都是有明确时间窗口的事件。这让赛事成为真正的**日度**热点源，
+# 而不是一条四个月前的旧话题。
+
+# ── 包含：英文 AI 相关 ──
+\b(ai|llm|genai|agent|agentic|machine learning|deep learning|rag|gpt|chatbot|nlp|diffusion|prompt|multimodal|voice assistant)\b
+
+# ── 包含：中文 AI 相关 ──
+(AI|人工智能|大模型|智能体|黑客松|算法|编程|视频生成)
+
+# ── 排除：与本号方向无关的领域 ──
+!crypto
+!bitcoin
+!blockchain
+!web3
+!\bnft\b
+!minecraft
+!地产
+!房地产
+!服装设计
+!时尚
+!fashion
+!医疗影像诊断
+!hiring
+!resume

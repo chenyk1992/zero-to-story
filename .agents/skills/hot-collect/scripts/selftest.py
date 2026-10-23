@@ -165,6 +165,38 @@ def main() -> int:
               cp.parent.name == "cookies" and cp.parent.parent == _dr(),
               f"{cp}  vs 数据根 {_dr()}")
 
+        # 6. competitions 采集面（离线，不联网）
+        from adapters import CompetitionsAdapter, _devpost_deadline
+
+        # 截止日期解析：Devpost 的日期写法有好几种，解析错了「剩几天」就全错
+        cases = {
+            "Oct 22 - Nov 16, 2026": "2026-11-16",
+            "Oct 21 - 27, 2026": "2026-10-27",
+            "Oct 23 - 24, 2026": "2026-10-24",
+            "Nov 16, 2026": "2026-11-16",
+            "Oct 21, 2026 - Nov 30, 2026": "2026-11-30",
+            "": None,
+        }
+        bad = {k: _devpost_deadline(k) for k, v in cases.items() if _devpost_deadline(k) != v}
+        check("赛事截止日期解析正确", not bad, f"错解: {bad}")
+
+        cad = CompetitionsAdapter()
+        inc, exc = cad._load_filters()
+        check("赛事过滤表可解析且非空", len(inc) >= 1 and len(exc) >= 1,
+              f"include {len(inc)} 条 / exclude {len(exc)} 条")
+
+        # 过滤真的生效：AI 的留下，crypto 的踢掉
+        ai_hack = {"title": "UGREEN Hackathon 2026 on AI NAS",
+                   "description": "Build AI agents on a NAS",
+                   "themes": [{"name": "AI"}], "tags": []}
+        crypto_hack = {"title": "Dakar Bitcoin Hack by BTrust",
+                       "description": "Build crypto apps",
+                       "themes": [{"name": "Blockchain"}], "tags": []}
+        kept = cad._filter([ai_hack, crypto_hack])
+        check("赛事过滤保留 AI、排除 crypto",
+              len(kept) == 1 and kept[0]["title"].startswith("UGREEN"),
+              f"留下 {[k.get('title') for k in kept]}")
+
     failed = [r for r in results if not r[1]]
     if args.json:
         print(json.dumps({

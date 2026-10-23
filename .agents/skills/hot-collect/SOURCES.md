@@ -37,7 +37,7 @@
 | 商业使用 | ✅ 官方公开接口；**但不要引入 `bilibili-API-collect`（CC-BY-NC 禁商用）的代码** |
 | 备选 | 官方开放平台 `member.bilibili.com/open`（合规但需实名认证、字段少、限频严） |
 
-### `cnpulse` · B 站搜索（国产模型中文侧定向供给）
+### `cnpulse` · B 站搜索（中文侧定向供给）
 
 | 项 | 值 |
 |---|---|
@@ -51,6 +51,21 @@
 | 产品清单 | `references/cn_products.txt` —— **数据不是代码**，每月新模型上线直接改文件 |
 | 商业使用 | ✅ 官方公开接口 |
 | 当前角色 | **只积累数据，不参与打分**（接入候选池 = 口径变更，需换版本号 + 30 份快照回归；回归集现 17/30） |
+
+### `competitions` · Devpost 公开 API（正在进行的 AI 赛事）
+
+| 项 | 值 |
+|---|---|
+| 端点 | `devpost.com/api/hackathons?status[]=open\|upcoming&order_by=recently-added&page=N` |
+| 鉴权 | **免登录、免 key** |
+| 返回 | 每个 hackathon 含 `title` / `description` / `themes[]` / `tags[]` / `prize_amount`（HTML 片段）/ `submission_period_dates` / `open_state` / `url` |
+| 实测规模 | 2026-10-23：3 页抓到 **54 个**，AI 过滤后 **20 个** |
+| **日期解析** | `submission_period_dates` 有多种写法：`Oct 22 - Nov 16, 2026` / `Oct 21 - 27, 2026` / `Oct 23 - 24, 2026` / `Nov 16, 2026`。取**最后一个**日期；区间结束不写月份时沿用开始月 |
+| 过滤表 | `references/competitions.txt` —— **数据不是代码**；正常行=包含，`!` 开头=排除 |
+| ⚠️ **HF competitions API 走不通** | `huggingface.co/api/competitions` 实测 **401 Unauthorized**（需 token）→ 免费合规的赛事源目前只有 Devpost |
+| 国内赛事 | **没有统一公开 API**（天池 / DataFountain / OpenI / CCF 各自为政）→ 中文侧赛事只能靠 B 站/抖音热榜侧面捕捉，已在 `signals.md` 记为缺口 |
+| 商业使用 | ✅ 公开 API |
+| 当前角色 | **只积累数据，不参与打分**（同 `cnpulse`） |
 
 ### `youtube` · 官方 RSS + Data API v3
 

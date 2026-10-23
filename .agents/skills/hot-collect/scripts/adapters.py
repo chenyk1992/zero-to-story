@@ -1169,12 +1169,234 @@ class CnPulseAdapter(Adapter):
         return out
 
 
+# --------------------------------------------------------------------------
+# AI competitions (Devpost public API, no key)
+# --------------------------------------------------------------------------
+
+COMPETITIONS_FILTER_FILE = (
+    Path(__file__).resolve().parent.parent / "references" / "competitions.txt"
+)
+DEVP0ST_API = "https://devpost.com/api/hackathons"
+
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])}
+
+
+def _devpost_money(text: str) -> int:
+    """Prize amount as a plain integer (the API returns an HTML blob)."""
+    if not text:
+        return 0
+    nums = re.findall(r"[\d,]+", re.sub(r"<[^>]+>", "", str(text)))
+    if not nums:
+        return 0
+    try:
+        return int(nums[0].replace(",", ""))
+    except ValueError:
+        return 0
+
+
+def _devpost_deadline(text: str) -> str | None:
+    """The closing date inside the submission period string.
+
+    Devpost writes it in several shapes:
+      "Oct 22 - Nov 16, 2026"   "Oct 21 - 27, 2026"   "Oct 23 - 24, 2026"
+      "Nov 16, 2026"
+    Taking the last date in the string is what matters, and the end of a
+    range may omit the month ("Oct 21 - 27" -> the 27th is still October).
+    """
+    if not text:
+        return None
+    s = str(text)
+    pat = re.compile(
+        r"([A-Z][a-z]{2})\s+(\d{1,2})"
+        r"(?:\s*[-–]\s*(?:([A-Z][a-z]{2})\s+)?(\d{1,2}))?"
+        r"\s*,\s*(\d{4})"
+    )
+    last = None
+    for m in pat.finditer(s):
+        last = m
+    if not last:
+        return None
+    mon_a, day_a, mon_b, day_b, year = last.groups()
+    month = mon_b or mon_a
+    day = day_b or day_a
+    try:
+        d = dt.date(int(year), _MONTHS[month[:3]], int(day))
+    except (ValueError, KeyError):
+        return None
+    return d.isoformat()
+
+
+class CompetitionsAdapter(Adapter):
+    """AI hackathons and competitions that are open or announced right now.
+
+    Why this face exists: a competition's freshness IS its deadline -
+    registration closing, the finals, the leaderboard moving. That makes
+    competitions a genuine DAY-TO-DAY hotspot source instead of a
+    four-month-old topic, and it gives the account a topic family that is
+    always current.
+
+    Devpost's public API needs no key and lists every hackathon. Hugging
+    Face's competitions API is NOT usable here - measured 2026-10-23 it
+    answers 401 Unauthorized without a token.
+
+    Filters live in references/competitions.txt (data, not code): Devpost
+    lists dozens of hackathons a week and unfiltered output is pure noise.
+    """
+
+    name = "competitions"
+    platform = "competitions"
+    PAGES = 2
+
+    def _load_filters(self) -> tuple[list[re.Pattern], list[re.Pattern]]:
+        include: list[re.Pattern] = []
+        exclude: list[re.Pattern] = []
+        if not COMPETITIONS_FILTER_FILE.exists():
+            return include, exclude
+        for raw in COMPETITIONS_FILTER_FILE.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            target = exclude if line.startswith("!") else include
+            pat = line[1:] if line.startswith("!") else line
+            try:
+                target.append(re.compile(pat, re.I))
+            except re.error:
+                continue
+        return include, exclude
+
+    def _fetch_page(self, status: str, page: int) -> list[dict]:
+        url = (f"{DEVP0ST_API}?status[]={status}"
+               f"&order_by=recently-added&page={page}")
+        try:
+            j = _get_json_retry(url, headers={"Accept": "application/json"})
+        except Exception:  # noqa: BLE001
+            return []
+        if j.get("code") != 0 and "hackathons" not in j:
+            return []
+        hacks = j.get("hackathons") or []
+        return [h for h in hacks if isinstance(h, dict)]
+
+    @staticmethod
+    def _theme_names(h: dict) -> list[str]:
+        out = []
+        for t in (h.get("themes") or []):
+            n = (t.get("name") or t.get("theme") or "") if isinstance(t, dict) else str(t)
+            if n:
+                out.append(str(n))
+        return out
+
+    def probe(self) -> tuple[bool, str]:
+        hacks = self._fetch_page("open", 1)
+        if not hacks:
+            return False, "Devpost API 无结果"
+        ai = self._filter(hacks)
+        return True, f"open 状态 {len(hacks)} 个，其中 AI 相关 {len(ai)} 个"
+
+    def _filter(self, hacks: list[dict]) -> list[dict]:
+        include, exclude = self._load_filters()
+        out = []
+        for h in hacks:
+            title = (h.get("title") or "").strip()
+            if not title:
+                continue
+            blob = " ".join([
+                title,
+                str(h.get("description") or ""),
+                " ".join(self._theme_names(h)),
+                " ".join(str(x) for x in (h.get("tags") or [])),
+            ])
+            if exclude and any(p.search(blob) for p in exclude):
+                continue
+            if include and not any(p.search(blob) for p in include):
+                continue
+            out.append(h)
+        return out
+
+    def fetch(self) -> list[dict]:
+        self.endpoint_status: dict[str, dict] = {}
+        self.endpoint_fingerprints: dict[str, dict] = {}
+        raw: list[dict] = []
+        seen: set[str] = set()
+        for status in ("open", "upcoming"):
+            for page in range(1, self.PAGES + 1):
+                hacks = self._fetch_page(status, page)
+                if not hacks:
+                    break
+                for h in hacks:
+                    title = (h.get("title") or "").strip()
+                    if title and title not in seen:
+                        seen.add(title)
+                        raw.append(h)
+
+        kept = self._filter(raw)
+        today = dt.date.today()
+        rows = []
+        for h in kept:
+            title = (h.get("title") or "").strip()
+            deadline = _devpost_deadline(h.get("submission_period_dates") or "")
+            left = None
+            if deadline:
+                try:
+                    left = (dt.date.fromisoformat(deadline) - today).days
+                except ValueError:
+                    left = None
+            prize = _devpost_money(h.get("prize_amount") or "")
+            desc = re.sub(r"<[^>]+>", " ", str(h.get("description") or "")).strip()
+            rows.append({
+                "title": title,
+                "prize": prize,
+                "deadline": deadline,
+                "left": left,
+                "url": h.get("url") or "",
+                "open_state": h.get("open_state") or "",
+                "desc": " ".join(desc.split())[:160],
+                "themes": self._theme_names(h)[:4],
+            })
+
+        # Rank by prize, then by how soon it closes: the imminent ones are
+        # the ones a viewer can still act on.
+        rows.sort(key=lambda r: (-r["prize"], r["left"] if r["left"] is not None else 999))
+        self.endpoint_status["devpost"] = {
+            "ok": bool(rows),
+            "items": len(rows),
+            "seen": len(seen),
+        }
+        if raw:
+            self.endpoint_fingerprints["devpost"] = _schema_keys(raw[:20])
+
+        out = []
+        for rank, r in enumerate(rows, start=1):
+            out.append({
+                "platform": "competitions",
+                "kind": "keyword",
+                "rank": rank,
+                "keyword": r["title"],
+                "title": r["desc"],
+                "heat": r["prize"],
+                "url": r["url"],
+                "category": "AI 赛事",
+                "stat": {},
+                "published": None,
+                "extra": {
+                    "prize_usd": r["prize"],
+                    "deadline": r["deadline"],
+                    "days_left": r["left"],
+                    "open_state": r["open_state"],
+                    "themes": r["themes"],
+                },
+            })
+        return out
+
+
 ADAPTERS: dict[str, Adapter] = {
     a.name: a for a in (
         SixtyAdapter(),
         BiliAdapter(),
         YouTubeAdapter(),
         CnPulseAdapter(),
+        CompetitionsAdapter(),
     )
 }
 
