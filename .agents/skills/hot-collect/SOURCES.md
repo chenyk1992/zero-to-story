@@ -37,6 +37,21 @@
 | 商业使用 | ✅ 官方公开接口；**但不要引入 `bilibili-API-collect`（CC-BY-NC 禁商用）的代码** |
 | 备选 | 官方开放平台 `member.bilibili.com/open`（合规但需实名认证、字段少、限频严） |
 
+### `cnpulse` · B 站搜索（国产模型中文侧定向供给）
+
+| 项 | 值 |
+|---|---|
+| 端点 | `api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=<产品>` |
+| 鉴权 | 免登录，但**必须带 buvid cookie**：`api.bilibili.com/x/frontend/finger/spi` → `buvid3` / `buvid4` |
+| **cookie 必须持久化** | 实测 2026-10-23：**B 站搜索结果按访客分桶**。同一个 cookie 连查 3 次 → 结果集**完全一致**（交集 20 / 并集 20）；换一个新 cookie → 换一批结果（交集 16 / 并集 24）。每次运行都取新 cookie 的话，采到的值**不可复现**，根本当不了时间序列 → cookie 存到 `<data-root>/cookies/bilibili.txt` 复用 |
+| 返回 | 每条含 `title`（带 `<em>` 高亮，需剥）、`play`、`pubdate`、`bvid`；外层含 `numResults`（上限 1000）、`pages` |
+| **412 限流** | 无 cookie 时前十余条请求能过，之后持续 `412 Precondition Failed`，**冷却数分钟也不恢复**。解法：取 spi 缓存 Cookie + 412/429 指数退避（`_get_json_retry`）。**没有这个，每日自动化第二天就挂** |
+| `order=click` 不可用于 heat | 按全站历史播放排序，会把**2018 年的通用教程**排到第一（实测「Seedance 即梦」拿到 18,263,579，来自 2018-09-07 的教程）。这种数字永远不变，带不了增速 → 一律取**近 14 天窗口**，降级时打 `extra.stale` |
+| 相关性顺序 ≠ 播放量顺序 | 供给面要读的是**相关性顺序**（人们真的做了什么），热度面要读**播放量**。实测「MiniMax H3」的第 3 条是「8G 显存+16G 内存也能 15 秒 720p」，按播放量排序会把它挤出 top-8 —— **而它恰恰是最该看到的竞争面** |
+| 产品清单 | `references/cn_products.txt` —— **数据不是代码**，每月新模型上线直接改文件 |
+| 商业使用 | ✅ 官方公开接口 |
+| 当前角色 | **只积累数据，不参与打分**（接入候选池 = 口径变更，需换版本号 + 30 份快照回归；回归集现 17/30） |
+
 ### `youtube` · 官方 RSS + Data API v3
 
 | 项 | 值 |

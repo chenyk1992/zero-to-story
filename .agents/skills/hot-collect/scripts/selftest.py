@@ -125,6 +125,46 @@ def main() -> int:
         finally:
             os.chdir(cwd)
 
+        # 5. cnpulse 采集面（离线，不联网）
+        import datetime as dt
+
+        from adapters import CnPulseAdapter, _bili_cookie_path
+
+        ad = CnPulseAdapter()
+        products = ad._load_products()
+        check("产品清单可解析且非空", len(products) >= 5,
+              f"{len(products)} 个产品，例：{products[0] if products else None}")
+        check("产品清单格式正确（标签|搜索词）",
+              all(lbl and qry for lbl, qry in products),
+              f"样例：{products[:2]}")
+
+        # heat 必须取近窗口，不能取历史最高。实测踩过的坑：按全站播放量排序，
+        # 「Seedance 即梦」拿到 18,263,579 —— 来自 2018-09-07 的通用教程。
+        today = dt.date(2026, 10, 23)
+        vids = [
+            {"title": "2018 通用教程", "play": 18_263_579, "pubdate": "2018-09-07", "bvid": "a"},
+            {"title": "本月的作品", "play": 102_642, "pubdate": "2026-10-15", "bvid": "b"},
+            {"title": "上周的作品", "play": 4_392, "pubdate": "2026-10-20", "bvid": "c"},
+        ]
+        heat, stale, recent_count, _ = ad._window(vids, today)
+        check("heat 取近窗口而非历史最高", heat == 102_642,
+              f"heat={heat}（历史最高是 18,263,579）")
+        check("近期作品计数正确", recent_count == 2, f"recent_count={recent_count}")
+        check("窗口内有近期作品时不标记 stale", stale is False, f"stale={stale}")
+
+        old_only = [v for v in vids if v["pubdate"] < "2026-01-01"]
+        heat2, stale2, _, _ = ad._window(old_only, today)
+        check("窗口内无近期作品时降级并标记 stale", stale2 is True and heat2 == 18_263_579,
+              f"heat={heat2} stale={stale2}")
+
+        # cookie 必须落在解析出来的数据根下（不能写死路径）
+        from _common import default_data_root as _dr
+
+        cp = _bili_cookie_path()
+        check("cookie 路径落在数据根下",
+              cp.parent.name == "cookies" and cp.parent.parent == _dr(),
+              f"{cp}  vs 数据根 {_dr()}")
+
     failed = [r for r in results if not r[1]]
     if args.json:
         print(json.dumps({

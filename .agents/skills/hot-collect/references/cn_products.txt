@@ -1,0 +1,28 @@
+# 中文侧定向供给清单 · cnpulse 采集面
+#
+# 格式：候选标签|站内搜索词
+#   候选标签 = 进快照的 keyword（打分时用它做字符串匹配）
+#   站内搜索词 = 打 B 站搜索接口用的 query（可以比标签更具体，避免撞词）
+#
+# **这是数据，不是代码。** 每月有新模型上线，直接改这个文件即可，不用动任何脚本。
+# 维护规则见 topic-scout/references/signals.md「采集面的角色分工」。
+#
+# 为什么需要这张表（实测 2026-10-23）：
+#   候选池 182 条里 youtube 占 173 条，中文侧只有 9 条。
+#   原因是中文侧热榜层（sixty/ai-news、sixty/quark）没有 heat 值、名次永不变，
+#   于是 S1/S3 结构性为 0，总分被封在 3.0；YouTube 候选最低 5.0。
+#   国产模型不是「不存在」，是**打分器拿不到它的数据形态**。
+#   这张表把「我们每个月都知道有哪些新模型」这件事变成可采集的数据源。
+
+MiniMax H3|MiniMax H3
+MiniMax 视频模型|MiniMax 视频模型
+Kling 4.0 可灵|Kling 4.0 可灵
+Seedance 即梦|Seedance 即梦
+DeepSeek|DeepSeek 深度求索
+通义千问|通义千问 Qwen
+豆包|豆包 AI 视频
+智谱 GLM|智谱 GLM
+Kimi|Kimi 月之暗面
+文心一言|文心一言
+ComfyUI 视频生成|ComfyUI 视频生成
+AI 漫剧本地部署|AI 漫剧 本地部署
