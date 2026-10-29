@@ -11,6 +11,7 @@ description: 为 AI 知识分享、工具实测与 vibe coding 账号采集免�
 
 ## 按请求取用
 
+- 综合账号研究先按[研究交接](references/research-handoff.md)复用已有快照与判断结果；仅采数据交 hot-collect，仅从已有热点库排序交 topic-scout，不重复采集或把不同格式的库直接混读。
 - 热点采集、平台接口和工具选择：读[免费来源与工具](references/free-sources.md)。优先复用有合适许可、真实所需功能的成熟框架，只补归一化和研究交接；不另造爬虫、签名或登录内核。下载过的源码不算已安装能力。
 - 连续观察、JSON 导入与指标比较：读[数据与采样](references/data-contract.md)，使用 [radar.py](scripts/radar.py)。脚本仅依赖 Python 标准库。
 - 对标视频、选题、脚本或账号复盘：读[内容研究与创作](references/editorial-workflow.md)。已有明确选题时直接进入相应阶段，不强迫先采全平台。
