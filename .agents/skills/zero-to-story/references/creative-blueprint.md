@@ -31,7 +31,7 @@ storyboard_brief.md 是故事、视觉和连续性的人工源文件。creative_
 | coverage | 观众必须看到/理解的事件、原文出处、可见证据和前后状态 |
 | scenes | 每场目的、转折、入场/离场状态、下一场义务和必要桥接 |
 | panels | Panel 顺序、4–15 秒时长、场景、六 Beat、状态和边界归属 |
-| dialogue | 按原文顺序的逐字对白、说话人、语言和所属 Setup |
+| dialogue | 按当前采用剧本顺序的逐字对白、说话人、语言和所属 Setup；原著来源和获准增补在人工源可追溯 |
 | generation.panel_plans | 每个 Panel 的 operation、可选视觉资产、首尾帧来源和最小运行时引用 |
 | generation.shots | 每个 Camera Setup 的镜头边界、动作、人物、参考和状态 |
 
@@ -40,6 +40,8 @@ must_show 和 must_explain 事件必须有唯一的镜头落点；optional 事�
 无人物、无对白的自然片可使用空 `cast`、空 `critical_characters` 和空 `dialogue`；`max_critical_characters` 是容量上限，不是必须出场人数。coverage、动作与状态可记录可观察的环境变化；场景 `turn` 可描述注意力或环境状态变化，末场 `next_obligation` 写已定收束和无后续义务。六 Beat 仍为语义时刻，单个 Setup 可覆盖全段；不为通过结构检查新增剧情或人物。无媒体控制需求时可用 T2V、`none` 和空运行时引用。
 
 ## 编译顺序
+
+小说/梗概先完成[场景剧本与创作修订](script-adaptation.md#从故事到场景剧本)，已有剧本引用当前版本。下面编译采用稿中的事件与对白，不从小说摘要直接填表；原作出处与改编决定仍保留。场景稿留在人工源，沿用现有 v2 schema，静态检查不判断戏是否好看。
 
 1. 从原文建立 source.conflicts，先解决人物、版本、道具和结尾等歧义。拆镜前按[固定人物文字](creative-assets.md#人物与场景文本锚点)建立当前主源角色条目与出现范围，包括跨镜配角/旁观者；`scenes.cast` 保留有关人物 ID，`critical_characters` 包含当前镜头必须正确识别或承担关键动作的人物，不等同“主演名单”。固定描述及英文表达仍在主源，不另造蓝图角色 schema；状态字段只记录当前事实变化。无人空镜不补人物。
 2. 列出观众必须获得的信息，给每个 coverage 事件写可见证据、before_state 和 after_state。

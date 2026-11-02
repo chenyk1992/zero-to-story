@@ -79,6 +79,9 @@ tmp_*.txt
 # Throwaway scratch dir at the repo root (one-off debug, log dumps, prompt drafts)
 TEMP/
 
+# Agent scratch dir for one-off image/video step args and debug dumps
+.mavis-tmp/
+
 # Per-project novel/storyboard/user data — analogue to workspace/, never committed
 /.short-drama/
 

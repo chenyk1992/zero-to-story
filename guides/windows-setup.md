@@ -25,7 +25,7 @@
 
    也可由获授权的 Agent 创建 `.venv` 并安装 `.[canvas]`；开发检查额外使用 `.[dev,canvas]`。不要复制旧机器 `.venv`。
 3. 用户确认安装前端依赖后，在 `web/canvas` 运行 `npm ci`、`npm run build`，再回到项目根。
-4. 重新运行预检，然后运行 `./scripts/start_canvas.ps1`。启动脚本只检查基础条件并打开画布，不补装依赖。端口冲突时可用 `-Port 8766`。
+4. 重新运行预检，然后运行 `./scripts/start_canvas.ps1`。启动脚本只检查基础条件并打开画布，不补装依赖。
 
 ## 按功能准备
 
