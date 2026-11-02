@@ -65,6 +65,25 @@ def test_delete_canvas_with_run_events(tmp_path) -> None:
         assert store._conn().execute("SELECT count(*) FROM run_events").fetchone()[0] == 0
 
 
+def test_recovered_resource_release_preserves_unknown_and_unblocks_other_run(tmp_path):
+    with CanvasStore(tmp_path / "canvas.sqlite3") as store:
+        canvas = store.create_canvas("test", _graph())
+        original = store.create_run(canvas["id"], "video-1", 1, "old", _snapshot(), resource_key="video")
+        store.claim_run(original["id"], owner_token="owner")
+        store.update_run(original["id"], status="unknown", provider_task_id="task-old", error="history missing")
+        queued = store.create_run(canvas["id"], "video-1", 1, "next", _snapshot(), resource_key="video")
+        with pytest.raises(RunStateError):
+            store.claim_run(queued["id"], owner_token="next-owner")
+        with pytest.raises(RunStateError):
+            store.release_unknown_resource(original["id"], request_id="old", provider_task_id="wrong", audit_path="audit", output_sha256="a" * 64)
+        restored = store.release_unknown_resource(original["id"], request_id="old", provider_task_id="task-old", audit_path="audit", output_sha256="a" * 64)
+        assert restored["status"] == "unknown"
+        assert restored["resource_released"] is True
+        assert restored["outputs"] == []
+        assert restored["evidence"][-1]["provider_terminal_status"] == "unknown"
+        assert store.claim_run(queued["id"], owner_token="next-owner")["status"] == "running"
+
+
 def test_canvas_version_is_compare_and_swap(tmp_path) -> None:
     with CanvasStore(tmp_path / "canvas.sqlite3") as store:
         canvas = store.create_canvas("demo", _graph())
@@ -285,7 +304,7 @@ def test_old_node_runs_are_migrated_additively_and_history_is_preserved(tmp_path
 
     with CanvasStore(db_path) as store:
         migrated = store.get_run("run-1")
-        assert store.schema_version == 2
+        assert store.schema_version == 3
         assert migrated["status"] == "failed"
         assert migrated["provider_task_id"] == "provider-1"
         assert migrated["owner_token"] == "owner-1"

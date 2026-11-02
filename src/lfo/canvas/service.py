@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +154,7 @@ class CanvasService:
             if any(
                 run["node_id"] == node_id
                 and run["status"] in {"queued", "pending_agent", "running", "unknown"}
+                and not (run["status"] == "unknown" and run.get("resource_released") is True)
                 for run in runs
             ):
                 raise CanvasError(
@@ -443,6 +445,50 @@ class CanvasService:
         self._notify()
         return self._public_run(result)
 
+    def release_verified_local_resource(self, run_id: str, audit_path: str) -> dict[str, Any]:
+        """Release a recovered producer's capacity without asserting job success."""
+        from lfo.comfy.admission import (
+            _verified_windows_listener,
+            inspect_submission,
+            state_directory,
+        )
+        from lfo.comfy.local_video_recovery import verify_recovered_video
+
+        run = self.store.get_run(run_id)
+        audit_root = (state_directory() / "reconciliations").resolve(strict=True)
+        audit_file = Path(audit_path).resolve(strict=True)
+        if not os.path.samefile(audit_file.parent, audit_root) or audit_file.suffix != ".json":
+            raise ValueError("audit must be an original guard reconciliation record")
+        audit = json.loads(audit_file.read_text(encoding="utf-8"))
+        if audit.get("kind") != "verified_local_video_resource_release":
+            raise ValueError("audit does not prove a local video resource release")
+        proof, receipt = audit.get("proof", {}), audit.get("receipt", {})
+        if inspect_submission() is not None:
+            raise ValueError("a submission receipt still occupies the machine")
+        if not audit.get("restart_evidence") or _verified_windows_listener(receipt["base_url"]) != audit.get("listener"):
+            raise ValueError("replacement server identity changed since the audit")
+        checked = verify_recovered_video(
+            run=run,
+            receipt=receipt,
+            output_root=Path(audit["workspace"]) / "output",
+            video=Path(proof["output_path"]),
+            expected_sha256=proof["sha256"],
+            server_restarted_at=datetime.fromisoformat(proof["server_restarted_at"]),
+        )
+        if checked != proof or proof.get("provider_terminal_status") != "unknown":
+            raise ValueError("stored audit and reverified original evidence differ")
+        if inspect_submission() is not None:
+            raise ValueError("another submission occupied the machine during verification")
+        result = self.store.release_unknown_resource(
+            run_id,
+            request_id=proof["request_id"],
+            provider_task_id=proof["provider_task_id"],
+            audit_path=str(audit_file),
+            output_sha256=proof["sha256"],
+        )
+        self._notify()
+        return self._public_run(result)
+
     def cancel_pending(self, run_id: str) -> dict[str, Any]:
         result = self._public_run(self.store.cancel_pending(run_id))
         self._notify()
@@ -471,6 +517,7 @@ class CanvasService:
                 "attention_state",
                 "attention_reason",
                 "provider_task_id",
+                "resource_released",
                 "outputs",
                 "review",
                 "error",
@@ -496,6 +543,7 @@ class CanvasService:
                     "running",
                     "unknown",
                 }
+                and not (run["status"] == "unknown" and run.get("resource_released") is True)
                 for run in runs
             ):
                 raise ValueError("该组件已有待处理请求")

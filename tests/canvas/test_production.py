@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -93,6 +94,44 @@ def video_run(service):
     return canvas, claimed
 
 
+def test_local_resource_release_keeps_unknown_and_checks_audit(production, tmp_path, monkeypatch):
+    from lfo.comfy import admission, local_video_recovery
+
+    service, _ = production
+    _, run = video_run(service)
+    service.store.update_run(run["id"], status="unknown", provider_task_id="task-old", error="lost")
+    monkeypatch.setenv("LFO_VIDEO_STATE", str(tmp_path / "guard"))
+    audit_dir = tmp_path / "guard" / "reconciliations"
+    audit_dir.mkdir(parents=True)
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"video")
+    proof = {"request_id": "video-request", "provider_task_id": "task-old",
+             "provider_terminal_status": "unknown", "output_path": str(video), "sha256": "a" * 64,
+             "server_restarted_at": "2026-01-01T00:00:00+00:00"}
+    listener = {"pid": 123, "started_at": proof["server_restarted_at"]}
+    audit = {"kind": "verified_local_video_resource_release", "proof": proof,
+             "receipt": {"base_url": "http://127.0.0.1:8188"}, "workspace": str(tmp_path),
+             "restart_evidence": "old server stopped", "listener": listener}
+    audit_file = audit_dir / "audit.json"
+    audit_file.write_text(json.dumps(audit), encoding="utf-8")
+    monkeypatch.setattr(admission, "_verified_windows_listener", lambda _url: listener)
+    monkeypatch.setattr(local_video_recovery, "verify_recovered_video", lambda **_kw: proof)
+    result = service.release_verified_local_resource(run["id"], str(audit_file))
+    assert result["status"] == "unknown"
+    assert result["resource_released"] is True
+    assert result["outputs"] == []
+
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps(audit), encoding="utf-8")
+    with pytest.raises(ValueError, match="original guard reconciliation"):
+        service.release_verified_local_resource(run["id"], str(outside))
+
+    audit["kind"] = "untrusted"
+    audit_file.write_text(json.dumps(audit), encoding="utf-8")
+    with pytest.raises(ValueError, match="audit does not prove"):
+        service.release_verified_local_resource(run["id"], str(audit_file))
+
+
 def test_capability_is_scoped_to_receiving_session(production):
     service, canvas = production
     assert service.catalog.get("codex-imagegen", ["image_gen"])["available"]
@@ -139,6 +178,26 @@ def test_unknown_keeps_original_task_id_and_can_collect_late_result(production, 
             run["id"], token, "succeeded", proof, [{"path": str(output), "kind": "image"}]
         )
     assert path.read_bytes() == b"late original output"
+
+
+def test_verified_resource_release_allows_explicit_same_node_request(production):
+    service, canvas = production
+    first = confirm(service, canvas, "original")
+    claim = service.claim_agent(first["id"], ["image_gen"])
+    service.progress_agent(first["id"], claim["owner_token"], "generation", "remote-original")
+    service.complete_agent(first["id"], claim["owner_token"], status="unknown", error="lost")
+    assert not service.readiness(canvas["id"], "one")["ready"]
+    with pytest.raises(CanvasError, match="已有待处理"):
+        service.confirm(canvas["id"], "one", canvas["version"], "new-request")
+
+    service.store.release_unknown_resource(first["id"], request_id="original",
+        provider_task_id="remote-original", audit_path="verified-audit", output_sha256="a" * 64)
+    assert service.readiness(canvas["id"], "one")["ready"]
+    assert len(service.store.list_runs(canvas["id"])) == 1  # no automatic retry
+    new = service.confirm(canvas["id"], "one", canvas["version"], "new-request")
+    assert new["id"] != first["id"]
+    assert new["status"] == "pending_agent"
+    assert service.store.get_run(first["id"])["status"] == "unknown"
 
 
 def test_reconcile_proof_and_task_identity_are_checked_before_collection(production, tmp_path):

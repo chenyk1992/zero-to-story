@@ -14,6 +14,7 @@ from lfo.comfy.admission import (
     inspect_submission,
     reconcile_submission,
     reconcile_submission_operator,
+    release_recovered_video_submission,
 )
 from lfo.comfy.exceptions import LfoComfyError
 
@@ -230,3 +231,100 @@ def test_restart_recovery_retains_guard_when_audit_write_fails(monkeypatch, tmp_
     with pytest.raises(OSError, match="audit storage"):
         reconcile_submission_operator("no-id", None, "failed", "observed restart", server_restarted_at=restarted)
     assert inspect_submission() is not None
+
+
+def test_verified_artifact_release_audits_unknown_provider_status(monkeypatch, tmp_path):
+    from lfo.comfy import admission, local_video_recovery, transport
+
+    monkeypatch.setenv("LFO_VIDEO_STATE", str(tmp_path / "state"))
+    listener_started = datetime.now(UTC).isoformat()
+    monkeypatch.setattr(admission, "_verified_windows_listener", lambda _url: {"pid": 1, "started_at": listener_started})
+    with VideoSubmissionGuard("http://127.0.0.1:8188", request_id="request-a") as guard:
+        guard.submitted("task-a")
+
+    @contextmanager
+    def session(_config):
+        class Client:
+            def call(self, name):
+                assert name == "server_info"
+                return {
+                    "server": {"running": True, "url": "http://127.0.0.1:8188"},
+                    "workspace": {"path": str(tmp_path)},
+                }
+
+        yield Client()
+
+    monkeypatch.setattr(transport, "_session", session)
+    monkeypatch.setattr(
+        transport,
+        "load_runtime_config",
+        lambda **kw: transport.RuntimeConfig(base_url=kw["base_url"]),
+    )
+    monkeypatch.setattr(
+        local_video_recovery,
+        "verify_recovered_video",
+        lambda **kw: {
+            "request_id": "request-a",
+            "provider_task_id": "task-a",
+            "provider_terminal_status": "unknown",
+            "sha256": "a" * 64,
+            "output_path": str(kw["video"]),
+            "server_restarted_at": kw["server_restarted_at"].isoformat(),
+        },
+    )
+    result = release_recovered_video_submission(
+        {"id": "run-a"},
+        video=tmp_path / "v.mp4",
+        expected_sha256="a" * 64,
+        server_restarted_at=datetime.now(UTC),
+        restart_evidence="Observed old server stopped and new process started",
+    )
+    audit = json.loads(Path(result["audit_path"]).read_text(encoding="utf-8"))
+    assert audit["kind"] == "verified_local_video_resource_release"
+    assert audit["proof"]["provider_terminal_status"] == "unknown"
+    assert inspect_submission() is None
+
+
+def test_verified_artifact_release_never_clears_guard_when_verification_fails(
+    monkeypatch, tmp_path
+):
+    from lfo.comfy import admission, local_video_recovery, transport
+
+    monkeypatch.setenv("LFO_VIDEO_STATE", str(tmp_path / "state"))
+    listener_started = datetime.now(UTC).isoformat()
+    monkeypatch.setattr(admission, "_verified_windows_listener", lambda _url: {"pid": 1, "started_at": listener_started})
+    with VideoSubmissionGuard("http://127.0.0.1:8188", request_id="request-a") as guard:
+        guard.submitted("task-a")
+
+    @contextmanager
+    def session(_config):
+        class Client:
+            def call(self, name):
+                return {
+                    "server": {"running": True, "url": "http://127.0.0.1:8188"},
+                    "workspace": {"path": str(tmp_path)},
+                }
+
+        yield Client()
+
+    monkeypatch.setattr(transport, "_session", session)
+    monkeypatch.setattr(
+        transport,
+        "load_runtime_config",
+        lambda **kw: transport.RuntimeConfig(base_url=kw["base_url"]),
+    )
+
+    def reject(**_kw):
+        raise ValueError("mismatch")
+
+    monkeypatch.setattr(local_video_recovery, "verify_recovered_video", reject)
+    with pytest.raises(ValueError, match="mismatch"):
+        release_recovered_video_submission(
+            {"id": "run-a"},
+            video=tmp_path / "v.mp4",
+            expected_sha256="a" * 64,
+            server_restarted_at=datetime.now(UTC),
+            restart_evidence="observed restart",
+        )
+    assert inspect_submission()["request_id"] == "request-a"
+    assert not list((tmp_path / "state" / "reconciliations").glob("*.json"))

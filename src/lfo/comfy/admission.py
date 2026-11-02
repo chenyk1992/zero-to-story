@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from .exceptions import LfoComfyError
@@ -214,6 +216,107 @@ def reconcile_submission_operator(
         }
     finally:
         guard._lock.close()
+
+
+def release_recovered_video_submission(
+    run: dict[str, Any],
+    *,
+    video: Path,
+    expected_sha256: str,
+    server_restarted_at: datetime,
+    restart_evidence: str,
+) -> dict[str, Any]:
+    """Release only a verified stopped producer; do not guess its final status.
+
+    The operator must actually observe the old server stop and the replacement
+    start. A file or missing history alone is never restart evidence. The Canvas
+    unknown row remains blocking until its separate, audited resource release.
+    """
+    from . import transport
+    from .local_video_recovery import verify_recovered_video
+
+    if not restart_evidence.strip():
+        raise ValueError("observed restart evidence is required")
+    guard = VideoSubmissionGuard("")
+    guard._acquire()
+    try:
+        receipt = inspect_submission()
+        if receipt is None:
+            raise ValueError("original receipt is missing; inspect the existing audit")
+        config = transport.load_runtime_config(base_url=receipt["base_url"])
+        with transport._session(config) as session:
+            info = session.call("server_info")
+        if not transport._running(info, config):
+            raise ValueError("replacement server is not ready at the original endpoint")
+        workspace = info.get("workspace", {}).get("path")
+        if not isinstance(workspace, str) or not workspace:
+            raise ValueError("replacement server workspace is unavailable")
+        listener = _verified_windows_listener(receipt["base_url"])
+        actual_start = datetime.fromisoformat(listener["started_at"])
+        if abs((actual_start - server_restarted_at).total_seconds()) > 1:
+            raise ValueError("observed restart does not match the actual server process")
+        proof = verify_recovered_video(
+            run=run,
+            receipt=receipt,
+            output_root=Path(workspace) / "output",
+            video=video,
+            server_restarted_at=server_restarted_at,
+            expected_sha256=expected_sha256,
+        )
+        audit_directory = guard.folder / "reconciliations"
+        audit_directory.mkdir(parents=True, exist_ok=True)
+        audit_path = (
+            audit_directory
+            / f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S.%fZ')}-{uuid4().hex}.json"
+        )
+        audit = {
+            "kind": "verified_local_video_resource_release",
+            "proof": proof,
+            "receipt": receipt,
+            "restart_evidence": restart_evidence.strip(),
+            "server": info["server"],
+            "workspace": workspace,
+            "listener": listener,
+            "recorded_at": datetime.now(UTC).isoformat(),
+        }
+        temporary = audit_path.with_suffix(".tmp")
+        try:
+            temporary.write_text(json.dumps(audit, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(audit_path)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+        current_listener = _verified_windows_listener(receipt["base_url"])
+        if current_listener != listener:
+            raise ValueError("replacement listener changed during recovery")
+        # The Canvas unknown row still holds its resource until a separate
+        # validated Canvas operation; releasing this guard alone cannot wake it.
+        guard.finished()
+        return {"audit_path": str(audit_path), **proof}
+    finally:
+        guard._lock.close()
+
+
+def _verified_windows_listener(base_url: str) -> dict[str, Any]:
+    """Read the local listener PID and creation time without launching it."""
+    parsed = urlsplit(base_url)
+    if os.name != "nt" or parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port:
+        raise ValueError("verified local recovery requires a Windows loopback server")
+    script = (
+        f"$l = @(Get-NetTCPConnection -LocalPort {parsed.port} -State Listen -ErrorAction Stop); "
+        "if ($l.Count -ne 1) { throw 'expected exactly one listener' }; "
+        "$p = Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $l[0].OwningProcess); "
+        "if (-not $p) { throw 'listener process missing' }; "
+        "@{pid=$p.ProcessId;started_at=$p.CreationDate.ToUniversalTime().ToString('o')} | ConvertTo-Json -Compress"
+    )
+    result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                            capture_output=True, text=True, timeout=20, check=False)
+    if result.returncode:
+        raise ValueError("cannot verify the replacement server listener")
+    data = json.loads(result.stdout)
+    if not isinstance(data.get("pid"), int) or not data.get("started_at"):
+        raise ValueError("invalid replacement server listener evidence")
+    return data
 
 
 def main() -> None:

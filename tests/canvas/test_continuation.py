@@ -74,6 +74,22 @@ def test_returned_media_has_priority_before_claims_and_action_truncation(service
     assert summary["actions_total"] == 150 and summary["actions_truncated"] is True
 
 
+def test_released_unknown_does_not_hide_independent_ready_work(service):
+    canvas = service.store.create_canvas("recover", _graph([_node("old"), _node("next")]))
+    _configure(service, canvas, ["old", "next"])
+    old = service.store.create_run(canvas["id"], "old", canvas["version"], "req-old",
+                                   {"node_id": "old", "node_type": "image"}, resource_key="video")
+    service.store.claim_run(old["id"], owner_token="old-owner")
+    service.store.update_run(old["id"], status="unknown", provider_task_id="task-old")
+    service.store.release_unknown_resource(old["id"], request_id="req-old", provider_task_id="task-old",
+                                           audit_path="audit", output_sha256="a" * 64)
+    packet = service.next_work(canvas["id"], "sess")
+    assert packet["status"] == "actionable"
+    assert packet["actions"][0]["node_id"] == "next"
+    assert any(x["node_id"] == "old" for x in packet["blocked_items"])
+    assert service.store.get_run(old["id"])["status"] == "unknown"
+
+
 def test_next_work_is_bounded_read_only_and_cannot_inherit_another_session(service):
     nodes = [_node(f"n-{i}") for i in range(40)]
     canvas = service.store.create_canvas("long", _graph(nodes))

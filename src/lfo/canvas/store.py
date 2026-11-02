@@ -11,6 +11,7 @@ database.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -131,7 +132,7 @@ class ContinuationRevisionRequiredError(CanvasStoreError):
 
 
 _UNSET = object()
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 _TERMINAL_STATUSES = frozenset({"succeeded", "failed", "unknown", "cancelled"})
 _CLAIMABLE_STATUSES = frozenset({"queued", "pending_agent"})
 _BLOCKING_STATUSES = frozenset({"running", "unknown"})
@@ -566,7 +567,7 @@ class CanvasStore:
             blockers = (
                 self._conn()
                 .execute(
-                    "SELECT resource_key, resource_capacity, status, stage, evidence FROM node_runs "
+                    "SELECT resource_key, resource_capacity, status, stage, evidence, resource_released FROM node_runs "
                     "WHERE id <> ? AND status IN ('running', 'unknown')",
                     (run_id,),
                 )
@@ -903,6 +904,60 @@ class CanvasStore:
                 now,
             )
         assert updated is not None
+        return self._run_from_row(updated)
+
+    def release_unknown_resource(
+        self,
+        run_id: str,
+        *,
+        request_id: str,
+        provider_task_id: str,
+        audit_path: str,
+        output_sha256: str,
+    ) -> dict[str, Any]:
+        """Release capacity without changing an unknown provider outcome."""
+        if not audit_path or not re.fullmatch(r"[0-9a-f]{64}", output_sha256):
+            raise ValueError("validated audit and output digest are required")
+        with self._lock, self._transaction():
+            row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise RunNotFoundError(run_id)
+            if (
+                row["status"] != "unknown"
+                or row["request_id"] != request_id
+                or row["provider_task_id"] != provider_task_id
+            ):
+                raise RunStateError(
+                    "original unknown request and provider id must match", code="run_conflict"
+                )
+            if row["resource_released"]:
+                return self._run_from_row(row)
+            now = _now()
+            history = _append_evidence(
+                _load(row["evidence"], "evidence"),
+                {
+                    "kind": "verified_resource_release",
+                    "audit_path": audit_path,
+                    "output_sha256": output_sha256,
+                    "provider_terminal_status": "unknown",
+                },
+                "recovery",
+                now,
+            )
+            cursor = self._conn().execute(
+                "UPDATE node_runs SET resource_released = 1, evidence = ?, updated_at = ? "
+                "WHERE id = ? AND status = 'unknown' AND resource_released = 0",
+                (_dump(history), now, run_id),
+            )
+            if cursor.rowcount != 1:
+                raise RunStateError("run changed during resource release", code="busy")
+            updated = (
+                self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            )
+            assert updated is not None
+            self._emit_event(
+                updated, "run.resource_released", {"provider_terminal_status": "unknown"}, now
+            )
         return self._run_from_row(updated)
 
     def preflight_reconcile(
@@ -2133,6 +2188,7 @@ class CanvasStore:
                 "attention_updated_at TEXT NOT NULL DEFAULT '', "
                 "resource_key TEXT NOT NULL DEFAULT 'legacy:unknown', "
                 "resource_capacity INTEGER NOT NULL DEFAULT 1, "
+                "resource_released INTEGER NOT NULL DEFAULT 0, "
                 "review TEXT, "
                 "review_owner_token TEXT, "
                 "reviewed_at TEXT, "
@@ -2252,7 +2308,7 @@ class CanvasStore:
         )
 
     def _migrate_node_runs(self) -> None:
-        """Add version-2 fields without rewriting historical execution data."""
+        """Add missing fields without rewriting historical execution data."""
 
         columns = {
             str(row["name"])
@@ -2267,6 +2323,7 @@ class CanvasStore:
             ("attention_updated_at", "TEXT NOT NULL DEFAULT ''"),
             ("resource_key", "TEXT NOT NULL DEFAULT 'legacy:unknown'"),
             ("resource_capacity", "INTEGER NOT NULL DEFAULT 1"),
+            ("resource_released", "INTEGER NOT NULL DEFAULT 0"),
             ("review", "TEXT"),
             ("review_owner_token", "TEXT"),
             ("reviewed_at", "TEXT"),
@@ -2396,6 +2453,7 @@ class CanvasStore:
             "attention_updated_at": attention_updated_at,
             "resource_key": row["resource_key"] or _UNKNOWN_RESOURCE_KEY,
             "resource_capacity": int(row["resource_capacity"] or _DEFAULT_RESOURCE_CAPACITY),
+            "resource_released": bool(row["resource_released"]),
             "review": review,
             "review_owner_token": row["review_owner_token"],
             "reviewed_at": row["reviewed_at"],
@@ -2826,16 +2884,16 @@ def _is_recoverable_row(row: Mapping[str, Any]) -> bool:
 def _run_holds_generation_resource(row: Mapping[str, Any]) -> bool:
     """Return whether a live run still occupies its generation resource.
 
-    An unknown run always occupies its resource because the store cannot prove
-    that remote work ended.  A running run releases the generation resource
-    only after it has entered collection or media validation and durable
-    evidence records that the provider finished.  Parse failures remain
-    conservative and keep the resource occupied.
+    An unknown run occupies its resource unless an explicit, audited recovery
+    marked that resource released without changing the unknown outcome. A
+    running run releases the generation resource only after it has entered
+    collection or media validation and durable evidence records that the
+    provider finished. Parse failures remain conservative.
     """
 
     status = row["status"]
     if status == "unknown":
-        return True
+        return not bool(row["resource_released"])
     if status != "running":
         return False
     if row["stage"] not in {"collection", "media_validation"}:

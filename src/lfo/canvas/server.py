@@ -297,6 +297,8 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 self._json(service.complete_agent(segments[2], **body))
             elif segments[3] == "reconcile":
                 self._json(service.reconcile_run(segments[2], **body))
+            elif segments[3] == "release-verified-local-resource":
+                self._json(service.release_verified_local_resource(segments[2], **body))
             elif segments[3] == "handoff-recovery":
                 self._json(service.handoff_recovery(segments[2], **body))
             elif segments[3] == "handoff-agent-claim":
