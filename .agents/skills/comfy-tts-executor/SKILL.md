@@ -5,7 +5,7 @@ description: 由 Canvas 服务执行已确认的本地 Qwen3-TTS CustomVoice、V
 
 # 本地 Qwen3-TTS 执行
 
-仅处理 Canvas 冻结的 `audio` 请求。`comfy-qwen-tts` 能力由服务内部 worker 领取 `queued` 并调用本 Skill 的内部 adapter；不提供对话或独立脚本的生成入口。所有试听也须先保存音频节点，再经画布确认执行。
+Canvas 冻结 `audio` 请求后，服务 worker 领取 `comfy-qwen-tts` 的 `queued` 请求并调用内部 adapter。台词生成和技术试听都先保存音频节点，再经画布确认执行。
 
 使用方法和参数见 [Canvas TTS 指南](../../../guides/canvas-tts.md)，共同规则见[共享生产规则](../../../guides/ai-system-prompt.md)。
 

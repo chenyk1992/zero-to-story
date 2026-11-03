@@ -1,18 +1,14 @@
 # 广告方法来源
 
-第四轮对照本机 `plot-twist-ad-generator` 1.0.0 的创意搜索与自筛层，自主补写[反转广告创意](twist-ad-ideation.md)：四类创意原型、选项写法、弱创意淘汰判据、静音自筛与人物动机四段路径。通用反转、商品因果、证据与数量/容器/接触、观察问题的最小修正已分别由[通用反转](../../short-drama-screenwriter/references/reversal-design.md)与[产品因果](product-causality.md)维护，本页只做指针，不重复定义。不复制原文字、模板、媒体或代码；不迁入固定 7–8 个场景菜单、每项必须经用户选择、剧本确认自动生成、直出文字重试，也不采用统一去字幕标点或商品结尾截字幕。静音自筛只作创意筛选，不设为交付门槛。
+本页记录广告方法的来源、项目落点与重要差异；创作和执行要求以对应方法页及[共享规则](../../../../guides/ai-system-prompt.md)为准。
 
-第三轮继续对照brand-ad本地快照的摄影与注意节奏方法，自主补写联想累积、连续发现、动作跨视点与带新含义的回返；保留克制与高能表达，不复制原案例/模板，不增加摄影配额、动效门禁或未知产品事实。
 
-2026-10-22 对照本机 `brand-ad` 1.1.6，自主重写[产品展示方法](product-showcase-direction.md)，吸收身份依据/创意场景分工与材质、尺度、使用关系的视觉事件思路；字体方法统一复用项目[构图与字体](../../mg-voiceover-animation-generator/references/composition-and-typography.md)。不复制原文字、模板、媒体或平台流程，不迁入固定模型、原生文字唯一实现、默认自动生成或新的广告入口。生成资料图不认证未知产品事实，例子只是原创规划。
+| 来源 | 采用的方法与项目落点 | 许可与重要差异 |
+| --- | --- | --- |
+| 本机 `plot-twist-ad-generator` 1.0.0 | 创意原型、产品促成的状态变化及创意自查，写入[反转广告创意](twist-ad-ideation.md)；通用反转与商品因果分别见编剧方法和[产品因果](product-causality.md)。 | 下载包未附许可文件；项目方法为自主重写，不复制原文、模板、媒体或代码。创意自查用于选择方向，不构成交付门槛。 |
+| 本机 `brand-ad` 1.1.6（2026-10-22 对照） | 摄影与注意力节奏、联想累积、连续发现、跨视点动作和回返，写入[产品展示方法](product-showcase-direction.md)及广告导演方法。 | 项目自主重写方法，未复制原案例、模板、媒体或平台流程；文字的实现方式按当前工具选择。生成资料图不证明产品事实。 |
+| `lip-product-ad-generator` | SKU、包装、刷头、质地、使用互动和落版，归入[美妆方向](beauty-product-direction.md)。 | 按产品资料和用户指定的媒介、模特、时长及画幅采用。 |
+| `fashion-scene-video-planner` | Runway/lifestyle、身份/服装/场景关系、材质廓形与衣料响应，归入[时装方向](fashion-direction.md)及视觉资产方法。 | 按具体服装、资料和用户意图选用运动表现。 |
+| `brand-ip-asset-package-design`、`ip-toy-grid-motion`、`poster-motion-generator` | 静态资产与八类动效见[视觉资产来源说明](../../visual-design-creator/references/source-notes.md)。 | 由视觉资产方法维护。 |
 
-归纳重写来源方法，不复制模板/媒体/执行流程；本机下载包无许可文件，不作为商用许可/已接入能力。生产只依赖项目。
-
-plot-twist-ad-generator的开放构思方向、产品利益与场景压力、人物证据/动机、隐藏揭示、数量/容器/接触、按需静音可读性及观察问题的最小修正迁入广告导演/产品因果/后期；通用反转统一在编剧方法维护。历史plot-twist-ad-creator入口已被统一广告替代，不保留别名发现；历史简报可直接作为输入，不改历史run/媒体。
-
-lip-product-ad-generator的SKU/包装/刷头/质地、使用互动与落版→美妆分支；九格静物可选，不固定30秒/横屏/模特/音乐。
-fashion-scene-video-planner的runway/lifestyle、身份/服装/场景分离、材质廓形、按需衣料运动响应与局部修改→时装与资产；尊重用户意图，不按衣服类别强判。
-brand-ip-asset-package-design、ip-toy-grid-motion、poster-motion-generator由[资产来源](../../visual-design-creator/references/source-notes.md)维护静态方法及八类动效。
-微表演/时间/喜剧/对称由[故事方法来源](../../zero-to-story/references/source-notes.md)和[编剧来源](../../short-drama-screenwriter/references/source-notes.md)维护；视频参考/替换由分析方法维护。
-
-不采用固定候选数/场景菜单、延迟商品露出、对所有广告设全静音门槛、统一写实、禁止所有分镜图、剧本确认自动生成、直出文字重试、去字幕标点、商品结尾截字幕、取消视听验收或来源默认平台。静音检查只响应明确投放/用户要求；画面修正只对已返回的成功媒体按既有授权与采用路径提出，不重提技术failed/unknown。没有独立反转入口/广告执行器/广告schema；保持Canvas唯一执行链和用户规格。
+对照的本机快照未附许可文件时，仅作方法参考，不复制原始资源，也不视为商用许可或已接入能力。字体设计统一复用项目[构图与字体](../../mg-voiceover-animation-generator/references/composition-and-typography.md)；微表演、时间、喜剧、对称与参考片替换见各自来源说明。项目生产统一遵守共享规则和 Canvas 执行链。

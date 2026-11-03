@@ -4,7 +4,7 @@
 
 ## 当前 Panel 的提交前检查
 
-新 MV 在 `graph.workspace.mv_production` 保存 `schema_version: 1` 元信息，只对 `panels` 中列出的视频节点启用。普通视频和未登记的旧画布沿用原规则；不得为补元信息重新生成旧镜头。结构与字段以 `src/lfo/canvas/mv_preflight.py` 的当前 schema 为准。
+新 MV 在 `graph.workspace.mv_production` 保存 `schema_version: 1` 元信息，只对 `panels` 中列出的视频节点启用。普通视频和未登记的旧画布沿用原规则；补元信息不触发旧镜头重生成。结构与字段以 `src/lfo/canvas/mv_preflight.py` 的当前 schema 为准。
 
 - `script`：画布 document 节点 ID 和创作版本。每个 Panel 保存源正文中确实存在的 `script_excerpt`，只绑定相关镜头片段；其他章节修订不使该镜头自动过期。
 - `song`：实际采用音频的节点、来源、SHA-256 与真实时长。生成歌曲引用成功 run 的当前 ACCEPT 文件；导入歌曲绑定音频 asset，并以 `imported_selection` 记录 `decision: ACCEPT`、`asset_sha256`、`source`、`evidence`（选定版本及实际听审依据），不伪造 run。
@@ -32,7 +32,7 @@ Canvas 的 `readiness` 返回当前声明与依赖的具体缺口；`confirm` �
 {"type":"placeholder","label":"副歌：街头全景，尚未生成"}
 ```
 
-预览在占位时间段烧录“MV 预览 · 待生成”及描述，需要本机 FFmpeg 的 ASS 滤镜和可用中文字体。图片只是静态构图，视频只用于实际已有范围；无素材段不伪造 run ID。使用实际主歌曲，不拉伸或循环歌曲。粗剪文件和回执均标为 preview；字形/运动通过、已生成数量及正式交付不得由占位推断。
+预览在占位时间段烧录“MV 预览 · 待生成”及描述，需要本机 FFmpeg 的 ASS 滤镜和可用中文字体。图片只是静态构图，视频只用于实际已有范围；占位段表示待生成，不产生采用结论。使用实际主歌曲，不拉伸或循环歌曲。粗剪文件和回执均标为 preview；字形与运动是否成立、已生成数量与正式交付按实际素材判断，不从占位推断。
 
 ```powershell
 ./.venv/Scripts/python.exe .agents/skills/music-video-creator/scripts/music_tools.py preview --edit PREVIEW_JSON --output NEW_PREVIEW_MP4 --receipt NEW_RECEIPT_JSON
@@ -48,7 +48,7 @@ Canvas 的 `readiness` 返回当前声明与依赖的具体缺口；`confirm` �
 ./.venv/Scripts/python.exe .agents/skills/music-video-creator/scripts/music_tools.py render --edit EDIT_JSON --output NEW_VIDEO --canvas-id CANVAS_ID --receipt NEW_RECEIPT_JSON
 ```
 
-`--canvas-id` 核对生成视频、生成图片段和生成 Logo 与当前成功 run 的 ACCEPT 路径和哈希。导入/拍摄视频及图片保存真实来源、选定版本和用途依据，不伪造 run。主歌曲、音效、导入素材及最终文件的视听采用仍由调用方核对。回执记录输出规格、实际帧区间、缓存复用与媒体摘要，不能把技术通过标成全片内容通过。修改字幕、声音或切点产生新版本，检查受影响接缝后再交付。缓存目录须专用于缓存，不得包含源媒体、输入清单、回执或输出文件，冲突在写入前报错。
+`--canvas-id` 核对生成视频、生成图片段和生成 Logo 与当前成功 run 的 ACCEPT 路径和哈希。导入/拍摄视频及图片保存真实来源、选定版本和用途依据。主歌曲、音效、导入素材及最终文件的视听采用由调用方核对。回执记录输出规格、实际帧区间、缓存复用与媒体摘要，按[素材就绪形态](../../../../guides/ai-system-prompt.md#素材就绪形态按真实状态不按节点存在)表述结论。修改字幕、声音或切点产生新版本，检查受影响接缝后再交付。缓存目录专用于缓存，不含源媒体、输入清单、回执或输出文件，冲突在写入前报错。
 
 ## 有证据的进度与交付
 

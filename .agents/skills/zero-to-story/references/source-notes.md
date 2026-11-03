@@ -4,11 +4,11 @@
 
 第三轮继续依据以下本地来源自主展开风格化3D、都市运动与仙宫空间生活关系，所有新配方为原创规划。去掉固定重置/发声比例不等于丢弃媒介差异；本轮把具体轮廓、材质、运动及节奏选择写回既有风格参考、模板和H3交接，不承诺静态图或原包案例已经证明本项目视频效果。
 
-第二轮对照本机rpg-game-cinematic 1.0.0，自主编写[游戏电影化](game-cinematic-direction.md)与当前状态交接模板，只取行动/空间/HUD生命周期及计划/实测分开的方法。未复制文字/代码/资产，未迁入30秒/固定地标数量、付费试片、分层HUD工具假设、额外审批或空间状态替代精确尾帧的默认；执行仍遵守项目现行规则。
+第二轮对照本机 rpg-game-cinematic 1.0.0，自主编写[游戏电影化](game-cinematic-direction.md)和状态交接模板，采用行动/空间/HUD生命周期及计划与实测区分的方法。项目只作方法参考，未复制其文字、代码或资产。
 
-只读对照本机 `half-narrated-3d-short-drama` 1.0.2、`90s-cel-animation-city-pop-short` 1.0.1、`chinese-celestial-palace-video` 1.0.1 的本地快照。自主重写旁白/对白/画面分工、音频排程、都市赛璐璐与仙宫环境互动方法；[镜头表现](expressive-direction.md)与[混合叙事](mixed-narration-direction.md)使用新编案例，不是历史作品缺陷的通用化。既有 miyazaki-inspired-animation / future-sci-fi-cinematic-generator 的风格适配继续保留。
+只读对照本机 `half-narrated-3d-short-drama` 1.0.2、`90s-cel-animation-city-pop-short` 1.0.1、`chinese-celestial-palace-video` 1.0.1。项目自主重写旁白/对白/画面分工、音频排程、都市赛璐璐与仙宫环境互动方法；[镜头表现](expressive-direction.md)和[混合叙事](mixed-narration-direction.md)采用新编案例，既有 miyazaki-inspired-animation / future-sci-fi-cinematic-generator 风格适配继续保留。来源包未附许可文件，未复制其内容或资产。
 
-不复制原包文字、模板、媒体或代码；本地包未附许可文件，元数据版本不构成复制分发授权。未迁入固定发声比例、强制 TTS 预演、周期性主卡重置、固定五镜、默认图像模型、审批或重试流程。方法、结构/输入检查与实际效果分别记录，不以旧作品的问题推断现行 Skill 有缺陷。
+每项方法均为项目内重写；未将来源包的镜头配额、预演、重置或模型流程作为本项目生产要求。计划检查与实际媒体效果分别依据各自证据判断。
 
 ## 漫剧老李新版的选择性方法适配
 
@@ -18,13 +18,13 @@
 
 ## 时间效果与广告方法
 
-2026-10-09 审查本机 bullet-time-slow-motion-video 与 plot-twist-ad-generator。采用其冻结/运动对象区分、环绕与恢复状态、产品参与因果和利益证据的通用思路，自主重写为[时间效果导演](time-effects-direction.md)及[统一广告](../../advertising-creator/SKILL.md)。本机包未发现许可文件，不复制其文字、模板、媒体、代码或工作流，不引用本机 .hub 路径作为运行依赖，也不沿用下列其他来源许可证。未引入固定资产套餐、精确速度控制、平台入口、重复审批、自动重试或免验收承诺。
+2026-10-09 对照本机 bullet-time-slow-motion-video 与 plot-twist-ad-generator，采用冻结/运动对象区分、环绕与恢复状态、产品参与因果及利益证据的方法，自主重写为[时间效果导演](time-effects-direction.md)和[统一广告](../../advertising-creator/SKILL.md)。来源包未附许可文件，不复制其内容、资产或工作流，也不把其默认流程带入项目。
 
 ## 五项本机专项方法
 
-2026-10-09 审查本机 character-identity-asset-studio、micro-expression-video-generator、sitcom-story-video、wes-anderson-style-short-film-generator、reference-video-recreation-workflow。采用其通用身份设计、可见反应发展、喜剧因果/反应、对称舞台化美术与证据/变更边界思路，自主重写为项目参考；复刻证据由video-deconstruct-analyzer、喜剧写作由short-drama-screenwriter负责，通用身份已统一维护于[视觉身份方法](../../visual-design-creator/references/character-identity-design.md)，旧故事路径保留适配。微表演/时间/对称可供三个主入口按需复用，不改变主责。本机包未发现许可文件，不复制原文字库、模板、媒体、工具流程，不将以下已有 MIT/其他许可声明套用到它们。不引入固定候选、资产套餐、画幅/配色/音乐、平台入口或自动重试。
+2026-10-09 对照本机 character-identity-asset-studio、micro-expression-video-generator、sitcom-story-video、wes-anderson-style-short-film-generator 和 reference-video-recreation-workflow。项目自主重写身份设计、可见反应、喜剧因果、对称舞台化美术及证据/变更方法；复刻证据归 video-deconstruct-analyzer，喜剧写作归 short-drama-screenwriter，通用身份见[视觉身份方法](../../visual-design-creator/references/character-identity-design.md)。微表演、时间效果和对称风格由三个主入口按需复用。来源包未附许可文件，未复制原文、模板、媒体或工具流程。
 
-源包复核后的补强仍采用按需方法：表演参考增加不同情绪和收整后余波的自编例子；喜剧复杂棚景可用空间辅助资料核对；严格角色音色连续复用项目已有声音引用。均写回现有镜头/声音交接，不迁移大词库、固定节拍、多视图套餐或强制声线生产。
+后续补强仍写回现有镜头和声音交接：表演参考增加情绪变化与余波例子，喜剧棚景按需核对空间，角色音色连续时复用已有声音引用。
 
 本目录中的动作与表演参考，是依据 [chenyk1992/manju-laoli-skill](https://github.com/chenyk1992/manju-laoli-skill) 固定版本 [`079df685f7cf2f0de635362bd359c233db38f9fe`](https://github.com/chenyk1992/manju-laoli-skill/tree/079df685f7cf2f0de635362bd359c233db38f9fe) 的导演资料所作的项目内重写。
 
@@ -36,7 +36,7 @@
 
 此外，`storyboard-production.md` 中的三个段缝案例借鉴了外部资料关于真实末态续演、换机位连续性和声音过渡的讨论；`creative-assets.md` 的当前 Panel 素材检查借鉴了存在、用途、绑定、版本四个核对角度。两者均复用本项目既有的 Canvas readiness、`runtime_input_keys`、`ACCEPT` 尾帧和确认快照规则。
 
-本项目主动未采用外部资料中的固定节奏、固定镜头/动作数量、强制换机位、全局 Asset-First 门禁、会话命令和“用户裁定”等流程约束。这里的文字、案例、字段映射和生产边界均按本项目现有契约重新编写，不能替代 Canvas 就绪检查或实际视频验收。
+项目内的方法、案例和字段映射按现有流程编写；创作与生产仍遵循当前 Canvas readiness 和实际视频验收要求。
 
 随该来源保留的 MIT 许可证见 [LICENSE.manju-laoli](../LICENSE.manju-laoli)。完整归属也登记在仓库根目录的 `THIRD_PARTY_NOTICES.md`。
 

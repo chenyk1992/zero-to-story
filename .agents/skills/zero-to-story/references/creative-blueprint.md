@@ -67,7 +67,7 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 - 对白顺序、Setup 归属和已确认文字策略可执行。汉字为主的条目按汉字数/整 Panel 时长给粗略风险提示（≥5.5，≥7 高风险，均为 warning）；不计标点，不以英文字符数套用中文阈值。蓝图未记录发声方式时不猜普通对白或说唱，提示不能裁决唱词可行性、实际音轨或某个短 Shot 的容量。
 - 人物 ID 核对：`critical_characters` 必须属于当前 `scenes[].cast`（空 cast 不能含关键人物）。说话人未列入当前 cast 时提示核对旁白、画外来源或 ID，不强制说话人入画；取景中的关键人物集合不是在场名单，相邻集合变化不自动报出入场错误。
 - 每个 Panel 恰好一条 `generation.panel_plans`；operation、首尾帧和引用槽位相互一致。
-- I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 明确选择分镜板或有用途的普通参考，`first_frame_source` / `last_frame_source` 为 `null`。本地 R2V 可另用 `first_frame_guide_source` 提供首帧引导，不接尾帧，也不承诺像素级首帧锁。
+- I2VA 只有一个首帧，FL2VA 按首帧/尾帧顺序提供两个帧，T2VA 不带视觉参考；R2V 明确选择分镜板或有用途的普通参考，`first_frame_source` / `last_frame_source` 为 `null`。本地 R2V 可另用 `first_frame_guide_source` 提供首帧引导，不接尾帧，首帧引导的范围见[控制方式](storyboard-production.md#选择控制方式)。
 
 预检不做最终视频评分，不要求形容词计数，不判断图文身份或站位是否自然，也不生成候选片、恢复记录或独立锁文件。没有结构化依据的入离场、可见说话人绑定与语言时序保留语义核对，不靠集合差或正则猜测。
 
@@ -93,9 +93,9 @@ python .agents/skills/zero-to-story/scripts/validate_creative_blueprint.py creat
 
 `operation` 只能是 `video.text_to_video`、`video.image_to_video`、`video.first_last_frame` 或 `video.reference_to_video`。`visual_asset_policy` 只能是 `none`、`storyboard_board`、`reference_assets`、`scene_keyframe` 或 `last_frame`。帧来源只能引用实际 asset key；`runtime_input_keys` 是当前 Panel 的最小引用集，不能混入只供审阅的规划资产。
 
-`storyboard_board` 是 R2V 的分镜板策略，使用时必须在 STEP 1 写入规范的 `storyboard_layout: "rowsxcolumns"`，例如 `1x2`、`2x2` 或 `2x3`，且行数乘列数为 2–6；其他策略的该字段必须为 `null` 或省略。STEP 3 按此布局一次生成或复用一张 `storyboard_board.<panel>`，不能生成 `storyboard_frame.*` 独立格子，也不能在事后拼板。
+`storyboard_board` 是 R2V 的分镜板策略，使用时必须在 STEP 1 写入规范的 `storyboard_layout: "rowsxcolumns"`，例如 `1x2`、`2x2` 或 `2x3`，且行数乘列数为 2–6；其他策略的该字段必须为 `null` 或省略。STEP 3 生成或复用一个 `storyboard_board.<panel>`；整板制作按[分镜板契约](creative-assets.md#r2v-自包含可变网格分镜板)。
 
-`reference_assets` 用于已明确选择且各有用途的 typed 图片、视频或声音参考。每项按 `kind` 绑定 `reference_image`、`reference_video` 或 `reference_audio` 槽位，列入 `runtime_input_keys`，不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；普通参考只提供构图或状态依据，不承诺像素级首帧锁。Canvas 槽位按实际 `kind` 和能力说明检查，不能把嵌入视频音轨伪造成独立声音参考。
+`reference_assets` 用于已明确选择且各有用途的 typed 图片、视频或声音参考。每项按 `kind` 绑定 `reference_image`、`reference_video` 或 `reference_audio` 槽位，列入 `runtime_input_keys`，不强制新增分镜板，不允许空引用或混入分镜板 key。`first_frame_source`、`last_frame_source`、`storyboard_layout` 均为 `null`；普通参考与首帧引导的区别见[控制方式](storyboard-production.md#选择控制方式)。Canvas 槽位按实际 `kind` 和能力说明检查，不能把嵌入视频音轨伪造成独立声音参考。
 
 本地 R2V 确有首帧引导需要时，可在 `generation.panel_plans` 填 `first_frame_guide_source`；其他模式须为 `null` 或省略。它指向独立的 `first_frame` 输入，不等于 I2VA/FL2VA 的 `first_frame_source`，也不占 `reference_slots`。`runtime_input_keys` 依次记录引导素材和各 Setup 普通参考的有序并集，同一素材承担两种用途时只列一次；Setup 的 `reference_keys` 仍只记录普通参考。如果引导只承担第 0 帧作用，不给它虚构 `<Picture N>` 标签；确实也作为普通参考时才占相应槽位。分镜板整图不能作首帧引导。选择与交接仍须核对 Canvas 当前能力及实际素材来源，规划中的尾帧不冒充已接受的真实尾帧。
 

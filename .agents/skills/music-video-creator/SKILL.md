@@ -5,7 +5,7 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱；为MV结合�
 
 # 音乐与 MV 创作
 
-遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。以最终音画观看效果安排创作；只完成用户要求的阶段，沿用已有歌曲、歌词、人物、素材和提供方选择。创作判断由主会话完成，生成只经 Canvas 已确认请求执行。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。从要让人听见的乐句与感受出发，发展词曲、演唱和声画关系，沿用已有歌曲、人物、素材及提供方选择，完成用户要求的阶段。
 
 ## 先按交付范围选择
 
@@ -21,28 +21,28 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱；为MV结合�
 
 ## MV 六阶段
 
-独立MV在前期创意阶段先按[整体风格推荐与继承](../zero-to-story/references/style-selection.md)结合歌曲主题、用户想法和观看目标主动推荐整体媒介、美术与气质，再发展剧情/表演/意象/文字路线和详细分镜。已有风格直接继承，授权自主设计则自行选择并说明依据，不重复确认。只有想法或歌词时视觉方向可暂定，详细音乐事件仍等实际采用歌核实；纯歌词/音频任务保持原范围。国漫、末日科幻等整体方向与局部反转、微表情、慢动作、运镜分层处理，音乐曲风不自动决定画风。
+独立 MV 先按[整体风格推荐](../zero-to-story/references/style-selection.md)结合歌曲主题、用户想法与观看目标确定媒介、美术和气质，已有风格直接深化。只有想法或歌词时可暂定视觉方向；正式音乐事件与详细分镜以实际采用歌为依据。剧情、表演、意象、文字及局部拍法在所选方向内发展。
 
-MV 制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)在 `mv_plan` 记录歌曲范围、时长、画幅、生成参数、声音与导出要求，区分用户指定、同 MV 沿用与本次推断；不逐镜重问。按[音乐时间轴](references/music-timeline.md)绑定实际采用歌曲及窗口，不能由模型默认长度决定选曲范围。仅歌词、歌曲/器乐或局部文字交付不提前收集视频参数。
+视频规格按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)记录到 `mv_plan`，注明歌曲范围、时长、画幅、参数、声音、导出要求及选值依据。歌曲窗口按[音乐时间轴](references/music-timeline.md)核实，纯文本/音频交付准备各自所需输入。
 
 1. 确定歌曲与意图：沿用用户选定的已有歌曲版本，核对实际文件与采用依据；用户选曲不自动等于内容验收 ACCEPT。只有歌词或想法时，在前期创意简报中按[音乐方向](references/music-direction.md)完成实际歌词、Hook/旋律主题、节奏、人声、编曲发展与收尾，形成音乐创作稿并交 Music 3 生成。正式详细分镜和参考卡以实际采用歌曲为依据；器乐作品无需歌词。
-2. 多人项目先冻结最终混剪和实际声音到角色的映射，再根据**实际采用音频**建立[音乐时间轴](references/music-timeline.md)：段落、歌词句、重要重拍、停顿及情绪转折；候选分析须听审校准。从暂定视觉转到实际歌曲或歌曲换版时，由主责完成[内部复核](references/music-timeline.md#实际歌曲到来后的内部复核)，在已选风格内更新受影响表达，直接继承已有选择，不新增确认或审批。
-3. 按[MV 导演方法](references/mv-direction.md)选择声音事件，安排表演、意象、剧情与文字的响应和全曲发展；按下方路线读取对应方法，建立文字系统，与人物/环境美术并行。未核对的事件保持候选，可用于暂定样式探索，不能作为精确歌词、口型或镜内卡点的采用依据；缺口只影响依赖该事件的镜头。
+2. 多人项目先冻结最终混剪与声音/角色映射，再按实际采用音频建立[音乐时间轴](references/music-timeline.md)：段落、歌词、重拍、停顿和情绪转折，候选分析经听审校准。歌曲到来或换版时，由主责按[内部复核](references/music-timeline.md#实际歌曲到来后的内部复核)更新受影响表达，沿用已有风格决定。
+3. 按[MV 导演方法](references/mv-direction.md)决定声音事件是否需要画面响应，安排表演、意象、剧情与文字的全曲发展；按下方路线读取对应方法，建立文字系统，与人物/环境美术并行。未核对的事件保持候选，可用于暂定样式探索，不能作为精确歌词、口型或镜内卡点的采用依据；缺口只影响依赖该事件的镜头。
 4. 把成片 Shot 映射到歌曲时间段，写明唱词、动作、运镜、文字事件及转场，再安排生成 Panel 和[视觉资产](references/visual-assets.md)。人物含跨镜配角按[固定文字与跨模式规则](../zero-to-story/references/creative-assets.md#人物与场景文本锚点)记录在本片计划；完整贴字/文字主导拼贴路线落实所需独立样式卡、空间卡，人物图按用途选择。确需完整人物图时使用[完整人物模板](assets/character_reference.template.md)，保留单角色16:9三视图与1–2张半身变化，不因登记角色自动生图，无人物不造人物卡。具体歌词图与镜头构图共同设计，再制作精确首帧或绑定普通 R2V。用[创作计划模板](assets/mv_plan.template.md)记录，先验证代表乐句的构图、文字和真实输入，再扩展同类镜头。
-5. 对已确定的 Panel 按[生产交接](references/production-handoff.md)交给 [h3-prompt-writing](../h3-prompt-writing/SKILL.md)，将全片脚本/版本映射和逐 Panel 完整提示词保存到 Canvas，再经 [canvas-workspace](../canvas-workspace/SKILL.md)执行。MV 不另写 H3 语法或提交 Comfy 任务。
+5. 对已确定的 Panel 按[生产交接](references/production-handoff.md)交给 [H3](../h3-prompt-writing/SKILL.md)定稿，将全片脚本/版本映射和逐 Panel 完整提示词保存到 Canvas，再经 [canvas-workspace](../canvas-workspace/SKILL.md)处理已授权运行。
 6. 用户要求成片时，围绕主歌曲完成[后期与成片验收](references/finishing-and-review.md)：采用窗口的粗剪、准确歌词、必要音效、一次完整视听检查。
 
-只做局部交付时，完成所需阶段并使用相关参考，不强制创建整曲计划、结构预览或成片。`mv_plan.md` 是创作源；实际音频时间轴和最终编辑清单绑定媒体版本；Canvas 是运行与接受状态的来源。
+局部交付完成所需阶段。`mv_plan.md` 持有创作事实，音乐时间轴和最终编辑清单绑定媒体版本，Canvas 持有运行与采用状态。
 
 完整 MV 在视频批量扩展前，按[生产检查与结构预览](references/production-checks.md)登记当前 Panel 的歌曲窗口、脚本片段和真实图片绑定，并制作整曲结构预览。检查只阻塞有缺口的 Panel；预览占位不当作已生成素材。生产进度读取 Canvas 的实际运行与事件，渲染采用可复用的分段缓存。
 
 ## 创作路线与必读方法
 
-叙事MV可按需读[反转](../short-drama-screenwriter/references/reversal-design.md)、[喜剧](../short-drama-screenwriter/references/sitcom-writing.md)、[表演](../zero-to-story/references/performance-direction.md)、[时间效果](../zero-to-story/references/time-effects-direction.md)、[对称风格](../zero-to-story/references/symmetric-storybook-style.md)或[布局动效](../visual-design-creator/references/layout-motion-handoff.md)。保持实际歌窗口与原主责，不补商品、影视六Beat或故事蓝图。
+叙事 MV 按需读[反转](../short-drama-screenwriter/references/reversal-design.md)、[喜剧](../short-drama-screenwriter/references/sitcom-writing.md)、[表演](../zero-to-story/references/performance-direction.md)、[时间效果](../zero-to-story/references/time-effects-direction.md)、[对称风格](../zero-to-story/references/symmetric-storybook-style.md)或[布局动效](../visual-design-creator/references/layout-motion-handoff.md)，在本片 Shot 与音乐窗口内落实。
 
-先记录用户希望获得的观看效果和所用方法。音乐曲风不等于视觉路线：流行歌曲也可使用空间歌词、拼贴或表演；Trap 等触发词不自动要求黑红色、快速硬切或全程演唱。
+先记录用户希望获得的观看效果和所用方法。根据实际乐句、人物与视觉母题选择路线：流行、说唱或抒情都可采用空间歌词、拼贴、表演或留白。
 
-路线已有、需要把它发展成完整乐句或安排重复副歌时，读[乐句与风格示例](references/route-examples.md)。从中选择文字、人物、图层或意象的主导关系，写回当前音乐响应与 Shot；示例不是固定镜数、风格配额或额外试片要求。
+需要发展乐句或重复副歌时读[乐句与风格示例](references/route-examples.md)，选择文字、人物、图层或意象的主导关系，写回音乐响应与 Shot。
 
 参考歌曲/MV时按[参考研究](../zero-to-story/references/reference-research.md)提取情绪、乐句发展与声画机制，不把榜单或评论当作实际听看证据。多语创作按需复用[语言适配](../short-drama-screenwriter/references/overseas-dialogue.md)，保留歌词韵律与风格，歌曲定稿后不借语言润色改动已采用词曲。叙事群戏和动作段按需复用[复杂调度](../zero-to-story/references/blocking-direction.md)与[动作导演](../zero-to-story/references/action-direction.md)，均服从实际主歌曲窗口。
 
@@ -54,11 +54,11 @@ MV 制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#�
 | 叙事、诗意、纯意象、普通字幕或明确无字 | 按用户路线组织；文字方法只在需要时读取。纯器乐可有视觉词也可无字，不能凭空补唱词 |
 | 人物表演与平面拼贴共同主导，或点名collage-performance-mv | 读[拼贴表演](references/collage-performance-direction.md)，在当前计划落实表演意图/出镜形态、图层关系、实际歌曲与生成/后期责任；不迁入表演占比或新合成器 |
 
-用户已指定的方法不能在自主决策时悄悄变成通用电影感镜头。授权自行设计时可自行完成路线选择和代表片段检查，不重复索要批准。能力不足只影响相关效果；记录可执行替代及其差异，不能以改名掩盖简化。来源取舍见[适配说明](references/source-adaptation.md)。
+沿用用户选定的方法；自主设计授权内完成路线选择和代表乐句检查。能力缺口只影响相关效果，交付可执行候选时说明它与原目标的差异。来源见[适配说明](references/source-adaptation.md)。
 
-文字驱动路线按[文字导演的效果基准](references/typography-direction.md#效果基准与全片发展)落实字形/版式、音乐触发、人物/空间关系与全片发展。用户点名 `music-video-subtitle-generator` 时保留其文字主视觉目标；材质、布局和动效密度仍按本作品选择。简化造成的差异须如实交付，不能以字幕数量或技术通过代替所选路线的效果验收。
+文字驱动路线按[效果基准](references/typography-direction.md#效果基准与全片发展)落实字形/版式、音乐触发、人物/空间关系和全片发展。`music-video-subtitle-generator` 保留文字主视觉目标，材料、布局与密度由本曲决定；实际片段检验所选关系。
 
-两份原 Skill 的空间文字、拼贴和遮挡默认作为 H3 生成内容完整交接，不因普通字幕器缺少这些功能而改为待开发后期。独立可编辑字幕、已有底片上的字层修复等才另行安排后期。所选效果能写入并执行生成与实际效果通过验收分别核实。
+空间文字、拼贴和遮挡路线默认把完整画面交给 H3 生成：在当前 Shot 写明准确文字、字形与材质、层级、遮挡、变化时序和跨镜方向。独立可编辑字幕或已有底片的字层修复按实际后期工具安排；所选生成效果与最终画面分别核实。
 
 用户要求图片支撑的生成式歌词时，按视觉资产规则为每项选定上屏原文落实可读图片并检查实际视频输入路径。全片文字样式卡不等于全曲文字素材完成；图片参考有助于约束字形，不保证 H3 稳定保持或准确同步。
 

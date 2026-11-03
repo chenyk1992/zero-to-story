@@ -1,6 +1,6 @@
 # 字形选型与排字机制
 
-当整体方向已有、但“用什么字、怎样排才属于这部作品”仍不具体时读取。供资产、片头、MG、MV和广告主责复用；本文补选型方法，不重建[字体角色与主体构图](../../mg-voiceover-animation-generator/references/composition-and-typography.md)或[空间共演](../../mg-voiceover-animation-generator/references/type-subject-direction.md)。不要求用完字族、增加辅助字或制作额外卡片。
+整体方向已定、但字形与排字仍需深化时读取。供资产、片头、MG、MV 和广告复用；按需结合[字体角色与构图](../../mg-voiceover-animation-generator/references/composition-and-typography.md)及[空间共演](../../mg-voiceover-animation-generator/references/type-subject-direction.md)，选适合准确原文与作品身份的关系。
 
 ## 从内容选字，而不是从效果名选字
 
@@ -42,6 +42,6 @@
 
 ## 怎样交给模板、图片和H3
 
-在现有字形/版式记录中写选择依据、可见骨架、主次与对齐关系、阅读状态及必要的变化，模板已有字段能容纳就不另建字族台账。下游正文展开这些特征，不只写“厚黑路线/机制编号”。
+在现有字形/版式记录中写选择依据、可见骨架、主次与对齐、阅读状态及必要变化。下游正文展开这些特征，让字形与当前内容的关系可被看见。
 
 H3中的字重、宽窄、尺度或色值是意图描述，不是可精确调用的字体/排版参数。生成式字图使用准确原文与所选骨架并查看实际结果；图片沿现有首帧或普通R2V路径传递，规则见[文字资产](../../music-video-creator/references/visual-assets.md#文字样式卡与逐事件文字图片)。确定性排字才核实真实字体、字形覆盖和布局工具。无论路径如何，都看实际字形、读序和观看效果，不以参数写得细代替验收。

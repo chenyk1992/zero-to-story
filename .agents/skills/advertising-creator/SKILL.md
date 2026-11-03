@@ -5,7 +5,7 @@ description: 创作广告、品牌传播和电商宣传，结合用户想法与�
 
 # 广告创作
 
-遵守[共享生产规则](../../../guides/ai-system-prompt.md)。本Skill负责广告目标、事实、创意、导演、主计划与广告验收；H3定稿、Canvas操作、实际执行仍各守原契约。电商属于广告，反转只是可选表现方法，没有独立反转广告入口。
+遵守[共享生产规则](../../../guides/ai-system-prompt.md)。围绕受众需要、可靠产品事实和品牌目的，发展可见可听的创意，统筹广告方案、导演和交付；H3 定稿、Canvas 操作与执行由对应专能完成。
 
 ## 当前范围与完成条件
 
@@ -18,20 +18,20 @@ description: 创作广告、品牌传播和电商宣传，结合用户想法与�
 | 现有影视/MV的局部品牌修改 | 保持原作品主责，只处理授权范围；独立电影宣发广告为新广告交付 |
 | 中立产品说明/已定单Panel提示词 | 明确专业MG/Presenter/B-roll/H3请求按原范围，不因有产品机械广告化 |
 
-广告采用歌曲时只委托音乐创作并接收实际采用音频，整支广告主责不转MV。影视配乐同理归影视统筹。混合目标确实影响当前交付且未明确时，只问归属缺口。
+歌曲广告由广告主责整合音乐成果与实际音频；独立音频交付归音乐。混合目标只有在影响当前交付且依据不足时才询问。
 
 ## 视频广告入口的制作规格
 
-按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)在 `ad_plan` 记录投放用途、时长、画幅、生成参数、声音与交付要求，区分用户指定、同广告沿用与本次推断；投放限制、产品事实和授权不能编造。只询问共享硬门或影响交付的真实冲突，同广告不逐镜重问。概念、文案和静态物料不提前收集视频参数；专业委托和执行端继承广告主责已定规格。
+视频制作按[制作规格与判断依据](../../../guides/ai-system-prompt.md#制作规格与判断依据)在 `ad_plan` 记录用途、时长、画幅、参数、声音及交付要求和选值依据，专业委托继承。概念、文案和静态物料按当前范围准备；产品、投放和授权事实缺口如实列明。
 
 ## 创作与按需路由
 
 1. 接收产品/品牌资料、受众/目的、范围、用户语言/时长/画幅/媒介/声音及露出策略。事实、条件、观察与未知分开；照片不证明功效、折扣、价格或活动。只问影响当前结果的缺口。
-2. 按[整体风格推荐与继承](../zero-to-story/references/style-selection.md)结合品牌目的、产品事实、用户想法和剧情主动推荐整体媒介、美术与气质，再按[广告导演](references/ad-direction.md)深化表达、脚本和分镜。已有故事或脚本只表示内容沿用，风格未定仍需推荐；已有风格直接继承，授权直接完成则选择并说明依据，不重复确认。参考竞品或作品时读[参考研究](../zero-to-story/references/reference-research.md)，区别创作机制与未经证实的效果；地域对白按需复用[语言适配](../short-drama-screenwriter/references/overseas-dialogue.md)。开放创意且表达路线/场景未定时才另提内容方向；不借风格推荐重写锁定脚本。产品驱动剧情读[产品因果](references/product-causality.md)，反转读[通用方法](../short-drama-screenwriter/references/reversal-design.md)，卖点直接推动状态倒置的剧情广告另读[反转广告创意](references/twist-ad-ideation.md)，喜剧按需读[喜剧写作](../short-drama-screenwriter/references/sitcom-writing.md)，不强制反转/人物/CTA/音乐。
-3. 唇妆读[美妆](references/beauty-product-direction.md)，服装读[时装](references/fashion-direction.md)；身份/IP/产品/版式委托[静态资产](../visual-design-creator/SKILL.md)。人物按[固定文字与跨模式规则](../zero-to-story/references/creative-assets.md#人物与场景文本锚点)记录在ad_plan，含跨镜配角；确需完整角色图时才用[统一设定图模板](../zero-to-story/assets/character_card_prompt.template.md)，从ad_plan逐字复制描述，保留单角色16:9三视图与1–2张半身变化，不建立影视故事板。微表演、时间效果、对称风格、海报/网格动效由导演参考返回事实，不转交全片主责。
+2. 按[整体风格](../zero-to-story/references/style-selection.md)结合品牌目的、产品事实与用户想法推荐方向，已有风格直接深化；授权直接完成时选择并说明依据。用[广告导演](references/ad-direction.md)发展脚本与分镜；参考研究读[来源方法](../zero-to-story/references/reference-research.md)，地域对白读[语言适配](../short-drama-screenwriter/references/overseas-dialogue.md)。产品推动剧情读[产品因果](references/product-causality.md)，需要反转时读[通用反转](../short-drama-screenwriter/references/reversal-design.md)或[反转广告创意](references/twist-ad-ideation.md)，喜剧读[喜剧写作](../short-drama-screenwriter/references/sitcom-writing.md)。
+3. 唇妆读[美妆](references/beauty-product-direction.md)，服装读[时装](references/fashion-direction.md)，身份/IP/产品/版式委托[静态资产](../visual-design-creator/SKILL.md)。人物含跨镜配角按[固定文字](../zero-to-story/references/creative-assets.md#人物与场景文本锚点)记录在 ad_plan；已决定制作完整角色图时使用[统一模板](../zero-to-story/assets/character_card_prompt.template.md)，保留单角色 16:9 三视图与 1–2 张半身变化。其他导演方法返回当前广告事实。
 4. 本阶段采用稿是唯一创作源；需要保存用[ad_plan模板](assets/ad_plan.template.md)。已有画布按[当前版本协调](../canvas-workspace/references/creative-handoff.md#当前版本协调)保存唯一项目主源，明确用户新编辑先合并再同步，只有受影响Panel更新。
-5. 准备制作/保存项目读[生产交接](references/production-handoff.md)，实际结果可用/要求成片读[后期与验收](references/finishing-and-review.md)。文本阶段不提前加载执行资料。没有画布生成授权不生成，创作采用不等于生成授权。
+5. 准备制作或保存项目读[生产交接](references/production-handoff.md)，结果可用或要求成片读[后期与验收](references/finishing-and-review.md)；按共享授权规则进入相应阶段。
 
-不要求影视六Beat/故事蓝图或独立MV六阶段；专业成果引用实际版本，不另写第二份全片计划。方法取舍见[来源说明](references/source-notes.md)。
+广告使用自身的 ad_plan 与 Shot 计划，引用专业成果的实际版本。方法取舍见[来源说明](references/source-notes.md)。
 
-产品、材质或品牌视觉关系主导时，按需读[产品展示导演](references/product-showcase-direction.md)；需要动态字体时复用[构图与字体](../mg-voiceover-animation-generator/references/composition-and-typography.md)的限定方法。事件、文字与声音仍写回 ad_plan，不转成独立 MG 全片或另一套展示流程。
+产品、材料或品牌视觉主导时读[产品展示导演](references/product-showcase-direction.md)，动态字体读[构图与字体](../mg-voiceover-animation-generator/references/composition-and-typography.md)。把选定事件、文字和声音写回 ad_plan。

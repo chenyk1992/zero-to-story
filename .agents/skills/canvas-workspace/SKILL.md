@@ -21,11 +21,11 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 
 ## 保存约定
 
-三主入口和专业任务的源协调、文字/时序、采用版及节点映射见[共同创作交接](references/creative-handoff.md)。画布不是第四个创作主入口。
+三主入口和专业任务的源协调、文字/时序、采用版及节点映射见[共同创作交接](references/creative-handoff.md)。画布保存当前创作成果和真实生产记录。
 
 选定的动作、构图、材质和声音表现按[表现方法的传递与局部更新](references/creative-handoff.md#表现方法的传递与局部更新)进入现有提示词、实际参考或后期清单；方法链接和资料节点本身不会进入模型。
 
-片头、拼贴表演与游戏状态等专业成果回原主源；多Panel按[共同边界](references/creative-handoff.md#跨panel文字声音与状态)保留文字、声音与实际状态。保存现有字段，不从专业术语推导新能力或自动创建运行。
+片头、拼贴表演与游戏状态等专业成果回原主源；多 Panel 按[共同边界](references/creative-handoff.md#跨panel文字声音与状态)保留文字、声音与实际状态，映射到当前接口支持的字段。
 
 - 日常先用 `canvas_read(canvas_id)` 的分页目录定位；目录省略长正文和历史，不可把它当完整图覆盖保存。按 `page.next_offset` 和当前 `expected_version` 读下一页，版本变化时重读。需要完整项目数据时显式 `view="full"`。
 - 多个镜头用 `canvas_read(canvas_id, node_ids=[...])` 一次精读最多 20 个目标及直接上游；全文和参数原样返回，共享输入只返回一次。响应的 `production` 同时给目标节点当前 readiness 和最新运行摘要，不为同一批次再逐项读取。readiness 不代表授权，确认执行时仍冻结并核实实际输入。按当前版本用一批 `canvas_edit` operations 保存，默认只返回新版本与改动回执；确需全图时设 `full=True`。
@@ -46,7 +46,7 @@ description: 组织和编辑项目节点画布，保存故事、素材与生成�
 4. **回填。** 用 `canvas_complete` 写实际输出路径和媒体类型。宿主无法指定目录时传回真实路径，由服务复制。领取后明确失败写 `failed`，提交结果不能核实写 `unknown`。完成令牌只用于该请求，不写入提示词或媒体元数据。
 5. **按用途验收。** 故事媒体或明确要求内容验收的任务，按共享规则记录一次 `ACCEPT/REJECT/INCONCLUSIVE`；普通技术组件只回填技术状态。内容证据不足与提交状态未知是两类问题，不能互相代替。
 
-Agent 型宿主媒体的单项回执、错误归属和回填中断处理见[执行结果交接](references/agent-result-handoff.md)。领取不等于已提交：调用前写 `submit`，拿到实际结果后立即写该 run 的结果证据并回填，再处理下一项。无法逐项可靠保存结果时逐张执行，不能把多个长耗时生成放进一个会提前抛错的 `Promise.all`，也不能只在全部结束后统一保存。宿主生成成功与 Canvas 回填失败分开处理，不把回填异常记成提供方生成失败。
+Agent 型宿主媒体的单项回执、错误归属与回填中断处理见[执行结果交接](references/agent-result-handoff.md)：领取不等于已提交，按该文档的阶段顺序逐项记录、落盘并回填，再处理下一项。
 
 页面排队不会唤醒空闲 Agent。“待 Agent 接手”不等于已经开始生成。
 
@@ -62,10 +62,10 @@ Agent 型宿主媒体的单项回执、错误归属和回填中断处理见[执�
 
 用户要求完整视频时，使用已接受的 Canvas 输出做顺序连接、裁切、音频和字幕等确定性后期，交付前检查实际最终文件，按需读[视频验收](../zero-to-story/references/video-qc.md)。
 
-独立后期工具不自动继承 Canvas 输入的采用检查。调用方在正式后期交接前读取当前 run.review，核对 ACCEPT、`output_path`、`output_sha256` 与实际文件，采用 review 指向的版本；不能只凭 run_id 或渲染成功认定接受。MV 的音乐版本与声音处理按[后期交接](../music-video-creator/references/finishing-and-review.md)核对。
+独立后期工具不自动继承 Canvas 输入的采用检查。调用方在正式后期交接前读取当前 run.review，核对 ACCEPT、`output_path`、`output_sha256` 与实际文件，采用 review 指向的版本（run_id 与渲染成功本身不构成采用依据，见[素材就绪形态](../../../guides/ai-system-prompt.md#素材就绪形态按真实状态不按节点存在)）。MV 的音乐版本与声音处理按[后期交接](../music-video-creator/references/finishing-and-review.md)核对。
 
 片段派生版按[采用版本与后期](references/creative-handoff.md#采用版本与后期)走合法入口：首次待审、INCONCLUSIVE 重开、REJECT 派生审片分别处理，不替换已 ACCEPT 原 run。成片后期保留源 review，放 `projects/<project_id>/final` 并检查实际成片。改绑已 ACCEPT Panel/尾帧版当前不支持，报告缺口并停相关续接。只有当前采用版 ACCEPT 且下游需要时才提取真实尾帧，不用普通资产边绕过来源。
 
 持续生产先绑定真实宿主会话、明确组件范围和已有授权；实际派发、结果待处理和处理完成按接续指南登记。结果返回后处理并启动下一项 ready 工作；结束前读取接续状态。暂停不自动恢复，持久状态不能独自唤醒宿主。
 
-能力文件只维护交接字段、模式和依赖；具体字段以当前能力与 API 为准。没有已接入执行能力的选项保持禁用。
+能力文件维护交接字段、模式和依赖，以当前能力与 API 为准；已接入的选项才可执行。

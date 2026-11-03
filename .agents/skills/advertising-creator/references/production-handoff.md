@@ -1,10 +1,10 @@
 # 广告生产交接
 
-已选字形/排字、包装材料与声画关系按[具体交接](../../canvas-workspace/references/creative-handoff.md#字形包装与声音互动的具体交接)从ad_plan取本段准确内容、可见过程、源版本/核对状态与责任。生成项进入完整prompt和真实参考；后期原轨、标准字/Logo或独立音效交实际工具，不把包装名、cue描述或资料边当作已实现输入。
+处理字形/排字、包装材料或声画关系时，按[具体交接](../../canvas-workspace/references/creative-handoff.md#字形包装与声音互动的具体交接)从 ad_plan 提取当前 Shot 的准确内容、可见过程、素材版本和制作责任，并写入完整 prompt、真实参考或后期清单。
 
-只在制作/保存项目/继续成片时读取。[共同交接](../../canvas-workspace/references/creative-handoff.md)定义源协调、文字/时间和现有接口；广告ad_plan是唯一全片创作源，Canvas是运行/快照/采用来源，不新增ad_production schema。
+用于保存项目、制作或继续成片。[共同交接](../../canvas-workspace/references/creative-handoff.md)定义源协调、文字/时间和接口；ad_plan 持有广告创作事实，Canvas 持有运行、快照与采用记录。
 
-按[共同风格交接](../../canvas-workspace/references/creative-handoff.md#整体风格的继承与分镜方法)继承ad_plan已采用的整体媒介、美术、品牌气质及局部例外；委托编剧/资产/MG等时一并传入，不让各专能另选全片风格。当前Shot的具体特征进入H3完整正文和实际参考，反转、表演或运镜保留本段目的，不能代替整体美术。产品事实与准确文案继续沿原依据，风格选择不扩展主张或生成授权。
+按[共同风格交接](../../canvas-workspace/references/creative-handoff.md#整体风格的继承与分镜方法)从 ad_plan 继承整体媒介、美术、品牌气质及局部变化，并传给受托专能。将当前 Shot 的具体视觉特征写入 H3 正文和对应参考；同时沿用已核实的产品事实与准确文案。
 
 ## 限定专业委托
 
@@ -19,7 +19,7 @@
 | 参考/替换分析 | [分析](../../video-deconstruct-analyzer/SKILL.md)：对象/窗口/保留与变化证据，不改广告策略 |
 | 开场片名/卡司专业序列 | [标题序列](../../title-sequence-creator/SKILL.md)：限定文字与镜头/声音事实及实际成果，广告保留总长、主张与主源 |
 
-传主源/版本、单元、锁定项、允许变化、素材、授权、位置、完成条件；返回该单元实际成果与未知，由广告整合。歌曲可单独有音乐成果文件，不能同时维护一份可改全片的MV计划。
+每项委托引用 ad_plan 版本和单元范围，说明锁定事实、可调整内容、所需素材、授权与完成条件；专能返回实际成果和待核项，由广告主责整合。歌曲可作为独立音乐成果交付，广告计划继续维护全片内容。
 
 ## Panel、模式与参数
 
@@ -29,7 +29,7 @@
 
 真实素材→实际端口→解析零基槽位→H3一基标签依次核对。商品不固定Picture1，规划九格不自动传入，related只资料。本地H3（provider=comfy）中t2v无媒体；i2v仅first_frame；fl2v实际首尾图；r2v至少一种参考、可另首帧、无尾帧、最多9图/3视频/3音频。普通本地r2v frame_zero_video_guide关闭/省略，不能把源片默认作为前缀。用户选择其他已接入提供方时，模式和参考容量按其当前capability核对，不套用上述本地数值。
 
-本地H3当前0.2～15秒、24fps，短插镜按可读性/实际能力；影视4秒下限不套广告。provider/model/mode、duration/aspect_ratio/megapixels及options里的sampler_profile/steps继承广告主责按[共享规格规则](../../../../guides/ai-system-prompt.md#制作规格与判断依据)记录的值与依据，按当前capability核对组合；执行端不猜。来源不明回主责核对，不切镜30秒/仅尾帧等冲突说明缺口，不自行拆分、改模式/提供方。
+本地 H3 当前支持 0.2～15 秒、24fps；短插镜按可读性与实际能力安排，影视的 4 秒下限不套用广告。provider/model/mode、duration/aspect_ratio/megapixels 及 options 中的 sampler_profile/steps 沿用广告主责按[共享规格规则](../../../../guides/ai-system-prompt.md#制作规格与判断依据)记录的值与依据，并按当前 capability 核对组合。若用户目标与可用模式或长度不匹配，回主责确定可执行的拍法。
 
 多人互动、产品交接和跨机位使用按需复用[复杂调度](../../zero-to-story/references/blocking-direction.md)，将空间、遮挡、接触与商品状态写回 ad_plan 当前 Shot；不建立影视蓝图。解释性文案可委托[narration-writer](../../narration-writer/SKILL.md)处理限定稿件，产品事实与主张仍由广告持有，不因委托变成中立科普。
 
@@ -47,6 +47,6 @@
 
 已有项目主源按配置media_root/projects/<canvas_id>/ad_plan.md，document.content投影、source_path实际路径，媒体content当前事实/位置/版本；定稿保存data.prompt。计划换版核对差异，只同步受影响草稿，不覆盖用户新编辑/冻结快照。
 
-读取最新Canvas保存参数和连线，readiness只技术齐全，不检查广告语义。保存不是授权；已有明确授权覆盖精确输入时确认一次，request_id幂等。本地Comfy queued由worker单次执行，pending_agent才由真实工具会话claim execution_snapshot；unknown/失败核实原任务，不重提/换后端。技术failed/unknown是原请求状态，不是内容修正或新运行授权；已成功媒体的画面问题按[后期与验收](finishing-and-review.md)处理。缺工具说明具体阶段。
+读取最新 Canvas 的参数与素材连线，按 readiness 确认输入齐全，再按[共享规则](../../../../guides/ai-system-prompt.md#唯一执行入口)在已有授权范围内创建请求。本地 Comfy 的 queued 请求由 worker 执行，pending_agent 请求由具备真实工具的会话领取；保留 request_id 与 execution_snapshot。执行状态未明时按共享规则核对原请求；成功媒体的内容修订和成片检查见[后期与验收](finishing-and-review.md)。缺少工具时说明受影响的制作环节。
 
-全部生成段组成时总预算等于Panel合计；含旧素材/授权后期插段时用逐段编辑清单记录实际采用窗口与成片位置。不多生成裁切凑长、不自动变速；24fps帧对齐差异按实际交付条件检查。
+全部生成段时长与 Panel 合计、目标片长对应；旧素材或后期插段用编辑清单记录实际采用窗口和成片位置。按锁定时长设计每个 Panel 的动作与结构；确需调整时长、增加生成段或变速时，回广告主责确定后更新计划。按交付要求核对 24fps 帧对齐差异。

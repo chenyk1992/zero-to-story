@@ -6,7 +6,7 @@ allowed-tools: [read, exec_command]
 
 # MiniMax 音色克隆
 
-遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 处理音频到 `voice_id`，不扩展到故事、TTS 视频或自动保存音色库。用用户当前语言交互。
+遵守[项目共享生产规则](../../../guides/ai-system-prompt.md)。本 Skill 将已授权音频转成 `voice_id`，按请求提供试听或保存结果。用用户当前语言交互。
 
 ## 输入与授权
 
@@ -39,6 +39,6 @@ allowed-tools: [read, exec_command]
 - 已知主参考逐字稿才传 `--text-validation`（最多 200 字符）和 `--accuracy`（默认 0.7）。
 - 已有独立短音频及其逐字稿才传 `--prompt-audio` / `--prompt-text`。语言已知才传 `--language-boost`，不猜逐字稿或语言。
 
-`input_sensitive_type` 非零时说明实际风险标记，停止后续使用并等待用户决定，不自动重试。告知用户：快速克隆音色若 7 天内未正式用于 TTS，可能被删除；不要因此自动发起 TTS。只有用户要求保存时才写到指定位置，默认不复制原音频或写数据库。
+`input_sensitive_type` 非零时报告实际风险标记，停止后续使用并等待用户决定。告知用户：快速克隆音色若 7 天内未正式用于 TTS，可能被删除；TTS 使用与保存按用户请求执行，保存到指定位置。
 
 维护或排查时，可在已授权的本地检查范围内加 `--dry-run`，只校验并输出计划，不上传。它不能证明真实 API 已成功，也不能冒充克隆授权。

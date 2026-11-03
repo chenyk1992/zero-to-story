@@ -1,6 +1,6 @@
 # 包装风格的材料、排字与能量
 
-在已选整体媒介、美术与气质内，需要把标题、品牌视觉或图形包装做具体时读取。整体选择沿[风格推荐](../../zero-to-story/references/style-selection.md)，普通MG行业布局沿[原视觉库](../../mg-voiceover-animation-generator/references/visual-style-layout-library.md)，字形选型沿[字形与排字](type-and-layout-choices.md)。本页补材料、排字、运动和声音如何形成同一观看感受，不新建全片风格母版，不覆盖既有Style Brief或MV视觉锚点。
+在已选整体媒介、美术与气质内深化标题、品牌视觉或图形包装时读取。整体方向沿[风格推荐](../../zero-to-story/references/style-selection.md)，MG 布局沿[原视觉库](../../mg-voiceover-animation-generator/references/visual-style-layout-library.md)，字形沿[选型方法](type-and-layout-choices.md)。本页将材料、排字、运动和声音联系成同一观看感受，结果写回当前 Style Brief 或 MV 视觉锚点。
 
 ## 先决定包装怎样参与内容
 
@@ -26,6 +26,6 @@
 
 ## 记录与实际观看
 
-只把本次选定的材料、字形/排字、运动质感和声画关系并入现有整体风格、文字事件或Shot。稳定特征与本段变化分开，下一Panel继承仍在作用的材料、文字状态与声音；沿[共同交接](../../canvas-workspace/references/creative-handoff.md)进入prompt、真实图片或已核实后期，不另建状态或执行字段。
+将选定材料、字形/排字、运动质感和声画关系写入现有风格、文字事件或 Shot。区分稳定特征与本段变化，下一 Panel 继承仍在作用的材料、文字状态和声音；按[共同交接](../../canvas-workspace/references/creative-handoff.md)落实到 prompt、真实图片或已核实后期。
 
-观看时判断包装是否帮助内容建立身份与情绪，读字和主体是否可辨，材料与运动是否属于同一方向。克制版不因变化少失败，高能版也不能只剩颗粒、闪光或多个效果名。未选择的方向不成为待验收项目；提示词、静态卡和离线对照只说明规划，真实视频效果仍待视听证据。
+实际观看时判断包装怎样建立身份与情绪，读字和主体是否可辨，材料与运动是否形成所选感受。安静方向看停留与细节，高能方向看变化的因果、冲击与落稳；方案、静态卡和离线对照分别记录各自证据范围。
