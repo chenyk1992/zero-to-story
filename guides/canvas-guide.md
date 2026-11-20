@@ -149,7 +149,7 @@ Agent 的 `canvas_read(canvas_id)` 默认是目录概览，每页 50 个节点�
 
 有采用要求时，完成必要后期后，通过 `canvas_claim_review` 取得审片令牌，再用 `canvas_review` 记录结论、实际文件、证据、实际末态及 `unverified`。`ACCEPT` 不能带关键未核实项。文件摘要由服务计算。不要把生成成功直接视为采用。
 
-已完成的 `INCONCLUSIVE` 可用 `canvas_reopen_review(run_id, reason, expected_updated_at)`（HTTP `POST /api/runs/{id}/reopen-review`）显式重开：先读取最新 run，把 `updated_at` 原样传入并写明具体复核原因。服务以 CAS 检查版本，竞争只允许一次成功；返回新的独占 `owner_token`，旧令牌失效。完整旧 review、原 reviewed_at、重开原因和时间保存在 run 的 `review_history` 中，新轮当前 review 清空。未完成的审查占用不抢占，`ACCEPT`/`REJECT` 不允许重开。新轮可绑定本 run 输出目录内已核验的实际派生文件，继续由服务计算 SHA-256；原媒体和生成记录保留，不重生成。
+已完成的 `INCONCLUSIVE` 可用 `canvas_reopen_review(run_id, reason, expected_updated_at)`（HTTP `POST /api/runs/{id}/reopen-review`）显式重开：先读取最新 run，把 `updated_at` 原样传入并写明具体复核原因。服务以 CAS 检查版本，竞争只允许一次成功；返回新的独占 `owner_token`，旧令牌失效。完整旧 review、原 reviewed_at、重开原因和时间保存在 run 的 `review_history` 中，新轮当前 review 清空。未完成的审查占用默认不抢占，`ACCEPT`/`REJECT` 不允许重开。仅操作员明确核实原审查 owner/令牌已丢失且取得本次授权时，可读取最新 run，调用 `canvas_handoff_review_claim(run_id, reason, expected_updated_at, owner_lost_confirmed=True)`（HTTP `POST /api/runs/{id}/handoff-review-claim`，正文同名字段）移交已成功且 review 和 reviewed_at 均为空的现有 claim。原因不得含令牌；CAS 和持久事件记录原因及旧 claim 失效，返回新令牌。该确认是防误用，并非多用户安全边界；不自动抢占或扩大授权。新轮可绑定本 run 输出目录内已核验的实际派生文件，继续由服务计算 SHA-256；原媒体和生成记录保留，不重生成。
 
 已完成 `REJECT` 的视频若有实际后期修复，用 `canvas_review_derived`（HTTP `POST /api/runs/{id}/review-derived`）一次登记新派生的最终审片。正文为 `reason`、最新 `expected_updated_at`、`decision`（仅 `ACCEPT` 或 `REJECT`）、`output_path`、非空 `evidence`，可附 `end_state`、`unverified`；`ACCEPT` 仍不允许关键未核实项。此入口不需要 claim 或令牌，只允许 `succeeded` 且当前完整 `REJECT`，不抢占未完成审查，也不修改原审片入口的终态规则。
 

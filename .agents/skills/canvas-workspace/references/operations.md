@@ -4,7 +4,7 @@
 
 按[当前版本协调](creative-handoff.md#当前版本协调)保留明确用户编辑，由调用方同步源/蓝图，画布不自动反写。三种改编方式只记创作简报，不新增 UI 或生成参数。参考用途不固定编号，按实际紧凑输入顺序映射零基槽/一基标签，不留空槽；顺序变化同步当前提示词，不改历史绑定。
 
-派生采用按[采用版本与后期](creative-handoff.md#采用版本与后期)核对。INCONCLUSIVE 用 POST /api/runs/{id}/reopen-review（原因、最新 expected_updated_at）取新 token；succeeded 完整 REJECT 视频用 POST /api/runs/{id}/review-derived 登记不同路径/哈希的原 run 目录派生版和最终证据。ACCEPT 不支持终态替换，不伪造状态绕过。
+派生采用按[采用版本与后期](creative-handoff.md#采用版本与后期)核对。未完成审查默认不抢占；仅操作员明确核实原 owner/令牌丢失且取得本次授权时，读最新 run 后用 POST /api/runs/{id}/handoff-review-claim（非空 reason、最新 expected_updated_at、owner_lost_confirmed=true）以 CAS 移交已有 claim 并记录审计，旧令牌失效；原因不含令牌，此确认不是多用户安全边界。INCONCLUSIVE 用 POST /api/runs/{id}/reopen-review（原因、最新 expected_updated_at）取新 token；succeeded 完整 REJECT 视频用 POST /api/runs/{id}/review-derived 登记不同路径/哈希的原 run 目录派生版和最终证据。ACCEPT 不支持终态替换，不伪造状态绕过。
 
 完整故事图使用本 Skill 的 `scripts/import_workspace.py` 及 JSON manifest，先 `--dry-run` 验证稳定节点 ID、素材路径和连线，再导入。已有画布使用 `CanvasClient.edit(canvas_id, version, operations)` 精确更新；版本冲突后重新读取当前版本与本次操作所需范围并重新应用，不用新版本号提交旧图，不以历史 Markdown 覆盖当前提示词。
 

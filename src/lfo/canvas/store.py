@@ -15,7 +15,7 @@ import re
 import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -1191,6 +1191,71 @@ class CanvasStore:
             )
             assert updated is not None
             self._emit_event(updated, "review.claimed", {"review_claimed": True}, now)
+        return token
+
+    def handoff_review_claim(
+        self, run_id: str, reason: str, expected_updated_at: str, owner_lost_confirmed: bool
+    ) -> str:
+        """Transfer a lost, unfinished review claim without changing the review."""
+        for name, value in (("reason", reason), ("expected_updated_at", expected_updated_at)):
+            if not isinstance(value, str) or not value.strip():
+                raise CanvasStoreError(
+                    f"review claim handoff requires non-empty {name}",
+                    code="review_handoff_input",
+                    status=400,
+                )
+        if owner_lost_confirmed is not True:
+            raise CanvasStoreError(
+                "review claim handoff requires confirmation that the owner/token is lost",
+                code="review_handoff_input",
+                status=400,
+            )
+        with self._lock, self._transaction():
+            row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            if row is None:
+                raise RunNotFoundError(run_id)
+            if row["updated_at"] != expected_updated_at:
+                raise RunStateError("run changed; read it again", code="review_handoff_conflict")
+            if not (
+                row["status"] == "succeeded"
+                and row["review"] is None
+                and row["reviewed_at"] is None
+                and row["review_owner_token"]
+            ):
+                raise RunStateError(
+                    "only a succeeded run with an unfinished claimed review can be handed off",
+                    code="review_handoff_not_ready",
+                )
+            if row["review_owner_token"] in reason:
+                raise CanvasStoreError(
+                    "reason must not contain the previous review token",
+                    code="review_handoff_input",
+                    status=400,
+                )
+            instant = datetime.now(UTC)
+            now = instant.isoformat(timespec="microseconds").replace("+00:00", "Z")
+            if now == expected_updated_at:
+                now = (instant + timedelta(microseconds=1)).isoformat(
+                    timespec="microseconds"
+                ).replace("+00:00", "Z")
+            token = uuid4().hex
+            cursor = self._conn().execute(
+                "UPDATE node_runs SET review_owner_token = ?, updated_at = ? "
+                "WHERE id = ? AND updated_at = ? AND status = 'succeeded' "
+                "AND review IS NULL AND reviewed_at IS NULL "
+                "AND review_owner_token IS NOT NULL AND review_owner_token != ''",
+                (token, now, run_id, expected_updated_at),
+            )
+            if cursor.rowcount != 1:
+                raise RunStateError("run changed; read it again", code="review_handoff_conflict")
+            updated = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+            assert updated is not None
+            self._emit_event(
+                updated,
+                "review.claim_handoff",
+                {"reason": reason.strip(), "previous_claim_invalidated": True},
+                now,
+            )
         return token
 
     def reopen_review(self, run_id: str, reason: str, expected_updated_at: str) -> str:

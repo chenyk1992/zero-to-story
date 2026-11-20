@@ -12,6 +12,43 @@ from lfo.canvas.service import CanvasService
 from lfo.canvas.settings import CanvasSettings
 
 
+def test_review_handoff_mcp_requires_strict_true_before_http(tmp_path, monkeypatch):
+    pytest.importorskip("mcp")
+    import anyio
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    from lfo.canvas.mcp_server import create_mcp
+
+    calls = []
+
+    def request(self, method, path, body):
+        calls.append((method, path, body))
+        return {"run_id": "run", "owner_token": "new-token"}
+
+    monkeypatch.setattr("lfo.canvas.mcp_server.CanvasClient.request", request)
+    mcp = create_mcp(CanvasSettings(Path(__file__).resolve().parents[2], tmp_path / "state", tmp_path / "media"))
+    args = {"run_id": "run", "reason": "owner lost", "expected_updated_at": "version"}
+
+    async def exercise():
+        tools = await mcp.list_tools()
+        tool = next(item for item in tools if item.name == "canvas_handoff_review_claim")
+        assert tool.inputSchema["properties"]["owner_lost_confirmed"]["type"] == "boolean"
+        for invalid in ("true", "false", 1, 0, None, False):
+            with pytest.raises(ToolError):
+                await mcp.call_tool("canvas_handoff_review_claim", {**args, "owner_lost_confirmed": invalid})
+            assert calls == []
+        with pytest.raises(ToolError):
+            await mcp.call_tool("canvas_handoff_review_claim", args)
+        assert calls == []
+        await mcp.call_tool("canvas_handoff_review_claim", {**args, "owner_lost_confirmed": True})
+        assert len(calls) == 1
+        assert calls[0] == ("POST", "/api/runs/run/handoff-review-claim", {
+            "reason": "owner lost", "expected_updated_at": "version", "owner_lost_confirmed": True,
+        })
+
+    anyio.run(exercise)
+
+
 def test_stdio_mcp_reads_and_edits_the_same_http_canvas(tmp_path):
     pytest.importorskip("mcp")
     import json
@@ -141,6 +178,16 @@ def test_stdio_mcp_reads_and_edits_the_same_http_canvas(tmp_path):
                     outputs=[{"path": str(output), "kind": "image"}],
                 )
                 old_token = service.store.claim_review(run["id"])
+                handoff_args = {
+                    "run_id": run["id"], "reason": "Prior reviewer lost token",
+                    "expected_updated_at": service.store.get_run(run["id"])["updated_at"],
+                    "owner_lost_confirmed": True,
+                }
+                handoff = await session.call_tool("canvas_handoff_review_claim", handoff_args)
+                assert not handoff.isError
+                assert handoff.structuredContent["owner_token"] != old_token
+                assert (await session.call_tool("canvas_handoff_review_claim", handoff_args)).isError
+                old_token = handoff.structuredContent["owner_token"]
                 reviewed = service.review_output(
                     run["id"],
                     old_token,

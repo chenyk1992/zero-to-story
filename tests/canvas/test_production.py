@@ -570,6 +570,117 @@ def test_reopen_review_cas_has_single_winner_and_requires_reason(production, tmp
         service.reopen_review(run["id"], "Cannot steal unfinished new round", current["updated_at"])
 
 
+def test_review_claim_handoff_preserves_run_and_invalidates_owner(production, tmp_path):
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    rid = run["id"]
+    old = service.store.claim_review(rid)
+    before = service.store.get_run(rid)
+    events_before = service.store.list_events()
+    result = service.handoff_review_claim(rid, "Prior reviewer lost access", before["updated_at"], True)
+    token = result["owner_token"]
+    after = service.store.get_run(rid)
+    assert token != old and after["review_owner_token"] == token
+    for key in before:
+        if key not in {"review_owner_token", "updated_at"}:
+            assert before[key] == after[key], key
+    assert after["updated_at"] != before["updated_at"]
+    assert "review_owner_token" not in service._public_run(after)
+    events = service.store.list_events()
+    assert len(events) == len(events_before) + 1
+    event = events[-1]
+    assert "Prior reviewer lost access" in str(event) and "previous_claim_invalidated" in str(event)
+    assert old not in str(event) and token not in str(event)
+    with pytest.raises(CanvasError):
+        service.review_output(rid, old, "ACCEPT", run["outputs"][0]["path"], ["checked"])
+    assert service.review_output(rid, token, "ACCEPT", run["outputs"][0]["path"], ["checked"])["review"]["decision"] == "ACCEPT"
+
+
+@pytest.mark.parametrize("case", ["no_claim", "running", "unknown", "reviewed_at", "INCONCLUSIVE", "ACCEPT", "REJECT", "stale", "empty_reason", "false", "integer", "token_in_reason"])
+def test_review_claim_handoff_rejects_invalid_states(production, tmp_path, case):
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    rid = run["id"]
+    token = None if case == "no_claim" else service.store.claim_review(rid)
+    if case in {"INCONCLUSIVE", "ACCEPT", "REJECT"}:
+        service.review_output(rid, token, case, run["outputs"][0]["path"], ["checked"])
+    if case in {"running", "unknown", "reviewed_at"}:
+        field = "reviewed_at" if case == "reviewed_at" else "status"
+        value = "2026-01-01T00:00:00Z" if field == "reviewed_at" else case
+        with service.store._lock, service.store._transaction():
+            service.store._conn().execute(f"UPDATE node_runs SET {field} = ? WHERE id = ?", (value, rid))
+    before = service.store.get_run(rid)
+    events = service.store.list_events()
+    reason = " " if case == "empty_reason" else token if case == "token_in_reason" else "Owner lost"
+    version = "stale" if case == "stale" else before["updated_at"]
+    confirmed = False if case == "false" else 1 if case == "integer" else True
+    with pytest.raises(CanvasError):
+        service.handoff_review_claim(rid, reason, version, confirmed)
+    assert service.store.get_run(rid) == before
+    assert service.store.list_events() == events
+
+
+def test_review_claim_handoff_cas_and_missing_run(production, tmp_path):
+    from lfo.canvas.store import CanvasStore
+
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    rid = run["id"]
+    service.store.claim_review(rid)
+    version = service.store.get_run(rid)["updated_at"]
+    with pytest.raises(CanvasError):
+        service.handoff_review_claim("missing", "Owner lost", version, True)
+
+    def attempt(_):
+        with CanvasStore(service.store.db_path) as store:
+            try:
+                return store.handoff_review_claim(rid, "Owner lost", version, True)
+            except CanvasError:
+                return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(attempt, range(2)))
+    assert sum(result is not None for result in results) == 1
+    assert service.store.get_run(rid)["review_owner_token"] in results
+
+
+def test_review_claim_handoff_http(production, tmp_path):
+    import threading
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    from lfo.canvas.server import CanvasHTTPServer
+
+    service, canvas = production
+    run = complete(service, canvas, tmp_path)
+    old = service.store.claim_review(run["id"])
+    version = service.store.get_run(run["id"])["updated_at"]
+    server = CanvasHTTPServer(("127.0.0.1", 0), service)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/api/runs/{run['id']}/handoff-review-claim"
+
+    def post(body):
+        request = Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "X-Canvas-Request": "1"})
+        with urlopen(request) as response:
+            return json.load(response)
+
+    body = {"reason": "Owner lost", "expected_updated_at": version}
+    try:
+        with pytest.raises(HTTPError) as missing:
+            post(body)
+        assert missing.value.code == 400
+        body["owner_lost_confirmed"] = True
+        assert post(body)["owner_token"] != old
+        with pytest.raises(HTTPError) as stale:
+            post(body)
+        assert stale.value.code == 409
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_missing_provider_never_silently_selects_native_image_tool(production):
     service, canvas = production
     canvas["graph"]["nodes"][0]["data"].pop("provider")

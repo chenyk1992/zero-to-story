@@ -320,6 +320,8 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 token = service.store.claim_review(segments[2], body.get("owner_token"))
                 service._notify()
                 self._json({"run_id": segments[2], "owner_token": token})
+            elif segments[3] == "handoff-review-claim":
+                self._json(service.handoff_review_claim(segments[2], **body))
             elif segments[3] == "reopen-review":
                 self._json(service.reopen_review(segments[2], **body))
             elif segments[3] == "review-derived":

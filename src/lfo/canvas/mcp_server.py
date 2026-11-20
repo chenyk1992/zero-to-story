@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlencode
 
+from pydantic import StrictBool
+
 from lfo.canvas.client import CanvasClient
 from lfo.canvas.settings import CanvasSettings
 
@@ -359,6 +361,23 @@ def create_mcp(settings: CanvasSettings):
     def canvas_claim_review(run_id: str) -> dict[str, Any]:
         """独占领取已成功产物的内容审查，取得审片令牌。普通画布组件不强制调用。"""
         return client.request("POST", f"/api/runs/{run_id}/claim-review", {})
+
+    @mcp.tool()
+    def canvas_handoff_review_claim(
+        run_id: str, reason: str, expected_updated_at: str, owner_lost_confirmed: StrictBool
+    ) -> dict[str, Any]:
+        """经授权且核实原审查 owner/令牌丢失时，移交未完成审查；旧令牌失效并留审计。"""
+        if owner_lost_confirmed is not True:
+            raise ValueError("必须明确确认原审查 owner/令牌已丢失")
+        return client.request(
+            "POST",
+            f"/api/runs/{run_id}/handoff-review-claim",
+            {
+                "reason": reason,
+                "expected_updated_at": expected_updated_at,
+                "owner_lost_confirmed": owner_lost_confirmed,
+            },
+        )
 
     @mcp.tool()
     def canvas_reopen_review(run_id: str, reason: str, expected_updated_at: str) -> dict[str, Any]:

@@ -934,6 +934,15 @@ class CanvasService:
         self._notify()
         return self._public_run(result)
 
+    def handoff_review_claim(
+        self, run_id: str, reason: str, expected_updated_at: str, owner_lost_confirmed: bool
+    ) -> dict[str, Any]:
+        token = self.store.handoff_review_claim(
+            run_id, reason, expected_updated_at, owner_lost_confirmed
+        )
+        self._notify()
+        return {"run_id": run_id, "owner_token": token}
+
     def reopen_review(self, run_id: str, reason: str, expected_updated_at: str) -> dict[str, Any]:
         token = self.store.reopen_review(run_id, reason, expected_updated_at)
         self._notify()
