@@ -725,6 +725,111 @@ describe('App accepted review previews', () => {
   });
 });
 
+describe('App run history polling', () => {
+  function generatedRun(nodeId: string, path: string): Run {
+    return {
+      id: path, node_id: nodeId, status: 'succeeded',
+      snapshot: { node_id: nodeId, node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: 'test', parameters: {}, inputs: {} },
+      outputs: [{ path: '/workspace/outputs/polling/original-' + path, kind: 'video', name: path }],
+      review: { decision: 'ACCEPT', evidence: [], end_state: {}, unverified: [], output_path: '/workspace/outputs/polling/' + path, output_sha256: 'review-hash' },
+    };
+  }
+
+  function capturePolling() {
+    const intervals: Array<{ delay: number; run: () => void | Promise<void> }> = [];
+    const spy = vi.spyOn(window, 'setInterval').mockImplementation((handler, timeout) => {
+      if (typeof handler === 'function') intervals.push({ delay: timeout ?? 0, run: handler as () => void | Promise<void> });
+      return intervals.length as unknown as number;
+    });
+    return {
+      restore: () => spy.mockRestore(),
+      tick: async () => {
+        const poll = intervals.filter((entry) => entry.delay === 3500).slice(-1)[0];
+        expect(poll).toBeDefined();
+        await act(async () => { void poll.run(); });
+        await settleApp();
+      },
+    };
+  }
+
+  it('coalesces run polls while a slow response is pending and still displays the adopted media', async () => {
+    const pending = deferred<{ runs: Run[] }>();
+    const run = generatedRun('shot-1', 'adopted.mp4');
+    api.getRuns.mockResolvedValue({ runs: [run] }).mockReturnValueOnce(pending.promise);
+    const polling = capturePolling();
+    try {
+      await act(async () => root.render(<App />));
+      await settleApp();
+      expect(api.getRuns).toHaveBeenCalledTimes(1);
+      await polling.tick();
+      await polling.tick();
+      expect(api.getRuns).toHaveBeenCalledTimes(1);
+      await act(async () => pending.resolve({ runs: [run] }));
+      await settleApp();
+      expect(container.querySelector('.node-preview.current-output video')?.getAttribute('src')).toContain('/media//workspace/outputs/polling/adopted.mp4');
+      await polling.tick();
+      expect(api.getRuns).toHaveBeenCalledTimes(2);
+    } finally {
+      polling.restore();
+    }
+  });
+
+  it('releases a failed run request so a later poll can restore media previews', async () => {
+    const pending = deferred<{ runs: Run[] }>();
+    const run = generatedRun('shot-1', 'recovered.mp4');
+    api.getRuns.mockResolvedValue({ runs: [run] }).mockReturnValueOnce(pending.promise);
+    const polling = capturePolling();
+    try {
+      await act(async () => root.render(<App />));
+      await settleApp();
+      await act(async () => pending.reject(new Error('temporary run history failure')));
+      await settleApp();
+      await polling.tick();
+      expect(api.getRuns).toHaveBeenCalledTimes(2);
+      expect(container.querySelector('.node-preview.current-output video')?.getAttribute('src')).toContain('/media//workspace/outputs/polling/recovered.mp4');
+    } finally {
+      polling.restore();
+    }
+  });
+
+  it('does not let an old canvas response clear the active canvas in-flight guard', async () => {
+    const other = structuredClone(canvas);
+    other.id = 'canvas-slow-b';
+    other.name = '另一个画布';
+    other.graph.nodes[0].id = 'shot-b';
+    other.graph.selection = ['shot-b'];
+    const oldRequest = deferred<{ runs: Run[] }>();
+    const activeRequest = deferred<{ runs: Run[] }>();
+    let firstCanvasCalls = 0;
+    window.history.replaceState(null, '', '?canvas=canvas-test');
+    api.getCanvases.mockResolvedValue({ canvases: [canvas, other] });
+    api.getCanvas.mockImplementation(async (id: string) => id === other.id ? other : canvas);
+    api.getRuns.mockImplementation((id: string) => id === other.id
+      ? activeRequest.promise
+      : ++firstCanvasCalls === 1 ? Promise.resolve({ runs: [] }) : oldRequest.promise);
+    const polling = capturePolling();
+    try {
+      await act(async () => root.render(<App />));
+      await settleApp();
+      await polling.tick();
+      const switcher = container.querySelector<HTMLSelectElement>('[aria-label="选择画布"]')!;
+      switcher.value = other.id;
+      await act(async () => switcher.dispatchEvent(new Event('change', { bubbles: true })));
+      await settleApp();
+      expect(api.getRuns.mock.calls.filter(([id]) => id === other.id)).toHaveLength(1);
+      await act(async () => oldRequest.resolve({ runs: [generatedRun('shot-1', 'old-canvas.mp4')] }));
+      await settleApp();
+      await polling.tick();
+      expect(api.getRuns.mock.calls.filter(([id]) => id === other.id)).toHaveLength(1);
+      await act(async () => activeRequest.resolve({ runs: [generatedRun('shot-b', 'active-canvas.mp4')] }));
+      await settleApp();
+      expect(container.querySelector('.node-preview.current-output video')?.getAttribute('src')).toContain('/media//workspace/outputs/polling/active-canvas.mp4');
+    } finally {
+      polling.restore();
+    }
+  });
+});
+
 describe('App continuation status', () => {
   it('loads the read-only plan summary for the active canvas', async () => {
     api.getContinuations.mockResolvedValue({ plans: [{

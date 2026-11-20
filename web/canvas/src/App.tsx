@@ -257,6 +257,7 @@ function App() {
   const edgesRef = useRef(edges);
   const runsRef = useRef(runs);
   const runsRequestRef = useRef(0);
+  const runsInFlightRef = useRef<{ canvasId: string; requestNumber: number } | undefined>(undefined);
   const continuationsRequestRef = useRef(0);
   const productionRequestRef = useRef(0);
   const viewportRef = useRef(viewport);
@@ -335,7 +336,11 @@ function App() {
   }, []);
 
   const refreshRuns = useCallback(async (canvasId: string) => {
+    // Slow history requests must finish before the next poll starts. Otherwise
+    // every response can be invalidated by the shorter polling interval.
+    if (runsInFlightRef.current?.canvasId === canvasId) return;
     const requestNumber = ++runsRequestRef.current;
+    runsInFlightRef.current = { canvasId, requestNumber };
     try {
       const response = await getRuns(canvasId);
       if (activeIdRef.current !== canvasId || requestNumber !== runsRequestRef.current) return;
@@ -356,6 +361,10 @@ function App() {
       }));
     } catch {
       // The canvas remains usable when run history is temporarily unavailable.
+    } finally {
+      if (runsInFlightRef.current?.requestNumber === requestNumber) {
+        runsInFlightRef.current = undefined;
+      }
     }
   }, []);
 
