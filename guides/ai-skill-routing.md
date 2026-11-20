@@ -16,6 +16,7 @@
 | 只要公开热点数据、榜单或快照，不要求选题判断 | [hot-collect](../.agents/skills/hot-collect/SKILL.md) | 采集与来源状态；已有符合需求的快照直接复用，不默认运行采集＋打分整链 |
 | 从已有热点快照挑选题、比较趋势或生成候选卡 | [topic-scout](../.agents/skills/topic-scout/SKILL.md) | 读取 hot-collect 数据；已有数据请求不自动补采，缺数据说明缺口 |
 | AI 知识分享、工具实测、vibe coding 账号的热点、升温线索、对标、选题与脚本复盘 | [ai-creator-radar](../.agents/skills/ai-creator-radar/SKILL.md) | 免费来源与可追溯采样；不承诺爆款、不自动发布或调用付费 API，成片交原有制作入口 |
+| 把已做好的本地成片发布到抖音（上传、合集与序号、横竖封面、AI 声明、谁可以看、保存权限、定时）并回后台核实 | [douyin-publisher](../.agents/skills/douyin-publisher/SKILL.md) | 只做平台发布与三处核实；不创作内容、不改成片、不做点赞评论与数据复盘 |
 | 从选题/资料撰写历史、科普、人物或知识解说稿 | `narration-writer` | 事实、解释与旁白文本；制作按视觉目标交影视/MG/B-roll/Presenter，不新增完整作品生产链 |
 | 海外对白、多语互动与地域语言 | 当前主责复用[语言适配](../.agents/skills/short-drama-screenwriter/references/overseas-dialogue.md) | 保留语言证据、人物知情与当前版本；文本、音色、字幕和口型分别验证 |
 | 多人、反打、产品交接或复杂走位 | 当前影视/MV/广告/专业主责复用[复杂调度](../.agents/skills/zero-to-story/references/blocking-direction.md) | 场景位置与各机位画面关系写回现有 Shot/Setup，不建第二份全片计划 |
