@@ -1,0 +1,162 @@
+{
+  "id": "comfy-h3-image",
+  "label": "本地 MiniMax H3 Image（ComfyUI）",
+  "node_types": [
+    "image"
+  ],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": [
+    "comfy-mcp",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "video",
+    "capacity": 1
+  },
+  "models": [
+    {
+      "id": "minimax-h3-image",
+      "label": "MiniMax H3 Image · INT8"
+    }
+  ],
+  "modes": [
+    {
+      "id": "create",
+      "label": "文生图"
+    },
+    {
+      "id": "reference",
+      "label": "图片参考生成"
+    },
+    {
+      "id": "edit",
+      "label": "图片编辑"
+    }
+  ],
+  "fields": [
+    {
+      "key": "aspect_ratio",
+      "label": "画幅比例",
+      "type": "select",
+      "group": "specs",
+      "required": true,
+      "modes": [
+        "create",
+        "reference"
+      ],
+      "options": [
+        {
+          "value": "1:1",
+          "label": "1:1"
+        },
+        {
+          "value": "2:3",
+          "label": "2:3"
+        },
+        {
+          "value": "3:2",
+          "label": "3:2"
+        },
+        {
+          "value": "3:4",
+          "label": "3:4"
+        },
+        {
+          "value": "4:3",
+          "label": "4:3"
+        },
+        {
+          "value": "9:16",
+          "label": "9:16"
+        },
+        {
+          "value": "16:9",
+          "label": "16:9"
+        },
+        {
+          "value": "21:9",
+          "label": "21:9"
+        }
+      ]
+    },
+    {
+      "key": "megapixels",
+      "label": "生成像素预算（MP）",
+      "type": "number",
+      "group": "specs",
+      "required": true,
+      "modes": [
+        "create",
+        "reference",
+        "edit"
+      ],
+      "min": 4,
+      "max": 20
+    },
+    {
+      "key": "steps",
+      "label": "采样步数（未填为 6）",
+      "type": "number",
+      "group": "advanced",
+      "min": 1,
+      "max": 100,
+      "integer": true
+    },
+    {
+      "key": "seed",
+      "label": "随机种子（未填时生成并记录）",
+      "type": "number",
+      "group": "advanced",
+      "min": 0,
+      "max": 9007199254740991,
+      "integer": true
+    }
+  ],
+  "input_rules": {
+    "create": {
+      "allowed": []
+    },
+    "reference": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 16
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    },
+    "edit": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 16
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    }
+  }
+}

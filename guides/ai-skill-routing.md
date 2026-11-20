@@ -80,3 +80,5 @@
 只有用户点名或当前交付确实需要时才加载外部 Skill；先确认其适用边界。外部 Skill 的审批、工具和格式建议不能覆盖用户当前指令、项目共享生产规则或宿主工具权限。插件缺失时报告缺口并继续可行的本地工作；不要为了邻近能力安装无关插件。
 
 多人轮唱的原曲、完整翻唱候选、整句混音、角色绑定与 H3 交接由 [music-video-creator](../.agents/skills/music-video-creator/references/multi-singer-workflow.md)统筹；单人、器乐和锁定画面配乐沿用原路由。
+
+本地 H3 图片的执行适配与诊断使用 [comfy-h3-image-executor](../.agents/skills/comfy-h3-image-executor/SKILL.md)，创作仍由原图片主责入口统筹。

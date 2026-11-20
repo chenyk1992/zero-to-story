@@ -211,7 +211,7 @@ def materialize_image(result, output_dir, config, normalized):
         if r.file_type in {"output", "absolute"} and Path(r.filename).suffix.lower() == ".png"
     ]
     if len(refs) != 1:
-        raise ValueError("Qwen 必须返回唯一 PNG 图片")
+        raise ValueError("图片执行器必须返回唯一 PNG 图片")
     ref = refs[0]
     output_dir.mkdir(parents=True, exist_ok=True)
     target = output_dir / "image.png"
@@ -243,14 +243,14 @@ def materialize_image(result, output_dir, config, normalized):
     }
 
 
-def execute_snapshot(snapshot, output_dir, config, *, emit=None):
+def execute_snapshot(snapshot, output_dir, config, *, emit=None, prepare_fn=None):
     emit = emit or (lambda event: print(json.dumps(event, ensure_ascii=False), flush=True))
     stage, result = "input_validation", None
     try:
         emit({"stage": stage})
         from lfo.comfy.admission import VideoSubmissionGuard
 
-        workflow, normalized = prepare_workflow(snapshot, uploader=lambda p: p.name)
+        workflow, normalized = (prepare_fn or prepare_workflow)(snapshot, uploader=lambda p: p.name)
         output_dir.mkdir(parents=True, exist_ok=True)
         with VideoSubmissionGuard(config.base_url, request_id=normalized["request_id"]) as guard, transport.ready_session(config) as session:
                 stage = "upload"
@@ -295,14 +295,14 @@ def execute_snapshot(snapshot, output_dir, config, *, emit=None):
         raise exc
 
 
-def main(argv=None):
+def main(argv=None, *, executor=None):
     parser = argparse.ArgumentParser(description="Execute one confirmed Canvas Qwen image request")
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
         snapshot = json.loads(args.input.read_text(encoding="utf-8-sig"))
-        result = execute_snapshot(snapshot, args.output_dir, transport.load_runtime_config())
+        result = (executor or execute_snapshot)(snapshot, args.output_dir, transport.load_runtime_config())
         print(json.dumps(result, ensure_ascii=False), flush=True)
         return 0
     except Exception as exc:
