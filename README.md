@@ -28,7 +28,7 @@
 
 ## 快速开始
 
-Windows 新电脑先运行只读环境预检，按提示自行准备，或明确授权 Agent 分析并安装缺少的依赖。项目不会在预检或启动时自动下载安装。完整功能准备与干净仓库边界见 [Windows 使用指南](guides/windows-setup.md)。不迁移旧电脑的画布、小说、媒体或其他私有数据。
+Windows 新电脑先运行只读环境预检，按提示自行准备，或直接参考（或交给 AI 助手执行）[新环境安装与模型准备指南](guides/install-guide.md)，逐步完成软件、依赖、MCP、ComfyUI 自定义节点与模型的安装和下载。项目不会在预检或启动时自动下载安装。干净仓库边界与功能对照见 [Windows 使用指南](guides/windows-setup.md)，不迁移旧电脑的画布、小说、媒体或其他私有数据。
 
 ```powershell
 ./scripts/check_environment.ps1
