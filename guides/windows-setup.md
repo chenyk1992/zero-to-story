@@ -40,10 +40,10 @@
 | MiMo 音频/视频理解 | `MIMO_API_KEY`、服务网络访问和可用账户；Pro/Flash 共用分析脚本，使用 Python 标准库 |
 | 本地 Qwen TTS | 已安装 Qwen3-TTS 节点及所选模式的 1.7B 权重、独立 Tokenizer、官方本地 Comfy MCP 及其内部使用的 comfy-cli、FFmpeg/FFprobe；见 [Canvas TTS](canvas-tts.md) |
 | MiniMax 音色克隆 | `MINIMAX_API_KEY`、服务网络访问、可用账户、FFprobe 和已授权参考音频；脚本使用 Python 标准库 |
-| 可选 mmx 视频 | 用户另行接入 mmx CLI、认证及 `mmx-h3-video` Skill；它不随本仓库提供，不是默认本地 H3 的前提 |
+| 可选 mmx 视频 | 用户另行接入 mmx CLI、认证及 `mmx-cli` Skill；它不随本仓库提供，不是默认本地 H3 的前提 |
 | 持续生产与验收 | 宿主的实际委派、视听检查与接续能力；按[接续指南](canvas-continuation.md)核实。普通浏览器打开画布不会自动提供这些 Agent 能力 |
 
-Seedance 当前只是未接入选项，安装环境不能使其变成已实现功能。API 密钥是否有效、远端额度、宿主权限和所选 Comfy 工作流是否可执行，需要对应功能的实际检查；不能把本地预检通过解释为整条生产链验证通过。真实生成仍从画布确认的请求执行。
+API 密钥是否有效、远端额度、宿主权限和所选 Comfy 工作流是否可执行，需要对应功能的实际检查；不能把本地预检通过解释为整条生产链验证通过。真实生成仍从画布确认的请求执行。
 
 ## 干净仓库边界
 

@@ -76,6 +76,7 @@ cwd = 'C:\path\to\zero-to-story'
 | 本地 Music 3 | `queued` 脚本任务；音频节点分别保存音乐描述与歌词，回填实际 FLAC，与本地图片/视频/TTS 共用 Comfy 资源和提交锁 |
 | 宿主图片工具 | 显式选择已安装能力后可排队；有该工具的会话才能领取 |
 | mmx 视频 | 用户明确选择，且原有 mmx 能力可用时接手；失败不切换提供方 |
+| 本地 AIStudio2API 生图/视频 | `queued` 脚本任务；经本机回环 `AIStudio2API` 单次调用 Nano Banana 生图（`aistudio-image`，独立图片并发）或 Gemini Omni 视频（`aistudio-video`，独立串行资源，不阻塞本机 Comfy GPU 队列；支持 `t2v`/`i2v`/`r2v`，不含尾帧 `fl2v`） |
 | 独立图片 | 能力声明资源独立时，最多并发 2；`LFO_IMAGE_CONCURRENCY=1` 可收紧到 1 |
 | 未知任务 | 继续占用相关资源；已证实独立的资源仍可推进 |
 | 提示词、资料、审查、字幕 | 无依赖且资源允许时与生成重叠；依赖实际末态的内容等证据齐全后定稿 |
@@ -155,7 +156,7 @@ Agent 的 `canvas_read(canvas_id)` 默认是目录概览，每页 50 个节点�
 
 派生必须位于原 run 输出目录，路径及 SHA-256 均不同于历次被拒绝文件，也不能覆盖原生成输出；改名但同内容不算新派生。服务验证被拒绝源文件仍完整，校验派生元数据并完整解码视频及音轨，确认文件在检查期间未变化后，在确认锁和事务 CAS 内将旧 review、原审片时间、具体原因及新文件绑定写入已有 `review_history`，原子登记新 review。当前 review 绑定新文件，旧媒体、生成 snapshot、outputs 和 provider ID 均保留；不会新建生成请求、重新生成或自动替换画布草稿。旧版本并发请求失败后须重新读取，不能无依据反复提交。
 
-需要连续性时，在连线上指定 `source_run_id` 和 `require_accept: true`，绑定已采用的具体运行。实际末态记录人物位置、朝向、姿态、物品、接触和已完成动作，只写可观察事实。需要精确尾帧时，接受后从实际采用版本提取，调用 `canvas_import_media` 取得文件引用与 `sha256`，保存为该视频的 `derived_outputs`，记录 `source_run_id`，通过 `output:<id>` 连接下一镜。已在工作区中的文件会原位引用。普通连线仍可读取最近成功结果。
+需要连续性时，在连线上指定 `source_run_id` 和 `require_accept: true`，绑定已采用的具体运行。实际末态记录人物位置、朝向、姿态、物品、接触和已完成动作，只写可观察事实。需要精确尾帧时，接受后优先使用单步原子操作 `canvas_bind_accepted_tail`（HTTP `POST /api/canvases/{id}/bind-accepted-tail`）提取/复用尾帧、写入 `derived_outputs` 并连线到下一镜 `first_frame`（只改草稿、不自动提交）；手动分步也可从采用版本提取并存入 `derived_outputs`。已在工作区中的文件会原位引用。普通连线仍可读取最近成功结果；多个独立就绪节点在明确授权内可用 `canvas_execute_batch`（HTTP `POST /api/canvases/{id}/runs/batch`）做全量预检和原子批量确认。
 
 `canvas_readiness` 检查当前镜头的输入与采用条件，不冻结输入、不提交生成。采用文件或其来源发生变化会阻止后续确认；已确认请求继续使用原固定文件。不要原地覆盖已采用媒体。
 
@@ -180,13 +181,15 @@ Agent 的 `canvas_read(canvas_id)` 默认是目录概览，每页 50 个节点�
 
 默认只探测实际时长并返回时间映射；`--apply` 使用同一映射剪切音画并写出对应字幕。执行者需先核实可删除区间，保护对白及句尾余量；不依据 VAD 或 ASR 自动删音，不改变人声速度。`--apply` 是写出开关，不增加新的用户审批。后期结果仍需检查实际音画和字幕。
 
+整集影视、短剧和广告可使用统一的叙事后期与有声故事板粗剪入口 `python -m lfo.media.story_edit`：支持 `lfo.story.preview.v1`（Animatic，用静态图/参考卡、TTS 试音与占位字幕先预演整集节奏）及 `lfo.story.edit.v1`（复用分段渲染缓存、核验 `ACCEPT` 源 SHA-256、提供原声接缝过渡 `seam_fade_ms`、J/L-cut 音画错位、音乐避让 `music_ducking`、响度对齐 `loudness` 与净版/字幕双输出），并将清单路径与摘要写入 `graph.workspace.production_summary` 供 `production_summary` 纳管。
+
 ## 数据与验证范围
 
 制作进度使用只读 `GET /api/canvases/{id}/production` 或 `canvas_production_summary`：统计覆盖当前整张画布，运行数与接受数来自当前 run，阶段观察跨度来自持久事件；缺少边界保留 unknown，部分可得保留 partial，不推测 ETA。接续提示明确来自最近更新计划，不代表整张画布状态。成片片段和采用来源数仅从当前项目目录内、不超过 4 MiB 的明确编辑清单及匹配 review 推导，清单引用存于 `graph.workspace.production_summary`，必填 `edit_manifest_path` 和 `edit_manifest_sha256`，对同一字节校验再解析；不可核实时页面显示原因。
 
 精读节点会在 `production[node_id]` 附带当前 `readiness` 和 `latest_run`；接续的 review 动作包含 `run` 摘要。优先复用同次读取的结果，只有输入/版本变化或需要原始冻结证据时再读取，不另外维护人工运行状态副本。只读文件哈希按文件身份和修改信息复用，确认冻结及实际执行仍重新核实字节与采用绑定。
 
-视频结果回收后自动准备无声候选和抽样图，并完整技术解码一次；材料在原运行目录，原片不变。`outputs[].metadata.review_materials` 提供状态、清单、摘要、实测解码帧数和准备耗时，页面显示材料入口。相同原片及材料摘要可复用，材料损坏时保留旧文件并准备新版本。准备失败单独记录，生成结果与 review 不改写；技术检查及抽样均不代表内容 ACCEPT。此阶段耗时属于结果处理，不等于模型生成时间。
+视频结果回收后自动准备无声候选、全片抽样图、末3帧连拍条和精确末帧候选，并完整技术解码一次；材料在原运行目录，原片不变。`outputs[].metadata.review_materials` 提供状态、清单、摘要、实测解码帧数和准备耗时，页面显示材料入口。相同原片及材料摘要可复用，材料损坏时保留旧文件并准备新版本；若已接受原片与未篡改的 `tail_frame` 摘要一致，提取真实尾帧时直接复用该候选，免除二次完整解码。准备失败单独记录，生成结果与 review 不改写；技术检查、抽样及末帧候选均不代表内容 ACCEPT，未 ACCEPT 前不可绑定下游。此阶段耗时属于结果处理，不等于模型生成时间。
 
 当前接续范围保留旧方案时，可显式在旧节点填写 `data.superseded_by` 指向同类型替代节点。只有替代节点也在范围内且已 ACCEPT，旧成功运行的 REJECT/INCONCLUSIVE 才作为已处理历史完成；原 review 与文件保留，仍在执行/unknown 或有显式单元阻塞时继续阻塞。该标记不重绑下游采用来源、不生成或授予授权。
 

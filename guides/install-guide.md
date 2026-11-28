@@ -350,8 +350,7 @@ python -m venv .venv/comfy-mcp
 | **MiMo 视听理解 / 成片盲审**<br>（`mimo-video-understanding`、`zero-to-story` 盲审） | 环境变量 `MIMO_API_KEY`<br>（可选 `MIMO_VIDEO_BASE_URL`、`MIMO_AUDIO_BASE_URL`） | 仅使用 Python 标准库；默认接口 `https://api.xiaomimimo.com/v1/chat/completions` |
 | **MiniMax 在线音色克隆**<br>（`voice-clone`） | 环境变量 `MINIMAX_API_KEY`<br>（可选 `MINIMAX_API_BASE_URL`）+ FFprobe | 仅使用 Python 标准库；上传克隆前须具备明确说话人授权 |
 | **热点采集与选题雷达**<br>（`hot-collect`、`topic-scout`） | 基础功能仅需 Python 标准库；可选 `LFO_HOTSPOT_DATA` | 仅在启用 TikTok 对标语料面时需 `pip install pyarrow pandas`；可用 `hot-collect/scripts/doctor.py` 自检 |
-| **画术动效渲染**<br>（`huashu-art-motion`） | `uv`、Playwright（`uv run --with playwright ...`）与 FFmpeg | 仅做编程/参数化动效渲染时需要 |
-| **宿主自带图片工具 / 外部 `mmx` CLI** | 由当前 AI 宿主或用户另行安装认证 | 不随本仓库分发；`Seedance` 当前为未接入占位选项 |
+| **宿主自带图片工具 / 外部 `mmx` CLI** | 由当前 AI 宿主或用户另行安装认证 | 不随本仓库分发 |
 
 ---
 

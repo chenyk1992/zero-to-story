@@ -100,3 +100,14 @@
 - [Codex Hooks](https://learn.chatgpt.com/docs/hooks)：`Stop` 返回 `decision: block` 会创建继续提示；项目 hooks 需要信任；MCP hooks 使用已连接的服务。
 - [Scheduled tasks](https://learn.chatgpt.com/docs/automations?surface=app)：原任务可按分钟间隔继续有上下文的工作；本地任务需要电脑和应用保持运行。
 - [Codex App Server](https://learn.chatgpt.com/docs/app-server)：`turn/start` 与事件订阅属于宿主接入职责；项目不私自连接桌面内部服务。
+
+## 跨宿主接续等级与非 Codex 宿主模式
+
+画布服务不猜测当前 AI 宿主品牌，而是严格根据当前 `session_id` 在 `continuation_sessions` 表中实际观测到的 `canvas_continuation_hook` 生命周期事件，在 `GET /api/continuations` 与 `canvas_continuation_read` 的只读字段 `continuation_support` 中返回事实等级（页面接续详情同步展示该只读说明）：
+
+| 等级 | 观测依据 | 非阻塞主控模式与边界 |
+| --- | --- | --- |
+| `manual_batch`（手动批次接续） | 未观测到 `Stop`、`SubagentStop` 或 `Interrupt`（仅无事件或只有 `SessionStart`） | 适用于 Claude Code / Antigravity / Cursor 等未加载项目 Codex hooks 的宿主；由主会话在每次汇报或 `canvas_next` 后按批手动推进，不假定点击停止或回合结束会自动写钩子 |
+| `hook_guarded`（钩子守护接续） | 实际收到过 `Stop`、`SubagentStop` 或 `Interrupt` 至少一项 | 自动检查仅覆盖已观测到的对应事件（未观测 `Interrupt` 仍需对话内显式暂停；未观测 `Stop` 仍需主会话主动读 `canvas_next`） |
+
+在 `manual_batch` 宿主中继续多镜头制作时，仍只登记已明确授权范围，并通过 `canvas_next(..., wait_seconds=25)` 做有界等待或配合宿主原生任务定时能力恢复；宿主钩子缺失时如实呈现 `manual_batch` 提示，不阻止正常画布编辑与生成。

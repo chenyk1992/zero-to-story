@@ -20,7 +20,7 @@
 | 从选题/资料撰写历史、科普、人物或知识解说稿 | `narration-writer` | 事实、解释与旁白文本；制作按视觉目标交影视/MG/B-roll/Presenter，不新增完整作品生产链 |
 | 海外对白、多语互动与地域语言 | 当前主责复用[语言适配](../.agents/skills/short-drama-screenwriter/references/overseas-dialogue.md) | 保留语言证据、人物知情与当前版本；文本、音色、字幕和口型分别验证 |
 | 多人、反打、产品交接或复杂走位 | 当前影视/MV/广告/专业主责复用[复杂调度](../.agents/skills/zero-to-story/references/blocking-direction.md) | 场景位置与各机位画面关系写回现有 Shot/Setup，不建第二份全片计划 |
-| 广告、品牌传播、电商宣传；含反转、美妆、时装和海报/IP动效 | `advertising-creator` | 独立广告策略、ad_plan、静态/视频制作与验收；反转可选，文本不自动生成 |
+| 广告、品牌/企业/机构/活动宣传片、电商宣传；含反转、美妆、时装和海报/IP动效 | `advertising-creator` | 广告和宣传片沿用 ad_plan，按[分阶段协作](../.agents/skills/advertising-creator/references/ad-collaboration.md)分别做完整成片观察；文案与静态物料止于所需范围 |
 | 卖点直接造成一次可见状态倒置的剧情广告 | `advertising-creator` 的[反转广告创意路线](../.agents/skills/advertising-creator/references/twist-ad-ideation.md) | 只补创意搜索与自筛；反转机制与商品因果仍在通用反转与产品因果，不新增入口或广告 schema |
 | 影视、广告或有叙事需要的MV中的反转、误判、身份揭示 | 当前写作/导演主 Skill，复用[通用反转](../.agents/skills/short-drama-screenwriter/references/reversal-design.md) | 反转是叙事机制，不自动归入喜剧，也不强制进入短剧或广告流程 |
 | 慢动作、冻结与子弹时间；bullet-time-slow-motion-video 项目方法 | 当前制作主 Skill，复用[时间效果导演](../.agents/skills/zero-to-story/references/time-effects-direction.md) | 效果窗口、冻结/运动对象、环绕与恢复；不新增控制接口。已有视频确定性变速先核实工具 |
@@ -39,8 +39,6 @@
 | 拼贴表演MV、人物与平面设计共演；collage-performance-mv项目方法 | `music-video-creator` 的[拼贴表演路线](../.agents/skills/music-video-creator/references/collage-performance-direction.md) | 记录人物表演、版式、主歌窗口与实际输入，不引入固定表演占比或独立合成器 |
 | RPG/开放世界/战斗/跑酷的电影化镜头与HUD状态 | 当前作品主责复用[游戏导演](../.agents/skills/zero-to-story/references/game-cinematic-direction.md) | 先补创作与状态交接；真实引擎证据、完整HUD和精确合成能力分别核实，不开发可玩游戏 |
 | 节点画布的故事、资产和待办 | `canvas-workspace` | 读取最新画布、保存编辑、领取已确认请求、回填实际媒体；不改画布 API 之外的运行时状态 |
-| 已确认的本地 Comfy 视频快照执行 | `comfy-video-executor` | 按固定快照执行一次并返回实际文件与结果；不写创意、不改冻结输入、不自动重提 |
-| 已确认的本地 Qwen 图片快照执行 | `comfy-image-executor` | 文生图、最多 10 张图片参考生成/编辑，由画布 worker 执行；无需 Codex，不写创意或重复提交 |
 | 数字人或虚拟实拍连续口播 | `virtual-presenter` | 角色、环境、表演、文案、声音参考和交接；不把普通 MG 或 B-roll 当作数字人流程 |
 | 口播、产品或抽象主题的 MG 动画 | `mg-voiceover-animation-generator` | MG 方案、口播、供 H3 定稿的内容和按需交接；不替代数字人或 B-roll Skill |
 | 逐字稿驱动的 B-roll | `transcript-broll-planner` | 语义拆分、镜头规划和获授权后的 Panel 交接；不改口播事实 |
@@ -48,11 +46,13 @@
 | 用 MiMo 分析音频、歌曲或视频 | `mimo-video-understanding` | Pro/Flash 音视频观察证据；保留原 Skill 名兼容视频调用，不把模型描述直接当作内容接受结论 |
 | 明确要 MiniMax voice id 的音色克隆 | `voice-clone` | 授权检查、音频校验和 MiniMax voice id；不替代本地 Qwen3-TTS |
 | 本地多语言语音、Eric 成都男声、声音设计或参考音色复用 | `qwen3-tts` | Qwen3-TTS 三模式的台词、参考转写、授权和听审准备；生成交给 Canvas 音频节点 |
-| 已确认的本地 Qwen3-TTS 音频快照执行 | `comfy-tts-executor` | 由画布 worker 单次执行 CustomVoice、VoiceDesign 或 Base，保留原始音频并回填交付 FLAC |
-| 已确认的本地 MiniMax Music 3 音乐快照执行 | `comfy-music-executor` | 由画布 worker 单次执行并回填实际音乐 FLAC；不编写歌词或重复提交 |
-| 已确认的本地 YuE2 参考旋律翻唱 | `comfy-yue2-executor` | 由画布 worker 执行 SheetSage2 melody ABC 与 YuE2，回填实际 FLAC；参考音色、原伴奏和固定多歌手身份不透传，不另行提交 |
-| 已确认的本地人声与伴奏分离 | `comfy-singing-executor` | 由画布 worker 执行 MelBandRoFormer，回填人声与伴奏；只保留 separate，不编排歌曲，不另行提交 |
 | 中英文文本去模板化 | `shuorenhua` | 文本审校和改写；不改变事实、责任主体或视频执行契约 |
+| 主题或实物素材驱动的复古拼贴代码动效短片（MP4＋可编辑源码） | [retro-collage-motion-film](../.agents/skills/retro-collage-motion-film/SKILL.md) | 四步确认（规格配色→方向→详细方案→素材与字体样张）后以代码排版和 `@napi-rs/canvas` 渲染成片；受广告委托只交指定段落，歌词主导拼贴 MV 走 `music-video-creator` |
+| 一句话知识主题的代码生成知识短片（黑金可视化、可复现实验、动态图表与连续对象转场） | [vibe-knowledge-film](../.agents/skills/vibe-knowledge-film/SKILL.md) | 七步门禁、确定性模拟与 `motion-kit` 连续转场检查，交付 MP4 与可编辑源码；纯文本解说稿走 `narration-writer`，H3 视频节点 MG 走 `mg-voiceover-animation-generator` |
+| 链接、文档或原始视频驱动的资讯解说视频（事实核验、原片/原图优先剪辑、18 套风格图解与按需 H3 底片） | [news-explainer-video](../.agents/skills/news-explainer-video/SKILL.md) | 提取证据链与原始媒体，结合实测配音时间轴（可接 `qwen3-tts`）、18 套风格与按需 H3/Canvas 底片合成资讯成片；仅摘要/写稿/拉片时不启动媒体生成 |
+| 控制当前工作区内置浏览器（打开、快照、UID 交互、富文本粘贴、上传、登录接管与副作用确认） | [control-in-app-browser](../.agents/skills/control-in-app-browser/SKILL.md) | 只约束浏览器工具面，不接管原任务主责；优先专用 Skill/Connector/导入路径，不可逆外部动作须先经用户确认 |
+| vlog、日常口播、街访、教程、测评与真人 UGC 推广的手机拍摄关系、人物真实感与实拍提示词 | [creator-pov](../.agents/skills/creator-pov/SKILL.md) | 定手持/支架/朋友跟拍关系、自然口语与手机实拍感英文视觉提示词；可独立交提示词，或协同 `virtual-presenter` / `advertising-creator` / `zero-to-story` 交 H3 与 Canvas 执行 |
+| 短剧四阶段端到端制作（大纲剧本、角色/场景四视图/道具及状态递进参考、防跳切分镜提示词与单集成片合成） | [short-drama-production](../.agents/skills/short-drama-production/SKILL.md) | 覆盖角色/道具状态递进与空间 2×2 四视图及跨段防同角度跳切；深度多集编剧协同 `short-drama-screenwriter`，图像与视频生成统一经 Canvas 执行 |
 
 ## 三完整作品入口与专业例外
 
@@ -82,4 +82,20 @@
 
 多人轮唱的原曲、完整翻唱候选、整句混音、角色绑定与 H3 交接由 [music-video-creator](../.agents/skills/music-video-creator/references/multi-singer-workflow.md)统筹；单人、器乐和锁定画面配乐沿用原路由。
 
-本地 H3 图片的执行适配与诊断使用 [comfy-h3-image-executor](../.agents/skills/comfy-h3-image-executor/SKILL.md)，创作仍由原图片主责入口统筹。
+## 内部 Worker 执行器索引（服务自动调用，仅诊断查阅）
+
+以下 `*-executor` Skill 均由 Canvas 服务内部 worker 按已确认冻结快照单次调用，不参与用户意图路由，不由主会话或子代理从对话直接启动；仅在适配维护或故障诊断时按需查阅。
+
+| 提供方标识 | 执行器 Skill | 职责边界 |
+| --- | --- | --- |
+| `comfy` | [comfy-video-executor](../.agents/skills/comfy-video-executor/SKILL.md) | 本地 Comfy H3 视频（T2VA/I2VA/FL2VA/R2V）单次执行与回填 |
+| `comfy-upscale` | [comfy-upscale-executor](../.agents/skills/comfy-upscale-executor/SKILL.md) | 本地 SeedVR2 3B INT8 分窗视频超分单次执行与回填 |
+| `comfy-h3-face-refine` | [comfy-h3-face-refine-executor](../.agents/skills/comfy-h3-face-refine-executor/SKILL.md) | 本地 H3 FaceRefine 单人（solo）/双人（duet）小脸局部精修与同镜窗拼接 |
+| `comfy-qwen-image` | [comfy-image-executor](../.agents/skills/comfy-image-executor/SKILL.md) | 本地 Qwen Image 2.1 文生图、1～10 张参考图生成与编辑 |
+| `comfy-h3-image` | [comfy-h3-image-executor](../.agents/skills/comfy-h3-image-executor/SKILL.md) | 本地 MiniMax H3 Image 文生图、1～16 张参考图生成与编辑 |
+| `comfy-qwen-tts` | [comfy-tts-executor](../.agents/skills/comfy-tts-executor/SKILL.md) | 本地 Qwen3-TTS（预置音色、声音设计、Base 克隆）语音生成 |
+| `comfy-minimax-music` | [comfy-music-executor](../.agents/skills/comfy-music-executor/SKILL.md) | 本地 MiniMax Music 3 音乐与歌词生成 |
+| `comfy-yue2-music` | [comfy-yue2-executor](../.agents/skills/comfy-yue2-executor/SKILL.md) | 本地 SheetSage2 + YuE2 参考旋律翻唱生成 |
+| `comfy-singing` | [comfy-singing-executor](../.agents/skills/comfy-singing-executor/SKILL.md) | 本地 MelBandRoFormer 人声与伴奏分离 |
+| `aistudio-image` | [aistudio-image-executor](../.agents/skills/aistudio-image-executor/SKILL.md) | 本机 AIStudio2API Nano Banana 生图、多图参考生成与编辑 |
+| `aistudio-video` | [aistudio-video-executor](../.agents/skills/aistudio-video-executor/SKILL.md) | 本机 AIStudio2API Gemini Omni 文生、首帧图生与多参考图生视频 |
