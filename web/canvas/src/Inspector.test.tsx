@@ -504,6 +504,26 @@ describe('Inspector editing behavior', () => {
     expect(events.onUpdate).not.toHaveBeenCalled();
   });
 
+  it('exposes optional tail strip and exact tail frame candidate links when prepared', async () => {
+    const node = makeVideo();
+    const run: Run = {
+      id: 'ready-materials-tail', node_id: node.id, status: 'succeeded',
+      snapshot: { node_id: node.id, node_type: 'video', provider: 'comfy', model: 'h3', mode: 'r2v', prompt: node.data.prompt, parameters: {}, inputs: {} },
+      outputs: [{ path: '/workspace/outputs/run/original.mp4', kind: 'video', metadata: { duration_ms: 1000,
+        review_materials: { status: 'ready', content_review: 'NOT_REVIEWED', artifacts: {
+          silent_video: { path: '/workspace/outputs/run/review/silent.mp4', sha256: 'silent-hash' },
+          contact_sheet: { path: '/workspace/outputs/run/review/contact.jpg', sha256: 'sheet-hash' },
+          tail_sheet: { path: '/workspace/outputs/run/review/tail-sheet.jpg', sha256: 'tstrip-hash' },
+          tail_frame: { path: '/workspace/outputs/run/review/tail-frame.png', sha256: 'tail-hash' },
+        } },
+      } }],
+    };
+    await renderInspector(node, [capability()], [run]);
+    const links = Array.from(container.querySelectorAll('.review-materials a'));
+    expect(links).toHaveLength(4);
+    expect(links.map((el) => el.textContent)).toEqual(['打开无声候选', '查看抽样图', '查看末3帧', '查看精确末帧']);
+  });
+
   it('uses an ACCEPTed derived file as current output and keeps the generated file available in history', async () => {
     const node = makeVideo();
     const run: Run = {

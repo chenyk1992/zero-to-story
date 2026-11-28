@@ -53,7 +53,7 @@ description: 将灵感、小说、剧本或短剧交接转成影视故事板、�
 2. **记录可执行计划。** 使用[故事板模板](assets/storyboard_brief.template.md)保存创作正文；`creative_blueprint.json` 按 [v2 规范](references/creative-blueprint.md)编译结构化索引。局部交付使用相应范围。
 3. **准备必要资产。** 完整蓝图先做静态预检，按报错修正后复核。按[角色图用途](references/creative-assets.md#角色设定图)决定复用、新建或仅用固定文字；已决定制作[完整设定图](assets/character_card_prompt.template.md)时保留三视图与半身变化规格。分镜板和关键帧按当前 Panel 控制需要准备，`planning_only` 保持规划用途。实际资产做一次用途检查。
 4. **写提示词并交接。** 将已确定的单 Panel 事实交给 H3 Skill，把返回提示词与素材、参数原样交给 [canvas-workspace](../canvas-workspace/SKILL.md)。每个 Panel 对应一个视频节点。已有授权覆盖时按共享规则执行；只要草稿时停在保存。
-5. **处理实际结果。** 按视频验收做一次结论。下游需要精确首帧时，才从已接受视频提取真实尾帧。用户要求完整成片时，对已接受输出完成确定性后期和一次最终视听检查。
+5. **处理实际结果。** 按视频验收做一次结论。下游需要精确首帧时，才从已接受视频提取真实尾帧。用户要求完整成片或先做有声故事板预演时，可使用 `python -m lfo.media.story_edit`（`lfo.story.preview.v1` Animatic 或 `lfo.story.edit.v1` 确定性后期，支持接缝过渡、J/L-cut、混音避让、响度对齐与字幕/净版输出）完成确定性后期和一次最终视听检查。
 
 各引用中的 "STEP 1 / STEP 3" 即上述第 1 步（先写成立的戏再设计镜头，含 operation、布局与资产计划锁定）与第 3 步（准备必要资产）。[创作蓝图](references/creative-blueprint.md)的"编译顺序"是第 1–2 步内部的子流程，编号独立，不与上述步骤对应。
 

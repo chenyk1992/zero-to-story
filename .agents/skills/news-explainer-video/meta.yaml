@@ -1,0 +1,34 @@
+display-name-zh: 资讯解说视频制作
+version: 1.0.0
+tag-en: "Commercial Ad"
+tag-cn: "商业广告"
+complete-tags-en:
+  - "Commercial Ad / Creative Generation"
+complete-tags-cn:
+  - "商业广告 / 创作生成"
+summary-en: "From links, documents or videos, verifies facts, edits original media with data graphics and real narration, and delivers a news explainer video with editable sources for tech and data news."
+summary-cn: "从链接、文档或视频中提取核验事实，优先剪用原始画面并配合图解与真实配音，交付可编辑的资讯解说成片。"
+desc-en: "For creators and editors explaining tech news, data stories, product launches or mechanisms in short video. Provide web links, readable PDF, Word or slide documents, uploaded videos, or a mix, plus topic, language and duration. The workflow extracts text, charts and speech with page and timecode references, verifies claims and separates company statements from facts, screens original images and footage as the main visuals, adds data graphics and process animation in one of 18 styles, and times the edit to real narration, music and sound. It asks once about on-screen attribution, off by default, and frame size. It delivers a playable video, an editable project or package, script, storyboard and source records. It never fabricates events or tests, never auto-publishes, and skips media production for summary-only requests."
+desc-cn: "面向用短视频讲清科技资讯、数据新闻、产品发布或机制原理的创作者。用户提供链接、文档、视频或混合材料，说明主题、语言与时长。流程提取正文、图表与语音并保留页码和时间码，核验事实、区分公司自述，看片选段让原始画面成为主体，再用18套风格的图解动画补充，按真实配音剪辑；开工前询问是否标注来源与画面尺寸。交付成片、可编辑工程、脚本分镜和来源记录。不伪造现场与实测，不自动发布，仅需摘要或脚本时不生成媒体。"
+author-en: "MiniMax Design"
+author-cn: "MiniMax Design"
+source: official-featured
+cover: https://cdn.hailuoai.com/hailuo-video-web/public_assets/3cb965f2-5a55-4ffd-b3a1-36a61e918fd1.mp4
+cover-en: https://cdn.hailuoai.com/hailuo-video-web/public_assets/3cb965f2-5a55-4ffd-b3a1-36a61e918fd1.mp4
+structured-info:
+  zh-CN:
+    summary: 把链接、文档或视频里的真实信息变成以原始画面为主、讲得清楚的资讯短片。
+    best-for:
+      - 科技资讯
+      - 数据新闻
+      - 产品解读
+    how-to-use: 提供链接、文档或视频并说明主题、语言和时长，选择是否标注来源及画面尺寸后开始制作。
+    outputs: 资讯解说成片、可编辑工程或制作包、脚本分镜及来源记录。
+  en-US:
+    summary: Turns the real information in links, documents or videos into a clear news short led by original media.
+    best-for:
+      - Tech news
+      - Data journalism
+      - Product explainers
+    how-to-use: Provide links, documents or videos with topic, language and duration, then choose source attribution and frame size to start.
+    outputs: News explainer video, editable project or production package, script, storyboard and source records.

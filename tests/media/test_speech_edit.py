@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from lfo.media._ffmpeg import probe
-from lfo.media.audio_qc import AudioQCReport
 from lfo.media.speech_edit import (
     ConfirmedSilentInterval,
     ProtectedSpeechInterval,
@@ -50,7 +49,6 @@ def test_plan_uses_actual_duration_and_maps_cues_over_removed_pause(
                 SubtitleCue(0, 600, "line"),
                 SubtitleCue(600, 900, "after"),
             ],
-            audio_qc_report=AudioQCReport(passed=True, inconclusive=True),
         )
     )
 
@@ -65,7 +63,6 @@ def test_plan_uses_actual_duration_and_maps_cues_over_removed_pause(
         (300, 400, "line"),
         (400, 700, "after"),
     ]
-    assert plan.audio_qc_readiness == "review_required"
     assert plan.audio_review_required
 
 
@@ -87,23 +84,6 @@ def test_pause_overlapping_protected_speech_tail_is_rejected(
                 protected_speech_intervals=[ProtectedSpeechInterval(100, 320, tail_margin_ms=100)],
             )
         )
-
-
-def test_failed_audio_report_allows_repair_planning_but_requires_new_review(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    source = _fake_source(tmp_path)
-    _patch_probe(monkeypatch)
-    plan = SpeechProtectedEditor().plan(
-        SpeechProtectedEditSpec(
-            source_path=source,
-            output_path=tmp_path / "output.mp4",
-            audio_qc_report=AudioQCReport(passed=False),
-        )
-    )
-
-    assert plan.audio_review_required
-    assert plan.audio_qc_readiness == "rejected"
 
 
 def test_required_tail_margin_cannot_be_silently_shortened(monkeypatch, tmp_path):

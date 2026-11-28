@@ -96,6 +96,28 @@ def create_mcp(settings: CanvasSettings):
         return client.request("POST", "/api/assets/import", {"path": path})
 
     @mcp.tool()
+    def canvas_bind_accepted_tail(
+        canvas_id: str,
+        source_run_id: str,
+        target_node_id: str,
+        expected_version: int,
+        edge_id: str | None = None,
+        full: bool = False,
+    ) -> dict[str, Any]:
+        """从已 ACCEPT 视频运行提取/复用唯一真实尾帧，登记到源节点 derived_outputs，并连线至目标节点 first_frame（只改草稿、不自动提交运行）。"""
+        return client.request(
+            "POST",
+            f"/api/canvases/{canvas_id}/bind-accepted-tail",
+            {
+                "source_run_id": source_run_id,
+                "target_node_id": target_node_id,
+                "expected_version": expected_version,
+                "edge_id": edge_id,
+                "full": full,
+            },
+        )
+
+    @mcp.tool()
     def canvas_execute(
         canvas_id: str, node_id: str, version: int, request_id: str
     ) -> dict[str, Any]:
@@ -104,6 +126,17 @@ def create_mcp(settings: CanvasSettings):
             "POST",
             f"/api/canvases/{canvas_id}/runs",
             {"node_id": node_id, "version": version, "request_id": request_id},
+        )
+
+    @mcp.tool()
+    def canvas_execute_batch(
+        canvas_id: str, version: int, items: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        """在已明确授权范围内对多个独立就绪节点执行全量预检与原子批量确认；items 每项包含 node_id 与 request_id，任一项校验失败则整批不落库。"""
+        return client.request(
+            "POST",
+            f"/api/canvases/{canvas_id}/runs/batch",
+            {"version": version, "items": items},
         )
 
     @mcp.tool()

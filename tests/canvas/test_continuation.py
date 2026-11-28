@@ -477,3 +477,35 @@ def test_failed_existing_run_is_not_retried_by_continuation(service: CanvasServi
         action["type"] == "execute_after_authorization_check" for action in summary["actions"]
     )
     assert service.store.get_run(run["id"])["status"] == "failed"
+
+
+def test_continuation_support_is_evidence_based_and_readonly(service: CanvasService) -> None:
+    canvas = service.store.create_canvas("demo", _graph([_node("a")]))
+    plan = _configure(service, canvas, ["a"], session="cross-host")
+    rev = plan["revision"]
+
+    initial = service.read_continuations(session_id="cross-host")
+    assert initial["continuation_support"]["level"] == "manual_batch"
+    assert initial["plans"][0]["continuation_support"]["observed_events"] == []
+    assert initial["plans"][0]["revision"] == rev
+
+    service.continuation_hook("cross-host", "SessionStart")
+    after_start = service.read_continuations(session_id="cross-host")
+    assert after_start["continuation_support"]["level"] == "manual_batch"
+    assert after_start["continuation_support"]["observed_events"] == ["SessionStart"]
+    assert after_start["plans"][0]["revision"] == rev
+
+    service.continuation_hook("cross-host", "Stop")
+    after_stop = service.read_continuations(session_id="cross-host")
+    assert after_stop["continuation_support"]["level"] == "hook_guarded"
+    assert after_stop["continuation_support"]["observed_events"] == ["SessionStart", "Stop"]
+    assert "Interrupt" in after_stop["continuation_support"]["note"]
+
+    service.continuation_hook("cross-host", "Interrupt")
+    after_interrupt = service.read_continuations(session_id="cross-host")
+    assert after_interrupt["continuation_support"]["observed_events"] == [
+        "SessionStart",
+        "Stop",
+        "Interrupt",
+    ]
+    assert "尚未观测到" not in after_interrupt["continuation_support"]["note"]

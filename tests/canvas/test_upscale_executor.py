@@ -12,7 +12,7 @@ from lfo.comfy import transport, upscale
 PROJECT = Path(__file__).resolve().parents[2]
 
 
-def snapshot(source: Path, *, start_frame=0, frame_count=120, chunk_mode="auto"):
+def snapshot(source: Path, *, start_frame=0, frame_count=120, chunk_mode="auto", target_width=1920, target_height=1066):
     return {
         "node_type": "video",
         "provider": "comfy-upscale",
@@ -23,8 +23,8 @@ def snapshot(source: Path, *, start_frame=0, frame_count=120, chunk_mode="auto")
         "parameters": {
             "start_frame": start_frame,
             "frame_count": frame_count,
-            "target_width": 1920,
-            "target_height": 1066,
+            "target_width": target_width,
+            "target_height": target_height,
             "chunk_mode": chunk_mode,
             "temporal_chunk_frames": 9 if chunk_mode == "manual" else None,
         },
@@ -83,6 +83,80 @@ def test_manual_mode_uses_only_safe_nine_pixel_frame_chunks(tmp_path):
     )
     assert workflow["4"]["inputs"]["chunking_mode"] == "manual"
     assert workflow["4"]["inputs"]["chunking_mode.frames_per_chunk"] == 9
+
+
+def test_portrait_upscale_accepts_1080x1944_and_rejects_oversize_square(tmp_path):
+    source = tmp_path / "portrait.mp4"
+    source.write_bytes(b"source")
+    workflow, normalized = upscale.prepare_workflow(
+        snapshot(source, frame_count=107, target_width=1080, target_height=1944),
+        "upload",
+        probe_fn=probe_for(frames=107, width=480, height=864),
+    )
+    assert normalized["width"] == 1080
+    assert normalized["height"] == 1944
+    assert workflow["4"]["inputs"]["target_width"] == 1080
+    assert workflow["4"]["inputs"]["target_height"] == 1944
+
+    oversized = snapshot(source, frame_count=107, target_width=1920, target_height=1944)
+    with pytest.raises(ValueError, match="短边不超过"):
+        upscale.normalize_snapshot(oversized, probe_fn=probe_for(frames=107, width=864, height=864))
+
+
+@pytest.mark.parametrize(
+    "src_w,src_h,exp_w,exp_h",
+    [
+        (1056, 608, 1876, 1080),
+        (1184, 672, 1902, 1080),
+        (864, 480, 1944, 1080),
+        (608, 1056, 1080, 1876),
+        (672, 1184, 1080, 1902),
+        (480, 864, 1080, 1944),
+        (768, 768, 1080, 1080),
+        (1024, 432, 1944, 820),
+    ],
+)
+def test_auto_proportional_target_preserves_native_aspect_without_precrop(
+    tmp_path, src_w, src_h, exp_w, exp_h
+):
+    source = tmp_path / f"native_{src_w}x{src_h}.mp4"
+    source.write_bytes(b"source")
+    req = snapshot(source, frame_count=120, target_width=None, target_height=None)
+    workflow, normalized = upscale.prepare_workflow(
+        req, "upload", probe_fn=probe_for(frames=120, width=src_w, height=src_h)
+    )
+    assert (normalized["width"], normalized["height"]) == (exp_w, exp_h)
+    assert workflow["4"]["inputs"]["target_width"] == exp_w
+    assert workflow["4"]["inputs"]["target_height"] == exp_h
+
+
+def test_single_edge_derives_proportional_pair_and_rejects_forced_standard_stretch(tmp_path):
+    source = tmp_path / "h3_06mp.mp4"
+    source.write_bytes(b"source")
+    probe_06mp = probe_for(frames=120, width=1056, height=608)
+
+    by_height = snapshot(source, target_width=None, target_height=1080)
+    _, norm_h = upscale.prepare_workflow(by_height, "upload", probe_fn=probe_06mp)
+    assert (norm_h["width"], norm_h["height"]) == (1876, 1080)
+
+    by_width = snapshot(source, target_width=1600, target_height=None)
+    _, norm_w = upscale.prepare_workflow(by_width, "upload", probe_fn=probe_06mp)
+    assert (norm_w["width"], norm_w["height"]) == (1600, 922)
+
+    # Forcing standard 1920x1080 on 1056x608 (~1.737) violates proportionality (~2.36% off)
+    forced_1080p = snapshot(source, target_width=1920, target_height=1080)
+    with pytest.raises(ValueError, match="等比"):
+        upscale.normalize_snapshot(forced_1080p, probe_fn=probe_06mp)
+
+    # Source already larger than the upscale ceiling fails cleanly on auto resolution
+    too_big_src = snapshot(source, target_width=None, target_height=None)
+    with pytest.raises(ValueError, match="已超过当前超分上限"):
+        upscale.normalize_snapshot(too_big_src, probe_fn=probe_for(frames=120, width=2560, height=1440))
+
+    # Downscaling below source size is rejected
+    downscale = snapshot(source, target_width=900, target_height=None)
+    with pytest.raises(ValueError, match="大于或等于源视频尺寸"):
+        upscale.normalize_snapshot(downscale, probe_fn=probe_06mp)
 
 
 @pytest.mark.parametrize("parameter,value", [

@@ -248,6 +248,34 @@ class CanvasHandler(BaseHTTPRequestHandler):
                 self._not_found()
         elif len(segments) == 4 and segments[:2] == ["api", "canvases"] and segments[3] == "production" and method == "GET":
             self._json(service.production_summary(segments[2]))
+        elif (
+            len(segments) == 4
+            and segments[:2] == ["api", "canvases"]
+            and segments[3] == "bind-accepted-tail"
+            and method == "POST"
+        ):
+            body = self._body()
+            self._json(
+                service.bind_accepted_tail(
+                    segments[2],
+                    body["source_run_id"],
+                    body["target_node_id"],
+                    body["expected_version"],
+                    edge_id=body.get("edge_id"),
+                    full=bool(body.get("full", False)),
+                )
+            )
+        elif (
+            len(segments) == 5
+            and segments[:2] == ["api", "canvases"]
+            and segments[3:] == ["runs", "batch"]
+            and method == "POST"
+        ):
+            body = self._body()
+            self._json(
+                service.confirm_batch(segments[2], body["version"], body["items"]),
+                201,
+            )
         elif len(segments) == 4 and segments[:2] == ["api", "canvases"] and segments[3] == "runs":
             if method == "GET":
                 runs = (

@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -20,25 +21,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from lfo.canvas.accepted_tail import extract_accepted_tail_for_run
 from lfo.canvas.capabilities import CapabilityCatalog
 from lfo.canvas.continuation import (
     CONTINUATION_EVENTS,
     build_continuation_summary,
+    build_continuation_support,
     continuation_fingerprint,
     public_continuation,
 )
-from lfo.canvas.graph import CanvasError, resolve_snapshot
+from lfo.canvas.graph import CanvasError, GraphValidationError, resolve_snapshot, validate_graph
 from lfo.canvas.media import CanvasMedia, creative_snapshot
 from lfo.canvas.mv_preflight import inspect_mv_panel, mv_metadata_fingerprint
 from lfo.canvas.production_metrics import summarize_production
 from lfo.canvas.review_materials import prepare_video_review
 from lfo.canvas.settings import CanvasSettings
-from lfo.canvas.store import CanvasStore, ContinuationRevisionError
-from lfo.canvas.views import canvas_view
+from lfo.canvas.store import CanvasStore, ContinuationRevisionError, VersionConflictError
+from lfo.canvas.views import canvas_view, edit_receipt
 from lfo.media._ffmpeg import probe, probe_audio, run_command
 
 
 class CanvasService:
+    _MAX_AFFINITY_STREAK = 8
+
     def __init__(self, settings: CanvasSettings, *, start_worker: bool = True) -> None:
         self.settings = settings
         self.store = CanvasStore(settings.database)
@@ -52,6 +57,7 @@ class CanvasService:
         self._execution_lock = threading.Lock()
         self._changes = threading.Condition()
         self._change_sequence = 0
+        self._video_affinity_streak = 0
         if start_worker:
             self.start_worker()
 
@@ -128,6 +134,24 @@ class CanvasService:
             }
         return result
 
+    def _resolve_run_resource(
+        self, snapshot: Mapping[str, Any], capability: Mapping[str, Any]
+    ) -> tuple[str, str, int]:
+        status = "pending_agent" if capability["execution"] == "agent" else "queued"
+        resource = capability.get("resource", {})
+        # Undeclared providers share a conservative resource. Media type
+        # alone is not evidence that an image uses a different GPU.
+        key = str(resource.get("key") or "video")
+        if key == "video":
+            capacity = 1
+        elif key.startswith("image:"):
+            capacity = min(
+                self.settings.image_concurrency, max(1, int(resource.get("capacity", 1)))
+            )
+        else:
+            capacity = max(1, int(resource.get("capacity", 1)))
+        return status, key, capacity
+
     def confirm(
         self, canvas_id: str, node_id: str, version: int, request_id: str
     ) -> dict[str, Any]:
@@ -171,16 +195,7 @@ class CanvasService:
             if production.get("context") is not None:
                 snapshot["production_context"] = copy.deepcopy(production["context"])
             frozen = self.media.freeze(snapshot, request_id)
-            status = "pending_agent" if capability["execution"] == "agent" else "queued"
-            resource = capability.get("resource", {})
-            # Undeclared providers share a conservative resource. Media type
-            # alone is not evidence that an image uses a different GPU.
-            key = "video" if snapshot["node_type"] == "video" else resource.get("key", "video")
-            capacity = (
-                1
-                if key == "video"
-                else min(self.settings.image_concurrency, max(1, int(resource.get("capacity", 1))))
-            )
+            status, key, capacity = self._resolve_run_resource(snapshot, capability)
             run = self.store.create_run(
                 canvas_id,
                 node_id,
@@ -193,6 +208,266 @@ class CanvasService:
             )
             self._notify()
             return self._public_run(run)
+
+    def confirm_batch(
+        self, canvas_id: str, version: int, items: Sequence[Mapping[str, Any]]
+    ) -> dict[str, Any]:
+        """Preflight and freeze all requested nodes before atomically creating runs."""
+
+        if isinstance(items, (str, bytes, bytearray)) or not isinstance(items, Sequence):
+            raise ValueError("items 必须是数组")
+        if not 1 <= len(items) <= 64:
+            raise ValueError("批量执行每次需要 1–64 个组件")
+        normalized: list[tuple[str, str]] = []
+        seen_nodes: set[str] = set()
+        seen_requests: set[str] = set()
+        for index, raw in enumerate(items):
+            if not isinstance(raw, Mapping):
+                raise ValueError(f"批量第 {index + 1} 项必须是对象")
+            node_id = raw.get("node_id")
+            request_id = raw.get("request_id")
+            if not isinstance(node_id, str) or not node_id.strip():
+                raise ValueError(f"批量第 {index + 1} 项缺少有效 node_id")
+            if not isinstance(request_id, str) or not request_id.strip() or len(request_id) > 200:
+                raise ValueError(f"批量第 {index + 1} 项执行请求编号无效")
+            if node_id in seen_nodes:
+                raise ValueError(f"批量请求包含重复组件：{node_id}")
+            if request_id in seen_requests:
+                raise ValueError(f"批量请求包含重复请求编号：{request_id}")
+            seen_nodes.add(node_id)
+            seen_requests.add(request_id)
+            normalized.append((node_id, request_id))
+
+        with self._confirm_lock:
+            existing_map: dict[str, dict[str, Any] | None] = {
+                req_id: self.store.get_run_by_request(req_id) for _, req_id in normalized
+            }
+            for node_id, req_id in normalized:
+                existing = existing_map[req_id]
+                if existing is not None and (
+                    existing["canvas_id"],
+                    existing["node_id"],
+                    existing["canvas_version"],
+                ) != (canvas_id, node_id, version):
+                    raise CanvasError(
+                        "该执行请求编号已用于另一份配置", code="request_conflict", status=409
+                    )
+            if all(existing_map[req_id] is not None for _, req_id in normalized):
+                return {
+                    "canvas_id": canvas_id,
+                    "version": version,
+                    "runs": [
+                        self._public_run(existing_map[req_id])  # type: ignore[arg-type]
+                        for _, req_id in normalized
+                    ],
+                }
+            if any(existing_map[req_id] is not None for _, req_id in normalized):
+                raise CanvasError(
+                    "部分执行请求编号已存在，请确认后使用新的批次请求编号",
+                    code="request_conflict",
+                    status=409,
+                )
+
+            canvas = self.store.get_canvas(canvas_id)
+            if canvas["version"] != version:
+                raise CanvasError(
+                    "画布已有新修改，请先同步并保存后再确认", code="version_conflict", status=409
+                )
+            runs = self.store.list_runs(canvas_id)
+            prepared: list[tuple[str, str, dict[str, Any], str, str, int]] = []
+            for node_id, req_id in normalized:
+                if any(
+                    run["node_id"] == node_id
+                    and run["status"] in {"queued", "pending_agent", "running", "unknown"}
+                    and not (run["status"] == "unknown" and run.get("resource_released") is True)
+                    for run in runs
+                ):
+                    raise CanvasError(
+                        f"组件 {node_id} 已有待处理任务，请先处理该任务",
+                        code="node_busy",
+                        status=409,
+                    )
+                snapshot = resolve_snapshot(canvas, node_id, runs)
+                capability = self.catalog.validate(snapshot)
+                production = inspect_mv_panel(canvas, node_id, snapshot, runs, self.media)
+                if not production["ready"]:
+                    raise CanvasError(
+                        f"组件 {node_id} 预检未通过："
+                        + "; ".join(issue["message"] for issue in production["issues"]),
+                        code="mv_preflight_failed",
+                        status=400,
+                    )
+                if production.get("context") is not None:
+                    snapshot["production_context"] = copy.deepcopy(production["context"])
+                status, key, capacity = self._resolve_run_resource(snapshot, capability)
+                prepared.append((node_id, req_id, snapshot, status, key, capacity))
+
+            created_folders: list[Path] = []
+            batch_payloads: list[dict[str, Any]] = []
+            try:
+                for node_id, req_id, snapshot, status, key, capacity in prepared:
+                    folder = self.settings.data_dir / "inputs" / uuid.uuid5(uuid.NAMESPACE_URL, req_id).hex
+                    existed = folder.exists()
+                    frozen = self.media.freeze(snapshot, req_id)
+                    if not existed and folder.exists():
+                        created_folders.append(folder)
+                    batch_payloads.append(
+                        {
+                            "canvas_id": canvas_id,
+                            "node_id": node_id,
+                            "expected_version": version,
+                            "request_id": req_id,
+                            "snapshot": frozen,
+                            "status": status,
+                            "resource_key": key,
+                            "resource_capacity": capacity,
+                        }
+                    )
+                created = self.store.create_runs_batch(batch_payloads)
+            except Exception:
+                for folder in created_folders:
+                    shutil.rmtree(folder, ignore_errors=True)
+                raise
+            self._notify()
+            return {
+                "canvas_id": canvas_id,
+                "version": version,
+                "runs": [self._public_run(run) for run in created],
+            }
+
+    def bind_accepted_tail(
+        self,
+        canvas_id: str,
+        source_run_id: str,
+        target_node_id: str,
+        expected_version: int,
+        *,
+        edge_id: str | None = None,
+        full: bool = False,
+    ) -> dict[str, Any]:
+        """Atomically extract/reuse an ACCEPT video tail, register it, and wire target first_frame."""
+
+        if isinstance(expected_version, bool) or not isinstance(expected_version, int) or expected_version < 1:
+            raise CanvasError("expected_version must be a positive integer", code="version_type", status=400)
+        if not isinstance(source_run_id, str) or not source_run_id.strip():
+            raise ValueError("source_run_id 不能为空")
+        if not isinstance(target_node_id, str) or not target_node_id.strip():
+            raise ValueError("target_node_id 不能为空")
+        if edge_id is not None and (not isinstance(edge_id, str) or not edge_id.strip()):
+            raise ValueError("edge_id 必须是非空字符串")
+
+        with self._confirm_lock:
+            canvas = self.store.get_canvas(canvas_id)
+            if canvas["version"] != expected_version:
+                raise VersionConflictError(canvas_id, expected_version, canvas["version"])
+            run = self.store.get_run(source_run_id)
+            if run["canvas_id"] != canvas_id:
+                raise CanvasError("源运行不属于当前画布", code="canvas_mismatch", status=400)
+            review = run.get("review") or {}
+            if run.get("status") != "succeeded" or review.get("decision") != "ACCEPT":
+                raise ValueError("真实尾帧需要成功且已 ACCEPT 的原运行")
+            if run.get("snapshot", {}).get("node_type") != "video":
+                raise ValueError("真实尾帧只适用于视频运行")
+
+            source_node_id = str(run["node_id"])
+            graph = copy.deepcopy(canvas["graph"])
+            nodes_by_id = {str(node["id"]): node for node in graph.get("nodes", [])}
+            if source_node_id not in nodes_by_id:
+                raise GraphValidationError(f"unknown source node: {source_node_id}", code="unknown_node")
+            if target_node_id not in nodes_by_id:
+                raise GraphValidationError(f"unknown target node: {target_node_id}", code="unknown_node")
+
+            remaining_edges = [
+                edge
+                for edge in graph.get("edges", [])
+                if not (
+                    edge.get("target") == target_node_id
+                    and edge.get("targetHandle") == "first_frame"
+                )
+            ]
+            resolved_edge_id = edge_id.strip() if edge_id is not None else f"edge-tail-{uuid.uuid4().hex[:12]}"
+            if any(edge.get("id") == resolved_edge_id for edge in remaining_edges):
+                raise GraphValidationError(
+                    f"duplicate edge id: {resolved_edge_id}", code="duplicate_edge_id"
+                )
+
+            probe_graph = copy.deepcopy(graph)
+            probe_nodes = {str(node["id"]): node for node in probe_graph.get("nodes", [])}
+            probe_source_data = probe_nodes[source_node_id].setdefault("data", {})
+            probe_derived = list(probe_source_data.get("derived_outputs") or [])
+            probe_id = f"probe-tail-{uuid.uuid4().hex[:8]}"
+            probe_derived.append(
+                {
+                    "id": probe_id,
+                    "label": "真实尾帧预检",
+                    "source_run_id": source_run_id,
+                    "source_version": str(review["output_sha256"]),
+                    "asset": {"path": "workspace/probe.png", "kind": "image"},
+                }
+            )
+            probe_source_data["derived_outputs"] = probe_derived
+            probe_graph["edges"] = [
+                edge
+                for edge in probe_graph.get("edges", [])
+                if not (
+                    edge.get("target") == target_node_id
+                    and edge.get("targetHandle") == "first_frame"
+                )
+            ] + [
+                {
+                    "id": resolved_edge_id,
+                    "source": source_node_id,
+                    "sourceHandle": f"output:{probe_id}",
+                    "target": target_node_id,
+                    "targetHandle": "first_frame",
+                    "source_run_id": source_run_id,
+                    "require_accept": True,
+                }
+            ]
+            validate_graph(probe_graph)
+
+            tail = extract_accepted_tail_for_run(
+                run,
+                settings=self.settings,
+                reload_run=lambda: self.store.get_run(source_run_id),
+            )
+            tail_path = Path(tail["asset"]["path"])
+            source_data = nodes_by_id[source_node_id].setdefault("data", {})
+            derived_outputs = list(source_data.get("derived_outputs") or [])
+            derived_outputs.append(
+                {
+                    "id": tail["id"],
+                    "label": f"真实尾帧 ({source_run_id[:8]})",
+                    "source_run_id": source_run_id,
+                    "source_version": str(review["output_sha256"]),
+                    "asset": {**tail["asset"], "name": f"{tail['id']}.png"},
+                }
+            )
+            source_data["derived_outputs"] = derived_outputs
+            new_edge = {
+                "id": resolved_edge_id,
+                "source": source_node_id,
+                "sourceHandle": f"output:{tail['id']}",
+                "target": target_node_id,
+                "targetHandle": "first_frame",
+                "source_run_id": source_run_id,
+                "require_accept": True,
+            }
+            graph["edges"] = remaining_edges + [new_edge]
+            try:
+                saved = self.store.save_canvas(canvas_id, expected_version, graph)
+            except Exception:
+                tail_path.unlink(missing_ok=True)
+                raise
+            self._notify()
+            payload = (
+                copy.deepcopy(saved)
+                if full
+                else edit_receipt(saved, [], affected_node_ids=[source_node_id, target_node_id])
+            )
+            payload["tail"] = tail
+            payload["edge"] = new_edge
+            return payload
 
     @staticmethod
     def _public_run(run: dict[str, Any]) -> dict[str, Any]:
@@ -664,6 +939,9 @@ class CanvasService:
         if summary["stalled"]:
             summary["warning"] = "接续摘要连续 3 次无进展，需要人工接手；计划未标记完成"
         public["summary"] = summary
+        session_id = str(plan.get("session_id") or "")
+        observed = self.store.get_session_hook_events(session_id) if session_id else []
+        public["continuation_support"] = build_continuation_support(observed)
         return public
 
     def configure_continuation(
@@ -698,7 +976,7 @@ class CanvasService:
     ) -> dict[str, Any]:
         """Read plans and checks without changing stop counters or units."""
 
-        return {
+        result: dict[str, Any] = {
             "plans": [
                 self._continuation_payload(plan)
                 for plan in self.store.list_continuations(
@@ -706,6 +984,11 @@ class CanvasService:
                 )
             ]
         }
+        if isinstance(session_id, str) and session_id.strip():
+            result["continuation_support"] = build_continuation_support(
+                self.store.get_session_hook_events(session_id.strip())
+            )
+        return result
 
     def next_work(self, canvas_id: str, session_id: str, *, limit: int = 6, wait_seconds: float = 0) -> dict[str, Any]:
         """Return a bounded result-first packet for only this registered scope.
@@ -804,6 +1087,7 @@ class CanvasService:
             raise ValueError(
                 "continuation hook event must be Stop, SessionStart, SubagentStop or Interrupt"
             )
+        self.store.record_session_hook_event(session_id, event)
         if event == "SessionStart":
             plans = self.store.list_continuations(session_id=session_id)
             # SessionStart only carries a small routing hint.  Detailed plan
@@ -1093,13 +1377,60 @@ class CanvasService:
         self._notify()
         return self._public_run(result)
 
+    def _prioritize_queued_runs(self, queued: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Prefer queued video runs matching the latest succeeded (provider, model) to avoid swaps."""
+
+        active_video = [
+            run
+            for run in queued
+            if run.get("resource_key") == "video" and run.get("attention_state", "active") == "active"
+        ]
+        if len(active_video) <= 1 or self._video_affinity_streak >= self._MAX_AFFINITY_STREAK:
+            return queued
+        affinity = self.store.latest_succeeded_signature("video")
+        if affinity is None:
+            return queued
+
+        def _signature(run: Mapping[str, Any]) -> tuple[str | None, str | None]:
+            snap = run.get("snapshot")
+            if not isinstance(snap, Mapping):
+                return (None, None)
+            provider = snap.get("provider")
+            model = snap.get("model")
+            return (
+                provider if isinstance(provider, str) else None,
+                model if isinstance(model, str) else None,
+            )
+
+        matching = [run for run in active_video if _signature(run) == affinity]
+        if not matching or _signature(active_video[0]) == affinity:
+            return queued
+        rest = [run for run in active_video if _signature(run) != affinity]
+        reordered_video = iter(matching + rest)
+        return [
+            next(reordered_video)
+            if run.get("resource_key") == "video" and run.get("attention_state", "active") == "active"
+            else run
+            for run in queued
+        ]
+
     def _work(self) -> None:
         while not self._stop.is_set():
             self._wake.wait(timeout=1)
             self._wake.clear()
             if self._stop.is_set():
                 return
-            for run in self.store.list_queued_runs():
+            fifo_queued = self.store.list_queued_runs()
+            first_fifo_video_id = next(
+                (
+                    run["id"]
+                    for run in fifo_queued
+                    if run.get("resource_key") == "video"
+                    and run.get("attention_state", "active") == "active"
+                ),
+                None,
+            )
+            for run in self._prioritize_queued_runs(fifo_queued):
                 if self._stop.is_set():
                     return
                 if run["status"] != "queued" or run.get("attention_state", "active") != "active":
@@ -1108,6 +1439,11 @@ class CanvasService:
                     claimed = self.store.claim_run(run["id"], owner_token=uuid.uuid4().hex)
                 except CanvasError:
                     continue
+                if claimed.get("resource_key") == "video":
+                    if first_fifo_video_id is not None and claimed["id"] != first_fifo_video_id:
+                        self._video_affinity_streak += 1
+                    else:
+                        self._video_affinity_streak = 0
                 worker = threading.Thread(
                     target=self._execute_in_worker, args=(claimed,), daemon=True
                 )

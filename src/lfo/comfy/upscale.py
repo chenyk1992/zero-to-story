@@ -22,8 +22,8 @@ SKILL_ROOT = Path(__file__).resolve().parents[3] / ".agents/skills/comfy-upscale
 MODEL_NAME = "seedvr2_3b_int8_convrot.safetensors"
 VAE_NAME = "seedvr2_ema_vae_fp16.safetensors"
 MAX_DURATION_SECONDS = 15.0
-MAX_WIDTH = 1920
-MAX_HEIGHT = 1080
+MAX_LONG_EDGE = 1944
+MAX_SHORT_EDGE = 1080
 
 
 def probe_video(path: Path) -> dict[str, Any]:
@@ -142,16 +142,12 @@ def normalize_snapshot(snapshot: dict[str, Any], *, probe_fn=None) -> dict[str, 
     if duration > MAX_DURATION_SECONDS:
         raise ValueError(f"单次超分最长支持 {MAX_DURATION_SECONDS:g} 秒；请在工作流内裁短片段")
 
-    width = _strict_int(_default_if_unset(params.get("target_width"), 1920), "target_width", minimum=2)
-    height = _strict_int(_default_if_unset(params.get("target_height"), 1066), "target_height", minimum=2)
-    if width > MAX_WIDTH or height > MAX_HEIGHT or width % 2 or height % 2:
-        raise ValueError(f"目标尺寸须为偶数且不超过 {MAX_WIDTH}×{MAX_HEIGHT}")
-    source_ratio = source["width"] / source["height"]
-    target_ratio = width / height
-    if abs(target_ratio / source_ratio - 1.0) > 0.002:
-        raise ValueError("目标尺寸需保持源视频画幅比例；请在后期补边")
-    if width < source["width"] or height < source["height"]:
-        raise ValueError("目标尺寸必须大于或等于源视频尺寸")
+    width, height = resolve_proportional_target_size(
+        source["width"],
+        source["height"],
+        target_width=params.get("target_width"),
+        target_height=params.get("target_height"),
+    )
 
     chunk_mode = _default_if_unset(params.get("chunk_mode"), "auto")
     if chunk_mode not in {"auto", "manual"}:
@@ -194,6 +190,58 @@ def _strict_int(value: Any, name: str, *, minimum: int) -> int:
 
 def _default_if_unset(value: Any, default: Any) -> Any:
     return default if value is None or value == "" else value
+
+
+def _round_even(value: float) -> int:
+    return max(2, int(round(value / 2.0)) * 2)
+
+
+def resolve_proportional_target_size(
+    source_width: int,
+    source_height: int,
+    *,
+    target_width: Any = None,
+    target_height: Any = None,
+) -> tuple[int, int]:
+    """Resolve an even, aspect-preserving target size within the bounded upscale envelope."""
+    has_width = target_width is not None and target_width != ""
+    has_height = target_height is not None and target_height != ""
+    if not has_width and not has_height:
+        max_w, max_h = (
+            (MAX_LONG_EDGE, MAX_SHORT_EDGE)
+            if source_width >= source_height
+            else (MAX_SHORT_EDGE, MAX_LONG_EDGE)
+        )
+        if source_width > max_w or source_height > max_h:
+            raise ValueError(
+                f"源视频尺寸（{source_width}×{source_height}）已超过当前超分上限（长边不超过 {MAX_LONG_EDGE}、短边不超过 {MAX_SHORT_EDGE}）"
+            )
+        if max_w / source_width <= max_h / source_height:
+            width = max_w
+            height = min(max_h, _round_even(max_w * source_height / source_width))
+        else:
+            height = max_h
+            width = min(max_w, _round_even(max_h * source_width / source_height))
+    elif has_width and not has_height:
+        width = _strict_int(target_width, "target_width", minimum=2)
+        height = _round_even(width * source_height / source_width)
+    elif has_height and not has_width:
+        height = _strict_int(target_height, "target_height", minimum=2)
+        width = _round_even(height * source_width / source_height)
+    else:
+        width = _strict_int(target_width, "target_width", minimum=2)
+        height = _strict_int(target_height, "target_height", minimum=2)
+
+    if max(width, height) > MAX_LONG_EDGE or min(width, height) > MAX_SHORT_EDGE or width % 2 or height % 2:
+        raise ValueError(f"目标尺寸须为偶数且长边不超过 {MAX_LONG_EDGE}、短边不超过 {MAX_SHORT_EDGE}")
+    source_ratio = source_width / source_height
+    target_ratio = width / height
+    ratio_tolerance = max(0.002, 1.0 / min(width, height) + 1e-6)
+    if abs(target_ratio / source_ratio - 1.0) > ratio_tolerance:
+        raise ValueError("目标尺寸须与源视频保持等比；留空将按源视频比例自动推算，不做非等比拉伸")
+    if width < source_width or height < source_height:
+        raise ValueError("目标尺寸必须大于或等于源视频尺寸")
+    return width, height
 
 
 def prepare_workflow(snapshot: dict[str, Any], upload_token: str, *, probe_fn=None) -> tuple[dict[str, Any], dict[str, Any]]:

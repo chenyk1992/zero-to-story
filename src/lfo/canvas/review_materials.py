@@ -48,7 +48,9 @@ def prepare_video_review(output: dict[str, Any], output_dir: Path) -> dict[str, 
             if isinstance(artifacts, dict) and all(isinstance(item, dict)
                    and Path(item["path"]).resolve().is_relative_to(root)
                    and _digest(Path(item["path"])) == item["sha256"]
-                   for item in artifacts.values()) and {"silent_video", "contact_sheet"} <= artifacts.keys():
+                   for item in artifacts.values()) and {
+                       "silent_video", "contact_sheet", "tail_frame", "tail_sheet"
+                   } <= artifacts.keys():
                 return {**receipt, "manifest_path": str(receipt_path)}
     except (OSError, ValueError, KeyError, TypeError):
         pass
@@ -57,18 +59,32 @@ def prepare_video_review(output: dict[str, Any], output_dir: Path) -> dict[str, 
         folder = Path(temporary)
         silent = folder / "silent.mp4"
         sheet = folder / "contact-sheet.jpg"
+        tail_frame = folder / "tail-frame.png"
+        tail_sheet = folder / "tail-sheet.jpg"
         result = run_command([
             os.environ.get("LFO_FFMPEG") or "ffmpeg", "-v", "error", "-xerror",
             "-i", str(source), "-filter_complex",
-            f"[0:v:0]split=2[full][sample];[sample]fps={5/duration:.12f},"
-            "scale=240:-2,tile=5x1:nb_frames=5[sheet]",
+            f"[0:v:0]split=4[full][sample][tail][tstrip];[sample]fps={5/duration:.12f},"
+            "scale=240:-2,tile=5x1:nb_frames=5[sheet];"
+            "[tstrip]scale=240:-2,tile=3x1:init_padding=2:overlap=2[ts]",
             "-map", "[full]", "-map", "0:a?", "-progress", "pipe:1", "-nostats",
             "-f", "null", "-", "-map", "[sheet]", "-frames:v", "1", str(sheet),
+            "-map", "[tail]", "-fps_mode", "passthrough", "-update", "1", str(tail_frame),
+            "-map", "[ts]", "-fps_mode", "passthrough", "-update", "1", str(tail_sheet),
             "-map", "0:v:0", "-c:v", "copy", "-an", "-movflags", "+faststart", str(silent),
         ], timeout_s=120)
         frames = [int(line.partition("=")[2].strip()) for line in result.stdout.splitlines()
                   if line.startswith("frame=") and line.partition("=")[2].strip().isdigit()]
-        if not frames or max(frames) <= 0 or not silent.is_file() or not sheet.is_file():
+        if (
+            not frames
+            or max(frames) <= 0
+            or not silent.is_file()
+            or not sheet.is_file()
+            or not tail_frame.is_file()
+            or not tail_frame.stat().st_size
+            or not tail_sheet.is_file()
+            or not tail_sheet.stat().st_size
+        ):
             raise ValueError("待审视频未完整解码或未产生检查材料")
         if _digest(source) != source_hash:
             raise ValueError("准备待审材料期间原视频发生变化")
@@ -76,7 +92,12 @@ def prepare_video_review(output: dict[str, Any], output_dir: Path) -> dict[str, 
         published = root / (folder.name + "-ready")
         published.mkdir()
         artifacts = {}
-        for key, file in (("silent_video", silent), ("contact_sheet", sheet)):
+        for key, file in (
+            ("silent_video", silent),
+            ("contact_sheet", sheet),
+            ("tail_frame", tail_frame),
+            ("tail_sheet", tail_sheet),
+        ):
             destination = published / file.name
             file.replace(destination)
             artifacts[key] = {"path": str(destination), "sha256": _digest(destination)}
@@ -87,7 +108,7 @@ def prepare_video_review(output: dict[str, Any], output_dir: Path) -> dict[str, 
         "metadata": metadata, "decode_verified": True, "decoded_frames": max(frames),
         "artifacts": artifacts, "elapsed_seconds": time.perf_counter() - started,
         "content_review": "NOT_REVIEWED",
-        "note": "技术解码和抽样材料不代表连续视听或内容采用；原片保留，候选仅移除音轨。",
+        "note": "技术解码、抽样与末帧候选不代表连续视听或内容采用；未 ACCEPT 前不可向下游绑定尾帧。",
     }
     pending = root / (published.name + ".json")
     pending.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

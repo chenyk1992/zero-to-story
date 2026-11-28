@@ -38,6 +38,14 @@ def test_preparation_preserves_original_and_stream_and_reuses_verified_receipt(c
     assert receipt["status"] == "ready" and receipt["decoded_frames"] == 24
     assert receipt["decode_verified"] and receipt["content_review"] == "NOT_REVIEWED"
     silent = Path(receipt["artifacts"]["silent_video"]["path"])
+    tail_frame = Path(receipt["artifacts"]["tail_frame"]["path"])
+    tail_sheet = Path(receipt["artifacts"]["tail_sheet"]["path"])
+    assert {"silent_video", "contact_sheet", "tail_frame", "tail_sheet"} <= receipt["artifacts"].keys()
+    assert tail_frame.is_file() and tail_sheet.is_file()
+    expected_tail = clip.parent / "expected_tail.png"
+    run_command(["ffmpeg", "-v", "error", "-i", str(clip), "-vf", "select=eq(n\\,23)",
+                 "-frames:v", "1", str(expected_tail)])
+    assert tail_frame.read_bytes() == expected_tail.read_bytes()
     assert probe(silent)["has_audio"] is False
     def video_hash(path):
         return run_command(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0",
@@ -51,6 +59,18 @@ def test_preparation_preserves_original_and_stream_and_reuses_verified_receipt(c
     json.dumps(receipt)  # persisted metadata must not contain circular references
 
 
+def test_preparation_handles_single_frame_clip(tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("real FFmpeg is required for media integration")
+    single = tmp_path / "single.mkv"
+    run_command(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=24",
+                 "-frames:v", "1", "-c:v", "ffv1", str(single)])
+    receipt = prepare_video_review(_output(single), tmp_path)
+    assert receipt["status"] == "ready" and receipt["decoded_frames"] == 1
+    assert Path(receipt["artifacts"]["tail_frame"]["path"]).is_file()
+    assert Path(receipt["artifacts"]["tail_sheet"]["path"]).is_file()
+
+
 def test_tampered_candidate_is_repaired_but_changed_source_is_rejected(clip):
     output = _output(clip)
     first = prepare_video_review(output, clip.parent)
@@ -59,6 +79,11 @@ def test_tampered_candidate_is_repaired_but_changed_source_is_rejected(clip):
     repaired = prepare_video_review(output, clip.parent)
     assert repaired["artifacts"] != first["artifacts"]
     assert old_sheet.read_bytes() == b"damaged preview"  # never replace shown files
+    repaired_tail = Path(repaired["artifacts"]["tail_frame"]["path"])
+    repaired_tail.write_bytes(b"damaged tail")
+    repaired_again = prepare_video_review(output, clip.parent)
+    assert repaired_again["artifacts"] != repaired["artifacts"]
+    assert repaired_tail.read_bytes() == b"damaged tail"
     clip.write_bytes(clip.read_bytes() + b"changed")
     with pytest.raises(ValueError, match="摘要不一致"):
         prepare_video_review(output, clip.parent)

@@ -1,0 +1,167 @@
+{
+  "id": "aistudio-image",
+  "label": "Google AI Studio 生图（Nano Banana）",
+  "node_types": [
+    "image"
+  ],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": [
+    "aistudio2api",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "aistudio-image",
+    "capacity": 2
+  },
+  "models": [
+    {
+      "id": "gemini-nano-banana-2.1",
+      "label": "Nano Banana 2.1（推荐）"
+    },
+    {
+      "id": "gemini-3-pro-image",
+      "label": "Nano Banana Pro"
+    },
+    {
+      "id": "gemini-nano-banana-2.1-search",
+      "label": "Nano Banana 2.1 · 联网增强"
+    },
+    {
+      "id": "gemini-3-pro-image-search",
+      "label": "Nano Banana Pro · 联网增强"
+    }
+  ],
+  "modes": [
+    {
+      "id": "create",
+      "label": "文生图"
+    },
+    {
+      "id": "reference",
+      "label": "图片参考生成"
+    },
+    {
+      "id": "edit",
+      "label": "图片编辑"
+    }
+  ],
+  "fields": [
+    {
+      "key": "aspect_ratio",
+      "label": "画幅比例",
+      "type": "select",
+      "group": "specs",
+      "required": false,
+      "options": [
+        {
+          "value": "1:1",
+          "label": "1:1"
+        },
+        {
+          "value": "2:3",
+          "label": "2:3"
+        },
+        {
+          "value": "3:2",
+          "label": "3:2"
+        },
+        {
+          "value": "3:4",
+          "label": "3:4"
+        },
+        {
+          "value": "4:3",
+          "label": "4:3"
+        },
+        {
+          "value": "4:5",
+          "label": "4:5"
+        },
+        {
+          "value": "5:4",
+          "label": "5:4"
+        },
+        {
+          "value": "9:16",
+          "label": "9:16"
+        },
+        {
+          "value": "16:9",
+          "label": "16:9"
+        },
+        {
+          "value": "21:9",
+          "label": "21:9"
+        }
+      ]
+    },
+    {
+      "key": "resolution",
+      "label": "输出分辨率",
+      "type": "select",
+      "group": "specs",
+      "required": false,
+      "options": [
+        {
+          "value": "1K",
+          "label": "1K"
+        },
+        {
+          "value": "2K",
+          "label": "2K（默认）"
+        },
+        {
+          "value": "4K",
+          "label": "4K"
+        }
+      ]
+    }
+  ],
+  "input_rules": {
+    "create": {
+      "allowed": []
+    },
+    "reference": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 14
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    },
+    "edit": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 14
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    }
+  }
+}

@@ -10,9 +10,9 @@
 
 MCP `canvas_read` 默认返回分页概览，每页默认 50、最多 100 个节点，不返回长正文和历史。后续页带首读版本 `expected_version`，版本变化后重读目录；`node_ids` 一次精读最多 20 个目标及其直接上游，`view="full"` 显式读取整图。MCP `canvas_edit` 默认仅返回版本和改动回执，必要时用 `full=True`；HTTP 页面保存仍返回完整画布。每次接续先用 `canvas_next` 读取当前会话的少量待办，优先处理已经完成的结果，再精读本批节点。
 
-R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序。项目 `scripts/r2v_wire.py` 要求显式画布 ID，冲突即停止保存；替换图片引用时保留其他组件、视口、选择和工作空间信息。`related` 不参与生成。
+R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序；替换图片引用时使用版本化 `edit`（`disconnect` 旧边后 `connect` 新边），保留其他组件、视口、选择、首帧连线和工作空间信息。`related` 不参与生成。
 
-查看原运行使用 `python -m lfo.canvas call GET /api/runs/<run_id>`；修改提示词使用版本化 `edit` 的 `update_node` 操作，不再复制章节专用提交脚本。审片辅助使用 `scripts/qc_video.py <video> <新的输出目录>` 提取抽样帧和响度；它不作内容判断，不记录 ACCEPT，不提取接力尾帧。
+查看原运行使用 `python -m lfo.canvas call GET /api/runs/<run_id>`；修改提示词使用版本化 `edit` 的 `update_node` 操作，不再复制章节专用提交脚本。
 
 精读节点响应的 `production` 已包含目标节点 readiness 和最新运行摘要；`canvas_next` 的 review 动作也带 `run` 摘要和实际输出，可直接使用，只有需要冻结快照/原始证据时再读完整 run。每次接续只以 Canvas 当前结果为状态来源，不手工同步另一份运行状态。只读素材核对复用文件身份、大小、修改/变更时间相同的哈希结果；确认冻结和实际执行仍对字节重新核实，不用缓存 readiness 代替授权或采用检查。
 
@@ -20,13 +20,13 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 
 旧节点可显式保存 `data.superseded_by=<新节点id>`，供接续摘要识别已处理历史候选。只有旧 run 已成功且 review 为 REJECT/INCONCLUSIVE、范围内同类型替代节点已 ACCEPT、且无显式执行单元阻塞时，旧候选标为完成并保留替代说明；不删除历史、不修改旧 review、不重绑下游引用，也不跳过 running/unknown。下游采用仍按原来源端口与实际文件核对。
 
-已 ACCEPT 的视频需要下一镜首帧时，从项目根运行：
+已 ACCEPT 的视频需要下一镜首帧时，优先使用单步原子工具 `canvas_bind_accepted_tail(canvas_id, source_run_id, target_node_id, expected_version)`（HTTP `POST /api/canvases/{id}/bind-accepted-tail`）：它在单次版本锁定事务中复用或解码真实尾帧、写入源节点 `data.derived_outputs` 并绑定 `source_run_id` / `require_accept: true` 到目标 `first_frame`（自动替换旧首帧边、保留其他边与已有 `derived_outputs`，且绝不自动提交生成）。若需分步手动操作，也可运行：
 
 ```powershell
 ./.venv/Scripts/python.exe scripts/accepted_tail.py <run_id>
 ```
 
-工具读取当前运行与采用摘要，完整解码并在该 run 输出目录创建唯一真实尾帧；不提交生成、不自动连线。将返回项追加到源视频节点 `data.derived_outputs`，保留既有项；源边使用 `sourceHandle: "output:<返回的 id>"`，并设置 `source_run_id` 与 `require_accept: true`，连接目标 `first_frame`。保存仍使用最新版本。再次确认时画布核实尾帧及采用源文件摘要；禁止用普通资产边绕过采用来源检查。
+工具读取当前运行与采用摘要，完整解码并在该 run 输出目录创建唯一真实尾帧；不提交生成、不自动连线。将返回项追加到源视频节点 `data.derived_outputs`，保留既有项；源边使用 `sourceHandle: "output:<返回的 id>"`，并设置 `source_run_id` 与 `require_accept: true`，连接目标 `first_frame`。保存仍使用最新版本。再次确认时画布核实尾帧及采用源文件摘要；禁止用普通资产边绕过采用来源检查。多个独立就绪且已获明确授权的节点可使用 `canvas_execute_batch(canvas_id, version, items)`（HTTP `POST /api/canvases/{id}/runs/batch`）完成全量预检与原子批量确认，任一项预检失败则整批不落库。
 
 优先使用项目 MCP `story_canvas` 的工具。若当前会话尚未加载新增工具，从项目根用 `.venv/Scripts/python.exe -m lfo.canvas open` 启动/找到页面，使用 `python -m lfo.canvas call METHOD /api/... --body-file <JSON文件>` 调用相同服务。这里的 python 指项目解释器；临时 JSON 放系统临时目录，避免占用创作工作区。
 
@@ -41,7 +41,9 @@ R2V 图片顺序等于实际 `reference_image` 边顺序与 `<Picture N>` 顺序
 | 精读多个节点 | GET /api/canvases/{id}?node_ids={id1}&node_ids={id2}；最多 20 个目标及直接上游 |
 | 保存配置 | PUT /api/canvases/{id}，正文 version、graph、可选 name |
 | 导入本地媒体 | POST /api/assets/import，正文 path |
+| 原子绑定采用尾帧 | POST /api/canvases/{id}/bind-accepted-tail，正文 `source_run_id`、`target_node_id`、`expected_version`，可选 `edge_id`、`full` |
 | 确认生成 | POST /api/canvases/{id}/runs，正文 node_id、version、request_id |
+| 原子批量确认生成 | POST /api/canvases/{id}/runs/batch，正文 version、`items:[{node_id,request_id}]` |
 | 查询结果/待办 | GET /api/runs 或 GET /api/canvases/{id}/runs |
 | 领取 Agent 请求 | POST /api/runs/{id}/claim，正文 `host_tools:[当前会话实际工具标签]` |
 | 回填结果 | POST /api/runs/{id}/complete，正文 `owner_token`、`status`、`outputs`，可选 `error`、`provider_task_id`、`stage`、`evidence` |

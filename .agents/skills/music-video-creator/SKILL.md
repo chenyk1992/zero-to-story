@@ -10,9 +10,9 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱；为MV结合�
 ## 先按交付范围选择
 
 - 只写歌词：按[音乐方向](references/music-direction.md)交付文本并停止，不生成音频或安排镜头。
-- 只要歌曲或器乐：准备音乐输入，经 Canvas 授权执行后交付实际音频和听审结论，不进入 MV 视觉阶段。
-- 独立歌曲驱动MV：使用下面六阶段，复用已有歌曲与采用证据。
-- 广告主题曲只要音频：本Skill完成音乐/听审即停止。完整歌曲形式广告由[广告入口](../advertising-creator/SKILL.md)统筹，本Skill仅返回限定音乐成果/实际采用版本与窗口，不建立全片mv_plan/整曲预览。现有MV仅加赞助落版保持MV主责。
+- 只要歌曲或器乐：准备音乐输入，经 Canvas 授权执行后，按[音乐协作与独立听审](references/music-collaboration.md)检查实际音频并交付，止于音频。
+- 独立歌曲驱动MV：使用下面六阶段，按[分阶段协作](references/music-collaboration.md)组织当前单元与独立审核，复用已有歌曲与采用证据。
+- 广告主题曲只要音频：本Skill完成音乐/听审即停止。完整歌曲形式广告由[广告入口](../advertising-creator/SKILL.md)统筹，本Skill仅返回限定音乐成果、实际采用版本与窗口；有可见演唱时按[音乐广告交接](../advertising-creator/references/production-handoff.md#音乐广告)提供实际逐句时序与声源依据，不建立全片mv_plan/整曲预览。现有MV仅加赞助落版保持MV主责。
 - 已锁定画面的配乐：由原故事/视频流程保持画面与声音时点，只复用[锁定画面配乐](references/music-direction.md#锁定画面配乐)，不改为歌曲主导的 MV。
 
 ## 多人音乐
@@ -30,7 +30,7 @@ description: 创作歌词、歌曲或器乐，支持多人轮唱；为MV结合�
 3. 按[MV 导演方法](references/mv-direction.md)决定声音事件是否需要画面响应，安排表演、意象、剧情与文字的全曲发展；按下方路线读取对应方法，建立文字系统，与人物/环境美术并行。未核对的事件保持候选，可用于暂定样式探索，不能作为精确歌词、口型或镜内卡点的采用依据；缺口只影响依赖该事件的镜头。
 4. 把成片 Shot 映射到歌曲时间段，写明唱词、动作、运镜、文字事件及转场，再安排生成 Panel 和[视觉资产](references/visual-assets.md)。人物含跨镜配角按[固定文字与跨模式规则](../zero-to-story/references/creative-assets.md#人物与场景文本锚点)记录在本片计划；完整贴字/文字主导拼贴路线落实所需独立样式卡、空间卡，人物图按用途选择。确需完整人物图时使用[完整人物模板](assets/character_reference.template.md)，保留单角色16:9三视图与1–2张半身变化，不因登记角色自动生图，无人物不造人物卡。具体歌词图与镜头构图共同设计，再制作精确首帧或绑定普通 R2V。用[创作计划模板](assets/mv_plan.template.md)记录，先验证代表乐句的构图、文字和真实输入，再扩展同类镜头。
 5. 对已确定的 Panel 按[生产交接](references/production-handoff.md)交给 [H3](../h3-prompt-writing/SKILL.md)定稿，将全片脚本/版本映射和逐 Panel 完整提示词保存到 Canvas，再经 [canvas-workspace](../canvas-workspace/SKILL.md)处理已授权运行。
-6. 用户要求成片时，围绕主歌曲完成[后期与成片验收](references/finishing-and-review.md)：采用窗口的粗剪、准确歌词、必要音效、一次完整视听检查。
+6. 用户要求成片时，围绕主歌曲完成[后期与成片验收](references/finishing-and-review.md)：采用窗口的粗剪、准确歌词、必要音效、成片独立观察及完整视听检查。
 
 局部交付完成所需阶段。`mv_plan.md` 持有创作事实，音乐时间轴和最终编辑清单绑定媒体版本，Canvas 持有运行与采用状态。
 

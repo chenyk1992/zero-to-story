@@ -646,3 +646,37 @@ def test_empty_scope_and_scope_cannot_be_widened_by_continuation() -> None:
     assert summary["scope_node_ids"] == ["video-b"]
     assert summary["run_counts"]["total"]["value"] == 0
     assert summary["timings"]["timeline_elapsed"]["state"] == "unknown"
+
+
+def test_story_edit_manifest_counts_accepted_and_partial_sources() -> None:
+    runs = [
+        _reviewed_source("accepted-1", r"E:\media\s1.mp4", "a" * 64, node_id="video-a"),
+        _reviewed_source("rejected-2", r"E:\media\s2.mp4", "b" * 64, node_id="video-b", decision="REJECT"),
+    ]
+    manifest = {
+        "schema": "lfo.story.edit.v1",
+        "canvas_id": CANVAS,
+        "segments": [
+            {
+                "shot_id": "S1",
+                "node_id": "video-a",
+                "run_id": "accepted-1",
+                "path": r"E:\media\s1.mp4",
+                "sha256": "a" * 64,
+            },
+            {
+                "shot_id": "S2",
+                "node_id": "video-b",
+                "run_id": "rejected-2",
+                "path": r"E:\media\s2.mp4",
+                "sha256": "b" * 64,
+            },
+        ],
+        "image_overlays": [],
+    }
+    summary = summarize_production(runs, [], canvas_id=CANVAS, edit_manifest=manifest)
+    assert summary["production_counts"]["segments"]["value"] == 2
+    assert summary["production_counts"]["segments"]["state"] == "observed"
+    accepted = summary["production_counts"]["accepted_sources"]
+    assert accepted["value"] == 1
+    assert accepted["state"] == "partial"

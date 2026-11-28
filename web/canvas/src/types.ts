@@ -243,6 +243,13 @@ export interface ContinuationPlanSummary {
   stop_attempts?: number;
 }
 
+export interface ContinuationSupport {
+  level: 'manual_batch' | 'hook_guarded' | 'scheduled_wakeup' | string;
+  label: string;
+  observed_events: string[];
+  note?: string;
+}
+
 /** Public, read-only shape consumed by the canvas status widget. */
 export interface ContinuationPlan {
   id: string;
@@ -252,12 +259,14 @@ export interface ContinuationPlan {
   state: ContinuationPlanState;
   revision: number;
   summary: ContinuationPlanSummary;
+  continuation_support?: ContinuationSupport;
   updated_at?: string;
   [key: string]: unknown;
 }
 
 export interface ContinuationsResponse {
   plans: ContinuationPlan[];
+  continuation_support?: ContinuationSupport;
 }
 
 export interface ProductionCountMetric {

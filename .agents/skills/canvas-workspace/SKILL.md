@@ -54,7 +54,7 @@ Agent 型宿主媒体的单项回执、错误归属与回填中断处理见[执�
 
 长视频先建立章节/场景索引，将已确认范围按当前制作批次推进，而非把全部提示词和所有历史常驻对话。常规批次先调用 `canvas_next(canvas_id, session_id)`：默认最多 6 个动作，先处理已返回单元和实际媒体；review 动作内的 `run` 已含紧凑运行/输出/待审材料，无需再读相同 run；还有工作时计数保留，处理后重读下一批。它只检查当前会话已登记范围，不授权、不生成、不恢复暂停。授权原文或完整单元绑定需要时再读原接续接口。
 
-视频回填后服务自动在原 run 目录准备 `*.review-materials.json`、同视频流无声候选和抽样图，结果位于输出 `metadata.review_materials`；完整技术解码通过也仍为 `NOT_REVIEWED`，不能自动 ACCEPT。先复用已有材料，不为相同文件重复解码/导出；准备失败单独显示，原生成结果保留，不因此重提生成。采用时仍由 review 绑定实际检查的文件和哈希。明确替代旧候选时，可在旧节点记录 `data.superseded_by`；只有范围内同类型替代节点已 ACCEPT，旧 REJECT/INCONCLUSIVE 才退出阻塞，原记录保留，运行中或 unknown 不得跳过。
+视频回填后服务自动在原 run 目录准备 `*.review-materials.json`、同视频流无声候选、抽样图、末3帧连拍条和精确末帧候选，结果位于输出 `metadata.review_materials`；完整技术解码通过也仍为 `NOT_REVIEWED`，不能自动 ACCEPT，未 ACCEPT 前不可向下游绑定尾帧。先复用已有材料，不为相同文件重复解码/导出；`ACCEPT` 后提取真实尾帧时若未篡改的 `tail_frame` 已就绪可直接复用，避免二次解码。准备失败单独显示，原生成结果保留，不因此重提生成。采用时仍由 review 绑定实际检查的文件和哈希。明确替代旧候选时，可在旧节点记录 `data.superseded_by`；只有范围内同类型替代节点已 ACCEPT，旧 REJECT/INCONCLUSIVE 才退出阻塞，原记录保留，运行中或 unknown 不得跳过。
 
 单次接续范围最多 256 个媒体节点，较大的项目按章节或场景批次登记。处理完的节点可在最新 `revision` 下移出当前范围；仍运行或结果未处理的单元保持在范围内。已有运行和采用结论留在原节点/原 run，不复制到主会话历史。属于具体场景的辅助单元绑定该 `node_id`，避免把所有章节的交接记录积累为全局单元。
 
@@ -63,6 +63,8 @@ Agent 型宿主媒体的单项回执、错误归属与回填中断处理见[执�
 用户要求完整视频时，使用已接受的 Canvas 输出做顺序连接、裁切、音频和字幕等确定性后期，交付前检查实际最终文件，按需读[视频验收](../zero-to-story/references/video-qc.md)。
 
 独立后期工具不自动继承 Canvas 输入的采用检查。调用方在正式后期交接前读取当前 run.review，核对 ACCEPT、`output_path`、`output_sha256` 与实际文件，采用 review 指向的版本（run_id 与渲染成功本身不构成采用依据，见[素材就绪形态](../../../guides/ai-system-prompt.md#素材就绪形态按真实状态不按节点存在)）。MV 的音乐版本与声音处理按[后期交接](../music-video-creator/references/finishing-and-review.md)核对。
+
+粗剪中单人或双人小脸影响身份或关键表情时，按[局部修脸交接](references/creative-handoff.md#粗剪审片中的局部修脸)处理授权范围内的局部派生候选。
 
 片段派生版按[采用版本与后期](references/creative-handoff.md#采用版本与后期)走合法入口：首次待审、INCONCLUSIVE 重开、REJECT 派生审片分别处理，不替换已 ACCEPT 原 run。成片后期保留源 review，放 `projects/<project_id>/final` 并检查实际成片。改绑已 ACCEPT Panel/尾帧版当前不支持，报告缺口并停相关续接。只有当前采用版 ACCEPT 且下游需要时才提取真实尾帧，不用普通资产边绕过来源。
 

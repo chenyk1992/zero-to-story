@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><title>motion-kit preview</title>
+<style>html,body{margin:0;background:#000;color:#ccc;font:13px sans-serif}canvas{display:block;width:100vw;max-width:1280px}#bar{padding:6px 10px}a{color:#D9B46A;margin-right:12px}</style>
+</head><body>
+<div id="bar"><a href="?scene=coin">coin → dot → curve</a><a href="?scene=brake">foot → pedal → master cylinder → wheel</a>
+  <span>Plays at the target fps from absolute time. Add &amp;t=2.4 to freeze a frame, &amp;fps=30 to change rate.</span></div>
+<canvas id="c" width="1280" height="720"></canvas>
+<script src="./motion.js"></script><script src="./examples.js"></script>
+<script>
+const q = new URLSearchParams(location.search), S = MotionExamples[q.get('scene') || 'coin'], FPS = +(q.get('fps') || 24);
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+// Every frame is drawn from t alone, so playing, scrubbing and random seeks show the same picture.
+// Reset ALL context state (dash, alpha, font, transform...) each frame: leaked state breaks random seeks.
+window.renderAt = t => { if (ctx.reset) ctx.reset(); ctx.save(); S.draw(ctx, t, cv.width, cv.height); ctx.restore(); return cv.toDataURL('image/png'); };
+// Determinism is judged on state(t) (exact) — pixels may differ by anti-aliasing on a first dashed/
+// blurred stroke in Chromium; treat thin sub-pixel differences as tolerance, not as hidden state.
+window.filmReady = true;
+if (q.has('t')) window.renderAt(+q.get('t'));
+else { const t0 = performance.now(); (function loop(now) { const e = ((now - t0) / 1000) % S.duration; window.renderAt(Math.floor(e * FPS) / FPS); requestAnimationFrame(loop); })(t0); }
+</script></body></html>

@@ -26,6 +26,8 @@ export interface ContinuationItem {
   details?: string[];
   progress?: string | null;
   stopAttempts?: number;
+  supportLabel?: string | null;
+  supportNote?: string | null;
   updatedAt?: string | null;
 }
 
@@ -238,6 +240,7 @@ export function ContinuationStatus({ state, summary, productionSummary, onRefres
                     <div className="continuation-item-metrics"><span>待处理 <b>{metric(item.pendingCount)}</b></span><span>阻塞 <b>{metric(item.blockedCount)}</b></span>{item.progress && <span>进度 <b>{item.progress}</b></span>}</div>
                     {item.progressStalled && <p className="continuation-warning" role="status"><Icon name="alert" size={12} />进展停滞，需要主会话处理</p>}
                     {item.reason && <p className="continuation-reason">{item.reason}</p>}
+                    {item.supportLabel && <p className="continuation-updated">接续保障：<b>{item.supportLabel}</b>{item.supportNote ? ` · ${item.supportNote}` : ''}</p>}
                     {item.stopAttempts !== undefined && item.stopAttempts > 0 && <p className="continuation-updated">连续等待处理 {metric(item.stopAttempts)} 次</p>}
                     {item.details && item.details.length > 0 && <ul className="continuation-detail-list">{item.details.map((detail, index) => <li key={`${item.id}-detail-${index}`}>{detail}</li>)}</ul>}
                     {formatUpdatedAt(item.updatedAt) && <time className="continuation-updated" dateTime={item.updatedAt || undefined}>最近更新 {formatUpdatedAt(item.updatedAt)}</time>}

@@ -1,0 +1,25 @@
+{
+  "repository": "https://github.com/threeaus/creator-style-kit",
+  "commit": "6aeb1ba22913dbc75b3dea0f9e131cfa78422504",
+  "retrieved": "2026-10-21",
+  "files_sha256": {
+    "references/styles/bauhaus-geometry/style.yaml": "07615d04d72eda51e045db91dd9f7501b081e35122e4cc22e63d1dd17048bd5c",
+    "references/styles/benchmark-hud/style.yaml": "c63313570b7c8a2f2c10af2666a51f7e0030a52aa1c2e7a69735d41f8e019b29",
+    "references/styles/blueprint/style.yaml": "71692e48cca12f72ddca5b48f3fe3a8d5dcc160cc73a4ee0a05132e2b07613d2",
+    "references/styles/clay-serif/style.yaml": "dc1daa1e4e21651e48f27e3f60e41254bf5b2fbd5e672d825b993e76b240d266",
+    "references/styles/dark-keynote/style.yaml": "bbdd1a9f4d98a02fc0dab386a4b23f88555b115461b7596ee07c295e3d53037d",
+    "references/styles/data-journal/style.yaml": "2b0d1646ba0fbac9560bdf08499ea9569623bc568d51f37b58b088d24c359dd9",
+    "references/styles/dev-console/style.yaml": "1a7e7b44142e99cad8a611ea031841eef126bc4fd246944ebaee1c95b66c2885",
+    "references/styles/editorial-paper/style.yaml": "0f531b1c1a4742cee76c6215abf3ae890a72864f2075d56f43480e8fed8b5a42",
+    "references/styles/frosted-aurora/style.yaml": "96a84ca574b1ac733e96e0ae4c4cd292c339973b7018d104c32906ebabe8bfaf",
+    "references/styles/ink-wash/style.yaml": "89251579bfc2b60702d7d3e194163ab8537b1eadc7ce7a0f2fa137cc5e9aebe5",
+    "references/styles/instrument-panel/style.yaml": "346be3254fb164ed19ebca9c41c5288ab67945a867e693f436bc55eb0819dc4e",
+    "references/styles/isometric-stack/style.yaml": "de49ef6d8d4874398f237ee8f13faf161d0f984f92ef514f75bc1d6a5cdc058a",
+    "references/styles/manim-morph/style.yaml": "d0b3af4dabd678fab2a40a0146b26c039e8b0cc79d49aed3cfdf230f9756b55d",
+    "references/styles/paper-figure/style.yaml": "5732d8e93b34ce8aab35885afef53805d609b842dda119d79f3af4f36443d27f",
+    "references/styles/particle-field/style.yaml": "e809b0d661f1d5072374defe013f670fcf23c3922c6a0ae488aa5cceb735fb0d",
+    "references/styles/poster-kinetic/style.yaml": "d1d87eeddc96434cf5b839fdb5f5f1dcf8e84f764a9d7a7f2298be1e49124f9f",
+    "references/styles/swiss-grid/style.yaml": "3a1596eabd89853ebdf49d36143ca7238aedf1ec17d2df8d8e62cbfc68a544a4",
+    "references/styles/warm-notebook/style.yaml": "12fbd2f7bb380168168f9949dfd13d060f4cf3d697d4c50e1ac6d8d02a54d5cf"
+  }
+}

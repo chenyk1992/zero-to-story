@@ -43,6 +43,15 @@ MEDIA_MIME_TYPES = {
 }
 
 
+class MiMoResponseError(RuntimeError):
+    """Keep a safe diagnostic separate from the provider response text."""
+
+    def __init__(self, category: str, message: str, *, http_status: int | None = None):
+        super().__init__(message)
+        self.category = category
+        self.http_status = http_status
+
+
 def is_url(path: str) -> bool:
     return path.startswith(("http://", "https://"))
 
@@ -236,24 +245,30 @@ def _analyze_media(
             body = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"MiMo {media_type} API HTTP {exc.code}: {error_body}") from exc
+        raise MiMoResponseError(
+            "http_error", f"MiMo {media_type} API HTTP {exc.code}: {error_body}",
+            http_status=exc.code,
+        ) from exc
 
     parsed = json.loads(body)
     result = extract_message_text(parsed)
     finish_reason = (parsed.get("choices") or [{}])[0].get("finish_reason")
     if finish_reason == "length":
-        raise RuntimeError(
+        raise MiMoResponseError(
+            "truncated_response",
             f"MiMo {media_type} API response was truncated; finish_reason=length. "
             "Disable thinking, shorten the prompt/media, or increase --max-tokens "
             "before explicitly running again. No output file was written."
         )
     if finish_reason != "stop":
-        raise RuntimeError(
+        raise MiMoResponseError(
+            "nonterminal_response",
             f"MiMo {media_type} API response did not finish normally; "
             f"finish_reason={finish_reason}. No output file was written."
         )
     if not result.strip():
-        raise RuntimeError(
+        raise MiMoResponseError(
+            "empty_answer",
             f"MiMo {media_type} API returned no final answer"
             + (f"; finish_reason={finish_reason}" if finish_reason else "")
             + ". No output file was written."

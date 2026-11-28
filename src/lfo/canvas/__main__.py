@@ -25,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     call.add_argument("method", choices=["GET", "POST", "PUT", "DELETE"])
     call.add_argument("path")
     call.add_argument("--body-file", type=Path)
+    gc_cmd = commands.add_parser("gc", help="只读诊断或清理工作区未被引用的孤儿临时目录")
+    gc_cmd.add_argument("--apply", action="store_true", help="显式确认删除已扫描出的孤儿运行/临时目录")
+    gc_cmd.add_argument("--min-age-seconds", type=float, default=3600.0, help="仅扫描或清理超过指定秒数的孤儿目录")
     args = parser.parse_args(argv)
     settings = CanvasSettings.resolve(args.project, args.data_dir, args.media_root, args.port)
     try:
@@ -38,6 +41,13 @@ def main(argv: list[str] | None = None) -> int:
             create_mcp(settings).run(transport="stdio")
         elif args.command == "open":
             print(json.dumps({"url": CanvasClient(settings).ensure_server()}, ensure_ascii=False))
+        elif args.command == "gc":
+            from lfo.canvas.gc import inspect_and_clean_workspace
+
+            report = inspect_and_clean_workspace(
+                settings, apply=bool(args.apply), min_age_seconds=float(args.min_age_seconds)
+            )
+            print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             body = (
                 json.loads(args.body_file.read_text(encoding="utf-8-sig"))

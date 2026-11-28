@@ -63,6 +63,20 @@ class CapabilityCatalog:
                                 reason=f"本机 Comfy MCP 未就绪：{exc}",
                             )
                         continue
+                    if executable == "aistudio2api":
+                        try:
+                            from lfo.aistudio.client import (
+                                load_runtime_config as load_aistudio_config,
+                            )
+
+                            load_aistudio_config()
+                        except (OSError, ValueError, RuntimeError) as exc:
+                            item.update(
+                                installed=False,
+                                available=False,
+                                reason=f"本机 AIStudio2API 未就绪：{exc}",
+                            )
+                        continue
                     override_name = {
                         "ffprobe": "LFO_FFPROBE",
                         "ffmpeg": "LFO_FFMPEG",

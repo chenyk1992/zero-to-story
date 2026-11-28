@@ -476,6 +476,138 @@ class CanvasStore:
         assert row is not None
         return self._run_from_row(row)
 
+    def create_runs_batch(
+        self, items: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Atomically create multiple immutable run intents in one transaction."""
+
+        if isinstance(items, (str, bytes, bytearray)) or not isinstance(items, Sequence) or not items:
+            raise CanvasStoreError("batch items must be a non-empty array", code="batch_items_type", status=400)
+
+        prepared: list[tuple[str, str, str, int, str, str, str, str, str, int]] = []
+        seen_requests: set[str] = set()
+        now = _now()
+        for item in items:
+            if not isinstance(item, Mapping):
+                raise CanvasStoreError("each batch item must be an object", code="batch_item_type", status=400)
+            canvas_id = _require_id(item.get("canvas_id"), "canvas_id")
+            node_id = _require_id(item.get("node_id"), "node_id")
+            expected_version = _require_version(item.get("expected_version"))
+            request_id = _require_request_id(item.get("request_id"))
+            if request_id in seen_requests:
+                raise RequestConflictError(request_id)
+            seen_requests.add(request_id)
+            status = _require_status(item.get("status", "queued"))
+            snapshot_json = _dump_snapshot(item.get("snapshot"))
+            resolved_key, resolved_cap = _resolve_resource(
+                item.get("resource_key"), item.get("resource_capacity")
+            )
+            prepared.append(
+                (
+                    str(uuid4()),
+                    request_id,
+                    canvas_id,
+                    node_id,
+                    expected_version,
+                    status,
+                    snapshot_json,
+                    _default_stage(status),
+                    resolved_key,
+                    resolved_cap,
+                )
+            )
+
+        with self._lock, self._transaction():
+            canvas_cache: dict[str, dict[str, Any]] = {}
+            for _run_id, request_id, canvas_id, node_id, expected_version, *_rest in prepared:
+                existing = (
+                    self._conn()
+                    .execute("SELECT 1 FROM node_runs WHERE request_id = ?", (request_id,))
+                    .fetchone()
+                )
+                if existing is not None:
+                    raise RequestConflictError(request_id)
+                if canvas_id not in canvas_cache:
+                    canvas_row = (
+                        self._conn().execute("SELECT * FROM canvases WHERE id = ?", (canvas_id,)).fetchone()
+                    )
+                    if canvas_row is None:
+                        raise CanvasNotFoundError(canvas_id)
+                    try:
+                        graph = validate_graph(_load(canvas_row["graph_json"], "graph_json"))
+                    except GraphValidationError as exc:
+                        raise CanvasStoreError(str(exc), code="invalid_canvas_graph", status=400) from exc
+                    canvas_cache[canvas_id] = {
+                        "version": int(canvas_row["version"]),
+                        "node_ids": {node["id"] for node in graph["nodes"]},
+                    }
+                cached = canvas_cache[canvas_id]
+                if cached["version"] != expected_version:
+                    raise VersionConflictError(canvas_id, expected_version, cached["version"])
+                if node_id not in cached["node_ids"]:
+                    raise CanvasStoreError(
+                        f"node not found in canvas: {node_id}", code="node_not_found", status=400
+                    )
+
+            created: list[dict[str, Any]] = []
+            for (
+                run_id,
+                request_id,
+                canvas_id,
+                node_id,
+                expected_version,
+                status,
+                snapshot_json,
+                stage,
+                resolved_key,
+                resolved_cap,
+            ) in prepared:
+                self._conn().execute(
+                    "INSERT INTO node_runs "
+                    "(id, request_id, canvas_id, node_id, canvas_version, status, snapshot, "
+                    "outputs, provider_task_id, owner_token, error, created_at, updated_at, "
+                    "stage, stage_updated_at, evidence, attention_state, attention_reason, "
+                    "attention_updated_at, resource_key, resource_capacity, review, "
+                    "review_owner_token, reviewed_at, recovery_token, recovery_reason, "
+                    "recovery_claimed_at, recovery_resolved_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        run_id,
+                        request_id,
+                        canvas_id,
+                        node_id,
+                        expected_version,
+                        status,
+                        snapshot_json,
+                        "[]",
+                        None,
+                        None,
+                        None,
+                        now,
+                        now,
+                        stage,
+                        now,
+                        "[]",
+                        "active",
+                        None,
+                        now,
+                        resolved_key,
+                        resolved_cap,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                )
+                row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
+                assert row is not None
+                self._emit_event(row, "run.created", {"status": status, "stage": stage}, now)
+                created.append(self._run_from_row(row))
+        return created
+
     def get_run(self, run_id: str) -> dict[str, Any]:
         with self._lock:
             row = self._conn().execute("SELECT * FROM node_runs WHERE id = ?", (run_id,)).fetchone()
@@ -491,6 +623,27 @@ class CanvasStore:
                 "ORDER BY created_at ASC, id ASC"
             ).fetchall()
         return [self._run_from_row(row) for row in rows]
+
+    def latest_succeeded_signature(self, resource_key: str = "video") -> tuple[str | None, str | None] | None:
+        """Return the (provider, model) of the most recently succeeded run for a resource."""
+        with self._lock:
+            row = self._conn().execute(
+                "SELECT snapshot FROM node_runs "
+                "WHERE resource_key = ? AND status = 'succeeded' "
+                "ORDER BY updated_at DESC, id DESC LIMIT 1",
+                (resource_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        snapshot = _load(row["snapshot"], "snapshot")
+        if not isinstance(snapshot, Mapping):
+            return None
+        provider = snapshot.get("provider")
+        model = snapshot.get("model")
+        return (
+            provider if isinstance(provider, str) else None,
+            model if isinstance(model, str) else None,
+        )
 
     def list_runs(self, canvas_id: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
@@ -2201,6 +2354,62 @@ class CanvasStore:
                 updated_rows.append(updated)
         return [self._continuation_from_row(row) for row in updated_rows]
 
+    def record_session_hook_event(self, session_id: str, event: str) -> list[str]:
+        """Record an observed host hook lifecycle event for a session without touching plan revisions."""
+
+        session_id = _require_continuation_session(session_id)
+        if not isinstance(event, str) or not event.strip():
+            raise CanvasStoreError("hook event must be a non-empty string", code="hook_event_type", status=400)
+        now = _now()
+        with self._lock, self._transaction():
+            row = (
+                self._conn()
+                .execute(
+                    "SELECT observed_events FROM continuation_sessions WHERE session_id = ?",
+                    (session_id,),
+                )
+                .fetchone()
+            )
+            existing = (
+                [str(item) for item in _load(row["observed_events"], "observed_events") if isinstance(item, str)]
+                if row is not None
+                else []
+            )
+            if event not in existing:
+                existing.append(event)
+            encoded = _dump(existing)
+            if row is None:
+                self._conn().execute(
+                    "INSERT INTO continuation_sessions(session_id, observed_events, updated_at) "
+                    "VALUES (?, ?, ?)",
+                    (session_id, encoded, now),
+                )
+            else:
+                self._conn().execute(
+                    "UPDATE continuation_sessions SET observed_events = ?, updated_at = ? "
+                    "WHERE session_id = ?",
+                    (encoded, now, session_id),
+                )
+        return existing
+
+    def get_session_hook_events(self, session_id: str) -> list[str]:
+        """Return observed host hook lifecycle events for ``session_id``."""
+
+        session_id = _require_continuation_session(session_id)
+        with self._lock:
+            row = (
+                self._conn()
+                .execute(
+                    "SELECT observed_events FROM continuation_sessions WHERE session_id = ?",
+                    (session_id,),
+                )
+                .fetchone()
+            )
+        if row is None:
+            return []
+        values = _load(row["observed_events"], "observed_events")
+        return [str(item) for item in values if isinstance(item, str)]
+
     @staticmethod
     def _check_continuation_revision(plan: Mapping[str, Any], expected: int) -> None:
         actual = int(plan["revision"])
@@ -2327,6 +2536,13 @@ class CanvasStore:
             self._conn().execute(
                 "CREATE INDEX IF NOT EXISTS idx_continuations_session "
                 "ON continuations(session_id, updated_at)"
+            )
+            self._conn().execute(
+                "CREATE TABLE IF NOT EXISTS continuation_sessions ("
+                "session_id TEXT PRIMARY KEY, "
+                "observed_events TEXT NOT NULL DEFAULT '[]', "
+                "updated_at TEXT NOT NULL"
+                ")"
             )
             self._conn().execute(
                 "CREATE INDEX IF NOT EXISTS idx_node_runs_resource_status "

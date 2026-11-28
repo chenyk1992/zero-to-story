@@ -15,7 +15,7 @@
 | MG/产品功能动效 | [MG](../../mg-voiceover-animation-generator/SKILL.md)：指定文案与镜头事实，多镜不套Presenter单机位 |
 | 连续数字人口播 | [Presenter](../../virtual-presenter/SKILL.md)：指定口播/角色/声音，保持其4～15秒、同镜续段真实尾帧条件 |
 | 逐字稿副镜头 | [B-roll](../../transcript-broll-planner/SKILL.md)：当前语义窗口，保留其专业约束 |
-| 歌词/歌曲/器乐 | [音乐](../../music-video-creator/SKILL.md)：实际采用音频与窗口/来源，不新建整片MV |
+| 歌词/歌曲/器乐 | [音乐](../../music-video-creator/SKILL.md)：实际采用音频、窗口和来源；可见演唱时带回逐句时序与声源依据，不新建整片MV |
 | 参考/替换分析 | [分析](../../video-deconstruct-analyzer/SKILL.md)：对象/窗口/保留与变化证据，不改广告策略 |
 | 开场片名/卡司专业序列 | [标题序列](../../title-sequence-creator/SKILL.md)：限定文字与镜头/声音事实及实际成果，广告保留总长、主张与主源 |
 
@@ -39,7 +39,7 @@
 
 委托音乐时保留原专业流程的用途与许可约束；广告统筹不等于获得歌曲、音色、素材或模型的商用许可。当前YuE2权重为CC BY-NC 4.0，采用该分支用于广告前须按实际商业用途核实许可；不因已有非商用试听或技术成功而推定可商用，不自动换提供方。
 
-先取得实际采用歌、摘要与所需音乐窗口。可见演唱/说唱用本地r2v、同窗口真实reference_audio、实际槽位及演员映射；歌曲只背景/背影动作则不强加音频槽。嘴部冻结与同步歌唱冲突在定稿前解决，不能擅改VO或重排歌。
+先取得实际采用歌、摘要与所需音乐窗口。涉及可见演唱时，在 ad_plan 的可见演唱交接保留实际逐句窗口、唱词、起口与停顿、声源和出镜人。有现成[轮唱表](../../music-video-creator/assets/group_vocals.template.md)可引用当前版本，广告主责核对出镜映射与相关 Shot。可见演唱/说唱用本地r2v、同窗口真实reference_audio、实际槽位及演员映射；歌曲只背景/背影动作则不强加音频槽。嘴部冻结与同步歌唱冲突在定稿前解决，不能擅改VO或重排歌。
 
 生成声、参考音频、最终主歌分别安排；参考不保证口型，最终保留主歌需实际后期与同步检查。广告不强制整曲预览或独立MV六阶段；明确启用graph.workspace.mv_production时必须完整满足[现行检查](../../music-video-creator/references/production-checks.md)，不能半填。只检查图片的字段不替代音频语义/窗口核对。
 
@@ -47,6 +47,6 @@
 
 已有项目主源按配置media_root/projects/<canvas_id>/ad_plan.md，document.content投影、source_path实际路径，媒体content当前事实/位置/版本；定稿保存data.prompt。计划换版核对差异，只同步受影响草稿，不覆盖用户新编辑/冻结快照。
 
-读取最新 Canvas 的参数与素材连线，按 readiness 确认输入齐全，再按[共享规则](../../../../guides/ai-system-prompt.md#唯一执行入口)在已有授权范围内创建请求。本地 Comfy 的 queued 请求由 worker 执行，pending_agent 请求由具备真实工具的会话领取；保留 request_id 与 execution_snapshot。执行状态未明时按共享规则核对原请求；成功媒体的内容修订和成片检查见[后期与验收](finishing-and-review.md)。缺少工具时说明受影响的制作环节。
+读取最新 Canvas 的参数与素材连线，按[生成前审核](ad-collaboration.md#广告与宣传片的分阶段协作)核对当前 Panel 的完整实际输入，处理关键冲突并确认 readiness，再按[共享规则](../../../../guides/ai-system-prompt.md#唯一执行入口)在已有授权范围内创建请求。本地 Comfy 的 queued 请求由 worker 执行，pending_agent 请求由具备真实工具的会话领取；保留 request_id 与 execution_snapshot。执行状态未明时按共享规则核对原请求；成功媒体的内容修订和成片检查见[后期与验收](finishing-and-review.md)。缺少工具时说明受影响的制作环节。
 
 全部生成段时长与 Panel 合计、目标片长对应；旧素材或后期插段用编辑清单记录实际采用窗口和成片位置。按锁定时长设计每个 Panel 的动作与结构；确需调整时长、增加生成段或变速时，回广告主责确定后更新计划。按交付要求核对 24fps 帧对齐差异。

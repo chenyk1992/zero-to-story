@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 from lfo.media._ffmpeg import MediaCommandError, probe
-from lfo.media.audio_qc import AudioQCReport
 from lfo.media.subtitles import SubtitleCue, map_cues_over_kept_intervals
 from lfo.media.timeline import ClipSegment, TimelineAssembler, TimelineResult, TimelineSpec
 
@@ -143,7 +142,6 @@ class SpeechProtectedEditSpec:
     protected_speech_intervals: Sequence[ProtectedSpeechInterval] = ()
     subtitle_cues: Sequence[SubtitleCue] = ()
     source_duration_ms: int | None = None
-    audio_qc_report: AudioQCReport | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -159,8 +157,6 @@ class SpeechProtectedEditSpec:
         object.__setattr__(self, "subtitle_cues", tuple(self.subtitle_cues))
         if self.source_duration_ms is not None:
             _require_ms(self.source_duration_ms, "source_duration_ms", positive=True)
-        if self.audio_qc_report is not None and not isinstance(self.audio_qc_report, AudioQCReport):
-            raise TypeError("audio_qc_report must be an AudioQCReport")
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,8 +171,7 @@ class SpeechProtectedEditPlan:
     kept_intervals: tuple[SourceInterval, ...]
     segments: tuple[EditSegment, ...]
     mapped_subtitle_cues: tuple[SubtitleCue, ...] = ()
-    audio_qc_readiness: str = "not_evaluated"
-    audio_review_required: bool = False
+    audio_review_required: bool = True
     source_metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def timeline_spec(
@@ -223,10 +218,6 @@ class SpeechProtectedEditResult:
     output_path: str | None = None
     command: tuple[str, ...] | None = None
     error: str | None = None
-
-    @property
-    def audio_qc_readiness(self) -> str | None:
-        return self.plan.audio_qc_readiness if self.plan is not None else None
 
     @property
     def audio_review_required(self) -> bool:
@@ -282,13 +273,6 @@ class SpeechProtectedEditor:
             segments.append(segment)
             output_cursor = segment.output_end_ms
 
-        readiness = "not_evaluated"
-        review_required = False
-        if spec.audio_qc_report is not None:
-            report = spec.audio_qc_report
-            readiness = report.acceptance_readiness.value
-            review_required = not report.passed or report.inconclusive
-
         return SpeechProtectedEditPlan(
             source_path=str(source.resolve()),
             output_path=(str(Path(spec.output_path).resolve()) if spec.output_path else None),
@@ -298,8 +282,7 @@ class SpeechProtectedEditor:
             kept_intervals=tuple(kept),
             segments=tuple(segments),
             mapped_subtitle_cues=tuple(mapped_cues),
-            audio_qc_readiness=readiness,
-            audio_review_required=review_required,
+            audio_review_required=True,
             source_metadata=metadata,
         )
 

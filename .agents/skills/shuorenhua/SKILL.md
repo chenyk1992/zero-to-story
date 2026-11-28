@@ -63,6 +63,6 @@ description: 检查和清理中英文文本里的 AI 套路，适用于“去 AI
 - 具体句内操作：`references/operation-manual.md`
 - 结构密度、Tier 与短语：`references/structures.md`、`severity.md`、`phrases-zh.md`、`phrases-en.md`
 - 场景禁改和发布语域：`references/scene-guardrails.md`、`scene-packs.md`
-- 误杀回归或用户要求示例/评测：`references/boundary-cases.md`、`references/examples.md`、`evals/real-samples.md`
+- 误杀回归或用户要求示例：`references/boundary-cases.md`、`references/examples.md`
 
 专业约束集中在 [改写决策契约](./references/rewrite-contract.md)，只读当前任务需要的章节。

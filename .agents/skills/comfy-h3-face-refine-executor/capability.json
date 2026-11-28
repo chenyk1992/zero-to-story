@@ -1,0 +1,205 @@
+{
+  "id": "comfy-h3-face-refine",
+  "label": "本地 H3 局部修脸（FaceRefine）",
+  "node_types": [
+    "video"
+  ],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": [
+    "comfy-mcp",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "video",
+    "capacity": 1
+  },
+  "models": [
+    {
+      "id": "minimax-h3-fl2va",
+      "label": "MiniMax H3 FL2VA INT8"
+    }
+  ],
+  "modes": [
+    {
+      "id": "solo",
+      "label": "单人局部修脸"
+    },
+    {
+      "id": "duet",
+      "label": "双人同框修脸"
+    }
+  ],
+  "fields": [
+    {
+      "key": "anchor_frame",
+      "label": "选脸锚点帧（源片从 0 开始）",
+      "type": "number",
+      "integer": true,
+      "required": true,
+      "min": 0,
+      "max": 3600
+    },
+    {
+      "key": "face_x",
+      "label": "目标脸横坐标（像素）",
+      "type": "number",
+      "integer": true,
+      "required": true,
+      "modes": ["solo"],
+      "min": 0,
+      "max": 16383
+    },
+    {
+      "key": "face_y",
+      "label": "目标脸纵坐标（像素）",
+      "type": "number",
+      "integer": true,
+      "required": true,
+      "modes": ["solo"],
+      "min": 0,
+      "max": 16383
+    },
+    {
+      "key": "left_x",
+      "label": "左脸横坐标（像素）",
+      "type": "number",
+      "integer": true,
+      "required": true,
+      "modes": ["duet"],
+      "min": 0,
+      "max": 16383
+    },
+    {
+      "key": "right_x",
+      "label": "右脸横坐标（像素）",
+      "type": "number",
+      "integer": true,
+      "required": true,
+      "modes": ["duet"],
+      "min": 0,
+      "max": 16383
+    },
+    {
+      "key": "anchor_y",
+      "label": "两张脸（或左脸）纵坐标（像素）",
+      "type": "number",
+      "integer": true,
+      "required": true,
+      "modes": ["duet"],
+      "min": 0,
+      "max": 16383
+    },
+    {
+      "key": "right_y",
+      "label": "右脸纵坐标（像素，留空沿用 anchor_y）",
+      "type": "number",
+      "integer": true,
+      "required": false,
+      "modes": ["duet"],
+      "min": 0,
+      "max": 16383
+    },
+    {
+      "key": "start_frame",
+      "label": "修脸起始帧（长镜头/局部窗口可选）",
+      "type": "number",
+      "integer": true,
+      "required": false,
+      "min": 0,
+      "max": 3600
+    },
+    {
+      "key": "frame_count",
+      "label": "修脸目标帧数（单窗最多 90 帧）",
+      "type": "number",
+      "integer": true,
+      "required": false,
+      "min": 1,
+      "max": 96
+    },
+    {
+      "key": "shot_start_frame",
+      "label": "同一连续镜头起始帧（防跨切点）",
+      "type": "number",
+      "integer": true,
+      "required": false,
+      "min": 0,
+      "max": 3600
+    },
+    {
+      "key": "shot_end_frame",
+      "label": "同一连续镜头结束帧（不含）",
+      "type": "number",
+      "integer": true,
+      "required": false,
+      "min": 1,
+      "max": 3600
+    }
+  ],
+  "input_rules": {
+    "solo": {
+      "allowed": [
+        "reference_videos",
+        "reference_images"
+      ],
+      "required": [
+        "reference_videos"
+      ],
+      "min_counts": {
+        "reference_videos": 1,
+        "reference_images": 1
+      },
+      "max_counts": {
+        "reference_videos": 1,
+        "reference_images": 1
+      },
+      "file_extensions": {
+        "reference_videos": [
+          ".mp4",
+          ".mov",
+          ".mkv",
+          ".webm"
+        ],
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp"
+        ]
+      }
+    },
+    "duet": {
+      "allowed": [
+        "reference_videos",
+        "reference_images"
+      ],
+      "required": [
+        "reference_videos"
+      ],
+      "min_counts": {
+        "reference_videos": 1,
+        "reference_images": 2
+      },
+      "max_counts": {
+        "reference_videos": 1,
+        "reference_images": 2
+      },
+      "file_extensions": {
+        "reference_videos": [
+          ".mp4",
+          ".mov",
+          ".mkv",
+          ".webm"
+        ],
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+display-name-zh: 真人记录创作
+version: 0.1.0
+source: official
+tag-en: Creative & Experimental
+tag-cn: 创意实验
+complete-tags-en:
+  - Creative & Experimental / Planning
+  - Commercial Ad / Planning
+complete-tags-cn:
+  - 创意实验 / 计划制定
+  - 商业广告 / 计划制定
+summary-en: Turn a brief or references into believable phone-recording plans and video prompts with motivated camera relationships and consistent people.
+summary-cn: 根据内容简述或参考素材，设计有镜头动机、人物连续的真实手机记录拍摄方案与视频提示词。
+desc-en: For phone-shot vlogs, talking heads, interviews, tutorials, reviews and authentic UGC promotions, provide a brief or reference material. First establish who films and why each view changes; then define believable behavior and continuity, and write English visual prompts with original-language dialogue and visible text. Outputs are filming notes or video prompts matched to the requested aspect ratio, duration and sound. Music and subtitles follow independent user requirements. Only the people-realism guidance applies to still images. Excludes narrative shorts, cinematic advertising, product-only footage, empty scenery and animation; it does not produce finished videos.
+desc-cn: 面向手机拍摄的vlog、口播、街访、教程、测评及真实UGC推广，接收内容简述或参考素材。先确定谁拍和切镜理由，再补人物状态与连续性，最后以英文写视觉提示词，保留原语言台词与画面文字。交付匹配画幅、时长和声音需求的拍摄说明或视频提示词，配乐与字幕分别服从用户要求。真人图片仅用人物真实感规则；不适用剧情短片、广告大片、纯产品、纯空镜和动画，不直接制作成片。
+author-en: MiniMax Hub
+author-cn: 海螺Hub
+structured-info:
+  zh-CN:
+    summary: 将手机记录内容的简述与参考素材转化为拍摄关系清楚、人物真实连贯的拍摄说明与视频提示词。
+    best-for:
+      - 日常记录
+      - 口播教程
+      - 真人推广
+    how-to-use: 提供内容简述或参考素材，说明画幅、时长及配乐与字幕需求后设计拍摄方案。
+    outputs: 拍摄关系说明、人物连续性约束及含原文台词的视频提示词。
+  en-US:
+    summary: Shape a phone-recording brief and references into filming notes and video prompts with clear camera relationships and believable, consistent people.
+    best-for:
+      - Everyday vlogs
+      - Talking heads and tutorials
+      - Authentic UGC promotions
+    how-to-use: Provide a brief or references and specify aspect ratio, duration, music and subtitle needs to plan the shoot.
+    outputs: Filming relationship notes, person continuity constraints and video prompts preserving original dialogue.

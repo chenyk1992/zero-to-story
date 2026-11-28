@@ -1,0 +1,37 @@
+display-name-zh: 复古拼贴动效短片
+version: 1.0.1
+tag-en: Commercial Ad
+tag-cn: 商业广告
+complete-tags-en:
+- Commercial Ad / Creative Generation
+complete-tags-cn:
+- 商业广告 / 创作生成
+summary-en: 'Turn a topic or uploaded material into a retro photo-collage motion film: align specs and color mode, confirm the object and motion direction, the detailed plan and the assets, then deliver kinetic type, object-led transitions and beat-synced audio.'
+summary-cn: 输入主题或素材，先对齐规格与色彩，再确认物件动效方向、详细方案和素材字体，产出带卡点配乐的复古拼贴短片。
+desc-en: For brand, product, event and concept promotion, turn a topic or uploaded material into a retro photographic-collage motion film. Confirm duration, framing, monochrome or color assets and palette, then choose core objects and a motion direction. Review a complete plan covering copy, fonts, shots and music. Prepare cutout assets and a type specimen; after approval, use editable code to animate typography, paper layers and object-led transitions. Score music and action accents to the visual rhythm, then render and inspect the film. Deliver a video with sound, editable source, asset records and a cue sheet. This workflow excludes live-action drama, lyric music videos and whole-film text-to-video generation.
+desc-cn: 面向品牌、产品、活动和概念宣传，将主题或上传素材制作成复古实物拼贴动效短片。先确认时长、画幅、黑白或彩色素材及配色，再确定核心物件与动效方向，审阅包含文案、字体、镜头和配乐的完整方案。准备剪贴素材与字体样张，经确认后用可编辑代码编排动态文字、纸层运动和物件转场，按画面节奏配置音乐与动作音效，最后渲染并检查成片。交付有声视频、源码、素材记录与卡点表。不用于真人剧情、歌词音乐视频或整片文生视频。
+author-en: MiniMax Design
+author-cn: MiniMax Design
+source: official-featured
+structured-info:
+  zh-CN:
+    summary: 把主题和实物素材编排为复古拼贴短片，以动态文字、纸层运动与物件转场连接画面，并配合节奏完成成片。
+    best-for:
+    - 品牌宣传
+    - 产品活动
+    - 复古拼贴
+    how-to-use: 输入主题或上传素材，依次确认规格配色、动效方向、制作方案与素材字体。
+    outputs: 有声动效成片、可编辑动画源码、素材来源记录与配乐卡点表。
+  en-US:
+    summary: Arrange topics and real-object assets into retro collage films, connecting kinetic type, paper motion and object transitions with a coordinated soundtrack.
+    best-for:
+    - Brand Promotion
+    - Product and Events
+    - Retro Collage
+    how-to-use: Enter a topic or upload assets, then approve specifications, colors, motion direction, production plan and typography.
+    outputs: Motion film with sound, editable animation source, asset provenance and music cue sheet.
+cover: https://cdn.hailuoai.com/hailuo-video-web/public_assets/b9adb96a-564e-4743-ba9b-9d7784da1a60.mp4
+cover-en: https://cdn.hailuoai.com/hailuo-video-web/public_assets/b9adb96a-564e-4743-ba9b-9d7784da1a60.mp4
+showcase:
+- https://cdn.hailuoai.com/prod/2026-10-23-14/video/1792735483654307319-1792735483633.mp4
+- https://cdn.hailuoai.com/prod/2026-10-23-14/video/1792735485519853824-1792735485489.mp4

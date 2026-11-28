@@ -11,8 +11,8 @@
   "fields": [
     {"key": "start_frame", "label": "起始帧", "type": "number", "integer": true, "min": 0},
     {"key": "frame_count", "label": "处理帧数", "type": "number", "integer": true, "min": 1},
-    {"key": "target_width", "label": "输出宽度", "type": "number", "integer": true, "values": [1920]},
-    {"key": "target_height", "label": "输出高度", "type": "number", "integer": true, "values": [1066]},
+    {"key": "target_width", "label": "输出宽度（留空自动等比）", "type": "number", "integer": true, "min": 2, "max": 1944},
+    {"key": "target_height", "label": "输出高度（留空自动等比）", "type": "number", "integer": true, "min": 2, "max": 1944},
     {
       "key": "chunk_mode",
       "label": "显存分块模式",

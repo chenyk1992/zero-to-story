@@ -2,12 +2,14 @@
 
 先确定观众看完后要理解、感受或采取什么行动，以及现有资料支持哪些产品事实；据此选择品牌感受、使用演示、卖点证据、场景剧情或口播说明作为主导关系。创意落到具体受众处境与品牌用途；当品牌记忆是目标时，既可沿用既有识别资产，也可在已定品牌方向内设计新的声画记忆点。可用“换成竞品后，哪些部分失去理由”启发差异，但不作硬性筛选；品类氛围等目标也可采用更普遍的表达。品牌事实、性能与标准字仍按可靠资料执行。
 
+涉及使用条件的产品主张，在可拍稿里让条件跟效果一起可见或可听。例如先看见杯盖锁紧，再展示倒置；片尾可读文字和声音可补足条件。活动或招募片使用往期素材时，在可拍稿确定哪些画面是回顾，哪句旁白或哪张落版交代本次日期和参与方式。
+
 围绕主导关系设计观众能看见、听见的事件。它可以来自产品使用、材料变化、人物选择、信息揭示，也可以是偏感受或陈列的视觉段落。镜头记录观众获得的新信息、主动作、起止状态、文字与声音；商品露出时机和阅读窗口按本次策略与信息量安排。
 
 | 需求 | 按需方法，不转主责 |
 | --- | --- |
 | 产品主角、材质/结构与品牌视觉 | [产品展示](product-showcase-direction.md)，先选一个可见事件，再发展摄影、图形和声音 |
-| 卖点直接造成一次可见状态倒置 | [反转广告创意](twist-ad-ideation.md)负责创意搜索与自筛；反转机制与商品因果仍在[通用反转](../../short-drama-screenwriter/references/reversal-design.md)与[产品因果](product-causality.md) |
+| 剧情中卖点直接造成一次可见状态倒置 | [反转广告创意](twist-ad-ideation.md)负责创意搜索与自筛；反转机制与商品因果仍在[通用反转](../../short-drama-screenwriter/references/reversal-design.md)与[产品因果](product-causality.md) |
 | 动态字体、主体与图形共演 | [构图与字体](../../mg-voiceover-animation-generator/references/composition-and-typography.md)，广告保留文案、主张与全片计划 |
 | 字形/排字或包装材料仍不具体 | [字形选型](../../visual-design-creator/references/type-and-layout-choices.md)、[包装风格](../../visual-design-creator/references/packaging-style-directions.md)，在已定整体方向内形成设计；不重写品牌标准字或已定文案 |
 | 材料声音、留白或声画先后关系 | [声音互动](../../music-video-creator/references/sound-image-interaction.md)，已有歌曲/原声和产品事实优先，结论回当前广告声音栏 |

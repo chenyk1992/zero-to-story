@@ -658,6 +658,8 @@ function OutputPreview({ output, title, status, help, onOpen, sectionRef }: { ou
         <p className="field-help">待审材料已就绪 · 内容仍需实际观看确认</p>
         {materials.artifacts?.silent_video && <a href={mediaUrl(materials.artifacts.silent_video.path)} target="_blank" rel="noreferrer">打开无声候选</a>}
         {materials.artifacts?.contact_sheet && <a href={mediaUrl(materials.artifacts.contact_sheet.path)} target="_blank" rel="noreferrer">查看抽样图</a>}
+        {materials.artifacts?.tail_sheet && <a href={mediaUrl(materials.artifacts.tail_sheet.path)} target="_blank" rel="noreferrer">查看末3帧</a>}
+        {materials.artifacts?.tail_frame && <a href={mediaUrl(materials.artifacts.tail_frame.path)} target="_blank" rel="noreferrer">查看精确末帧</a>}
       </div>}
       {materials?.status === 'failed' && <p className="field-help">待审材料准备未完成，原片已保留，可直接播放原片检查。</p>}
     </section>

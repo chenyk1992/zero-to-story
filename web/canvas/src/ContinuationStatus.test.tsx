@@ -23,6 +23,8 @@ const activeSummary: ContinuationSummary = {
       progressStalled: false,
       progress: '2 / 4',
       reason: '等待执行结果回填。',
+      supportLabel: '手动批次接续',
+      supportNote: '尚未观测到 Stop/SubagentStop 钩子事件',
       updatedAt: '2026-09-10T10:30:00Z',
     },
     {
@@ -129,6 +131,7 @@ describe('ContinuationStatus', () => {
     await act(async () => firstPlan?.click());
     expect(firstPlan?.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelector('.continuation-item-details')?.textContent).toContain('等待执行结果回填');
+    expect(container.querySelector('.continuation-item-details')?.textContent).toContain('接续保障：手动批次接续');
     expect(container.querySelector('.continuation-item-details')?.textContent).toContain('2 / 4');
   });
 

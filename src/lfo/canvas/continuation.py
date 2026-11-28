@@ -20,6 +20,31 @@ CONTINUATION_STATES = frozenset({"active", "paused"})
 CONTINUATION_UNIT_STATES = frozenset({"dispatched", "result_ready", "handled", "blocked"})
 CONTINUATION_EVENTS = frozenset({"Stop", "SessionStart", "SubagentStop", "Interrupt"})
 
+
+def build_continuation_support(observed_events: Sequence[str]) -> dict[str, Any]:
+    """Derive read-only continuation capability level strictly from observed hook events."""
+
+    seen = set(observed_events)
+    ordered = [event for event in ("SessionStart", "SubagentStop", "Stop", "Interrupt") if event in seen]
+    guarded_events = {"Stop", "SubagentStop", "Interrupt"}
+    if seen & guarded_events:
+        missing = [event for event in ("Stop", "Interrupt") if event not in seen]
+        note = "当前会话已观测到宿主生命周期钩子事件，可自动记录结束检查或单元返回。"
+        if missing:
+            note += f" 尚未观测到 {', '.join(missing)}，对应自动拦截或中断暂停不可依赖。"
+        return {
+            "level": "hook_guarded",
+            "label": "钩子守护接续",
+            "observed_events": ordered,
+            "note": note,
+        }
+    return {
+        "level": "manual_batch",
+        "label": "手动批次接续",
+        "observed_events": ordered,
+        "note": "尚未观测到 Stop/SubagentStop 钩子事件；请由主会话通过 canvas_next 按批推进，空闲跟进需宿主原生定时能力",
+    }
+
 # The plan is an opt-in hand-off aid, so it must remain small enough to pass
 # through a hook context.  Persistence rejects values above these limits and
 # the summary applies a second bound to the number of returned records.

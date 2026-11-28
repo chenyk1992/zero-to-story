@@ -1,0 +1,41 @@
+display-name-zh: 短剧全流程制作
+version: 0.1.1
+tag-en: Short Drama
+tag-cn: 短剧漫剧
+complete-tags-en:
+- Short Drama / Full Production
+complete-tags-cn:
+- 短剧漫剧 / 成片制作
+summary-en: Take a short drama from premise or script through genre hooks, episode scripts, character, scene, and
+  prop references, storyboards, and segment prompts to an assembled episode cut.
+summary-cn: 从短剧题材或已有剧本出发，经题材钩子、分集剧本、角色场景道具参考、分镜与片段提示词，制作出完整的单集成片。
+desc-en: For creators producing domestic vertical or international short dramas end to end. Provide a premise,
+  genre direction, or existing script, plus episode count, length, frame format, and visual style. The workflow
+  selects genre hooks, writes an outline and scene-level script with episode pacing and paywall points, builds
+  character, scene, and plot-critical prop references, plans a shot table by generation unit, then writes segment prompts to generate
+  video segments and assembles them in order into the episode. When music or subtitles are needed, they are
+  generated at the final-cut stage to match the script's emotion and timing. Deliverables include the script,
+  references, shot table, and the final cut. Requests outside this workflow are left to other skills.
+desc-cn: 面向需要从零完成国内竖屏或出海短剧的创作者。用户提供题材方向、故事设定或已有剧本，以及集数、单集时长、画幅和视觉风格。流程选择题材与钩子，写出大纲和含分集节奏、付费点的场景级剧本，再建立角色、场景与关键道具参考，按生成单元规划分镜表，编写片段提示词生成视频片段，并按分镜顺序合成单集。需要配乐或字幕时，在成片阶段按剧本情绪与节奏生成。交付剧本、参考图、分镜表与成片；本流程之外的需求交由其他 Skill 处理。
+author-en: MiniMax Hub
+author-cn: MiniMax Hub
+source: official
+structured-info:
+  zh-CN:
+    summary: 从短剧题材或已有剧本出发，经剧本、角色场景道具参考、分镜与片段提示词，制作出完整的单集成片。
+    best-for:
+    - 短剧制作
+    - 分集剧本
+    - 出海短剧
+    how-to-use: 提供题材或剧本、集数时长与画幅，依次完成剧本、参考图、分镜与片段生成，合成单集成片。
+    outputs: 分集剧本、角色场景道具参考图、分镜表、视频片段与合成成片。
+  en-US:
+    summary: Take a short drama from premise or script through scripts, character, scene, and prop references, storyboards,
+      and segment prompts to an assembled episode cut.
+    best-for:
+    - Short Drama Production
+    - Episode Scripts
+    - International Short Dramas
+    how-to-use: Provide a premise or script, episode count, length, and frame format; the workflow completes the
+      script, references, storyboard, and segment generation, then assembles the episode.
+    outputs: Episode scripts, character, scene, and prop references, shot tables, video segments, and the assembled cut.

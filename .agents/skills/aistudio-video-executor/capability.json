@@ -1,0 +1,129 @@
+{
+  "id": "aistudio-video",
+  "label": "Google AI Studio 视频（Gemini Omni）",
+  "node_types": [
+    "video"
+  ],
+  "execution": "script",
+  "entrypoint": "scripts/execute.py",
+  "requires_executables": [
+    "aistudio2api",
+    "ffmpeg",
+    "ffprobe"
+  ],
+  "resource": {
+    "key": "aistudio-video",
+    "capacity": 1
+  },
+  "models": [
+    {
+      "id": "gemini-omni-1.2-flash",
+      "label": "Gemini Omni 1.2 Flash（3–15s）"
+    },
+    {
+      "id": "gemini-omni-1.1-flash",
+      "label": "Gemini Omni 1.1 Flash（3–10s）"
+    }
+  ],
+  "modes": [
+    {
+      "id": "t2v",
+      "label": "文生视频"
+    },
+    {
+      "id": "i2v",
+      "label": "图生视频（首帧）"
+    },
+    {
+      "id": "r2v",
+      "label": "参考素材生视频"
+    }
+  ],
+  "fields": [
+    {
+      "key": "duration",
+      "label": "时长（秒）",
+      "type": "number",
+      "group": "specs",
+      "min": 3,
+      "max": 15,
+      "integer": true,
+      "required": true
+    },
+    {
+      "key": "aspect_ratio",
+      "label": "画幅比例",
+      "type": "select",
+      "group": "specs",
+      "required": true,
+      "options": [
+        {
+          "value": "16:9",
+          "label": "16:9"
+        },
+        {
+          "value": "9:16",
+          "label": "9:16"
+        }
+      ]
+    },
+    {
+      "key": "resolution",
+      "label": "输出分辨率",
+      "type": "select",
+      "group": "specs",
+      "required": false,
+      "options": [
+        {
+          "value": "360p",
+          "label": "360p"
+        },
+        {
+          "value": "720p",
+          "label": "720p"
+        },
+        {
+          "value": "1080p",
+          "label": "1080p（默认）"
+        },
+        {
+          "value": "4k",
+          "label": "4K"
+        }
+      ]
+    }
+  ],
+  "input_rules": {
+    "t2v": {
+      "allowed": []
+    },
+    "i2v": {
+      "allowed": [
+        "first_frame"
+      ],
+      "required": [
+        "first_frame"
+      ]
+    },
+    "r2v": {
+      "allowed": [
+        "reference_images"
+      ],
+      "any_of": [
+        "reference_images"
+      ],
+      "max_counts": {
+        "reference_images": 6
+      },
+      "file_extensions": {
+        "reference_images": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".bmp"
+        ]
+      }
+    }
+  }
+}

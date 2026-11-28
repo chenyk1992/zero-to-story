@@ -1,0 +1,32 @@
+display-name-zh: 控制内置浏览器
+version: 0.1.3
+tag-en: "Platform Tooling"
+tag-cn: "平台工具"
+complete-tags-en:
+  - "Platform Tooling"
+complete-tags-cn:
+  - "平台工具"
+summary-en: "Operate the in-app browser on real pages — navigate, read, click, fill, screenshot — with login takeover and side-effect confirmation"
+summary-cn: "用内置浏览器打开、读取和操作真实网页，覆盖登录接管、外部副作用确认与结果验证的完整操作规范"
+desc-en: "For tasks that operate the workspace's built-in browser on real web pages: opening and navigating tabs, reading page content, snapshotting interactive elements, clicking, filling forms, taking screenshots, and editing in online editors. The skill defines the full operating contract for the browser surface: observe before acting and verify after, tab matching and reuse, user-driven login takeover that never touches credentials, mandatory confirmation before external side effects such as publishing, submitting, deleting, or purchasing, page media extraction and screenshot delivery rules, and structured recovery for common browser errors. Load it when the user names the in-app browser, designates a site as the material source, or sends annotated web screenshots that must be applied back to the live page."
+desc-cn: "适用于需要在当前会话的内置浏览器中完成真实网页操作的场景：打开与导航标签页、读取页面内容、快照交互元素、点击、填写表单、截图以及在线编辑器修改。本技能规定浏览器操作的完整契约：先观察再动作再验证、标签页匹配与复用、登录由用户接管且绝不触碰凭据、发布提交删除购买等外部副作用必须先经用户确认、页面素材提取与截图交付约定，以及浏览器错误恢复方式。当用户点名内置浏览器、指定网站作为素材来源、或发来需改回真实页面的批注截图时加载本技能。"
+author-en: "MiniMax Design"
+author-cn: "MiniMax Design"
+source: official
+structured-info:
+  zh-CN:
+    summary: 控制会话内置浏览器完成真实网页操作，覆盖读取、点击、填写、截图与登录接管等完整浏览器操作规范。
+    best-for:
+      - 网页操作
+      - 素材采集
+      - 登录接管
+    how-to-use: 说明要操作的网页和目标动作，需要登录或提交等关键操作时按提示确认。
+    outputs: 页面读取结果、完成的网页操作、截图与提取的页面素材。
+  en-US:
+    summary: Operate the session's built-in browser on real web pages, covering reading, clicking, form filling, screenshots, and user-driven login takeover under a full operating contract.
+    best-for:
+      - Web Operations
+      - Material Collection
+      - Login Takeover
+    how-to-use: Describe the page and the goal; confirm critical actions like logins or submissions when prompted.
+    outputs: Page readings, completed web actions, screenshots, and extracted page media.

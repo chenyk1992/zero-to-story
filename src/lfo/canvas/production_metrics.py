@@ -760,7 +760,7 @@ def _production_counts(
         "segments": _unknown_count("没有提供实际编辑清单或清单格式不受支持。"),
     }
     if not isinstance(manifest, Mapping) or not str(manifest.get("schema", "")).startswith(
-        "lfo.mv.edit."
+        ("lfo.mv.edit.", "lfo.story.edit.")
     ):
         return result
     if canvas_id is not None and manifest.get("canvas_id") != canvas_id:

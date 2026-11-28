@@ -77,3 +77,67 @@ def test_real_tail_includes_action_after_last_sample(tmp_path):
     actual = Path(result["asset"]["path"]).read_bytes()
     assert actual == expected.read_bytes()
     assert actual != sampled.read_bytes()
+
+
+def test_tail_reuses_verified_review_material_without_redecoding(tmp_path, monkeypatch):
+    client, run = client_for(tmp_path)
+    output_dir = client.settings.output_dir("canvas", "run")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    source = output_dir / "source.mp4"
+    source.write_bytes(b"source video bytes")
+    source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    tail_bytes = b"cached-tail-png-bytes"
+    cached_tail = output_dir / "review-ready" / "tail-frame.png"
+    cached_tail.parent.mkdir(parents=True, exist_ok=True)
+    cached_tail.write_bytes(tail_bytes)
+    tail_sha = hashlib.sha256(tail_bytes).hexdigest()
+    run["review"] = {"decision": "ACCEPT", "output_path": str(source), "output_sha256": source_sha}
+    run["outputs"] = [{
+        "path": str(source),
+        "kind": "video",
+        "metadata": {
+            "review_materials": {
+                "status": "ready",
+                "source_path": str(source),
+                "source_sha256": source_sha,
+                "artifacts": {"tail_frame": {"path": str(cached_tail), "sha256": tail_sha}},
+            }
+        },
+    }]
+    monkeypatch.setattr("lfo.canvas.accepted_tail.run_command", lambda *_args: pytest.fail("must reuse cached tail_frame"))
+    extracted = extract_accepted_tail(client, "run")
+    assert Path(extracted["asset"]["path"]).read_bytes() == tail_bytes
+    assert extracted["asset"]["sha256"] == tail_sha
+
+
+def test_tail_falls_back_to_ffmpeg_when_cached_tail_tampered_or_derived(tmp_path, monkeypatch):
+    client, run = client_for(tmp_path)
+    output_dir = client.settings.output_dir("canvas", "run")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    source = output_dir / "derived.mp4"
+    source.write_bytes(b"derived video bytes")
+    source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    cached_tail = output_dir / "review-ready" / "tail-frame.png"
+    cached_tail.parent.mkdir(parents=True, exist_ok=True)
+    cached_tail.write_bytes(b"tampered")
+    run["review"] = {"decision": "ACCEPT", "output_path": str(source), "output_sha256": source_sha}
+    run["outputs"] = [{
+        "path": str(source),
+        "kind": "video",
+        "metadata": {
+            "review_materials": {
+                "status": "ready",
+                "source_path": str(source),
+                "source_sha256": source_sha,
+                "artifacts": {"tail_frame": {"path": str(cached_tail), "sha256": "0" * 64}},
+            }
+        },
+    }]
+    calls = []
+    def decode(command):
+        calls.append(command)
+        Path(command[-1]).write_bytes(b"redecoded-tail")
+    monkeypatch.setattr("lfo.canvas.accepted_tail.run_command", decode)
+    extracted = extract_accepted_tail(client, "run")
+    assert len(calls) == 1
+    assert Path(extracted["asset"]["path"]).read_bytes() == b"redecoded-tail"

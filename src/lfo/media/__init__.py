@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from lfo.media.audio_qc import AudioAcceptanceReadiness
 from lfo.media.speech_edit import (
     ConfirmedSilentInterval,
     EditSegment,
@@ -15,7 +14,6 @@ from lfo.media.speech_edit import (
 )
 
 __all__ = [
-    "AudioAcceptanceReadiness",
     "ConfirmedSilentInterval",
     "EditSegment",
     "ProtectedSpeechInterval",

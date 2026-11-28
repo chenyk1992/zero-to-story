@@ -79,6 +79,20 @@ def test_upscale_capability_is_discovered_and_accepts_one_five_second_video(tmp_
     reference = tmp_path / "h3-raw.mp4"
     reference.write_bytes(b"test fixture")
     validate_input_contract(snapshot(reference), entry)
+    portrait = snapshot(reference)
+    portrait["parameters"].update(target_width=1080, target_height=1944)
+    validate_input_contract(portrait, entry)
+    auto_proportional = snapshot(reference)
+    auto_proportional["parameters"].pop("target_width")
+    auto_proportional["parameters"].pop("target_height")
+    validate_input_contract(auto_proportional, entry)
+    native_h3 = snapshot(reference)
+    native_h3["parameters"].update(target_width=1876, target_height=1080)
+    validate_input_contract(native_h3, entry)
+    out_of_range = snapshot(reference)
+    out_of_range["parameters"].update(target_width=1946, target_height=1080)
+    with pytest.raises(ValueError):
+        validate_input_contract(out_of_range, entry)
 
 
 def test_upscale_contract_requires_exactly_one_video_reference(tmp_path):

@@ -1,0 +1,37 @@
+display-name-zh: Vibe 知识短片
+version: 1.0.1
+source: official-featured
+tag-en: Education
+tag-cn: 教育
+complete-tags-en:
+- Education / Creative Generation
+complete-tags-cn:
+- 教育 / 创作生成
+summary-en: Make abstract ideas visible through experiments and animated charts, turning one topic into a music-led film with editable source.
+summary-cn: 让抽象知识变成看得见的实验与动态图表，从一句主题到带音乐的成片和可编辑源码。
+desc-en: A code-first knowledge-film Skill for creators seeking rigorous, music-led explainers, with short-sample validation also supported. Provide a topic, optional references and required music. The workflow frames one audience question, verifies claims, designs observable experiments, builds animated charts and continuous object transitions, arranges motion to real musical landmarks and validates exported media. It delivers a finished MP4 or an approved short sample, editable source, rerender instructions, source records and replaceable data or caption mappings. It suits mathematics, science, technology and knowledge-history explainers; it does not handle product advertising, generic particle decoration or unsupported historical claims.
+desc-cn: 面向需要严谨、音乐驱动知识讲解片的创作者，也支持短样片验证。提供主题，可附参考资料和指定音乐。流程提炼问题、核实主张、设计可观察实验，构建动态图表与连续对象转场，按真实音乐节点编排并验证导出媒体。交付完整MP4或获准短样片、可编辑源码、重渲染说明、来源记录及可替换数据和字幕映射。适用于数学、科学、技术和知识史；不处理产品广告、泛粒子装饰或无依据的历史叙事。
+author-en: MiniMax Design
+author-cn: MiniMax Design
+structured-info:
+  zh-CN:
+    summary: 以可复现实验和动态图表解释经过核实的知识，将音乐节奏与连续转场结合，制作可编辑的完整知识短片。
+    best-for:
+    - 科学科普
+    - 程序实验
+    - 知识讲解
+    how-to-use: 提供知识主题和可选参考资料，确认时长与画幅，批准实验和视觉方案后制作。
+    outputs: 知识分镜与来源记录、实验图表、完整有声视频及可编辑项目源码。
+  en-US:
+    summary: Explain verified knowledge through reproducible experiments and animated charts, combining musical rhythm and continuous transitions in an editable finished film.
+    best-for:
+    - Science Explainers
+    - Procedural Experiments
+    - Knowledge Films
+    how-to-use: Provide a topic and optional references, confirm duration and framing, then approve experiments and visual direction.
+    outputs: Storyboard and source records, experimental charts, finished video with sound, and editable project source.
+cover: https://cdn.hailuoai.com/hailuo-video-web/public_assets/9184a323-cf8b-42f8-89c9-843337b1baf4.mp4
+cover-en: https://cdn.hailuoai.com/hailuo-video-web/public_assets/9184a323-cf8b-42f8-89c9-843337b1baf4.mp4
+showcase:
+- https://cdn.hailuoai.com/prod/2026-10-23-14/video/1792735551760911793-1792735551703.mp4
+- https://cdn.hailuoai.com/prod/2026-10-23-14/video/1792735502381863505-1792735502280.mp4

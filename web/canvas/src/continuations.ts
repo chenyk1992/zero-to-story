@@ -44,6 +44,8 @@ function toItem(plan: ContinuationPlan, index: number): ContinuationItem {
     reason: summary.reason || reasons[0] || null,
     details: reasons,
     stopAttempts: summary.stop_attempts,
+    supportLabel: plan.continuation_support?.label || null,
+    supportNote: plan.continuation_support?.note || null,
     updatedAt: plan.updated_at || null,
   };
 }

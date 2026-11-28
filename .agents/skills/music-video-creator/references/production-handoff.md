@@ -4,9 +4,9 @@
 
 歌曲到来或换版后，按[内部复核](music-timeline.md#实际歌曲到来后的内部复核)更新主源中的声音依据和受影响 Shot。拼贴表演按[专业路线](collage-performance-direction.md)写明人物意图、出镜形态及表演与图层的关系；跨 Panel 的文字、歌曲窗口和人物/空间/图层状态按[共同边界](../../canvas-workspace/references/creative-handoff.md#跨panel文字声音与状态)交接，并在本 Panel 映射实际输入槽位。
 
-[共同交接](../../canvas-workspace/references/creative-handoff.md)说明版本、文字、时间、采用与后期的通用规则。受广告委托时只交实际采用的音乐成果和窗口；完整歌曲广告仍由广告主责统筹。广告明确启用 mv_production 时，按[生产检查](production-checks.md)登记必需输入与结构预览。参考复刻按[变更交接](../../video-deconstruct-analyzer/references/recreation-change-plan.md)分别记录源片时间和歌曲时间。
+[共同交接](../../canvas-workspace/references/creative-handoff.md)说明版本、文字、时间、采用与后期的通用规则。受广告委托时按广告侧[音乐广告](../../advertising-creator/references/production-handoff.md#音乐广告)交付采用音轨、版本与窗口；可见演唱同时交逐句时序和声源依据。完整歌曲广告仍由广告主责统筹。广告明确启用 mv_production 时，按[生产检查](production-checks.md)登记必需输入与结构预览。参考复刻按[变更交接](../../video-deconstruct-analyzer/references/recreation-change-plan.md)分别记录源片时间和歌曲时间。
 
-需要生产时，按[当前 Panel 提交前检查](production-checks.md#当前-panel-的提交前检查)核实输入及歌曲/脚本关联；用户只要提示词时交付文本。
+需要生产时，按[分阶段协作](music-collaboration.md)审核本 Panel 的实际输入和歌曲窗口，结合[当前 Panel 提交前检查](production-checks.md#当前-panel-的提交前检查)核实输入及歌曲/脚本关联；用户只要提示词时交付文本。
 
 完整 MV 保留一份可审阅的全片创作脚本：音乐窗口、全局人物/美术/文字系统、按时间排序的 Shot、唱词与文字事件、前后镜衔接，以及 Shot 到 Panel 的版本映射。保存于 Canvas 文档节点（如“完整 MV 脚本”）；若主文档在工作区，则画布保存明确版本和可访问引用，不维护两个各自修改的权威稿。局部 prompt 请求只保存所需片段，不强建全片脚本。
 
